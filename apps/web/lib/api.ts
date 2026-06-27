@@ -1,4 +1,8 @@
-import type { InterviewState, ProjectIdeaInput } from '@archivato/shared';
+import type {
+  InterviewState,
+  ProjectIdeaInput,
+  RequirementDocument,
+} from '@archivato/shared';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
@@ -45,4 +49,14 @@ export const interviewApi = {
 
   get: (sessionId: string) =>
     request<InterviewState>(`/interview/${sessionId}`),
+};
+
+export const requirementsApi = {
+  generate: (sessionId: string) =>
+    request<RequirementDocument>(`/requirements/${sessionId}/generate`, {
+      method: 'POST',
+    }),
+
+  get: (sessionId: string) =>
+    request<RequirementDocument>(`/requirements/${sessionId}`),
 };

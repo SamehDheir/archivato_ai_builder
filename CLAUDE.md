@@ -67,10 +67,23 @@ DB Design → API Design → Review → Export
     live completeness bar → requirements summary → confirm. `lib/api.ts` client.
   - Verified: 15/15 API tests pass; api + web build clean; full HTTP flow checked
     (gate fires at 0.91, 400 on bad input, 409 on double-confirm).
-- **Session storage is IN-MEMORY for now** (behind the repository interface) so the
+- **Slice 3 — DONE:** Requirement Document generation.
+  - `packages/shared/requirements.ts`: `RequirementDocument` (functional FR-n,
+    nonFunctional NFR-n, roles, businessRules BR-n, constraints, assumptions).
+  - `apps/api/src/llm/agents/requirement-engineer.agent.ts`: LLM generation with
+    a deterministic fallback built from the interview (valid doc in mock mode).
+  - `apps/api/src/requirements`: `RequirementsService` (gate: confirmed-only),
+    `RequirementDocumentRepository` + in-memory impl, controller. Reads sessions
+    from `InterviewModule` (which now EXPORTS `INTERVIEW_SESSION_REPOSITORY`).
+  - REST: POST `/requirements/:sessionId/generate`, GET `/requirements/:sessionId`.
+  - Frontend: "Generate Requirement Document" on the confirmed screen renders the
+    full doc (`apps/web/app/RequirementDocumentView.tsx`) + regenerate.
+  - Verified: 20/20 API tests; api + web build clean; HTTP flow checked
+    (409 before confirm, 404 before generate, 200 after).
+- **Session/doc storage is IN-MEMORY for now** (behind repository interfaces) so the
   UI runs with zero Postgres setup. Prisma/Postgres is its own upcoming slice.
-- **Next up — Slice 3:** Requirements module (formal Requirement Document via the
-  Requirement Engineer agent) + its frontend view.
+- **Next up — Slice 4:** System Design (architecture type, stack, service breakdown)
+  via the System Architect agent + frontend view.
 - **Not built yet:** Prisma/Postgres wiring, BullMQ/Redis, JWT auth,
   SystemDesign/DB/API/Review/Export modules.
 

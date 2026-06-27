@@ -4,9 +4,11 @@ import { useState } from 'react';
 import type {
   InterviewState,
   ProjectScale,
+  RequirementDocument,
   RequirementsSummary,
 } from '@archivato/shared';
-import { interviewApi } from '../lib/api';
+import { interviewApi, requirementsApi } from '../lib/api';
+import { RequirementDocumentView } from './RequirementDocumentView';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
@@ -22,6 +24,9 @@ export default function Home() {
 
   // Answer box
   const [answer, setAnswer] = useState('');
+
+  // Requirement document (Slice 3)
+  const [doc, setDoc] = useState<RequirementDocument | null>(null);
 
   async function run<T>(fn: () => Promise<T>) {
     setBusy(true);
@@ -66,8 +71,17 @@ export default function Home() {
     if (next) setState(next);
   }
 
+  async function handleGenerate() {
+    if (!state) return;
+    const generated = await run(() =>
+      requirementsApi.generate(state.sessionId),
+    );
+    if (generated) setDoc(generated);
+  }
+
   function reset() {
     setState(null);
+    setDoc(null);
     setIdea('');
     setIndustry('');
     setScale('');
@@ -189,13 +203,54 @@ export default function Home() {
           {state.status === 'confirmed' && (
             <div className="panel">
               <span className="badge">✓ Requirements confirmed</span>
-              <p className="subtitle" style={{ marginTop: 12 }}>
-                The pipeline can now proceed to System Design (next slice).
-              </p>
-              {state.summary && <SummaryView summary={state.summary} />}
-              <button className="secondary" onClick={reset}>
-                Start a new interview
-              </button>
+              {!doc && (
+                <>
+                  <p className="subtitle" style={{ marginTop: 12 }}>
+                    Generate the formal Requirement Document from this interview.
+                  </p>
+                  {state.summary && <SummaryView summary={state.summary} />}
+                  <div className="row">
+                    <button onClick={handleGenerate} disabled={busy}>
+                      {busy ? 'Generating…' : 'Generate Requirement Document'}
+                    </button>
+                    <button
+                      className="secondary"
+                      onClick={reset}
+                      disabled={busy}
+                    >
+                      Start over
+                    </button>
+                  </div>
+                  {error && <div className="error">{error}</div>}
+                </>
+              )}
+
+              {doc && (
+                <>
+                  <h3 style={{ marginTop: 12 }}>Requirement Document</h3>
+                  <RequirementDocumentView doc={doc} />
+                  <p className="subtitle" style={{ marginTop: 16 }}>
+                    The pipeline can now proceed to System Design (next slice).
+                  </p>
+                  <div className="row">
+                    <button
+                      className="secondary"
+                      onClick={handleGenerate}
+                      disabled={busy}
+                    >
+                      {busy ? 'Regenerating…' : 'Regenerate'}
+                    </button>
+                    <button
+                      className="secondary"
+                      onClick={reset}
+                      disabled={busy}
+                    >
+                      Start a new interview
+                    </button>
+                  </div>
+                  {error && <div className="error">{error}</div>}
+                </>
+              )}
             </div>
           )}
         </>

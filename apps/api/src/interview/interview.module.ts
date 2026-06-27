@@ -16,5 +16,7 @@ import { InMemoryInterviewSessionRepository } from './in-memory-interview-sessio
       useClass: InMemoryInterviewSessionRepository,
     },
   ],
+  // Export the session store so RequirementsModule reads the same instance.
+  exports: [INTERVIEW_SESSION_REPOSITORY],
 })
 export class InterviewModule {}

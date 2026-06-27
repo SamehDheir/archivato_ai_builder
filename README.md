@@ -41,9 +41,10 @@ archivato-ai-builder/
 ├─ apps/
 │  ├─ api/               # NestJS backend
 │  │  └─ src/
-│  │     ├─ llm/         # LlmProvider interface, mock + claude, BaseAgent
-│  │     └─ interview/   # phased interview engine (state machine, REST)
-│  └─ web/               # Next.js frontend (interview chat UI)
+│  │     ├─ llm/         # LlmProvider interface, mock + claude, agents
+│  │     ├─ interview/   # phased interview engine (state machine, REST)
+│  │     └─ requirements/# Requirement Document generation (REST)
+│  └─ web/               # Next.js frontend (interview + requirements UI)
 ├─ CLAUDE.md             # working memory / decisions log
 └─ README.md            # this file
 ```
@@ -113,10 +114,22 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - **Next.js chat UI**: idea form → phased Q&A → live completeness bar →
   requirements summary → confirm.
 
+### ✅ Slice 3 — Requirement Document + UI
+- `RequirementEngineerAgent` turns a **confirmed** interview into a formal,
+  structured **Requirement Document**: functional (FR-n, prioritized),
+  non-functional (NFR-n), user roles, business rules, constraints, assumptions.
+- LLM-generated with a **deterministic fallback** built from the interview, so
+  the stage always yields a valid document (and demos cleanly in mock mode).
+- Gate enforced: requirements can only be generated **after** confirmation.
+- Repository pattern for documents — in-memory for now, Prisma later.
+- REST API (`/requirements/:sessionId/generate`, `/requirements/:sessionId`).
+- **Frontend**: a "Generate Requirement Document" button on the confirmed
+  screen renders the full document (FR table, NFRs, roles, rules…), with regenerate.
+
 ### ⏳ Upcoming
-- **Slice 3** — Requirements module (formal Requirement Document via the
-  Requirement Engineer agent) + frontend view.
-- Persistence (Prisma + PostgreSQL), System/DB/API Design, Review Engine,
+- **Slice 4** — System Design (architecture type, tech stack, service breakdown)
+  via the System Architect agent + frontend view.
+- Persistence (Prisma + PostgreSQL), DB/API Design, Review Engine,
   Export (PDF/Markdown/JSON/OpenAPI/GitHub), Auth (JWT), BullMQ/Redis.
 
 ---
@@ -129,6 +142,8 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/interview/:id`       | Fetch current interview state                |
 | POST   | `/api/interview/:id/answer`| Answer the current question and advance      |
 | POST   | `/api/interview/:id/confirm`| Confirm the summarized requirements (gate)  |
+| POST   | `/api/requirements/:sessionId/generate`| Generate the Requirement Document (confirmed only) |
+| GET    | `/api/requirements/:sessionId`| Fetch a generated Requirement Document    |
 
 ---
 

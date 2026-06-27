@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { LlmModule } from './llm/llm.module';
 import { InterviewModule } from './interview/interview.module';
+import { RequirementsModule } from './requirements/requirements.module';
 
 @Module({
   imports: [
@@ -11,6 +12,8 @@ import { InterviewModule } from './interview/interview.module';
     LlmModule,
     // Slice 2: the AI interview loop (intent → phased Q&A → confirmation gate).
     InterviewModule,
+    // Slice 3: formal Requirement Document generation from a confirmed interview.
+    RequirementsModule,
   ],
 })
 export class AppModule {}
