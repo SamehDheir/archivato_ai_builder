@@ -19,5 +19,7 @@ import { InMemorySystemDesignRepository } from './in-memory-system-design.reposi
       useClass: InMemorySystemDesignRepository,
     },
   ],
+  // Export the design store so downstream stages (Database Design) read it.
+  exports: [SYSTEM_DESIGN_REPOSITORY],
 })
 export class SystemDesignModule {}

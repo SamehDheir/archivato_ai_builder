@@ -14,3 +14,4 @@ export * from './agents';
 export * from './interview';
 export * from './requirements';
 export * from './system-design';
+export * from './database-design';

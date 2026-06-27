@@ -95,12 +95,26 @@ DB Design → API Design → Review → Export
     button after the requirement doc (architecture, tech-stack table, service grid).
   - Verified: 26/26 API tests; api + web build clean; HTTP flow checked
     (409 before requirements, 404 before generate, 200 after).
+- **Slice 5 — DONE:** Database Design generation.
+  - `packages/shared/database-design.ts`: `DatabaseDesign` (entities with
+    `EntityColumn` PK/FK/unique/type, `Relation[]` one-to-one/many).
+  - `apps/api/src/llm/agents/database-designer.agent.ts`: LLM generation with a
+    deterministic fallback (always `users`; profile table per role; invoices/
+    notifications/reports per service; FKs → users.id; relations).
+  - `apps/api/src/database-design`: `DatabaseDesignService` (gate: confirmed +
+    requirement doc + system design must exist), repo + in-memory impl, controller.
+    SystemDesignModule now EXPORTS `SYSTEM_DESIGN_REPOSITORY`.
+  - REST: POST `/database-design/:sessionId/generate`, GET `/database-design/:sessionId`.
+  - Frontend: `apps/web/app/DatabaseDesignView.tsx` + "Generate Database Design"
+    button after system design (entity cards with PK/FK/unique badges, relations).
+  - Verified: 31/31 API tests; api + web build clean; HTTP flow checked
+    (409 before system design, 404 before generate, 200 after).
 - **All stage storage is IN-MEMORY for now** (behind repository interfaces) so the
   UI runs with zero Postgres setup. Prisma/Postgres is its own upcoming slice.
-- **Next up — Slice 5:** Database Design (entities, PKs/FKs, relations) via the
-  Database Designer agent + frontend view.
+- **Next up — Slice 6:** API Design (endpoints, request/response schemas, status
+  codes) via the API Designer agent + frontend view.
 - **Not built yet:** Prisma/Postgres wiring, BullMQ/Redis, JWT auth,
-  DB/API/Review/Export modules.
+  API/Review/Export modules.
 
 ## Verification gotcha (learned Slice 3–4)
 

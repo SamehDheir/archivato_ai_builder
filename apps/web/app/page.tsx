@@ -2,15 +2,22 @@
 
 import { useState } from 'react';
 import type {
+  DatabaseDesign,
   InterviewState,
   ProjectScale,
   RequirementDocument,
   RequirementsSummary,
   SystemDesign,
 } from '@archivato/shared';
-import { interviewApi, requirementsApi, systemDesignApi } from '../lib/api';
+import {
+  databaseDesignApi,
+  interviewApi,
+  requirementsApi,
+  systemDesignApi,
+} from '../lib/api';
 import { RequirementDocumentView } from './RequirementDocumentView';
 import { SystemDesignView } from './SystemDesignView';
+import { DatabaseDesignView } from './DatabaseDesignView';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
@@ -32,6 +39,9 @@ export default function Home() {
 
   // System design (Slice 4)
   const [design, setDesign] = useState<SystemDesign | null>(null);
+
+  // Database design (Slice 5)
+  const [dbDesign, setDbDesign] = useState<DatabaseDesign | null>(null);
 
   async function run<T>(fn: () => Promise<T>) {
     setBusy(true);
@@ -92,10 +102,19 @@ export default function Home() {
     if (generated) setDesign(generated);
   }
 
+  async function handleGenerateDbDesign() {
+    if (!state) return;
+    const generated = await run(() =>
+      databaseDesignApi.generate(state.sessionId),
+    );
+    if (generated) setDbDesign(generated);
+  }
+
   function reset() {
     setState(null);
     setDoc(null);
     setDesign(null);
+    setDbDesign(null);
     setIdea('');
     setIndustry('');
     setScale('');
@@ -269,26 +288,57 @@ export default function Home() {
                     <>
                       <h3 style={{ marginTop: 20 }}>System Design</h3>
                       <SystemDesignView design={design} />
-                      <p className="subtitle" style={{ marginTop: 16 }}>
-                        The pipeline can now proceed to Database Design (next
-                        slice).
-                      </p>
-                      <div className="row">
-                        <button
-                          className="secondary"
-                          onClick={handleGenerateDesign}
-                          disabled={busy}
-                        >
-                          {busy ? 'Regenerating…' : 'Regenerate design'}
-                        </button>
-                        <button
-                          className="secondary"
-                          onClick={reset}
-                          disabled={busy}
-                        >
-                          Start a new interview
-                        </button>
-                      </div>
+
+                      {!dbDesign && (
+                        <>
+                          <p className="subtitle" style={{ marginTop: 16 }}>
+                            Next: design the database schema from the services
+                            and roles.
+                          </p>
+                          <div className="row">
+                            <button
+                              onClick={handleGenerateDbDesign}
+                              disabled={busy}
+                            >
+                              {busy ? 'Designing…' : 'Generate Database Design'}
+                            </button>
+                            <button
+                              className="secondary"
+                              onClick={handleGenerateDesign}
+                              disabled={busy}
+                            >
+                              Regenerate system design
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      {dbDesign && (
+                        <>
+                          <h3 style={{ marginTop: 20 }}>Database Design</h3>
+                          <DatabaseDesignView design={dbDesign} />
+                          <p className="subtitle" style={{ marginTop: 16 }}>
+                            The pipeline can now proceed to API Design (next
+                            slice).
+                          </p>
+                          <div className="row">
+                            <button
+                              className="secondary"
+                              onClick={handleGenerateDbDesign}
+                              disabled={busy}
+                            >
+                              {busy ? 'Regenerating…' : 'Regenerate schema'}
+                            </button>
+                            <button
+                              className="secondary"
+                              onClick={reset}
+                              disabled={busy}
+                            >
+                              Start a new interview
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
                   {error && <div className="error">{error}</div>}

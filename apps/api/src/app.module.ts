@@ -4,6 +4,7 @@ import { LlmModule } from './llm/llm.module';
 import { InterviewModule } from './interview/interview.module';
 import { RequirementsModule } from './requirements/requirements.module';
 import { SystemDesignModule } from './system-design/system-design.module';
+import { DatabaseDesignModule } from './database-design/database-design.module';
 
 @Module({
   imports: [
@@ -17,6 +18,8 @@ import { SystemDesignModule } from './system-design/system-design.module';
     RequirementsModule,
     // Slice 4: System Design (architecture, tech stack, service breakdown).
     SystemDesignModule,
+    // Slice 5: Database Design (entities, PKs/FKs, relations).
+    DatabaseDesignModule,
   ],
 })
 export class AppModule {}
