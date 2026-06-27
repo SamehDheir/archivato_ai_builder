@@ -109,12 +109,27 @@ DB Design → API Design → Review → Export
     button after system design (entity cards with PK/FK/unique badges, relations).
   - Verified: 31/31 API tests; api + web build clean; HTTP flow checked
     (409 before system design, 404 before generate, 200 after).
-- **All stage storage is IN-MEMORY for now** (behind repository interfaces) so the
-  UI runs with zero Postgres setup. Prisma/Postgres is its own upcoming slice.
-- **Next up — Slice 6:** API Design (endpoints, request/response schemas, status
-  codes) via the API Designer agent + frontend view.
-- **Not built yet:** Prisma/Postgres wiring, BullMQ/Redis, JWT auth,
-  API/Review/Export modules.
+- **Slice 6 — DONE:** API Design generation.
+  - `packages/shared/api-design.ts`: `ApiDesign` (modules → endpoints with method,
+    request/response `SchemaField[]`, status codes).
+  - `apps/api/src/llm/agents/api-designer.agent.ts`: LLM generation with a
+    deterministic fallback (Auth module + CRUD per entity; server-managed fields
+    excluded from write schemas).
+  - `apps/api/src/api-design`: `ApiDesignService` (gate: full upstream chain incl.
+    database design), repo + in-memory impl, controller. DatabaseDesignModule now
+    EXPORTS `DATABASE_DESIGN_REPOSITORY`.
+  - REST: POST `/api-design/:sessionId/generate`, GET `/api-design/:sessionId`.
+  - Frontend: `apps/web/app/ApiDesignView.tsx` + "Generate API Design" button
+    after the database design (method badges, paths, status codes, schema columns).
+  - Verified: 36/36 API tests; api + web build clean; HTTP flow checked.
+- **Next up — PERSISTENCE slice:** user asked to use Prisma + PostgreSQL and store
+  ALL data. Swap every in-memory repository for a Prisma-backed implementation.
+- **Not built yet:** BullMQ/Redis, JWT auth, Review/Export modules.
+
+## Review rule (added Slice 6)
+
+After finishing each slice, run a **security + code review** (`/security-review`
+and `/code-review`) and address findings before moving on.
 
 ## Verification gotcha (learned Slice 3–4)
 

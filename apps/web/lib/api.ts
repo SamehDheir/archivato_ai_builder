@@ -1,4 +1,5 @@
 import type {
+  ApiDesign,
   DatabaseDesign,
   InterviewState,
   ProjectIdeaInput,
@@ -81,4 +82,13 @@ export const databaseDesignApi = {
 
   get: (sessionId: string) =>
     request<DatabaseDesign>(`/database-design/${sessionId}`),
+};
+
+export const apiDesignApi = {
+  generate: (sessionId: string) =>
+    request<ApiDesign>(`/api-design/${sessionId}/generate`, {
+      method: 'POST',
+    }),
+
+  get: (sessionId: string) => request<ApiDesign>(`/api-design/${sessionId}`),
 };

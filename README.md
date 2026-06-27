@@ -45,7 +45,8 @@ archivato-ai-builder/
 │  │     ├─ interview/   # phased interview engine (state machine, REST)
 │  │     ├─ requirements/# Requirement Document generation (REST)
 │  │     ├─ system-design/   # System Design generation (REST)
-│  │     └─ database-design/ # Database Design generation (REST)
+│  │     ├─ database-design/ # Database Design generation (REST)
+│  │     └─ api-design/      # API Design generation (REST)
 │  └─ web/               # Next.js frontend (interview → requirements → designs)
 ├─ CLAUDE.md             # working memory / decisions log
 └─ README.md            # this file
@@ -157,10 +158,25 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - **Frontend**: a "Generate Database Design" button after the system design
   renders entity cards (columns with PK/FK/unique badges) and a relations list.
 
+### ✅ Slice 6 — API Design + UI
+- `ApiDesignerAgent` turns the upstream chain (interview → requirements →
+  system design → database design) into an **API Design**: endpoints grouped by
+  module, each with HTTP method, request/response schemas, and status codes.
+- LLM-generated with a **deterministic fallback** that derives REST CRUD
+  endpoints from the database entities (plus an Auth module: register / login /
+  refresh). Server-managed fields (id, timestamps, password_hash) are excluded
+  from write schemas.
+- Gate enforced: requires the full upstream chain incl. a database design.
+- Repository pattern for designs — in-memory for now, Prisma later.
+- REST API (`/api-design/:sessionId/generate`, `/api-design/:sessionId`).
+- **Frontend**: a "Generate API Design" button after the database design renders
+  module sections with colored method badges, paths, status codes, and
+  request/response schema columns. Per-part JSON download included.
+
 ### ⏳ Upcoming
-- **Slice 6** — API Design (endpoints, request/response schemas, status codes)
-  via the API Designer agent + frontend view.
-- Persistence (Prisma + PostgreSQL), Review Engine,
+- **Slice 7** — Review Engine (scalability score, security issues, missing
+  features, performance risks, recommendations) via the Reviewer agent + UI.
+- Persistence (Prisma + PostgreSQL),
   Export (PDF/Markdown/JSON/OpenAPI/GitHub), Auth (JWT), BullMQ/Redis.
 
 ---
@@ -179,6 +195,8 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/system-design/:sessionId`| Fetch a generated System Design          |
 | POST   | `/api/database-design/:sessionId/generate`| Generate the Database Design (system design required) |
 | GET    | `/api/database-design/:sessionId`| Fetch a generated Database Design       |
+| POST   | `/api/api-design/:sessionId/generate`| Generate the API Design (database design required) |
+| GET    | `/api/api-design/:sessionId`| Fetch a generated API Design                 |
 
 ---
 

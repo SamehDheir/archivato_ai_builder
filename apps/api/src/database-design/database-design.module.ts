@@ -20,5 +20,7 @@ import { InMemoryDatabaseDesignRepository } from './in-memory-database-design.re
       useClass: InMemoryDatabaseDesignRepository,
     },
   ],
+  // Export the schema store so downstream stages (API Design) read it.
+  exports: [DATABASE_DESIGN_REPOSITORY],
 })
 export class DatabaseDesignModule {}
