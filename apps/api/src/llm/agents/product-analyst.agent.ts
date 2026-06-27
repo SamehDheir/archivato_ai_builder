@@ -1,19 +1,19 @@
-import { AgentRole, type ProjectIdeaInput } from '@archivato/shared';
+import { Inject, Injectable } from '@nestjs/common';
+import {
+  AgentRole,
+  type IntentAnalysis,
+  type ProjectIdeaInput,
+} from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
+import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
 
-/** The Product Analyst's structured read of a raw idea (Intent Analysis stage). */
-export interface IntentAnalysis {
-  summary: string;
-  domain: string;
-  primaryUsers: string[];
-  coreCapabilities: string[];
-  openQuestions: string[];
-}
+export type { IntentAnalysis };
 
 /**
- * Sample concrete agent, included in Slice 1 to exercise the LLM/Agent core
- * end-to-end. The full Intent Analysis prompt is refined in its own slice.
+ * Owns the Intent Analysis stage: turns a raw idea into a structured read of
+ * domain, users, capabilities, and the open questions the interview must close.
  */
+@Injectable()
 export class ProductAnalystAgent extends BaseAgent {
   readonly role = AgentRole.ProductAnalyst;
 
@@ -22,6 +22,10 @@ export class ProductAnalystAgent extends BaseAgent {
     'Given a raw business idea, extract a concise, structured intent analysis.',
     'You never invent product decisions; unknowns go into openQuestions.',
   ].join(' ');
+
+  constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
+    super(llm);
+  }
 
   async analyze(input: ProjectIdeaInput): Promise<IntentAnalysis> {
     const prompt = [

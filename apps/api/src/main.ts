@@ -6,6 +6,9 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Allow the Next.js dev client (apps/web) to call the API.
+  app.enableCors({ origin: true });
+
   // Global validation — DTOs are validated/sanitized everywhere (project rule).
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true }),

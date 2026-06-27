@@ -9,7 +9,10 @@
   ],
   "scripts": {
     "build:shared": "npm run build --workspace @archivato/shared",
-    "test:api": "npm run test --workspace @archivato/api"
+    "test:api": "npm run test --workspace @archivato/api",
+    "dev:api": "npm run start:dev --workspace @archivato/api",
+    "dev:web": "npm run dev --workspace @archivato/web",
+    "build": "npm run build --workspace @archivato/shared && npm run build --workspace @archivato/api && npm run build --workspace @archivato/web"
   },
   "engines": {
     "node": ">=20"

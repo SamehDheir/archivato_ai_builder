@@ -39,6 +39,12 @@ DB Design → API Design → Review → Export
 - **Structured output contract:** every agent uses `completeJson<T>()`, which
   strips code fences / prose and throws `LlmJsonParseError` on bad JSON.
 
+## Workflow Rule (added Slice 2)
+
+- **Every slice ships backend + matching frontend** so the user can click through
+  and verify it works. Run locally: `npm run dev:api` (port 3001) and
+  `npm run dev:web` (port 3000). `npm run build` builds shared → api → web.
+
 ## Current Phase
 
 - **Slice 1 — DONE:** Monorepo scaffold + LLM/Agent Core.
@@ -46,10 +52,27 @@ DB Design → API Design → Review → Export
   - `apps/api`: NestJS shell (`main.ts`, `AppModule`, global validation/config).
   - `apps/api/src/llm`: `LlmProvider` interface, mock + claude providers, JSON
     parser util, `BaseAgent`, `LlmModule`, sample `ProductAnalystAgent`, spec tests.
-- **Next up — Slice 2:** Intent Analysis + Interview Engine (the critical feature:
-  phased A–E loop, completeness scoring, confirmation gate).
-- **Not built yet:** Prisma/Postgres wiring, BullMQ/Redis, JWT auth, apps/web UI,
-  Requirements/SystemDesign/DB/API/Review/Export modules.
+- **Slice 2 — DONE:** Intent Analysis + Interview Engine (the critical feature).
+  - `packages/shared/interview.ts`: `InterviewPhase` (A–E), `InterviewState`,
+    `RequirementsSummary`, `COMPLETENESS_THRESHOLD = 0.9`.
+  - `apps/api/src/interview`: deterministic `QUESTION_PLAN` (11 Qs across phases),
+    `InterviewService` state machine (collecting → awaiting_confirmation → confirmed),
+    completeness scoring + 90% gate, summarize-before-confirm, intent via
+    `ProductAnalystAgent` with deterministic fallback when the provider doesn't
+    conform (so mock mode demos cleanly). Repository pattern:
+    `InterviewSessionRepository` interface + `InMemoryInterviewSessionRepository`
+    (Prisma swap-in later). REST: POST `/interview`, GET `/interview/:id`,
+    POST `/interview/:id/answer`, POST `/interview/:id/confirm`. DTOs validated.
+  - `apps/web` (Next.js 14): chat-style interview page — idea form → phased Q&A →
+    live completeness bar → requirements summary → confirm. `lib/api.ts` client.
+  - Verified: 15/15 API tests pass; api + web build clean; full HTTP flow checked
+    (gate fires at 0.91, 400 on bad input, 409 on double-confirm).
+- **Session storage is IN-MEMORY for now** (behind the repository interface) so the
+  UI runs with zero Postgres setup. Prisma/Postgres is its own upcoming slice.
+- **Next up — Slice 3:** Requirements module (formal Requirement Document via the
+  Requirement Engineer agent) + its frontend view.
+- **Not built yet:** Prisma/Postgres wiring, BullMQ/Redis, JWT auth,
+  SystemDesign/DB/API/Review/Export modules.
 
 ## Rules
 
