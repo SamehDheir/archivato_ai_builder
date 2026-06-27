@@ -1,4 +1,5 @@
 import type { RequirementDocument } from '@archivato/shared';
+import { DownloadButton } from './DownloadButton';
 
 const PRIORITY_COLORS: Record<string, string> = {
   must: '#f87171',
@@ -13,9 +14,16 @@ export function RequirementDocumentView({
 }) {
   return (
     <div>
-      <p className="subtitle">
-        Generated {new Date(doc.generatedAt).toLocaleString()}
-      </p>
+      <div className="view-header">
+        <p className="subtitle">
+          Generated {new Date(doc.generatedAt).toLocaleString()}
+        </p>
+        <DownloadButton
+          filename={`requirements-${doc.sessionId}.json`}
+          data={doc}
+          label="Download requirements"
+        />
+      </div>
 
       <div className="summary-section">
         <h4>Functional requirements</h4>

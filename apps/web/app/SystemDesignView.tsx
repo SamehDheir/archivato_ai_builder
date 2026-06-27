@@ -1,4 +1,5 @@
 import type { SystemDesign } from '@archivato/shared';
+import { DownloadButton } from './DownloadButton';
 
 const ARCH_LABEL: Record<string, string> = {
   monolith: 'Monolith',
@@ -9,9 +10,16 @@ const ARCH_LABEL: Record<string, string> = {
 export function SystemDesignView({ design }: { design: SystemDesign }) {
   return (
     <div>
-      <p className="subtitle">
-        Generated {new Date(design.generatedAt).toLocaleString()}
-      </p>
+      <div className="view-header">
+        <p className="subtitle">
+          Generated {new Date(design.generatedAt).toLocaleString()}
+        </p>
+        <DownloadButton
+          filename={`system-design-${design.sessionId}.json`}
+          data={design}
+          label="Download system design"
+        />
+      </div>
 
       <div className="summary-section">
         <h4>Architecture</h4>

@@ -1,31 +1,37 @@
 import type { DatabaseDesign, EntityColumn } from '@archivato/shared';
+import { DownloadButton } from './DownloadButton';
 
 export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
   return (
     <div>
-      <p className="subtitle">
-        {design.databaseType} · generated{' '}
-        {new Date(design.generatedAt).toLocaleString()}
-      </p>
+      <div className="view-header">
+        <p className="subtitle">
+          {design.databaseType} · generated{' '}
+          {new Date(design.generatedAt).toLocaleString()}
+        </p>
+        <DownloadButton
+          filename={`database-design-${design.sessionId}.json`}
+          data={design}
+          label="Download schema"
+        />
+      </div>
 
       <div className="summary-section">
         <h4>Entities</h4>
-        <div className="service-grid">
+        <div className="entity-grid">
           {design.entities.map((entity) => (
             <div className="entity-card" key={entity.name}>
               <div className="entity-name mono">{entity.name}</div>
               <div className="subtitle">{entity.description}</div>
-              <table className="col-table">
-                <tbody>
-                  {entity.columns.map((col) => (
-                    <tr key={col.name}>
-                      <td className="mono">{col.name}</td>
-                      <td className="subtitle">{col.type}</td>
-                      <td>{columnBadges(col)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ul className="col-list">
+                {entity.columns.map((col) => (
+                  <li className="col-row" key={col.name}>
+                    <span className="col-name mono">{col.name}</span>
+                    <span className="col-type subtitle">{col.type}</span>
+                    <span className="col-badges">{columnBadges(col)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           ))}
         </div>
