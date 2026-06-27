@@ -6,9 +6,11 @@ import type {
   ProjectScale,
   RequirementDocument,
   RequirementsSummary,
+  SystemDesign,
 } from '@archivato/shared';
-import { interviewApi, requirementsApi } from '../lib/api';
+import { interviewApi, requirementsApi, systemDesignApi } from '../lib/api';
 import { RequirementDocumentView } from './RequirementDocumentView';
+import { SystemDesignView } from './SystemDesignView';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
@@ -27,6 +29,9 @@ export default function Home() {
 
   // Requirement document (Slice 3)
   const [doc, setDoc] = useState<RequirementDocument | null>(null);
+
+  // System design (Slice 4)
+  const [design, setDesign] = useState<SystemDesign | null>(null);
 
   async function run<T>(fn: () => Promise<T>) {
     setBusy(true);
@@ -79,9 +84,18 @@ export default function Home() {
     if (generated) setDoc(generated);
   }
 
+  async function handleGenerateDesign() {
+    if (!state) return;
+    const generated = await run(() =>
+      systemDesignApi.generate(state.sessionId),
+    );
+    if (generated) setDesign(generated);
+  }
+
   function reset() {
     setState(null);
     setDoc(null);
+    setDesign(null);
     setIdea('');
     setIndustry('');
     setScale('');
@@ -229,25 +243,54 @@ export default function Home() {
                 <>
                   <h3 style={{ marginTop: 12 }}>Requirement Document</h3>
                   <RequirementDocumentView doc={doc} />
-                  <p className="subtitle" style={{ marginTop: 16 }}>
-                    The pipeline can now proceed to System Design (next slice).
-                  </p>
-                  <div className="row">
-                    <button
-                      className="secondary"
-                      onClick={handleGenerate}
-                      disabled={busy}
-                    >
-                      {busy ? 'Regenerating…' : 'Regenerate'}
-                    </button>
-                    <button
-                      className="secondary"
-                      onClick={reset}
-                      disabled={busy}
-                    >
-                      Start a new interview
-                    </button>
-                  </div>
+
+                  {!design && (
+                    <>
+                      <p className="subtitle" style={{ marginTop: 16 }}>
+                        Next: design the system architecture from these
+                        requirements.
+                      </p>
+                      <div className="row">
+                        <button onClick={handleGenerateDesign} disabled={busy}>
+                          {busy ? 'Designing…' : 'Generate System Design'}
+                        </button>
+                        <button
+                          className="secondary"
+                          onClick={handleGenerate}
+                          disabled={busy}
+                        >
+                          Regenerate requirements
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {design && (
+                    <>
+                      <h3 style={{ marginTop: 20 }}>System Design</h3>
+                      <SystemDesignView design={design} />
+                      <p className="subtitle" style={{ marginTop: 16 }}>
+                        The pipeline can now proceed to Database Design (next
+                        slice).
+                      </p>
+                      <div className="row">
+                        <button
+                          className="secondary"
+                          onClick={handleGenerateDesign}
+                          disabled={busy}
+                        >
+                          {busy ? 'Regenerating…' : 'Regenerate design'}
+                        </button>
+                        <button
+                          className="secondary"
+                          onClick={reset}
+                          disabled={busy}
+                        >
+                          Start a new interview
+                        </button>
+                      </div>
+                    </>
+                  )}
                   {error && <div className="error">{error}</div>}
                 </>
               )}

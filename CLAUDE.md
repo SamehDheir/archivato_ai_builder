@@ -80,12 +80,34 @@ DB Design → API Design → Review → Export
     full doc (`apps/web/app/RequirementDocumentView.tsx`) + regenerate.
   - Verified: 20/20 API tests; api + web build clean; HTTP flow checked
     (409 before confirm, 404 before generate, 200 after).
-- **Session/doc storage is IN-MEMORY for now** (behind repository interfaces) so the
+- **Slice 4 — DONE:** System Design generation.
+  - `packages/shared/system-design.ts`: `SystemDesign` (architecture type +
+    rationale, `TechChoice[]`, `ServiceModule[]` with dependencies).
+  - `apps/api/src/llm/agents/system-architect.agent.ts`: LLM generation with a
+    deterministic, keyword-driven fallback (infers architecture, tech stack, and
+    services — Auth/Users always, Billing/Notifications/Reporting on keywords).
+  - `apps/api/src/system-design`: `SystemDesignService` (gate: confirmed interview
+    AND requirement doc must exist), repository + in-memory impl, controller.
+    Reads session + requirement stores (RequirementsModule now EXPORTS
+    `REQUIREMENT_DOCUMENT_REPOSITORY`).
+  - REST: POST `/system-design/:sessionId/generate`, GET `/system-design/:sessionId`.
+  - Frontend: `apps/web/app/SystemDesignView.tsx` + a "Generate System Design"
+    button after the requirement doc (architecture, tech-stack table, service grid).
+  - Verified: 26/26 API tests; api + web build clean; HTTP flow checked
+    (409 before requirements, 404 before generate, 200 after).
+- **All stage storage is IN-MEMORY for now** (behind repository interfaces) so the
   UI runs with zero Postgres setup. Prisma/Postgres is its own upcoming slice.
-- **Next up — Slice 4:** System Design (architecture type, stack, service breakdown)
-  via the System Architect agent + frontend view.
+- **Next up — Slice 5:** Database Design (entities, PKs/FKs, relations) via the
+  Database Designer agent + frontend view.
 - **Not built yet:** Prisma/Postgres wiring, BullMQ/Redis, JWT auth,
-  SystemDesign/DB/API/Review/Export modules.
+  DB/API/Review/Export modules.
+
+## Verification gotcha (learned Slice 3–4)
+
+Don't run a production `next build` in `apps/web` while a `next dev` server is
+running — it overwrites `.next` and breaks the dev server (`Cannot find module
+'./NNN.js'`, HTTP 500). After verifying with a build, `rm -rf apps/web/.next`
+and restart `next dev`.
 
 ## Rules
 

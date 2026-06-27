@@ -2,6 +2,7 @@ import type {
   InterviewState,
   ProjectIdeaInput,
   RequirementDocument,
+  SystemDesign,
 } from '@archivato/shared';
 
 const API_URL =
@@ -59,4 +60,14 @@ export const requirementsApi = {
 
   get: (sessionId: string) =>
     request<RequirementDocument>(`/requirements/${sessionId}`),
+};
+
+export const systemDesignApi = {
+  generate: (sessionId: string) =>
+    request<SystemDesign>(`/system-design/${sessionId}/generate`, {
+      method: 'POST',
+    }),
+
+  get: (sessionId: string) =>
+    request<SystemDesign>(`/system-design/${sessionId}`),
 };

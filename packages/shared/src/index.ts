@@ -13,3 +13,4 @@ export * from './pipeline';
 export * from './agents';
 export * from './interview';
 export * from './requirements';
+export * from './system-design';

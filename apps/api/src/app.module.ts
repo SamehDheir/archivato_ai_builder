@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { LlmModule } from './llm/llm.module';
 import { InterviewModule } from './interview/interview.module';
 import { RequirementsModule } from './requirements/requirements.module';
+import { SystemDesignModule } from './system-design/system-design.module';
 
 @Module({
   imports: [
@@ -14,6 +15,8 @@ import { RequirementsModule } from './requirements/requirements.module';
     InterviewModule,
     // Slice 3: formal Requirement Document generation from a confirmed interview.
     RequirementsModule,
+    // Slice 4: System Design (architecture, tech stack, service breakdown).
+    SystemDesignModule,
   ],
 })
 export class AppModule {}

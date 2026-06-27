@@ -19,5 +19,7 @@ import { InMemoryRequirementDocumentRepository } from './in-memory-requirement-d
       useClass: InMemoryRequirementDocumentRepository,
     },
   ],
+  // Export the doc store so downstream stages (System Design) read the same data.
+  exports: [REQUIREMENT_DOCUMENT_REPOSITORY],
 })
 export class RequirementsModule {}

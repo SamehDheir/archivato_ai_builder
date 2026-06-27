@@ -43,8 +43,9 @@ archivato-ai-builder/
 │  │  └─ src/
 │  │     ├─ llm/         # LlmProvider interface, mock + claude, agents
 │  │     ├─ interview/   # phased interview engine (state machine, REST)
-│  │     └─ requirements/# Requirement Document generation (REST)
-│  └─ web/               # Next.js frontend (interview + requirements UI)
+│  │     ├─ requirements/# Requirement Document generation (REST)
+│  │     └─ system-design/ # System Design generation (REST)
+│  └─ web/               # Next.js frontend (interview → requirements → design)
 ├─ CLAUDE.md             # working memory / decisions log
 └─ README.md            # this file
 ```
@@ -126,10 +127,24 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - **Frontend**: a "Generate Requirement Document" button on the confirmed
   screen renders the full document (FR table, NFRs, roles, rules…), with regenerate.
 
+### ✅ Slice 4 — System Design + UI
+- `SystemArchitectAgent` turns a confirmed interview + its Requirement Document
+  into a **System Design**: architecture type (monolith / modular_monolith /
+  microservices) with rationale, a **tech-stack recommendation**, and a
+  **service breakdown** (Auth, Users, Billing, Notifications… with dependencies).
+- LLM-generated with a **deterministic fallback** that infers the design from
+  the requirements (keyword-driven), so the stage always yields a valid design.
+- Gate enforced: requires a confirmed interview **and** a generated requirement
+  document (pipeline order: Requirements → System Design).
+- Repository pattern for designs — in-memory for now, Prisma later.
+- REST API (`/system-design/:sessionId/generate`, `/system-design/:sessionId`).
+- **Frontend**: a "Generate System Design" button after the requirement document
+  renders architecture, tech-stack table, and a service-card grid.
+
 ### ⏳ Upcoming
-- **Slice 4** — System Design (architecture type, tech stack, service breakdown)
-  via the System Architect agent + frontend view.
-- Persistence (Prisma + PostgreSQL), DB/API Design, Review Engine,
+- **Slice 5** — Database Design (entities, PKs/FKs, relations) via the Database
+  Designer agent + frontend view.
+- Persistence (Prisma + PostgreSQL), API Design, Review Engine,
   Export (PDF/Markdown/JSON/OpenAPI/GitHub), Auth (JWT), BullMQ/Redis.
 
 ---
@@ -144,6 +159,8 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | POST   | `/api/interview/:id/confirm`| Confirm the summarized requirements (gate)  |
 | POST   | `/api/requirements/:sessionId/generate`| Generate the Requirement Document (confirmed only) |
 | GET    | `/api/requirements/:sessionId`| Fetch a generated Requirement Document    |
+| POST   | `/api/system-design/:sessionId/generate`| Generate the System Design (requirements required) |
+| GET    | `/api/system-design/:sessionId`| Fetch a generated System Design          |
 
 ---
 
