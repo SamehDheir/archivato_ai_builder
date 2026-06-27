@@ -1,0 +1,17 @@
+{
+  "name": "archivato-ai-builder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Software Architecture Generator — turns a business idea into a full system design",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace @archivato/shared",
+    "test:api": "npm run test --workspace @archivato/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
