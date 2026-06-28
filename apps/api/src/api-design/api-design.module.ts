@@ -7,7 +7,7 @@ import { ApiDesignerAgent } from '../llm/agents/api-designer.agent';
 import { ApiDesignController } from './api-design.controller';
 import { ApiDesignService } from './api-design.service';
 import { API_DESIGN_REPOSITORY } from './api-design.repository';
-import { InMemoryApiDesignRepository } from './in-memory-api-design.repository';
+import { PrismaApiDesignRepository } from './prisma-api-design.repository';
 
 @Module({
   // Pull in every upstream store needed to design the API.
@@ -23,7 +23,7 @@ import { InMemoryApiDesignRepository } from './in-memory-api-design.repository';
     ApiDesignerAgent,
     {
       provide: API_DESIGN_REPOSITORY,
-      useClass: InMemoryApiDesignRepository,
+      useClass: PrismaApiDesignRepository,
     },
   ],
 })

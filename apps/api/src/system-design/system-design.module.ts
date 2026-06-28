@@ -5,7 +5,7 @@ import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { SystemDesignController } from './system-design.controller';
 import { SystemDesignService } from './system-design.service';
 import { SYSTEM_DESIGN_REPOSITORY } from './system-design.repository';
-import { InMemorySystemDesignRepository } from './in-memory-system-design.repository';
+import { PrismaSystemDesignRepository } from './prisma-system-design.repository';
 
 @Module({
   // Pull in the shared session + requirement stores from upstream stages.
@@ -16,7 +16,7 @@ import { InMemorySystemDesignRepository } from './in-memory-system-design.reposi
     SystemArchitectAgent,
     {
       provide: SYSTEM_DESIGN_REPOSITORY,
-      useClass: InMemorySystemDesignRepository,
+      useClass: PrismaSystemDesignRepository,
     },
   ],
   // Export the design store so downstream stages (Database Design) read it.

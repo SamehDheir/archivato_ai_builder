@@ -1,0 +1,76 @@
+// Archivato persistence — PostgreSQL via Prisma.
+//
+// Each pipeline stage's artifact is stored as JSON keyed by the interview
+// session, so the rich generated documents are persisted faithfully while the
+// app keeps using the shared TypeScript types. Deleting a session cascades to
+// all of its artifacts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model InterviewSession {
+  id             String   @id @default(uuid())
+  idea           String
+  industry       String?
+  scale          String?
+  preferredStack String?
+  status         String   @default("collecting")
+  intent         Json?
+  history        Json // InterviewExchange[]
+  summary        Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  requirementDocument RequirementDocument?
+  systemDesign        SystemDesign?
+  databaseDesign      DatabaseDesign?
+  apiDesign           ApiDesign?
+
+  @@map("interview_sessions")
+}
+
+model RequirementDocument {
+  sessionId String           @id
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("requirement_documents")
+}
+
+model SystemDesign {
+  sessionId String           @id
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("system_designs")
+}
+
+model DatabaseDesign {
+  sessionId String           @id
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("database_designs")
+}
+
+model ApiDesign {
+  sessionId String           @id
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("api_designs")
+}

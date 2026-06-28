@@ -22,7 +22,7 @@ System Design → DB Design → API Design → Review → Export
 | Backend      | NestJS + TypeScript (`apps/api`)                   |
 | Frontend     | Next.js 14 (App Router) + React (`apps/web`)       |
 | Shared types | `@archivato/shared` (`packages/shared`)            |
-| Database     | PostgreSQL + Prisma *(upcoming slice)*             |
+| Database     | PostgreSQL + Prisma (all data persisted)           |
 | Queue        | BullMQ + Redis *(upcoming slice)*                  |
 | AI           | Anthropic Claude via a swappable `LlmProvider`     |
 | Auth         | JWT + refresh tokens *(upcoming slice)*            |
@@ -40,7 +40,9 @@ archivato-ai-builder/
 │  └─ shared/            # framework-free domain types shared by api + web
 ├─ apps/
 │  ├─ api/               # NestJS backend
+│  │  ├─ prisma/         # Prisma schema + migrations (PostgreSQL)
 │  │  └─ src/
+│  │     ├─ prisma/      # PrismaService + global module
 │  │     ├─ llm/         # LlmProvider interface, mock + claude, agents
 │  │     ├─ interview/   # phased interview engine (state machine, REST)
 │  │     ├─ requirements/# Requirement Document generation (REST)
@@ -67,7 +69,7 @@ npm run build:shared      # build the shared types package once
 
 ### Configure
 ```bash
-cp .env.example .env                       # API config
+cp .env.example .env                       # API config (incl. DATABASE_URL)
 cp apps/web/.env.local.example apps/web/.env.local
 ```
 By default the API runs in **mock LLM mode** (`LLM_PROVIDER=mock`) — fully
@@ -77,6 +79,15 @@ LLM_PROVIDER=claude
 ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_MODEL=claude-sonnet-4-6   # claude-opus-4-8 is more capable
 ```
+
+### Database (PostgreSQL via Prisma)
+All pipeline data is persisted. Start Postgres and apply the schema:
+```bash
+docker compose up -d db                    # Postgres on host port 5433
+npm run prisma:migrate --workspace @archivato/api   # apply migrations + generate client
+```
+`DATABASE_URL` (in `.env`) defaults to the docker-compose database. Point it at
+any other Postgres if you prefer.
 
 ### Run (two terminals)
 ```bash
@@ -173,11 +184,20 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   module sections with colored method badges, paths, status codes, and
   request/response schema columns. Per-part JSON download included.
 
+### ✅ Persistence — PostgreSQL + Prisma
+- All pipeline data is now stored in PostgreSQL via Prisma. Every in-memory
+  repository was swapped for a Prisma-backed implementation behind the **same
+  repository interface** — services were untouched.
+- Schema: an `interview_sessions` table plus one table per artifact
+  (`requirement_documents`, `system_designs`, `database_designs`, `api_designs`),
+  each storing the artifact as JSONB and cascading on session delete.
+- `docker-compose.yml` provides a local Postgres; `prisma migrate` manages the
+  schema. Verified end-to-end: artifacts survive a full API restart.
+
 ### ⏳ Upcoming
 - **Slice 7** — Review Engine (scalability score, security issues, missing
   features, performance risks, recommendations) via the Reviewer agent + UI.
-- Persistence (Prisma + PostgreSQL),
-  Export (PDF/Markdown/JSON/OpenAPI/GitHub), Auth (JWT), BullMQ/Redis.
+- Export (PDF/Markdown/JSON/OpenAPI/GitHub), Auth (JWT), BullMQ/Redis.
 
 ---
 
@@ -201,6 +221,6 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 ---
 
 ## Notes
-- Sessions are stored **in memory**; restarting the API clears them. Persistence
-  arrives in a dedicated slice.
+- All pipeline data is **persisted in PostgreSQL** (Prisma); artifacts survive
+  API restarts. The API requires a reachable `DATABASE_URL` to boot.
 - See [`CLAUDE.md`](./CLAUDE.md) for the running log of decisions and phase status.

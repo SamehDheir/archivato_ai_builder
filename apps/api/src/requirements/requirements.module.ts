@@ -4,7 +4,7 @@ import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.age
 import { RequirementsController } from './requirements.controller';
 import { RequirementsService } from './requirements.service';
 import { REQUIREMENT_DOCUMENT_REPOSITORY } from './requirement-document.repository';
-import { InMemoryRequirementDocumentRepository } from './in-memory-requirement-document.repository';
+import { PrismaRequirementDocumentRepository } from './prisma-requirement-document.repository';
 
 @Module({
   // InterviewModule exports the shared session repository so requirements can
@@ -16,7 +16,7 @@ import { InMemoryRequirementDocumentRepository } from './in-memory-requirement-d
     RequirementEngineerAgent,
     {
       provide: REQUIREMENT_DOCUMENT_REPOSITORY,
-      useClass: InMemoryRequirementDocumentRepository,
+      useClass: PrismaRequirementDocumentRepository,
     },
   ],
   // Export the doc store so downstream stages (System Design) read the same data.

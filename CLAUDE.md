@@ -122,9 +122,23 @@ DB Design → API Design → Review → Export
   - Frontend: `apps/web/app/ApiDesignView.tsx` + "Generate API Design" button
     after the database design (method badges, paths, status codes, schema columns).
   - Verified: 36/36 API tests; api + web build clean; HTTP flow checked.
-- **Next up — PERSISTENCE slice:** user asked to use Prisma + PostgreSQL and store
-  ALL data. Swap every in-memory repository for a Prisma-backed implementation.
-- **Not built yet:** BullMQ/Redis, JWT auth, Review/Export modules.
+- **PERSISTENCE — DONE:** Prisma + PostgreSQL, all data stored.
+  - `apps/api/prisma/schema.prisma`: `interview_sessions` (idea/industry/scale/
+    preferredStack/status columns + intent/history/summary JSONB) + one table per
+    artifact (`requirement_documents`, `system_designs`, `database_designs`,
+    `api_designs`), each storing the artifact as JSONB, FK → session ON DELETE CASCADE.
+  - `apps/api/src/prisma`: `PrismaService` (connect on init) + global `PrismaModule`.
+  - Prisma-backed repos for all 5 stores implement the SAME repository interfaces;
+    every feature module now provides the Prisma repo (in-memory classes kept for
+    unit tests, which stay DB-free).
+  - `docker-compose.yml`: Postgres 15 on host port **5433** (avoids local 5432).
+    `.env` has `DATABASE_URL` (gitignored). Migration `init` applied.
+  - Verified: 36/36 tests; api builds; full pipeline persisted and artifacts
+    survive an API restart (proved data is in Postgres, not memory).
+- **Run prereq now:** `docker compose up -d db` then `npm run prisma:migrate
+  --workspace @archivato/api` before `npm run dev:api`.
+- **Not built yet:** BullMQ/Redis, JWT auth, Review/Export modules. CORS is still
+  `origin:true` (tighten in auth slice).
 
 ## Review rule (added Slice 6)
 

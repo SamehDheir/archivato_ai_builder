@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { PrismaModule } from './prisma/prisma.module';
 import { LlmModule } from './llm/llm.module';
 import { InterviewModule } from './interview/interview.module';
 import { RequirementsModule } from './requirements/requirements.module';
@@ -11,6 +12,8 @@ import { ApiDesignModule } from './api-design/api-design.module';
   imports: [
     // Load .env once, globally, so every module can read config.
     ConfigModule.forRoot({ isGlobal: true }),
+    // Persistence: PostgreSQL via Prisma (global PrismaService).
+    PrismaModule,
     // Slice 1: the LLM / Agent core.
     LlmModule,
     // Slice 2: the AI interview loop (intent → phased Q&A → confirmation gate).

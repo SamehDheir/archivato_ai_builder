@@ -1,0 +1,21 @@
+# Local Postgres for development. Mapped to host port 5433 to avoid clashing
+# with an existing local Postgres on 5432.
+#
+#   docker compose up -d db
+#
+services:
+  db:
+    image: postgres:15
+    container_name: archivato-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: archivato
+    ports:
+      - '5433:5432'
+    volumes:
+      - archivato_pgdata:/var/lib/postgresql/data
+
+volumes:
+  archivato_pgdata:
