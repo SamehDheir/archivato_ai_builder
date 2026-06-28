@@ -135,9 +135,28 @@ DB Design → API Design → Review → Export
     `.env` has `DATABASE_URL` (gitignored). Migration `init` applied.
   - Verified: 36/36 tests; api builds; full pipeline persisted and artifacts
     survive an API restart (proved data is in Postgres, not memory).
+- **Slice 7 — DONE:** Review Engine (the AI architecture review).
+  - `packages/shared/review.ts`: `ReviewReport` (scalabilityScore 0-100, summary,
+    `ReviewFinding[]` security/performance with severity, missingFeatures[],
+    recommendations[]).
+  - `apps/api/src/llm/agents/reviewer.agent.ts`: LLM generation with a
+    deterministic, artifact-aware fallback (pagination/cache/queue detection,
+    authz/rate-limit/N+1 heuristics, scalability scoring).
+  - `apps/api/src/review`: `ReviewService` (gate: full pipeline incl. API design),
+    repo interface + in-memory (tests) + Prisma impl, controller. ApiDesignModule
+    now EXPORTS `API_DESIGN_REPOSITORY`.
+  - Prisma model `review_reports` (FK→session, cascade); migration
+    `20260628120000_add_review_reports` applied + recorded.
+  - REST: POST `/review/:sessionId/generate`, GET `/review/:sessionId`.
+  - Frontend: `apps/web/app/ReviewView.tsx` + "Run AI Review" button after the API
+    design (score ring, severity-tagged findings, recommendations, JSON download).
+  - Verified: 41/41 API tests; api + web build clean; review_reports table created.
+    NOTE: runtime HTTP smoke deferred — a Docker-Desktop restart broke host
+    loopback (all 127.0.0.1 ports NetworkUnreachable), so API↔DB over localhost
+    couldn't be exercised. `wsl --shutdown` / Docker restart restores it.
 - **Run prereq now:** `docker compose up -d db` then `npm run prisma:migrate
   --workspace @archivato/api` before `npm run dev:api`.
-- **Not built yet:** BullMQ/Redis, JWT auth, Review/Export modules. CORS is still
+- **Not built yet:** BullMQ/Redis, JWT auth, Export module. CORS is still
   `origin:true` (tighten in auth slice).
 
 ## Review rule (added Slice 6)

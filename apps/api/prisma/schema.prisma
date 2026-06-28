@@ -31,6 +31,7 @@ model InterviewSession {
   systemDesign        SystemDesign?
   databaseDesign      DatabaseDesign?
   apiDesign           ApiDesign?
+  reviewReport        ReviewReport?
 
   @@map("interview_sessions")
 }
@@ -73,4 +74,14 @@ model ApiDesign {
   updatedAt DateTime         @updatedAt
 
   @@map("api_designs")
+}
+
+model ReviewReport {
+  sessionId String           @id
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("review_reports")
 }

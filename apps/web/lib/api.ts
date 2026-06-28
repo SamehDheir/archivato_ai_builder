@@ -4,6 +4,7 @@ import type {
   InterviewState,
   ProjectIdeaInput,
   RequirementDocument,
+  ReviewReport,
   SystemDesign,
 } from '@archivato/shared';
 
@@ -91,4 +92,13 @@ export const apiDesignApi = {
     }),
 
   get: (sessionId: string) => request<ApiDesign>(`/api-design/${sessionId}`),
+};
+
+export const reviewApi = {
+  generate: (sessionId: string) =>
+    request<ReviewReport>(`/review/${sessionId}/generate`, {
+      method: 'POST',
+    }),
+
+  get: (sessionId: string) => request<ReviewReport>(`/review/${sessionId}`),
 };

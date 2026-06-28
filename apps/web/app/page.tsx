@@ -8,6 +8,7 @@ import type {
   ProjectScale,
   RequirementDocument,
   RequirementsSummary,
+  ReviewReport,
   SystemDesign,
 } from '@archivato/shared';
 import {
@@ -15,12 +16,14 @@ import {
   databaseDesignApi,
   interviewApi,
   requirementsApi,
+  reviewApi,
   systemDesignApi,
 } from '../lib/api';
 import { RequirementDocumentView } from './RequirementDocumentView';
 import { SystemDesignView } from './SystemDesignView';
 import { DatabaseDesignView } from './DatabaseDesignView';
 import { ApiDesignView } from './ApiDesignView';
+import { ReviewView } from './ReviewView';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
@@ -48,6 +51,9 @@ export default function Home() {
 
   // API design (Slice 6)
   const [apiDesign, setApiDesign] = useState<ApiDesign | null>(null);
+
+  // Review report (Slice 7)
+  const [review, setReview] = useState<ReviewReport | null>(null);
 
   async function run<T>(fn: () => Promise<T>) {
     setBusy(true);
@@ -124,12 +130,19 @@ export default function Home() {
     if (generated) setApiDesign(generated);
   }
 
+  async function handleGenerateReview() {
+    if (!state) return;
+    const generated = await run(() => reviewApi.generate(state.sessionId));
+    if (generated) setReview(generated);
+  }
+
   function reset() {
     setState(null);
     setDoc(null);
     setDesign(null);
     setDbDesign(null);
     setApiDesign(null);
+    setReview(null);
     setIdea('');
     setIndustry('');
     setScale('');
@@ -150,7 +163,7 @@ export default function Home() {
           <label htmlFor="idea">Project idea</label>
           <textarea
             id="idea"
-            placeholder="e.g. A clinic management system with appointments, billing, doctors, and patient records."
+            placeholder="e.g. A  management systclinicem with appointments, billing, doctors, and patient records."
             value={idea}
             onChange={(e) => setIdea(e.target.value)}
             required
@@ -361,29 +374,65 @@ export default function Home() {
                             <>
                               <h3 style={{ marginTop: 20 }}>API Design</h3>
                               <ApiDesignView design={apiDesign} />
-                              <p
-                                className="subtitle"
-                                style={{ marginTop: 16 }}
-                              >
-                                The pipeline can now proceed to the Review Engine
-                                (next slice).
-                              </p>
-                              <div className="row">
-                                <button
-                                  className="secondary"
-                                  onClick={handleGenerateApiDesign}
-                                  disabled={busy}
-                                >
-                                  {busy ? 'Regenerating…' : 'Regenerate API'}
-                                </button>
-                                <button
-                                  className="secondary"
-                                  onClick={reset}
-                                  disabled={busy}
-                                >
-                                  Start a new interview
-                                </button>
-                              </div>
+
+                              {!review && (
+                                <>
+                                  <p
+                                    className="subtitle"
+                                    style={{ marginTop: 16 }}
+                                  >
+                                    Finally: run the AI review of the whole
+                                    system.
+                                  </p>
+                                  <div className="row">
+                                    <button
+                                      onClick={handleGenerateReview}
+                                      disabled={busy}
+                                    >
+                                      {busy ? 'Reviewing…' : 'Run AI Review'}
+                                    </button>
+                                    <button
+                                      className="secondary"
+                                      onClick={handleGenerateApiDesign}
+                                      disabled={busy}
+                                    >
+                                      Regenerate API
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+
+                              {review && (
+                                <>
+                                  <h3 style={{ marginTop: 20 }}>
+                                    AI Review
+                                  </h3>
+                                  <ReviewView report={review} />
+                                  <p
+                                    className="subtitle"
+                                    style={{ marginTop: 16 }}
+                                  >
+                                    Pipeline complete. Export arrives in the next
+                                    slice.
+                                  </p>
+                                  <div className="row">
+                                    <button
+                                      className="secondary"
+                                      onClick={handleGenerateReview}
+                                      disabled={busy}
+                                    >
+                                      {busy ? 'Regenerating…' : 'Regenerate review'}
+                                    </button>
+                                    <button
+                                      className="secondary"
+                                      onClick={reset}
+                                      disabled={busy}
+                                    >
+                                      Start a new interview
+                                    </button>
+                                  </div>
+                                </>
+                              )}
                             </>
                           )}
                         </>

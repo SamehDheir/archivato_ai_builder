@@ -48,7 +48,9 @@ archivato-ai-builder/
 │  │     ├─ requirements/# Requirement Document generation (REST)
 │  │     ├─ system-design/   # System Design generation (REST)
 │  │     ├─ database-design/ # Database Design generation (REST)
-│  │     └─ api-design/      # API Design generation (REST)
+│  │     ├─ api-design/      # API Design generation (REST)
+│  │     ├─ review/          # AI Review Engine (REST)
+│  │     └─ prisma/          # PrismaService + module
 │  └─ web/               # Next.js frontend (interview → requirements → designs)
 ├─ CLAUDE.md             # working memory / decisions log
 └─ README.md            # this file
@@ -192,15 +194,27 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   repository was swapped for a Prisma-backed implementation behind the **same
   repository interface** — services were untouched.
 - Schema: an `interview_sessions` table plus one table per artifact
-  (`requirement_documents`, `system_designs`, `database_designs`, `api_designs`),
-  each storing the artifact as JSONB and cascading on session delete.
+  (`requirement_documents`, `system_designs`, `database_designs`, `api_designs`,
+  `review_reports`), each storing the artifact as JSONB and cascading on session
+  delete.
 - `docker-compose.yml` provides a local Postgres; `prisma migrate` manages the
   schema. Verified end-to-end: artifacts survive a full API restart.
 
+### ✅ Slice 7 — Review Engine + UI
+- `ReviewerAgent` analyzes the whole pipeline and outputs a **scalability score**
+  (0–100), **security issues** and **performance risks** (with severity),
+  **missing features**, and **recommendations**.
+- LLM-generated with a deterministic, artifact-aware fallback (detects pagination,
+  caching, queues; flags weak authorization, missing rate limits, N+1 risks).
+- Gate enforced: requires the full pipeline through the API design. Persisted to
+  `review_reports`.
+- REST API (`/review/:sessionId/generate`, `/review/:sessionId`).
+- **Frontend**: a "Run AI Review" button after the API design renders a score
+  ring, severity-tagged findings, and recommendations, with JSON download.
+
 ### ⏳ Upcoming
-- **Slice 7** — Review Engine (scalability score, security issues, missing
-  features, performance risks, recommendations) via the Reviewer agent + UI.
-- Export (PDF/Markdown/JSON/OpenAPI/GitHub), Auth (JWT), BullMQ/Redis.
+- **Slice 8** — Export (PDF / Markdown / JSON / OpenAPI / GitHub structure).
+- Auth (JWT + refresh tokens), BullMQ/Redis for async generation.
 
 ---
 
@@ -220,6 +234,8 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/database-design/:sessionId`| Fetch a generated Database Design       |
 | POST   | `/api/api-design/:sessionId/generate`| Generate the API Design (database design required) |
 | GET    | `/api/api-design/:sessionId`| Fetch a generated API Design                 |
+| POST   | `/api/review/:sessionId/generate`| Run the AI Review (full pipeline required)  |
+| GET    | `/api/review/:sessionId`| Fetch a generated Review report                  |
 
 ---
 
