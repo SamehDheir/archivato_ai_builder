@@ -69,9 +69,12 @@ npm run build:shared      # build the shared types package once
 
 ### Configure
 ```bash
-cp .env.example .env                       # API config (incl. DATABASE_URL)
+cp .env.example apps/api/.env              # API + Prisma read apps/api/.env
 cp apps/web/.env.local.example apps/web/.env.local
 ```
+> The NestJS dev server and Prisma CLI load `apps/api/.env` (that's where
+> `DATABASE_URL` must live). On Windows, stop the dev API before running
+> `prisma migrate`/`generate` to avoid an engine-DLL file lock (`EPERM`).
 By default the API runs in **mock LLM mode** (`LLM_PROVIDER=mock`) — fully
 offline, no API key required. To use real Claude:
 ```env
