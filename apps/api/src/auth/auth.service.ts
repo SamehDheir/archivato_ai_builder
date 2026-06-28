@@ -1,0 +1,101 @@
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import type { AuthUser, LoginInput, RegisterInput } from '@archivato/shared';
+import { USER_REPOSITORY, type UserRepository } from './user.repository';
+import type { User } from './user.entity';
+import { PasswordService } from './password.service';
+import { TokenService, type IssuedRefreshToken } from './token.service';
+import { EmailVerificationService } from './email-verification.service';
+import { toAuthUser } from './user.mapper';
+
+/**
+ * The result of a successful authentication. The controller turns `accessToken`
+ * and `refresh` into httpOnly cookies; only `user` is sent in the body.
+ */
+export interface AuthSession {
+  user: AuthUser;
+  accessToken: string;
+  refresh: IssuedRefreshToken;
+}
+
+@Injectable()
+export class AuthService {
+  constructor(
+    @Inject(USER_REPOSITORY) private readonly users: UserRepository,
+    private readonly passwords: PasswordService,
+    private readonly tokens: TokenService,
+    private readonly emailVerification: EmailVerificationService,
+  ) {}
+
+  /** Create a local account, send a verification email, and start a session. */
+  async register(input: RegisterInput): Promise<AuthSession> {
+    const existing = await this.users.findByEmail(input.email);
+    if (existing) {
+      throw new ConflictException('Email already registered');
+    }
+    const passwordHash = await this.passwords.hash(input.password);
+    const user = await this.users.create({
+      email: input.email,
+      passwordHash,
+      displayName: input.displayName,
+      providers: ['password'],
+    });
+    // Fire off the verification email; never block sign-up on mail delivery.
+    await this.emailVerification.issueAndSend(user).catch(() => undefined);
+    return this.startSession(user);
+  }
+
+  /** Verify credentials and start a session. */
+  async login(input: LoginInput): Promise<AuthSession> {
+    const user = await this.users.findByEmail(input.email);
+    // Generic message + password check even when absent — avoids leaking which
+    // emails exist and which accounts are OAuth-only.
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+    const ok = await this.passwords.compare(input.password, user.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+    return this.startSession(user);
+  }
+
+  /** Rotate the refresh token and mint a fresh access token. */
+  async refresh(rawRefresh: string): Promise<AuthSession> {
+    const { userId, refresh } = await this.tokens.rotateRefreshToken(rawRefresh);
+    const user = await this.users.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    return {
+      user: toAuthUser(user),
+      accessToken: this.tokens.signAccessToken(user),
+      refresh,
+    };
+  }
+
+  /** Revoke the presented refresh token (logout). */
+  async logout(rawRefresh: string | undefined): Promise<void> {
+    if (rawRefresh) await this.tokens.revokeRefreshToken(rawRefresh);
+  }
+
+  /** Look up the current user for GET /auth/me. */
+  async getUser(userId: string): Promise<AuthUser> {
+    const user = await this.users.findById(userId);
+    if (!user) throw new UnauthorizedException();
+    return toAuthUser(user);
+  }
+
+  private async startSession(user: User): Promise<AuthSession> {
+    const refresh = await this.tokens.issueRefreshToken(user.id);
+    return {
+      user: toAuthUser(user),
+      accessToken: this.tokens.signAccessToken(user),
+      refresh,
+    };
+  }
+}

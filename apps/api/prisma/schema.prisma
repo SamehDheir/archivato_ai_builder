@@ -14,6 +14,59 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// --- Authentication (Slice 9) -------------------------------------------------
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  // Null for accounts created purely via OAuth (Slice 9c).
+  passwordHash  String?
+  displayName   String
+  emailVerified Boolean  @default(false)
+  // Linked OAuth providers, e.g. ["google"] (Slice 9c). Empty for local-only.
+  providers     String[] @default([])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  refreshTokens     RefreshToken[]
+  verificationTokens EmailVerificationToken[]
+
+  @@map("users")
+}
+
+// Single-use email-verification tokens (Slice 9b). Like refresh tokens, only a
+// SHA-256 hash is stored; the raw value travels in the emailed link.
+model EmailVerificationToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+// Opaque rotating refresh tokens. We store only a SHA-256 hash of the token;
+// the raw value lives solely in the client's httpOnly cookie. Rotated on every
+// refresh and revoked on logout.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// --- Pipeline -----------------------------------------------------------------
+
 model InterviewSession {
   id             String   @id @default(uuid())
   idea           String

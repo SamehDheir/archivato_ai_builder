@@ -18,3 +18,4 @@ export * from './database-design';
 export * from './api-design';
 export * from './review';
 export * from './export';
+export * from './auth';

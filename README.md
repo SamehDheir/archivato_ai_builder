@@ -25,7 +25,7 @@ System Design → DB Design → API Design → Review → Export
 | Database     | PostgreSQL + Prisma (all data persisted)           |
 | Queue        | BullMQ + Redis *(upcoming slice)*                  |
 | AI           | Anthropic Claude via a swappable `LlmProvider`     |
-| Auth         | JWT + refresh tokens *(upcoming slice)*            |
+| Auth         | JWT access + rotating refresh tokens (httpOnly cookies) |
 | Monorepo     | npm workspaces (`apps/*` + `packages/*`)           |
 
 Architecture pattern: **Modular Monolith** (split later if needed).
@@ -43,6 +43,7 @@ archivato-ai-builder/
 │  │  ├─ prisma/         # Prisma schema + migrations (PostgreSQL)
 │  │  └─ src/
 │  │     ├─ prisma/      # PrismaService + global module
+│  │     ├─ auth/        # register/login/refresh, JWT cookie guard
 │  │     ├─ llm/         # LlmProvider interface, mock + claude, agents
 │  │     ├─ interview/   # phased interview engine (state machine, REST)
 │  │     ├─ requirements/# Requirement Document generation (REST)
@@ -227,8 +228,39 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - **Frontend**: an Export panel after the review with one-click downloads for
   each format plus "Print / Save as PDF".
 
+### ✅ Slice 9a — Auth core (Register / Login / Refresh) + UI
+- Local **register / login** with bcrypt-hashed passwords, **rotating refresh
+  tokens** (only a SHA-256 hash is stored; single-use rotation on every refresh),
+  and a short-lived **access JWT**.
+- **Tokens are delivered as httpOnly cookies** (`archivato_access` site-wide,
+  `archivato_refresh` scoped to `/api/auth`) — the browser never exposes them to
+  JS. CORS is now locked to `WEB_ORIGIN` with credentials (was `origin:true`).
+- `JwtAuthGuard` + `@CurrentUser()` protect routes; login returns a generic 401
+  so it never reveals which emails exist.
+- Repository pattern for **both** new stores (users + refresh tokens) — in-memory
+  for tests, Prisma for the app. New `users` + `refresh_tokens` tables.
+- REST API (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`,
+  `/auth/me`).
+- **Frontend**: an `AuthGate` wraps the whole app — dedicated `/login` and
+  `/register` routes (guest-only: signed-in users are redirected home), a header
+  with the current user + **Sign out** when signed in.
+- Pipeline routes stay public for now; per-user ownership is a focused follow-up.
+
+### ✅ Slice 9b — Email verification (+ UI)
+- **Single-use, 24h verification tokens** (only a SHA-256 hash stored) issued on
+  registration and on demand. Three-tier delivery in `MailService`: **real SMTP**
+  (nodemailer) when `SMTP_HOST` is set; an **Ethereal preview** inbox when
+  `MAIL_PREVIEW=true` and no SMTP (actually sends and logs a clickable preview
+  URL — zero setup); otherwise it logs the link to the server console.
+- REST API (`/auth/verify-email`, `/auth/resend-verification`).
+- **Frontend**: a `/verify` landing page that confirms the token, plus an
+  "unverified" banner with a **Resend** action for signed-in users.
+- *Forgot-password (the reset half of 9b) is still upcoming.*
+
 ### ⏳ Upcoming
-- Auth (JWT + refresh tokens), BullMQ/Redis for async generation, YAML OpenAPI.
+- Slice 9b (cont.): forgot-password / reset via SMTP.
+- Slice 9c: OAuth (Google / GitHub) via passport.
+- BullMQ/Redis for async generation; YAML OpenAPI; per-user pipeline ownership.
 
 ---
 
@@ -236,6 +268,13 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 
 | Method | Path                       | Description                                  |
 | ------ | -------------------------- | -------------------------------------------- |
+| POST   | `/api/auth/register`       | Create an account; sets auth cookies         |
+| POST   | `/api/auth/login`          | Sign in; sets auth cookies                   |
+| POST   | `/api/auth/refresh`        | Rotate the refresh cookie + re-issue access  |
+| POST   | `/api/auth/logout`         | Revoke the refresh token and clear cookies   |
+| POST   | `/api/auth/verify-email`   | Confirm an email-verification token (public) |
+| POST   | `/api/auth/resend-verification`| Re-send the verification email (guarded) |
+| GET    | `/api/auth/me`             | Current user (requires a valid access cookie)|
 | POST   | `/api/interview`           | Start an interview from a raw idea           |
 | GET    | `/api/interview/:id`       | Fetch current interview state                |
 | POST   | `/api/interview/:id/answer`| Answer the current question and advance      |

@@ -481,6 +481,136 @@ h3 {
   margin-left: auto; /* push badges right when they fit on one line */
 }
 
+/* ── Auth bar (Slice 9) ── */
+.authbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.authbar .brand {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.authbar-spacer {
+  flex: 1;
+}
+
+.authbar-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.authbar button {
+  margin-top: 0;
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.badge-warn {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(248, 113, 113, 0.14);
+  color: var(--danger);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+}
+
+/* Inline text button (mode toggle on the auth form). */
+.linklike {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Login / Register tabs on the auth screen. */
+.tabs {
+  display: flex;
+  gap: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 18px;
+}
+
+.tabs button {
+  flex: 1;
+  margin-top: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 9px 12px;
+}
+
+.tabs button.active {
+  background: var(--accent);
+  color: #0b1020;
+}
+
+/* Centered full-screen loading state with a spinner. */
+.loading-screen {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.spinner {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+.spinner.small {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.notice {
+  font-size: 13px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 12px;
+}
+
+.notice.info {
+  background: rgba(109, 139, 255, 0.12);
+  border: 1px solid rgba(109, 139, 255, 0.4);
+  color: var(--text);
+}
+
+.notice.ok {
+  background: rgba(74, 222, 128, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  color: var(--text);
+}
+
 @media (max-width: 480px) {
   .container {
     padding: 20px 14px 48px;

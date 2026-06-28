@@ -168,15 +168,81 @@ DB Design → API Design → Review → Export
     downloads + Print/Save-as-PDF).
   - Verified OFFLINE: 47/47 API tests; api + web build clean. (Network was down —
     see below — so no runtime HTTP smoke; builders are fully unit-tested.)
+- **Slice 9a — DONE:** Auth core (Register / Login / Refresh + JWT cookie guard).
+  - `packages/shared/auth.ts`: `AuthUser` (public-safe, no hash), `AuthProvider`
+    (`password` | `google` | `github`), `RegisterInput`, `LoginInput`.
+  - Prisma `users` (email unique, nullable `passwordHash` for OAuth-only,
+    `emailVerified`, `providers String[]`) + `refresh_tokens` (FK→users cascade,
+    `tokenHash` unique, expiry, `revokedAt`). Migration
+    `20260628141350_add_auth_users_refresh_tokens` applied.
+  - `apps/api/src/auth`: repository pattern for BOTH stores (`USER_REPOSITORY`,
+    `REFRESH_TOKEN_REPOSITORY`) with in-memory (tests) + Prisma impls.
+    `PasswordService` (bcrypt, 12 rounds), `TokenService` (access JWT via
+    `@nestjs/jwt` + opaque 256-bit refresh; only the SHA-256 hash is stored,
+    rotated single-use on every refresh), `AuthService`, `AuthController`,
+    `JwtStrategy` (reads access token from httpOnly cookie), `JwtAuthGuard`,
+    `@CurrentUser()`. DTOs validated.
+  - **Tokens = httpOnly cookies**: `archivato_access` (Path=/, 15min) +
+    `archivato_refresh` (Path=/api/auth, 7d). `main.ts` adds `cookie-parser`
+    and CORS is now locked to `WEB_ORIGIN` with `credentials:true`
+    (was `origin:true`). Login does NOT leak which emails exist (generic 401).
+  - REST: POST `/auth/{register,login,refresh,logout}`, GET `/auth/me` (guarded).
+  - Frontend: `apps/web/app/AuthGate.tsx` gates the whole app (layout-level) —
+    login/register form when signed out, header + Sign out when signed in;
+    `authApi` in `lib/api.ts`; all requests now send `credentials:'include'`.
+  - Decision: pipeline routes stay PUBLIC for now (auth is standalone this
+    slice); userId ownership + route guards are a focused follow-up.
+  - Verified: 56/56 API tests (9 new); api + web build clean; full HTTP flow
+    smoke-tested live (register 201 + cookies, me 200/401, refresh 200 rotate,
+    dup 409, bad login 401, logout 200).
+- **Slice 9b — DONE (email verification half):** Verify email + resend.
+  - Prisma `email_verification_tokens` (FK→users cascade, `tokenHash` unique,
+    expiry, `consumedAt`); migration `20260628145025_add_email_verification_tokens`.
+  - `apps/api/src/auth`: `MailService` (nodemailer; real SMTP when `SMTP_HOST`
+    set, else logs the verify link to the console — dev fallback),
+    `EmailVerificationService` (single-use 24h tokens, SHA-256-hashed, issued on
+    register + resend; flips `users.emailVerified`). New repo
+    `EMAIL_VERIFICATION_TOKEN_REPOSITORY` (in-memory + Prisma). `toAuthUser`
+    extracted to `user.mapper.ts` (breaks the service↔strategy import cycle).
+  - REST: POST `/auth/verify-email` (public, body `{token}`), POST
+    `/auth/resend-verification` (guarded). Register now fires a verification
+    email (non-blocking).
+  - Frontend: `/verify` page (consumes `?token=`), `authApi.verifyEmail`/
+    `resendVerification`, an "unverified" banner with Resend in `AuthGate`.
+  - Auth UX: extracted reusable `AuthForm` (Login/Register tabs); dedicated
+    `/login` + `/register` routes that are GUEST-ONLY (signed-in users are
+    redirected to `/`); `/verify` is public; new spinner loading screen.
+  - Verified: 62/62 API tests (6 new); api build + web type-check clean; live
+    smoke (register 201 → link logged → verify true → reuse 400 → me true →
+    resend 409).
+  - **RE-ENABLED (2026-06-28):** after a brief disable, register sends the
+    verification email again (accounts start unverified; banner restored).
+    `MailService` now has a 3-tier delivery strategy: (1) real SMTP when
+    `SMTP_HOST` set; (2) **Ethereal preview** when `MAIL_PREVIEW=true` and no
+    SMTP — actually sends to a throwaway inbox and logs a clickable preview URL
+    (zero-config dev); (3) else logs the link. Verified live: real send through
+    Gmail SMTP ("Email sent … via SMTP"). User's `apps/api/.env` now carries
+    `JWT_ACCESS_SECRET` (real, not the insecure fallback), `WEB_ORIGIN`,
+    `MAIL_PREVIEW=true`, and Gmail `SMTP_*`.
+  - **Forgot-password NOT done yet** (the other half of 9b).
+- **Auth bugfix (2026-06-28):** guarded routes 401'd right after login because
+  `JWT_ACCESS_TTL_SECONDS` from `.env` is a STRING ("900"); `jsonwebtoken`
+  reads a numeric string `expiresIn` as MILLISECONDS, so tokens expired
+  instantly (`exp === iat`). Fixed by coercing the TTL to a number in
+  `TokenService` (+ `JwtModule`); regression test in `token.service.spec.ts`
+  asserts a string "900" → 900s. ALSO added transparent refresh to the web
+  client (`lib/api.ts`): a 401 triggers one `POST /auth/refresh` + retry, so
+  short access tokens renew automatically via the 7-day refresh cookie. Gotcha:
+  `config.get<number>()` does NOT coerce — env values are always strings.
 - **Run prereq now:** `docker compose up -d db` then `npm run prisma:migrate
-  --workspace @archivato/api` before `npm run dev:api`.
-- **Not built yet:** BullMQ/Redis, JWT auth. CORS is still `origin:true`
-  (tighten in auth slice).
-- **ENV NOTE (2026-06-28):** Docker Desktop's WSL networking wiped the host
-  127.0.0.0/8 loopback route mid-session → all localhost + DNS broke (push +
-  DB blocked). Non-admin fixes (wsl --shutdown, quitting Docker, re-adding route)
-  failed; needs an elevated `New-NetRoute` or a reboot. Slices 7 (`14a82cf`) and
-  8 are committed locally and must be pushed once networking is restored.
+  --workspace @archivato/api` before `npm run dev:api`. On Windows, STOP
+  `dev:api` before `prisma migrate/generate` (engine-DLL lock → EPERM).
+- **Not built yet:** Slice 9b forgot-password (SMTP reset links), Slice 9c
+  (OAuth Google/GitHub via passport), BullMQ/Redis. Pipeline routes not yet
+  user-scoped.
+- **ENV NOTE (2026-06-28):** The earlier loopback/DNS breakage is RESOLVED —
+  localhost + DNS work again (npm install, DB on 5433, and live HTTP smoke all
+  succeeded during Slice 9a). Slices 7–8 + 9a still need pushing to the remote.
 
 ## Review rule (added Slice 6)
 
