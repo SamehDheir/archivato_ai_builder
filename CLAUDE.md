@@ -154,10 +154,29 @@ DB Design → API Design → Review → Export
     NOTE: runtime HTTP smoke deferred — a Docker-Desktop restart broke host
     loopback (all 127.0.0.1 ports NetworkUnreachable), so API↔DB over localhost
     couldn't be exercised. `wsl --shutdown` / Docker restart restores it.
+- **Slice 8 — DONE:** Export.
+  - `packages/shared/export.ts`: `ExportBundle`, `ProjectStructure`, `ProjectFile`.
+  - `apps/api/src/export`: pure dependency-free builders — `buildMarkdown`,
+    `buildOpenApi` (`:id`→`{id}`, component schemas from entities),
+    `buildProjectStructure` (module folder per service + shared/middleware/config/
+    utils). `ExportService` gathers all artifacts (gate: pipeline through API
+    design; review optional), controller serves json/markdown/openapi/structure.
+    ReviewModule now EXPORTS `REVIEW_REPORT_REPOSITORY`.
+  - PDF = client-side print (no server PDF dep). Markdown/print output HTML-escaped.
+  - REST: GET `/export/:sessionId/{json,markdown,openapi,structure}`.
+  - Frontend: `apps/web/app/ExportView.tsx` panel after the review (per-format
+    downloads + Print/Save-as-PDF).
+  - Verified OFFLINE: 47/47 API tests; api + web build clean. (Network was down —
+    see below — so no runtime HTTP smoke; builders are fully unit-tested.)
 - **Run prereq now:** `docker compose up -d db` then `npm run prisma:migrate
   --workspace @archivato/api` before `npm run dev:api`.
-- **Not built yet:** BullMQ/Redis, JWT auth, Export module. CORS is still
-  `origin:true` (tighten in auth slice).
+- **Not built yet:** BullMQ/Redis, JWT auth. CORS is still `origin:true`
+  (tighten in auth slice).
+- **ENV NOTE (2026-06-28):** Docker Desktop's WSL networking wiped the host
+  127.0.0.0/8 loopback route mid-session → all localhost + DNS broke (push +
+  DB blocked). Non-admin fixes (wsl --shutdown, quitting Docker, re-adding route)
+  failed; needs an elevated `New-NetRoute` or a reboot. Slices 7 (`14a82cf`) and
+  8 are committed locally and must be pushed once networking is restored.
 
 ## Review rule (added Slice 6)
 

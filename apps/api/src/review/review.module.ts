@@ -28,5 +28,7 @@ import { PrismaReviewReportRepository } from './prisma-review-report.repository'
       useClass: PrismaReviewReportRepository,
     },
   ],
+  // Export the review store so the Export stage can include it in the bundle.
+  exports: [REVIEW_REPORT_REPOSITORY],
 })
 export class ReviewModule {}

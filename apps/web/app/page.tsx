@@ -24,6 +24,7 @@ import { SystemDesignView } from './SystemDesignView';
 import { DatabaseDesignView } from './DatabaseDesignView';
 import { ApiDesignView } from './ApiDesignView';
 import { ReviewView } from './ReviewView';
+import { ExportView } from './ExportView';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
@@ -408,14 +409,11 @@ export default function Home() {
                                     AI Review
                                   </h3>
                                   <ReviewView report={review} />
-                                  <p
-                                    className="subtitle"
-                                    style={{ marginTop: 16 }}
-                                  >
-                                    Pipeline complete. Export arrives in the next
-                                    slice.
-                                  </p>
-                                  <div className="row">
+
+                                  <h3 style={{ marginTop: 20 }}>Export</h3>
+                                  <ExportView sessionId={state.sessionId} />
+
+                                  <div className="row" style={{ marginTop: 16 }}>
                                     <button
                                       className="secondary"
                                       onClick={handleGenerateReview}

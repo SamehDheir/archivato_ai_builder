@@ -8,6 +8,7 @@ import { SystemDesignModule } from './system-design/system-design.module';
 import { DatabaseDesignModule } from './database-design/database-design.module';
 import { ApiDesignModule } from './api-design/api-design.module';
 import { ReviewModule } from './review/review.module';
+import { ExportModule } from './export/export.module';
 
 @Module({
   imports: [
@@ -29,6 +30,8 @@ import { ReviewModule } from './review/review.module';
     ApiDesignModule,
     // Slice 7: Review Engine (scalability, security, performance, recommendations).
     ReviewModule,
+    // Slice 8: Export (JSON / Markdown / OpenAPI / GitHub structure).
+    ExportModule,
   ],
 })
 export class AppModule {}

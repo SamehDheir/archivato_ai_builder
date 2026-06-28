@@ -340,6 +340,18 @@ h3 {
   margin-bottom: 4px;
 }
 
+/* ── Export ── */
+.export-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.export-grid button {
+  margin-top: 0;
+}
+
 .download-btn {
   margin-top: 0;
   padding: 7px 12px;

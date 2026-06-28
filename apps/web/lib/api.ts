@@ -1,8 +1,10 @@
 import type {
   ApiDesign,
   DatabaseDesign,
+  ExportBundle,
   InterviewState,
   ProjectIdeaInput,
+  ProjectStructure,
   RequirementDocument,
   ReviewReport,
   SystemDesign,
@@ -101,4 +103,21 @@ export const reviewApi = {
     }),
 
   get: (sessionId: string) => request<ReviewReport>(`/review/${sessionId}`),
+};
+
+async function requestText(path: string): Promise<string> {
+  const res = await fetch(`${API_URL}${path}`);
+  if (!res.ok) throw new Error(res.statusText);
+  return res.text();
+}
+
+export const exportApi = {
+  json: (sessionId: string) =>
+    request<ExportBundle>(`/export/${sessionId}/json`),
+  markdown: (sessionId: string) =>
+    requestText(`/export/${sessionId}/markdown`),
+  openapi: (sessionId: string) =>
+    request<Record<string, unknown>>(`/export/${sessionId}/openapi`),
+  structure: (sessionId: string) =>
+    request<ProjectStructure>(`/export/${sessionId}/structure`),
 };

@@ -50,6 +50,7 @@ archivato-ai-builder/
 │  │     ├─ database-design/ # Database Design generation (REST)
 │  │     ├─ api-design/      # API Design generation (REST)
 │  │     ├─ review/          # AI Review Engine (REST)
+│  │     ├─ export/          # Export: JSON/Markdown/OpenAPI/structure
 │  │     └─ prisma/          # PrismaService + module
 │  └─ web/               # Next.js frontend (interview → requirements → designs)
 ├─ CLAUDE.md             # working memory / decisions log
@@ -212,9 +213,22 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - **Frontend**: a "Run AI Review" button after the API design renders a score
   ring, severity-tagged findings, and recommendations, with JSON download.
 
+### ✅ Slice 8 — Export + UI
+- `ExportService` assembles the full pipeline into portable formats:
+  **JSON** bundle, **Markdown** report, **OpenAPI 3.0** spec (derived from the API
+  + database design, with `:id`→`{id}` paths and component schemas), and a
+  **GitHub project structure** (module folders per service + shared/middleware/
+  config/utils, spec Step 7). Dependency-free pure builders.
+- **PDF** is produced client-side via the browser print dialog — no server PDF
+  dependency.
+- Gate enforced: requires the design pipeline through the API design (review is
+  included if present).
+- REST API (`/export/:sessionId/{json,markdown,openapi,structure}`).
+- **Frontend**: an Export panel after the review with one-click downloads for
+  each format plus "Print / Save as PDF".
+
 ### ⏳ Upcoming
-- **Slice 8** — Export (PDF / Markdown / JSON / OpenAPI / GitHub structure).
-- Auth (JWT + refresh tokens), BullMQ/Redis for async generation.
+- Auth (JWT + refresh tokens), BullMQ/Redis for async generation, YAML OpenAPI.
 
 ---
 
@@ -236,6 +250,10 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/api-design/:sessionId`| Fetch a generated API Design                 |
 | POST   | `/api/review/:sessionId/generate`| Run the AI Review (full pipeline required)  |
 | GET    | `/api/review/:sessionId`| Fetch a generated Review report                  |
+| GET    | `/api/export/:sessionId/json`| Full artifact bundle (JSON)                 |
+| GET    | `/api/export/:sessionId/markdown`| Markdown report                         |
+| GET    | `/api/export/:sessionId/openapi`| OpenAPI 3.0 spec (JSON)                   |
+| GET    | `/api/export/:sessionId/structure`| GitHub project structure manifest       |
 
 ---
 
