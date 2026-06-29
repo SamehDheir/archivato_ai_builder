@@ -1,7 +1,35 @@
 {
   "permissions": {
     "allow": [
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "PowerShell(docker info --format \"{{.ServerVersion}}\" 2>&1)",
+      "PowerShell(npm run prisma:deploy --workspace @archivato/api 2>&1)",
+      "Bash(curl -s -i -X POST http://localhost:3001/api/interview -H 'Content-Type: application/json' -d '{\"idea\":\"A peer-to-peer bike rental marketplace\"}')",
+      "Bash(git check-ignore *)",
+      "Skill(code-review)",
+      "Skill(code-review:*)",
+      "Bash(grep -iE \"\\(^|/\\)\\\\.env$\")",
+      "PowerShell(if \\($?\\) { \"WEB TYPECHECK OK\" })",
+      "PowerShell(cd \"d:/portoflio/Archivato AI Builder/apps/api\"; npx nest build 2>&1 | Select-Object -Last 8; echo \"=== build exit $? ===\")",
+      "PowerShell(npx tsc --noEmit -p \"d:/portoflio/Archivato AI Builder/apps/web/tsconfig.json\" 2>&1)",
+      "Bash(git restore *)",
+      "Bash(echo \"== commit exit $? ==\")",
+      "PowerShell(cd \"d:/portoflio/Archivato AI Builder/apps/api\"; npx nest build 2>&1 | Select-Object -Last 10; echo \"=== build exit $? ===\")",
+      "PowerShell(cd \"d:/portoflio/Archivato AI Builder/apps/api\"; npx nest build 2>&1 | Select-Object -Last 6; echo \"=== build $? ===\"; cd \"d:/portoflio/Archivato AI Builder\"; npm test --workspace @archivato/api 2>&1 | Select-String -Pattern \"Tests:|Test Suites:|FAIL|✕\" | Select-Object -First 15)",
+      "Bash(docker version *)",
+      "Bash(docker info *)",
+      "Bash(npx --workspace @archivato/api prisma migrate status --schema apps/api/prisma/schema.prisma)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(npm install *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"redis-exit: $?\")",
+      "Bash(echo \"exit $?\")",
+      "Bash(node -e \"const net=require\\('net'\\);const s=net.connect\\(6379,'127.0.0.1'\\);s.setTimeout\\(3000\\);s.on\\('connect',\\(\\)=>{s.write\\('PING\\\\r\\\\n'\\)}\\);s.on\\('data',d=>{console.log\\('reply:',JSON.stringify\\(d.toString\\(\\)\\)\\);s.end\\(\\);process.exit\\(0\\)}\\);s.on\\('timeout',\\(\\)=>{console.log\\('TIMEOUT'\\);process.exit\\(1\\)}\\);s.on\\('error',e=>{console.log\\('ERR',e.code\\);process.exit\\(1\\)}\\)\")",
+      "Bash(curl -s -o /dev/null -w '%{http_code}\\\\n' -X POST http://localhost:3001/api/jobs/x/requirements)",
+      "Bash(curl -s -o /dev/null --retry 40 --retry-connrefused --retry-delay 1 http://localhost:3001/api/auth/oauth/providers)",
+      "Bash(ls next.config.*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)"
     ]
   }
 }
