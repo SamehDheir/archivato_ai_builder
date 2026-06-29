@@ -278,9 +278,10 @@ DB Design → API Design → Review → Export
 - **Run prereq now:** `docker compose up -d db` then `npm run prisma:migrate
   --workspace @archivato/api` before `npm run dev:api`. On Windows, STOP
   `dev:api` before `prisma migrate/generate` (engine-DLL lock → EPERM).
-- **Not built yet:** Slice 9b forgot-password (SMTP reset links), Slice 9c
-  (OAuth Google/GitHub via passport), BullMQ/Redis. Pipeline routes not yet
-  user-scoped.
+- **Not built yet:** (historical note — these are now DONE) ~~Slice 9b
+  forgot-password~~, ~~Slice 9c OAuth~~, ~~BullMQ/Redis~~, ~~user-scoped pipeline
+  routes~~. Remaining ideas: BullMQ retries/backoff + a real worker process
+  (currently in-process), YAML OpenAPI export, incremental polish.
 - **ENV NOTE (2026-06-28):** The earlier loopback/DNS breakage is RESOLVED —
   localhost + DNS work again (npm install, DB on 5433, and live HTTP smoke all
   succeeded during Slice 9a). Slices 7–8 + 9a still need pushing to the remote.
@@ -329,6 +330,58 @@ DB Design → API Design → Review → Export
     run `prisma migrate deploy`/`dev` once Postgres is back on 5433).
   - Verified: 74/74 tests (3 new adaptive tests scripting the mock as Groq); api
     build clean. Runtime smoke against Groq pending the user's free key + DB up.
+
+- **Slice 11 — DONE (2026-06-29): Per-user pipeline ownership + async generation + UI to Tailwind/shadcn.**
+  - **Pending migration applied:** `20260629090000_add_interview_adaptive_fields`
+    was already applied (CLAUDE's "not applied" note was stale — `pendingQuestion`
+    + `coverage` columns exist; verified via `prisma migrate status` + `\d`).
+  - **User-scoped pipeline (ownership):** `InterviewSession` now has a nullable
+    `userId` FK→users (cascade) + index; migration `20260629120344_add_session_
+    ownership`. `start(input, userId)` stamps the owner from `@CurrentUser()`;
+    new `list(userId)` → `ProjectSummary[]` (shared type). New
+    `SessionOwnerGuard` (in `interview/`, **provided+exported by InterviewModule**
+    so every downstream module that imports it can inject it): loads the session
+    by `:sessionId`/`:id` and **404s** (no existence leak) when missing or not
+    owned. ALL pipeline controllers now `@UseGuards(JwtAuthGuard,
+    SessionOwnerGuard)` (interview/requirements/system-design/database-design/
+    api-design/review/export/chat) — they were previously PUBLIC. Repo gained
+    `findByUserId` (in-memory + Prisma). REST: GET `/interview` (my projects).
+    Frontend: "My projects" list on the home screen (open any past session),
+    `interviewApi.list()`, `loadSession()` refactor. Verified live: owner 200,
+    attacker 404, anon 401, lists correctly scoped.
+  - **BullMQ/Redis async generation:** `@nestjs/bullmq` + `bullmq`; Redis added to
+    docker-compose (`redis:7-alpine`, host 6379). `jobs/` module: `PIPELINE_QUEUE`,
+    `PipelineProcessor` (WorkerHost — injects the 5 stage services, runs
+    `generate()` by stage), `JobsService` (enqueue with stage allowlist →400;
+    `status()` cross-checks `job.data.sessionId===sessionId` so a guessable
+    sequential jobId can't be read cross-tenant), `JobsController`
+    (`POST/GET /jobs/:sessionId/:stage|:jobId`, owner-guarded). Shared `jobs.ts`
+    (`PipelineStageName`, `JobStatus`, `PIPELINE_STAGES`). Frontend: `jobsApi.run()`
+    enqueues + polls; `page.tsx` generate buttons now async with a live `<Progress>`
+    bar. Verified live: enqueue→active→completed (artifact returned), attacker
+    job 404, unknown stage 400, artifact persisted. NOTE: the design agents stay
+    on mock by default so jobs complete instantly; the queue matters with real
+    Claude/Groq.
+  - **Frontend fully migrated to Tailwind + shadcn/ui** (user request — "all
+    project old and new"). Added `tailwind.config.ts`, `postcss.config.js`,
+    `components.json`, `lib/utils.ts` (`cn`), rewrote `globals.css` as the
+    `@tailwind` layers + shadcn dark-theme HSL tokens mirroring the old palette
+    (bg #0f1117, accent #6d8bff, green #4ade80). Component library under
+    `components/ui/`: button, card, badge, input, textarea, label, select,
+    progress, tabs, table, alert, separator, skeleton. EVERY app component
+    rewritten to use them (page, AuthGate, AuthForm, ForgotPasswordForm,
+    ChatPanel, Download/Export, all 5 design Views, verify page). `@/*` path
+    alias already existed in tsconfig. Verified: web type-check + `next build`
+    clean (7 routes); dev server serves the 31KB compiled Tailwind CSS.
+  - **GOTCHA (learned):** Next only wires the PostCSS/Tailwind pipeline at
+    startup — a `next dev` started BEFORE the tailwind/postcss config existed
+    serves NO Tailwind output (page looks unstyled though build passes). Restart
+    `next dev` after adding/changing `tailwind.config.ts`/`postcss.config.js`.
+  - Tests: **98 API tests pass** (12 new: ownership guard ×5, my-projects list,
+    jobs service ×5, +1). Security review: no findings; the slice removes the
+    prior unauthenticated-pipeline-access gap.
+  - **Prereq update:** `docker compose up -d db redis` (Redis now required for
+    `/jobs`). API still boots without Redis but enqueue will fail until it's up.
 
 ## Review rule (added Slice 6)
 

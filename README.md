@@ -23,9 +23,10 @@ System Design → DB Design → API Design → Review → Export
 | Frontend     | Next.js 14 (App Router) + React (`apps/web`)       |
 | Shared types | `@archivato/shared` (`packages/shared`)            |
 | Database     | PostgreSQL + Prisma (all data persisted)           |
-| Queue        | BullMQ + Redis *(upcoming slice)*                  |
+| Queue        | BullMQ + Redis (async pipeline generation)         |
 | AI           | Anthropic Claude via a swappable `LlmProvider`     |
 | Auth         | JWT access + rotating refresh tokens (httpOnly cookies) |
+| Frontend UI  | Tailwind CSS + shadcn/ui (dark theme)              |
 | Monorepo     | npm workspaces (`apps/*` + `packages/*`)           |
 
 Architecture pattern: **Modular Monolith** (split later if needed).
@@ -87,10 +88,11 @@ ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_MODEL=claude-sonnet-4-6   # claude-opus-4-8 is more capable
 ```
 
-### Database (PostgreSQL via Prisma)
-All pipeline data is persisted. Start Postgres and apply the schema:
+### Database + Redis (PostgreSQL via Prisma, Redis for the job queue)
+All pipeline data is persisted; async generation runs on Redis (BullMQ). Start
+both services and apply the schema:
 ```bash
-docker compose up -d db                    # Postgres on host port 5433
+docker compose up -d db redis              # Postgres on 5433, Redis on 6379
 npm run prisma:migrate --workspace @archivato/api   # apply migrations + generate client
 ```
 `DATABASE_URL` (in `.env`) defaults to the docker-compose database. Point it at
@@ -306,9 +308,26 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - **Frontend**: "Continue with Google / GitHub" buttons on the auth screen,
   shown only for configured providers; callback errors surface on `/login`.
 
+### ✅ Slice 11 — Per-user pipeline ownership ("My projects")
+- Every interview session is now owned by the authenticated user (`userId` FK).
+  A `SessionOwnerGuard` protects **all** pipeline routes (previously public):
+  non-owners get a `404` (no existence leak), unauthenticated requests `401`.
+- `GET /interview` lists the signed-in user's projects; the home screen shows a
+  **"My projects"** list to resume any past session.
+
+### ✅ Slice 11 — Async generation (BullMQ + Redis)
+- Heavy generation stages run on a background worker. The client enqueues a job
+  and polls its status, with a **live progress bar**, instead of blocking on a
+  long request. Jobs are owner-scoped and a job's status can only be read for
+  the session it belongs to.
+- REST API (`POST /jobs/:sessionId/:stage`, `GET /jobs/:sessionId/:jobId`).
+
+### ✅ Slice 11 — UI rebuilt on Tailwind CSS + shadcn/ui
+- The entire web app was migrated to **Tailwind CSS + shadcn/ui** with a cohesive
+  dark theme (Card, Button, Badge, Input, Select, Tabs, Table, Progress, Alert…).
+
 ### ⏳ Upcoming
-- BullMQ/Redis for async generation; user-scoped pipeline ("my projects").
-- BullMQ/Redis for async generation; YAML OpenAPI; per-user pipeline ownership.
+- A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
 ---
 
@@ -323,8 +342,9 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | POST   | `/api/auth/verify-email`   | Confirm an email-verification token (public) |
 | POST   | `/api/auth/resend-verification`| Re-send the verification email (guarded) |
 | GET    | `/api/auth/me`             | Current user (requires a valid access cookie)|
-| POST   | `/api/interview`           | Start an interview from a raw idea           |
-| GET    | `/api/interview/:id`       | Fetch current interview state                |
+| GET    | `/api/interview`           | List the signed-in user's projects           |
+| POST   | `/api/interview`           | Start an interview from a raw idea (owned)    |
+| GET    | `/api/interview/:id`       | Fetch current interview state (owner only)   |
 | POST   | `/api/interview/:id/answer`| Answer the current question and advance      |
 | POST   | `/api/interview/:id/confirm`| Confirm the summarized requirements (gate)  |
 | POST   | `/api/requirements/:sessionId/generate`| Generate the Requirement Document (confirmed only) |
@@ -339,6 +359,8 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/review/:sessionId`| Fetch a generated Review report                  |
 | POST   | `/api/chat/:sessionId`  | Refine the design from a chat instruction        |
 | GET    | `/api/chat/:sessionId`  | Fetch the refinement conversation                |
+| POST   | `/api/jobs/:sessionId/:stage` | Enqueue async generation of a stage        |
+| GET    | `/api/jobs/:sessionId/:jobId` | Poll a generation job's status + result    |
 | GET    | `/api/export/:sessionId/json`| Full artifact bundle (JSON)                 |
 | GET    | `/api/export/:sessionId/markdown`| Markdown report                         |
 | GET    | `/api/export/:sessionId/openapi`| OpenAPI 3.0 spec (JSON)                   |
