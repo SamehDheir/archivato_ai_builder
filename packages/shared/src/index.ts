@@ -21,3 +21,4 @@ export * from './export';
 export * from './auth';
 export * from './chat';
 export * from './jobs';
+export * from './versions';

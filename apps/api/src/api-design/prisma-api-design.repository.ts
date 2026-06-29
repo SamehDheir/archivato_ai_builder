@@ -25,4 +25,8 @@ export class PrismaApiDesignRepository implements ApiDesignRepository {
     });
     return row ? (row.data as unknown as ApiDesign) : null;
   }
+
+  async deleteBySessionId(sessionId: string): Promise<void> {
+    await this.prisma.apiDesign.deleteMany({ where: { sessionId } });
+  }
 }

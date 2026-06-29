@@ -25,4 +25,8 @@ export class PrismaReviewReportRepository implements ReviewReportRepository {
     });
     return row ? (row.data as unknown as ReviewReport) : null;
   }
+
+  async deleteBySessionId(sessionId: string): Promise<void> {
+    await this.prisma.reviewReport.deleteMany({ where: { sessionId } });
+  }
 }

@@ -5,6 +5,7 @@ import { SystemDesignModule } from '../system-design/system-design.module';
 import { DatabaseDesignModule } from '../database-design/database-design.module';
 import { ApiDesignModule } from '../api-design/api-design.module';
 import { ReviewModule } from '../review/review.module';
+import { VersionsModule } from '../versions/versions.module';
 import { RefinementAgent } from '../llm/agents/refinement.agent';
 import { ChatController } from './chat.controller';
 import { RefinementService } from './refinement.service';
@@ -23,6 +24,7 @@ import { PrismaChatMessageRepository } from './prisma-chat-message.repository';
     DatabaseDesignModule,
     ApiDesignModule,
     ReviewModule,
+    VersionsModule,
   ],
   controllers: [ChatController],
   providers: [

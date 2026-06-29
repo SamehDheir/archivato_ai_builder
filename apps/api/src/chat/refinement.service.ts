@@ -26,6 +26,7 @@ import { DatabaseDesignService } from '../database-design/database-design.servic
 import { ApiDesignService } from '../api-design/api-design.service';
 import { ReviewService } from '../review/review.service';
 import { RefinementAgent } from '../llm/agents/refinement.agent';
+import { VersionsService } from '../versions/versions.service';
 import {
   CHAT_MESSAGE_REPOSITORY,
   type ChatMessageRepository,
@@ -55,6 +56,7 @@ export class RefinementService {
     private readonly databaseDesign: DatabaseDesignService,
     private readonly apiDesign: ApiDesignService,
     private readonly review: ReviewService,
+    private readonly versions: VersionsService,
   ) {}
 
   /** Apply one chat instruction and regenerate the affected design artifacts. */
@@ -92,7 +94,10 @@ export class RefinementService {
     const hadReview = await this.reviews.findBySessionId(sessionId);
     const reviewReport = hadReview ? await this.review.generate(sessionId) : null;
 
-    // 3) Persist the conversation turn.
+    // 3) Record a new project version capturing the whole refinement.
+    await this.versions.snapshot(sessionId, `refine: ${truncate(instruction)}`);
+
+    // 4) Persist the conversation turn.
     await this.chat.create({ sessionId, role: 'user', content: instruction });
     await this.chat.create({ sessionId, role: 'assistant', content: summary });
     const messages = await this.chat.listBySession(sessionId);
@@ -115,4 +120,10 @@ export class RefinementService {
     }
     return this.chat.listBySession(sessionId);
   }
+}
+
+/** Keep version labels short and readable. */
+function truncate(text: string, max = 60): string {
+  const t = text.trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }

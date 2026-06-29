@@ -9,4 +9,6 @@ export const REQUIREMENT_DOCUMENT_REPOSITORY = Symbol(
 export interface RequirementDocumentRepository {
   upsert(doc: RequirementDocument): Promise<RequirementDocument>;
   findBySessionId(sessionId: string): Promise<RequirementDocument | null>;
+  /** Remove the artifact for a session (used by version restore). No-op if absent. */
+  deleteBySessionId(sessionId: string): Promise<void>;
 }

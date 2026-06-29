@@ -27,4 +27,8 @@ export class PrismaDatabaseDesignRepository
     });
     return row ? (row.data as unknown as DatabaseDesign) : null;
   }
+
+  async deleteBySessionId(sessionId: string): Promise<void> {
+    await this.prisma.databaseDesign.deleteMany({ where: { sessionId } });
+  }
 }

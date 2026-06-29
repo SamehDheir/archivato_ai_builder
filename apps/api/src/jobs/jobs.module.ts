@@ -7,6 +7,7 @@ import { SystemDesignModule } from '../system-design/system-design.module';
 import { DatabaseDesignModule } from '../database-design/database-design.module';
 import { ApiDesignModule } from '../api-design/api-design.module';
 import { ReviewModule } from '../review/review.module';
+import { VersionsModule } from '../versions/versions.module';
 import { JobsController } from './jobs.controller';
 import { JobsService } from './jobs.service';
 import { PipelineProcessor } from './pipeline.processor';
@@ -36,6 +37,7 @@ import { PIPELINE_QUEUE } from './pipeline.constants';
     DatabaseDesignModule,
     ApiDesignModule,
     ReviewModule,
+    VersionsModule,
   ],
   controllers: [JobsController],
   providers: [JobsService, PipelineProcessor],

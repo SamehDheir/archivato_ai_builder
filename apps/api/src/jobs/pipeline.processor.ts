@@ -7,6 +7,7 @@ import { SystemDesignService } from '../system-design/system-design.service';
 import { DatabaseDesignService } from '../database-design/database-design.service';
 import { ApiDesignService } from '../api-design/api-design.service';
 import { ReviewService } from '../review/review.service';
+import { VersionsService } from '../versions/versions.service';
 import { PIPELINE_QUEUE, type GenerateJobData } from './pipeline.constants';
 
 /**
@@ -24,6 +25,7 @@ export class PipelineProcessor extends WorkerHost {
     private readonly databaseDesign: DatabaseDesignService,
     private readonly apiDesign: ApiDesignService,
     private readonly review: ReviewService,
+    private readonly versions: VersionsService,
   ) {
     super();
   }
@@ -33,6 +35,8 @@ export class PipelineProcessor extends WorkerHost {
     this.logger.log(`Generating ${stage} for session ${sessionId} (job ${job.id})`);
     await job.updateProgress(10);
     const result = await this.run(stage, sessionId);
+    // Record a new project version capturing this modification.
+    await this.versions.snapshot(sessionId, `generate ${stage}`);
     await job.updateProgress(100);
     return result;
   }

@@ -12,6 +12,7 @@ import { ReviewModule } from './review/review.module';
 import { ExportModule } from './export/export.module';
 import { ChatModule } from './chat/chat.module';
 import { JobsModule } from './jobs/jobs.module';
+import { VersionsModule } from './versions/versions.module';
 
 @Module({
   imports: [
@@ -41,6 +42,8 @@ import { JobsModule } from './jobs/jobs.module';
     ChatModule,
     // Async pipeline generation (BullMQ/Redis): enqueue + poll job status.
     JobsModule,
+    // Slice 12: project version history (snapshot on every modification).
+    VersionsModule,
   ],
 })
 export class AppModule {}

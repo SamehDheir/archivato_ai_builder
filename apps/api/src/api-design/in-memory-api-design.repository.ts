@@ -15,4 +15,8 @@ export class InMemoryApiDesignRepository implements ApiDesignRepository {
   async findBySessionId(sessionId: string): Promise<ApiDesign | null> {
     return this.designs.get(sessionId) ?? null;
   }
+
+  async deleteBySessionId(sessionId: string): Promise<void> {
+    this.designs.delete(sessionId);
+  }
 }

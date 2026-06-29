@@ -112,9 +112,26 @@ model InterviewSession {
   apiDesign           ApiDesign?
   reviewReport        ReviewReport?
   chatMessages        ChatMessage[]
+  versions            ProjectVersion[]
 
   @@index([userId])
   @@map("interview_sessions")
+}
+
+// Project version history (Slice 12). Each modification snapshots every artifact
+// as the next sequential version so the project can be compared and restored.
+model ProjectVersion {
+  id        String           @id @default(uuid())
+  sessionId String
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  version   Int
+  label     String
+  snapshot  Json // ProjectSnapshot (all five artifacts, nullable each)
+  createdAt DateTime         @default(now())
+
+  @@unique([sessionId, version])
+  @@index([sessionId])
+  @@map("project_versions")
 }
 
 // Post-generation refinement chat (Slice 10). One row per message; the design

@@ -7,4 +7,6 @@ export const REVIEW_REPORT_REPOSITORY = Symbol('REVIEW_REPORT_REPOSITORY');
 export interface ReviewReportRepository {
   upsert(report: ReviewReport): Promise<ReviewReport>;
   findBySessionId(sessionId: string): Promise<ReviewReport | null>;
+  /** Remove the artifact for a session (used by version restore). No-op if absent. */
+  deleteBySessionId(sessionId: string): Promise<void>;
 }

@@ -19,4 +19,8 @@ export class InMemoryRequirementDocumentRepository
   ): Promise<RequirementDocument | null> {
     return this.docs.get(sessionId) ?? null;
   }
+
+  async deleteBySessionId(sessionId: string): Promise<void> {
+    this.docs.delete(sessionId);
+  }
 }

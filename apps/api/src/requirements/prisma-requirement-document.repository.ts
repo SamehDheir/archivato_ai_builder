@@ -29,4 +29,8 @@ export class PrismaRequirementDocumentRepository
     });
     return row ? (row.data as unknown as RequirementDocument) : null;
   }
+
+  async deleteBySessionId(sessionId: string): Promise<void> {
+    await this.prisma.requirementDocument.deleteMany({ where: { sessionId } });
+  }
 }

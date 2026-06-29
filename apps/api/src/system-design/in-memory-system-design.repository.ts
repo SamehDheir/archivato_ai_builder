@@ -15,4 +15,8 @@ export class InMemorySystemDesignRepository implements SystemDesignRepository {
   async findBySessionId(sessionId: string): Promise<SystemDesign | null> {
     return this.designs.get(sessionId) ?? null;
   }
+
+  async deleteBySessionId(sessionId: string): Promise<void> {
+    this.designs.delete(sessionId);
+  }
 }

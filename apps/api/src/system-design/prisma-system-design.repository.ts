@@ -25,4 +25,8 @@ export class PrismaSystemDesignRepository implements SystemDesignRepository {
     });
     return row ? (row.data as unknown as SystemDesign) : null;
   }
+
+  async deleteBySessionId(sessionId: string): Promise<void> {
+    await this.prisma.systemDesign.deleteMany({ where: { sessionId } });
+  }
 }

@@ -17,4 +17,8 @@ export class InMemoryDatabaseDesignRepository
   async findBySessionId(sessionId: string): Promise<DatabaseDesign | null> {
     return this.designs.get(sessionId) ?? null;
   }
+
+  async deleteBySessionId(sessionId: string): Promise<void> {
+    this.designs.delete(sessionId);
+  }
 }

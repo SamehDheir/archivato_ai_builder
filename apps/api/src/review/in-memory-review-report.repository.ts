@@ -15,4 +15,8 @@ export class InMemoryReviewReportRepository implements ReviewReportRepository {
   async findBySessionId(sessionId: string): Promise<ReviewReport | null> {
     return this.reports.get(sessionId) ?? null;
   }
+
+  async deleteBySessionId(sessionId: string): Promise<void> {
+    this.reports.delete(sessionId);
+  }
 }

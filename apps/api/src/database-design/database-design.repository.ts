@@ -7,4 +7,6 @@ export const DATABASE_DESIGN_REPOSITORY = Symbol('DATABASE_DESIGN_REPOSITORY');
 export interface DatabaseDesignRepository {
   upsert(design: DatabaseDesign): Promise<DatabaseDesign>;
   findBySessionId(sessionId: string): Promise<DatabaseDesign | null>;
+  /** Remove the artifact for a session (used by version restore). No-op if absent. */
+  deleteBySessionId(sessionId: string): Promise<void>;
 }

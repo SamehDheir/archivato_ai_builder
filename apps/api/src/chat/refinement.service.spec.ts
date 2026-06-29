@@ -14,6 +14,8 @@ import { ApiDesignService } from '../api-design/api-design.service';
 import { InMemoryApiDesignRepository } from '../api-design/in-memory-api-design.repository';
 import { ReviewService } from '../review/review.service';
 import { InMemoryReviewReportRepository } from '../review/in-memory-review-report.repository';
+import { VersionsService } from '../versions/versions.service';
+import { InMemoryProjectVersionRepository } from '../versions/in-memory-project-version.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { DatabaseDesignerAgent } from '../llm/agents/database-designer.agent';
@@ -89,6 +91,14 @@ function makeHarness(): Harness {
     reviewRepo,
     new ReviewerAgent(mock),
   );
+  const versions = new VersionsService(
+    new InMemoryProjectVersionRepository(),
+    docRepo,
+    sysRepo,
+    dbRepo,
+    apiRepo,
+    reviewRepo,
+  );
   const service = new RefinementService(
     sessionRepo,
     docRepo,
@@ -100,6 +110,7 @@ function makeHarness(): Harness {
     databaseDesign,
     apiDesign,
     review,
+    versions,
   );
   return {
     interview,
