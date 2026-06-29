@@ -80,13 +80,24 @@ cp apps/web/.env.local.example apps/web/.env.local
 > The NestJS dev server and Prisma CLI load `apps/api/.env` (that's where
 > `DATABASE_URL` must live). On Windows, stop the dev API before running
 > `prisma migrate`/`generate` to avoid an engine-DLL file lock (`EPERM`).
-By default the API runs in **mock LLM mode** (`LLM_PROVIDER=mock`) — fully
-offline, no API key required. To use real Claude:
+**One switch for real AI.** With no key the API runs fully offline in **mock
+mode** (deterministic). Pasting a **free Groq key** flips the *entire* pipeline
+— the interview **and** every design agent (requirements, system, database, API,
+review, refine) — to real AI:
+```env
+# leave LLM_PROVIDER unset → auto: Groq when GROQ_API_KEY is set, else mock
+GROQ_API_KEY=gsk_...            # free, https://console.groq.com/keys
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+To force a specific provider for everything instead, set `LLM_PROVIDER`:
 ```env
 LLM_PROVIDER=claude
 ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_MODEL=claude-sonnet-4-6   # claude-opus-4-8 is more capable
 ```
+Every agent keeps a deterministic fallback, so malformed model output still
+produces a valid artifact. The API logs which provider it resolved on startup
+(`Agent LLM provider: …` / `Interview LLM provider: …`).
 
 ### Database + Redis (PostgreSQL via Prisma, Redis for the job queue)
 All pipeline data is persisted; async generation runs on Redis (BullMQ). Start

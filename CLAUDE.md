@@ -435,6 +435,23 @@ DB Design → API Design → Review → Export
     (state + handlers). Container widened to `max-w-4xl` for the design tables.
   - Verified: web type-check + `next build` clean; dev server serves Tailwind.
 
+- **Real AI for ALL agents — one switch (2026-06-29).** Previously only the
+  interview used real AI (Groq); the design agents were pinned to mock. Now the
+  base `LLM_PROVIDER` token auto-resolves just like the interview:
+  `selectProviderKind(forced, groqApiKey)` in `llm.module.ts` → an explicit
+  `LLM_PROVIDER=mock|claude|groq` forces that provider for **everything**; else
+  GROQ_API_KEY present → **groq for every agent** (interview + requirements,
+  system, database, API, review, refine, product-analyst); else mock. Empty env
+  strings count as unset. `INTERVIEW_LLM_PROVIDER` still pins only the interview.
+  NO agent code changed — they all already inject `LLM_PROVIDER`; only the module
+  factory + a startup log (`Agent/Interview LLM provider: <name>`) + env docs.
+  Every agent keeps its deterministic fallback, so bad model output still yields
+  a valid artifact. Pure helpers unit-tested (`llm.module.spec.ts`); 108 tests.
+  **GOTCHA:** the old `.env`/`.env.example` had `LLM_PROVIDER=mock`, which now
+  FORCES mock and defeats the key — both were changed to leave it **unset** so
+  pasting `GROQ_API_KEY` flips the pipeline. (`apps/api/.env` is gitignored — the
+  user must paste the real key there; verify via the startup log line.)
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`
