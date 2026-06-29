@@ -13,6 +13,7 @@ import { ExportModule } from './export/export.module';
 import { ChatModule } from './chat/chat.module';
 import { JobsModule } from './jobs/jobs.module';
 import { VersionsModule } from './versions/versions.module';
+import { DiagramsModule } from './diagrams/diagrams.module';
 
 @Module({
   imports: [
@@ -44,6 +45,8 @@ import { VersionsModule } from './versions/versions.module';
     JobsModule,
     // Slice 12: project version history (snapshot on every modification).
     VersionsModule,
+    // Architecture diagrams (Mermaid, deterministic from the design artifacts).
+    DiagramsModule,
   ],
 })
 export class AppModule {}

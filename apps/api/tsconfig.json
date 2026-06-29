@@ -4,6 +4,11 @@
     "rootDir": "src",
     "outDir": "dist",
     "baseUrl": ".",
+    // Only load the type packages we actually use. Without this, tsc implicitly
+    // pulls in EVERY @types/* hoisted into the monorepo node_modules (e.g. the
+    // @types/d3-* that arrive transitively with the web app's mermaid dep),
+    // which can break the API build on unrelated, incompatible declarations.
+    "types": ["node", "jest"],
     "paths": {
       "@archivato/shared": ["../../packages/shared/dist/index.d.ts"]
     }
