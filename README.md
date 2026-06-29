@@ -326,6 +326,16 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - The entire web app was migrated to **Tailwind CSS + shadcn/ui** with a cohesive
   dark theme (Card, Button, Badge, Input, Select, Tabs, Table, Progress, Alert…).
 
+### ✅ Slice 12 — Project version history (compare + restore)
+- **Every modification snapshots the whole project** (all artifacts together) as
+  the next sequential version — captured after each async stage generation and
+  each chat refinement (identical no-op snapshots are deduped).
+- **Compare** any two versions in a side-by-side JSON diff, and **Restore** any
+  version in one click (the project is rewritten to match that snapshot exactly,
+  and the restore is saved as a new version, so history is never lost).
+- REST API (`GET /versions/:sessionId`, `GET /versions/:sessionId/:version`,
+  `POST /versions/:sessionId/:version/restore`), all owner-scoped.
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
@@ -361,6 +371,9 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/chat/:sessionId`  | Fetch the refinement conversation                |
 | POST   | `/api/jobs/:sessionId/:stage` | Enqueue async generation of a stage        |
 | GET    | `/api/jobs/:sessionId/:jobId` | Poll a generation job's status + result    |
+| GET    | `/api/versions/:sessionId` | List a project's version history             |
+| GET    | `/api/versions/:sessionId/:version` | Fetch one version's full snapshot   |
+| POST   | `/api/versions/:sessionId/:version/restore` | Restore the project to a version |
 | GET    | `/api/export/:sessionId/json`| Full artifact bundle (JSON)                 |
 | GET    | `/api/export/:sessionId/markdown`| Markdown report                         |
 | GET    | `/api/export/:sessionId/openapi`| OpenAPI 3.0 spec (JSON)                   |

@@ -383,6 +383,43 @@ DB Design → API Design → Review → Export
   - **Prereq update:** `docker compose up -d db redis` (Redis now required for
     `/jobs`). API still boots without Redis but enqueue will fail until it's up.
 
+- **Slice 12 — DONE (2026-06-29): Project version history (snapshot / compare / restore).**
+  - **Project-level snapshots:** every modification snapshots ALL artifacts
+    together as the next sequential version (chosen over per-artifact history).
+    Shared `versions.ts` (`ProjectSnapshot`, `ProjectVersionMeta`,
+    `ProjectVersionDetail`). Prisma `project_versions` (FK→session cascade,
+    `@@unique([sessionId, version])`, snapshot JSON); migration
+    `20260629143026_add_project_versions`.
+  - `apps/api/src/versions`: `VersionsService.snapshot()` reads all five
+    artifacts and writes the next version, **deduping** when the snapshot equals
+    the latest (so deterministic mock regeneration doesn't spam versions);
+    `list`/`get`; `restore()` rewrites every artifact to the target snapshot
+    (upsert present, **delete absent**) and records the restore as a NEW version
+    (history is never destroyed). Repository pattern (in-memory + Prisma),
+    `@@unique` compound key via `sessionId_version`.
+  - **`deleteBySessionId` added to all 5 artifact repos** (interface + in-memory
+    + Prisma `deleteMany`) — needed for an exact restore.
+  - **Snapshot hooks:** `PipelineProcessor` snapshots after each async stage
+    generation (`generate <stage>`); `RefinementService` snapshots after the
+    chat cascade (`refine: <instruction>`). JobsModule + ChatModule import
+    VersionsModule; VersionsModule imports the 5 artifact modules + Interview
+    (guard). NOTE: the **synchronous** `/:stage/generate` endpoints do NOT
+    snapshot — only the jobs path + refine do (that's what the UI uses).
+  - REST (owner-guarded): GET `/versions/:sessionId`, GET
+    `/versions/:sessionId/:version`, POST `/versions/:sessionId/:version/restore`.
+  - Frontend: `apps/web/app/VersionHistory.tsx` panel in the project view —
+    version list, **side-by-side JSON diff** (client-side LCS line diff,
+    add/remove highlighted), one-click **Restore**. `versionsApi`; `page.tsx`
+    bumps a `versionsReload` signal after every generate/refine/restore and
+    `handleRestored` replaces the in-view artifacts.
+  - Verified: **102 API tests** (+4 version-service); web type-check + `next
+    build` clean. Live smoke through the real BullMQ/Redis path: 5 jobs → 5
+    versions (correct labels, newest-first), v1 snapshot `apiDesign:null`,
+    restore v1 → v6 + api-design removed (404), attacker 404, unknown version 404.
+  - **Run note:** Redis is required for `/jobs` (which now also snapshots). This
+    env's Docker Desktop pulls via `mirror.gcr.io` which fails DNS — Redis only
+    ran because the image was cached; a fresh pull needs that mirror fixed.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`
