@@ -9,6 +9,7 @@ import type {
   LoginInput,
   PipelineStageName,
   ProjectIdeaInput,
+  ProjectDiagrams,
   ProjectSnapshot,
   ProjectStructure,
   ProjectSummary,
@@ -208,6 +209,12 @@ export const versionsApi = {
     request<ProjectSnapshot>(`/versions/${sessionId}/${version}/restore`, {
       method: 'POST',
     }),
+};
+
+export const diagramsApi = {
+  /** Architecture diagrams (Mermaid source per diagram) for a project. */
+  get: (sessionId: string) =>
+    request<ProjectDiagrams>(`/diagrams/${sessionId}`),
 };
 
 async function requestText(path: string): Promise<string> {

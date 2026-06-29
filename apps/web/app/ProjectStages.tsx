@@ -26,6 +26,7 @@ import { ReviewView } from './ReviewView';
 import { ExportView } from './ExportView';
 import { ChatPanel } from './ChatPanel';
 import { VersionHistory } from './VersionHistory';
+import { DiagramsView } from './DiagramsView';
 import { SummaryView } from './SummaryView';
 
 export type ActiveJob = { stage: PipelineStageName; progress: number };
@@ -43,6 +44,7 @@ type TabKey =
   | 'system'
   | 'database'
   | 'api'
+  | 'diagrams'
   | 'review'
   | 'export'
   | 'refine'
@@ -99,6 +101,7 @@ export function ProjectStages({
     system: !!doc,
     database: !!design,
     api: !!dbDesign,
+    diagrams: !!design,
     review: !!apiDesign,
     export: !!apiDesign,
     refine: !!apiDesign,
@@ -140,6 +143,9 @@ export function ProjectStages({
             </TabsTrigger>
             <TabsTrigger value="api" disabled={!available.api}>
               API
+            </TabsTrigger>
+            <TabsTrigger value="diagrams" disabled={!available.diagrams}>
+              Diagrams
             </TabsTrigger>
             <TabsTrigger value="review" disabled={!available.review}>
               Review
@@ -240,6 +246,11 @@ export function ProjectStages({
                 />
               </>
             )}
+          </TabsContent>
+
+          {/* Architecture diagrams */}
+          <TabsContent value="diagrams" className="mt-4">
+            <DiagramsView sessionId={sessionId} reloadKey={versionsReload} />
           </TabsContent>
 
           {/* Review */}
