@@ -244,6 +244,51 @@ DB Design → API Design → Review → Export
   localhost + DNS work again (npm install, DB on 5433, and live HTTP smoke all
   succeeded during Slice 9a). Slices 7–8 + 9a still need pushing to the remote.
 
+- **Slice 10 — DONE:** AI Chat After Generation (refine the design via chat).
+  - `packages/shared/chat.ts`: `ChatMessage`, `RefineRequest`, `RefineResult`
+    (transcript + every regenerated artifact). New `AgentRole.Refiner`.
+  - `apps/api/src/llm/agents/refinement.agent.ts`: amends the Requirement
+    Document from an instruction (LLM + deterministic fallback that appends an
+    FR, plus a scalability NFR whose wording trips the architecture fallback to
+    microservices — so keyword cascades work in mock mode).
+  - `apps/api/src/chat`: `RefinementService` (gate: confirmed + full design
+    through API exists) amends requirements, then calls the existing
+    System/DB/API services' `generate()` to regenerate downstream, and the
+    `ReviewService` only if a review already existed. Persists a user+assistant
+    turn. `ChatMessageRepository` (in-memory + Prisma). Controller: POST/GET
+    `/chat/:sessionId`. The four stage modules now ALSO export their Service.
+  - Prisma `chat_messages` (FK→session cascade); migration
+    `20260628155155_add_chat_messages`.
+  - Frontend: `apps/web/app/ChatPanel.tsx` after the API design (example chips,
+    transcript, optimistic send); a refinement re-renders every artifact at once
+    via `handleRefined` in `page.tsx`.
+  - Verified: 71/71 API tests (6 new); api build + web type-check clean; live
+    smoke (Add notifications → Notifications service + notifications table;
+    "scalable to 5M users" → microservices; transcript persisted; reqs grew).
+
+- **Adaptive interview + Groq (2026-06-29):** the interview now asks
+  AI-generated, concept-aware questions instead of the fixed 11-question plan.
+  - `apps/api/src/llm/groq-llm.provider.ts`: free **Groq** provider (OpenAI-
+    compatible, native `fetch`, no SDK dep). Config `GROQ_API_KEY` (+ `GROQ_MODEL`,
+    default `llama-3.3-70b-versatile`).
+  - New token `INTERVIEW_LLM_PROVIDER` (in `llm-provider.interface.ts`) wired in
+    `LlmModule`: defaults to **groq when `GROQ_API_KEY` is set**, else falls back
+    to `LLM_PROVIDER`. So the free key flips ONLY the interview to real AI; the
+    design agents stay on the default (mock). Override via `INTERVIEW_LLM_PROVIDER`.
+  - `llm/agents/interviewer.agent.ts` (`AgentRole.Interviewer`): given the concept
+    + answers so far, returns the next question (or `done`) + a `coverage` 0..1.
+    No fallback in the agent — `InterviewService` reverts to the deterministic
+    `QUESTION_PLAN` when the model is unavailable/non-conforming (mock & tests).
+  - `InterviewService` refactor: stores a generated `pendingQuestion` + `coverage`
+    on the session (new Prisma columns + entity fields); `decideNext()` tries the
+    adaptive path, else the plan. Caps: min 4 / max 12 adaptive questions. Plan
+    behavior is byte-for-byte preserved so existing tests pass.
+  - Migration `20260629090000_add_interview_adaptive_fields` (pendingQuestion JSONB
+    + coverage float) — **written but NOT yet applied** (Docker engine was down;
+    run `prisma migrate deploy`/`dev` once Postgres is back on 5433).
+  - Verified: 74/74 tests (3 new adaptive tests scripting the mock as Groq); api
+    build clean. Runtime smoke against Groq pending the user's free key + DB up.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`

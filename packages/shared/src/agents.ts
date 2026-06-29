@@ -4,11 +4,15 @@
  */
 export enum AgentRole {
   ProductAnalyst = 'product_analyst',
+  /** Drives the adaptive interview — picks the next question from the concept. */
+  Interviewer = 'interviewer',
   RequirementEngineer = 'requirement_engineer',
   SystemArchitect = 'system_architect',
   DatabaseDesigner = 'database_designer',
   ApiDesigner = 'api_designer',
   Reviewer = 'reviewer',
+  /** Applies post-generation chat instructions by amending the requirements. */
+  Refiner = 'refiner',
 }
 
 /** A single turn in an LLM conversation. */

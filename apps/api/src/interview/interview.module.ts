@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
+import { InterviewerAgent } from '../llm/agents/interviewer.agent';
 import { InterviewController } from './interview.controller';
 import { InterviewService } from './interview.service';
 import { INTERVIEW_SESSION_REPOSITORY } from './interview-session.repository';
@@ -10,6 +11,7 @@ import { PrismaInterviewSessionRepository } from './prisma-interview-session.rep
   providers: [
     InterviewService,
     ProductAnalystAgent,
+    InterviewerAgent,
     {
       provide: INTERVIEW_SESSION_REPOSITORY,
       useClass: PrismaInterviewSessionRepository,

@@ -19,7 +19,7 @@ import { PrismaSystemDesignRepository } from './prisma-system-design.repository'
       useClass: PrismaSystemDesignRepository,
     },
   ],
-  // Export the design store so downstream stages (Database Design) read it.
-  exports: [SYSTEM_DESIGN_REPOSITORY],
+  // Export the design store (downstream stages) + the service (chat refinement).
+  exports: [SYSTEM_DESIGN_REPOSITORY, SystemDesignService],
 })
 export class SystemDesignModule {}

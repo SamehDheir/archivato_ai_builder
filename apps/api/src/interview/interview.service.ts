@@ -8,6 +8,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import {
   COMPLETENESS_THRESHOLD,
+  INTERVIEW_PHASE_ORDER,
   InterviewPhase,
   type InterviewExchange,
   type InterviewQuestion,
@@ -17,12 +18,24 @@ import {
   type RequirementsSummary,
 } from '@archivato/shared';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
+import { InterviewerAgent } from '../llm/agents/interviewer.agent';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
 } from './interview-session.repository';
 import type { InterviewSession } from './interview-session.entity';
 import { QUESTION_PLAN, TOTAL_QUESTIONS } from './question-plan';
+
+/** Adaptive interview caps so a real model can't end too early or run forever. */
+const MIN_ADAPTIVE_QUESTIONS = 4;
+const MAX_ADAPTIVE_QUESTIONS = 12;
+
+/** One turn's decision: the next question (or done) plus a coverage estimate. */
+interface InterviewDecision {
+  done: boolean;
+  coverage: number;
+  question: InterviewQuestion | null;
+}
 
 @Injectable()
 export class InterviewService {
@@ -32,6 +45,7 @@ export class InterviewService {
     @Inject(INTERVIEW_SESSION_REPOSITORY)
     private readonly repo: InterviewSessionRepository,
     private readonly productAnalyst: ProductAnalystAgent,
+    private readonly interviewer: InterviewerAgent,
   ) {}
 
   /** Start a new interview from a raw idea and return the first question. */
@@ -43,10 +57,13 @@ export class InterviewService {
       status: 'collecting',
       intent: await this.analyzeIntent(input),
       history: [],
+      pendingQuestion: null,
+      coverage: 0,
       summary: null,
       createdAt: now,
       updatedAt: now,
     };
+    await this.advance(session); // choose the first question
     await this.repo.create(session);
     return this.toState(session);
   }
@@ -61,19 +78,14 @@ export class InterviewService {
       );
     }
 
-    const question = this.nextQuestion(session);
+    const question = session.pendingQuestion;
     if (!question) {
       // Shouldn't happen while collecting, but guard anyway.
       throw new ConflictException('No question is currently pending.');
     }
 
     session.history.push({ question, answer: answer.trim() });
-
-    // Reached the gate? Summarize and wait for confirmation.
-    if (this.completeness(session) >= COMPLETENESS_THRESHOLD) {
-      session.status = 'awaiting_confirmation';
-      session.summary = this.buildSummary(session);
-    }
+    await this.advance(session);
 
     await this.repo.save(session);
     return this.toState(session);
@@ -148,14 +160,96 @@ export class InterviewService {
     };
   }
 
-  /** First unanswered question in plan order, or null if all answered. */
-  private nextQuestion(session: InterviewSession): InterviewQuestion | null {
-    const answeredIds = new Set(session.history.map((h) => h.question.id));
-    return QUESTION_PLAN.find((q) => !answeredIds.has(q.id)) ?? null;
+  /**
+   * Pick the next question (or close the gate) and update the session. Tries the
+   * adaptive interviewer first; falls back to the deterministic question plan
+   * when the model is unavailable or non-conforming (e.g. mock mode / tests).
+   */
+  private async advance(session: InterviewSession): Promise<void> {
+    const next = await this.decideNext(session);
+    session.coverage = round2(next.coverage);
+    if (next.done) {
+      session.status = 'awaiting_confirmation';
+      session.summary = this.buildSummary(session);
+      session.pendingQuestion = null;
+    } else {
+      session.pendingQuestion = next.question;
+    }
   }
 
-  private completeness(session: InterviewSession): number {
-    return session.history.length / TOTAL_QUESTIONS;
+  private async decideNext(
+    session: InterviewSession,
+  ): Promise<InterviewDecision> {
+    // Hard cap so a real model can't ask forever.
+    if (session.history.length >= MAX_ADAPTIVE_QUESTIONS) {
+      return { done: true, coverage: 1, question: null };
+    }
+    const adaptive = await this.tryAdaptive(session);
+    return adaptive ?? this.planDecision(session);
+  }
+
+  /** Ask the real-AI interviewer for the next question; null if unusable. */
+  private async tryAdaptive(
+    session: InterviewSession,
+  ): Promise<InterviewDecision | null> {
+    try {
+      const d = await this.interviewer.decide({
+        idea: session.input.idea,
+        intent: session.intent,
+        history: session.history,
+      });
+      if (!d || typeof d.done !== 'boolean') return null;
+
+      const coverage = clamp01(typeof d.coverage === 'number' ? d.coverage : 0);
+      const canFinish = session.history.length >= MIN_ADAPTIVE_QUESTIONS;
+
+      if (d.done && canFinish) {
+        return {
+          done: true,
+          coverage: Math.max(coverage, COMPLETENESS_THRESHOLD),
+          question: null,
+        };
+      }
+      if (typeof d.question === 'string' && d.question.trim().length > 0) {
+        return {
+          done: false,
+          coverage,
+          question: {
+            id: `q${session.history.length + 1}`,
+            phase: this.resolvePhase(d.phase, session),
+            prompt: d.question.trim(),
+          },
+        };
+      }
+      // "done" too early, or no question supplied → let the plan provide one.
+      return null;
+    } catch (err) {
+      this.logger.warn(`Adaptive interview failed; using question plan: ${err}`);
+      return null;
+    }
+  }
+
+  /** Deterministic backbone: next unanswered plan question + length coverage. */
+  private planDecision(session: InterviewSession): InterviewDecision {
+    const answeredIds = new Set(session.history.map((h) => h.question.id));
+    const question = QUESTION_PLAN.find((q) => !answeredIds.has(q.id)) ?? null;
+    const coverage = session.history.length / TOTAL_QUESTIONS;
+    const done = question === null || coverage >= COMPLETENESS_THRESHOLD;
+    return { done, coverage, question: done ? null : question };
+  }
+
+  /** Map a free-text phase from the model onto a known phase. */
+  private resolvePhase(
+    raw: string | undefined,
+    session: InterviewSession,
+  ): InterviewPhase {
+    const match = INTERVIEW_PHASE_ORDER.find((p) => p === raw);
+    if (match) return match;
+    const idx = Math.min(
+      session.history.length,
+      INTERVIEW_PHASE_ORDER.length - 1,
+    );
+    return INTERVIEW_PHASE_ORDER[idx];
   }
 
   private answersForPhase(
@@ -199,12 +293,12 @@ export class InterviewService {
 
   private toState(session: InterviewSession): InterviewState {
     const currentQuestion =
-      session.status === 'collecting' ? this.nextQuestion(session) : null;
+      session.status === 'collecting' ? session.pendingQuestion : null;
     return {
       sessionId: session.id,
       status: session.status,
       phase: currentQuestion?.phase ?? null,
-      completeness: round2(this.completeness(session)),
+      completeness: round2(session.coverage),
       intent: session.intent,
       history: session.history as InterviewExchange[],
       currentQuestion,
@@ -219,4 +313,9 @@ function dedupe(values: string[]): string[] {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+function clamp01(n: number): number {
+  if (Number.isNaN(n)) return 0;
+  return Math.max(0, Math.min(1, n));
 }

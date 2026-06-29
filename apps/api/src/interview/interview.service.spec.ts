@@ -3,13 +3,14 @@ import { COMPLETENESS_THRESHOLD, type IntentAnalysis } from '@archivato/shared';
 import { InterviewService } from './interview.service';
 import { InMemoryInterviewSessionRepository } from './in-memory-interview-session.repository';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
+import { InterviewerAgent } from '../llm/agents/interviewer.agent';
 import { MockLlmProvider } from '../llm/mock-llm.provider';
 import { TOTAL_QUESTIONS } from './question-plan';
 
 function makeService(mock = new MockLlmProvider()): InterviewService {
   const repo = new InMemoryInterviewSessionRepository();
   const analyst = new ProductAnalystAgent(mock);
-  return new InterviewService(repo, analyst);
+  return new InterviewService(repo, analyst, new InterviewerAgent(mock));
 }
 
 const IDEA = { idea: 'A clinic management system with appointments and billing' };
@@ -108,5 +109,69 @@ describe('InterviewService', () => {
     await expect(svc.getState('nope')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  // ── adaptive interview (real-AI path, scripted via the mock) ──────────────
+
+  /** A mock that answers the interviewer with scripted, adaptive decisions. */
+  function adaptiveMock(): MockLlmProvider {
+    const mock = new MockLlmProvider();
+    let turn = 0;
+    mock.setResponder((messages) => {
+      const text = messages.map((m) => m.content).join('\n');
+      // The interviewer prompt asks for the "NEXT question"; everything else
+      // (intent analysis) just echoes and uses its deterministic fallback.
+      if (!text.includes('NEXT question')) {
+        return JSON.stringify({ provider: 'mock', echo: 'intent' });
+      }
+      turn += 1;
+      // Finish once at least 4 questions have been answered (turn 5).
+      if (turn >= 5) {
+        return JSON.stringify({ done: true, coverage: 0.95 });
+      }
+      return JSON.stringify({
+        done: false,
+        coverage: 0.2 * turn,
+        phase: 'features',
+        question: `Adaptive question ${turn}?`,
+      });
+    });
+    return mock;
+  }
+
+  it('asks AI-generated questions when the interview provider conforms', async () => {
+    const svc = makeService(adaptiveMock());
+    const state = await svc.start(IDEA);
+
+    expect(state.currentQuestion?.id).toBe('q1');
+    expect(state.currentQuestion?.prompt).toBe('Adaptive question 1?');
+    expect(state.currentQuestion?.phase).toBe('features');
+    // Coverage reflects the model's estimate, not a fixed plan ratio.
+    expect(state.completeness).toBeCloseTo(0.2);
+  });
+
+  it('closes the gate when the AI signals it has enough', async () => {
+    const svc = makeService(adaptiveMock());
+    const { sessionId } = await svc.start(IDEA);
+
+    // Answer the 4 adaptive questions; the 5th decision is done=true.
+    for (let i = 0; i < 6; i++) {
+      const s = await svc.getState(sessionId);
+      if (s.status !== 'collecting') break;
+      await svc.answer(sessionId, `answer ${i}`);
+    }
+
+    const state = await svc.getState(sessionId);
+    expect(state.status).toBe('awaiting_confirmation');
+    expect(state.history).toHaveLength(4);
+    expect(state.completeness).toBeGreaterThanOrEqual(COMPLETENESS_THRESHOLD);
+    expect(state.currentQuestion).toBeNull();
+    expect(state.summary).not.toBeNull();
+  });
+
+  it('falls back to the fixed plan when the provider is non-conforming', async () => {
+    const svc = makeService(); // default echo → invalid decision → plan
+    const state = await svc.start(IDEA);
+    expect(state.currentQuestion?.id).toBe('a1');
   });
 });

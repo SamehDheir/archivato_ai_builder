@@ -481,6 +481,46 @@ h3 {
   margin-left: auto; /* push badges right when they fit on one line */
 }
 
+/* ── AI Chat (Slice 10) ── */
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.chat-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.chip {
+  margin-top: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chat-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
 /* ── Auth bar (Slice 9) ── */
 .authbar {
   display: flex;

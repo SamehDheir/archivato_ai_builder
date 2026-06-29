@@ -1,5 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { ExportService } from './export.service';
+import { RefinementService } from './refinement.service';
+import { InMemoryChatMessageRepository } from './in-memory-chat-message.repository';
+import { RefinementAgent } from '../llm/agents/refinement.agent';
 import { InterviewService } from '../interview/interview.service';
 import { InMemoryInterviewSessionRepository } from '../interview/in-memory-interview-session.repository';
 import { RequirementsService } from '../requirements/requirements.service';
@@ -10,19 +12,21 @@ import { DatabaseDesignService } from '../database-design/database-design.servic
 import { InMemoryDatabaseDesignRepository } from '../database-design/in-memory-database-design.repository';
 import { ApiDesignService } from '../api-design/api-design.service';
 import { InMemoryApiDesignRepository } from '../api-design/in-memory-api-design.repository';
+import { ReviewService } from '../review/review.service';
 import { InMemoryReviewReportRepository } from '../review/in-memory-review-report.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { DatabaseDesignerAgent } from '../llm/agents/database-designer.agent';
 import { ApiDesignerAgent } from '../llm/agents/api-designer.agent';
+import { ReviewerAgent } from '../llm/agents/reviewer.agent';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
 import { InterviewerAgent } from '../llm/agents/interviewer.agent';
 import { MockLlmProvider } from '../llm/mock-llm.provider';
 import { TOTAL_QUESTIONS } from '../interview/question-plan';
 
-const IDEA = {
-  idea: 'A clinic system with appointments, billing, notifications and reports',
-};
+// A deliberately plain idea so the baseline design has NO notifications and a
+// modular-monolith architecture — making refinements observable.
+const IDEA = { idea: 'A simple personal todo list app' };
 
 interface Harness {
   interview: InterviewService;
@@ -30,7 +34,9 @@ interface Harness {
   systemDesign: SystemDesignService;
   databaseDesign: DatabaseDesignService;
   apiDesign: ApiDesignService;
-  service: ExportService;
+  review: ReviewService;
+  reviewRepo: InMemoryReviewReportRepository;
+  service: RefinementService;
 }
 
 function makeHarness(): Harness {
@@ -40,6 +46,7 @@ function makeHarness(): Harness {
   const dbRepo = new InMemoryDatabaseDesignRepository();
   const apiRepo = new InMemoryApiDesignRepository();
   const reviewRepo = new InMemoryReviewReportRepository();
+  const chatRepo = new InMemoryChatMessageRepository();
   const mock = new MockLlmProvider();
 
   const interview = new InterviewService(
@@ -73,13 +80,26 @@ function makeHarness(): Harness {
     apiRepo,
     new ApiDesignerAgent(mock),
   );
-  const service = new ExportService(
+  const review = new ReviewService(
     sessionRepo,
     docRepo,
     sysRepo,
     dbRepo,
     apiRepo,
     reviewRepo,
+    new ReviewerAgent(mock),
+  );
+  const service = new RefinementService(
+    sessionRepo,
+    docRepo,
+    apiRepo,
+    reviewRepo,
+    chatRepo,
+    new RefinementAgent(mock),
+    systemDesign,
+    databaseDesign,
+    apiDesign,
+    review,
   );
   return {
     interview,
@@ -87,16 +107,19 @@ function makeHarness(): Harness {
     systemDesign,
     databaseDesign,
     apiDesign,
+    review,
+    reviewRepo,
     service,
   };
 }
 
-async function fullPipeline(h: Harness): Promise<string> {
+/** Run the pipeline through the API design (chat becomes available after this). */
+async function pipeline(h: Harness): Promise<string> {
   const { sessionId } = await h.interview.start(IDEA);
   for (let i = 0; i < TOTAL_QUESTIONS; i++) {
     const state = await h.interview.getState(sessionId);
     if (state.status !== 'collecting') break;
-    await h.interview.answer(sessionId, 'payments billing notifications reports');
+    await h.interview.answer(sessionId, 'basic task tracking for one user');
   }
   await h.interview.confirm(sessionId);
   await h.requirements.generate(sessionId);
@@ -106,15 +129,15 @@ async function fullPipeline(h: Harness): Promise<string> {
   return sessionId;
 }
 
-describe('ExportService', () => {
+describe('RefinementService', () => {
   it('throws NotFound for an unknown session', async () => {
     const h = makeHarness();
-    await expect(h.service.bundle('nope')).rejects.toBeInstanceOf(
+    await expect(h.service.refine('nope', 'Add notifications')).rejects.toBeInstanceOf(
       NotFoundException,
     );
   });
 
-  it('refuses to export an incomplete pipeline', async () => {
+  it('refuses to refine before a full design exists', async () => {
     const h = makeHarness();
     const { sessionId } = await h.interview.start(IDEA);
     for (let i = 0; i < TOTAL_QUESTIONS; i++) {
@@ -124,56 +147,78 @@ describe('ExportService', () => {
     }
     await h.interview.confirm(sessionId);
     await h.requirements.generate(sessionId);
-    // stop before system/db/api designs
-    await expect(h.service.bundle(sessionId)).rejects.toBeInstanceOf(
-      ConflictException,
+    // no system/db/api design yet
+    await expect(
+      h.service.refine(sessionId, 'Add notifications'),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('“Add notifications” cascades a Notifications service into the design', async () => {
+    const h = makeHarness();
+    const sessionId = await pipeline(h);
+
+    // Baseline has no Notifications service.
+    const before = await h.systemDesign.get(sessionId);
+    expect(before.services.some((s) => s.name === 'Notifications')).toBe(false);
+
+    const result = await h.service.refine(
+      sessionId,
+      'Add notifications and email alerts',
     );
+
+    expect(
+      result.systemDesign.services.some((s) => s.name === 'Notifications'),
+    ).toBe(true);
+    // The requirement document grew by the new FR.
+    expect(result.requirementDocument.functional.length).toBeGreaterThan(
+      before.services.length,
+    );
+    // Transcript persisted: user instruction + assistant summary.
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages[0].role).toBe('user');
+    expect(result.messages[1].role).toBe('assistant');
+    // No review existed, so it stays null.
+    expect(result.reviewReport).toBeNull();
   });
 
-  it('bundles all artifacts (review optional/null)', async () => {
+  it('“scalable to 5 million users” redesigns toward microservices', async () => {
     const h = makeHarness();
-    const sessionId = await fullPipeline(h);
-    const bundle = await h.service.bundle(sessionId);
+    const sessionId = await pipeline(h);
 
-    expect(bundle.sessionId).toBe(sessionId);
-    expect(bundle.requirements.functional.length).toBeGreaterThan(0);
-    expect(bundle.apiDesign.modules.length).toBeGreaterThan(0);
-    expect(bundle.review).toBeNull();
+    const before = await h.systemDesign.get(sessionId);
+    expect(before.architecture).not.toBe('microservices');
+
+    const result = await h.service.refine(
+      sessionId,
+      'Make it scalable to 5 million users',
+    );
+    expect(result.systemDesign.architecture).toBe('microservices');
   });
 
-  it('renders Markdown with the major sections', async () => {
+  it('regenerates the review only when one already exists', async () => {
     const h = makeHarness();
-    const sessionId = await fullPipeline(h);
-    const md = await h.service.markdown(sessionId);
+    const sessionId = await pipeline(h);
+    await h.review.generate(sessionId);
 
-    expect(md).toContain('# Archivato — System Design');
-    expect(md).toContain('## Requirements');
-    expect(md).toContain('## System Design');
-    expect(md).toContain('## Database Design');
-    expect(md).toContain('## API Design');
+    const result = await h.service.refine(sessionId, 'Add notifications');
+    expect(result.reviewReport).not.toBeNull();
+    expect(result.reviewReport!.sessionId).toBe(sessionId);
   });
 
-  it('builds a valid OpenAPI document', async () => {
+  it('accumulates the transcript across turns', async () => {
     const h = makeHarness();
-    const sessionId = await fullPipeline(h);
-    const spec = await h.service.openapi(sessionId);
+    const sessionId = await pipeline(h);
 
-    expect(spec.openapi).toBe('3.0.3');
-    const paths = spec.paths as Record<string, unknown>;
-    // ":id" must be converted to "{id}" and no raw ":" params remain
-    expect(Object.keys(paths).some((p) => p.includes('{id}'))).toBe(true);
-    expect(Object.keys(paths).some((p) => p.includes(':'))).toBe(false);
-    expect(paths['/api/users']).toBeDefined();
-  });
+    await h.service.refine(sessionId, 'Add notifications');
+    await h.service.refine(sessionId, 'Add reporting dashboards');
 
-  it('generates a GitHub project structure with module folders', async () => {
-    const h = makeHarness();
-    const sessionId = await fullPipeline(h);
-    const structure = await h.service.structure(sessionId);
-
-    const paths = structure.files.map((f) => f.path);
-    expect(paths).toContain('README.md');
-    expect(paths.some((p) => p.startsWith('src/modules/auth/'))).toBe(true);
-    expect(paths).toContain('src/config/index.ts');
+    const messages = await h.service.getMessages(sessionId);
+    expect(messages).toHaveLength(4); // 2 turns × (user + assistant)
+    expect(messages.map((m) => m.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+    ]);
   });
 });

@@ -26,7 +26,7 @@ import { PrismaApiDesignRepository } from './prisma-api-design.repository';
       useClass: PrismaApiDesignRepository,
     },
   ],
-  // Export the API design store so the Review stage can read it.
-  exports: [API_DESIGN_REPOSITORY],
+  // Export the API design store (Review/Export) + the service (chat refinement).
+  exports: [API_DESIGN_REPOSITORY, ApiDesignService],
 })
 export class ApiDesignModule {}

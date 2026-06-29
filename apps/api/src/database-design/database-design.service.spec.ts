@@ -11,6 +11,7 @@ import { InMemorySystemDesignRepository } from '../system-design/in-memory-syste
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
+import { InterviewerAgent } from '../llm/agents/interviewer.agent';
 import { MockLlmProvider } from '../llm/mock-llm.provider';
 import { TOTAL_QUESTIONS } from '../interview/question-plan';
 
@@ -36,6 +37,7 @@ function makeHarness(): Harness {
   const interview = new InterviewService(
     sessionRepo,
     new ProductAnalystAgent(mock),
+    new InterviewerAgent(mock),
   );
   const requirements = new RequirementsService(
     sessionRepo,

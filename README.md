@@ -257,6 +257,18 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   "unverified" banner with a **Resend** action for signed-in users.
 - *Forgot-password (the reset half of 9b) is still upcoming.*
 
+### ✅ Slice 10 — AI Chat After Generation (+ UI)
+- Once the design is complete, a chat panel lets you refine it in natural
+  language ("Add notifications", "Make it scalable to 5 million users").
+- A `RefinementAgent` amends the **Requirement Document**, then the existing
+  System / Database / API services **regenerate from it** (and the review too, if
+  one was already run) so every artifact stays consistent — the keyword-driven
+  fallbacks make changes cascade in mock mode.
+- The conversation is **persisted** (`chat_messages` table) and replayed on load.
+- REST API (`POST /chat/:sessionId`, `GET /chat/:sessionId`).
+- **Frontend**: a `ChatPanel` after the API design with example prompts; applying
+  a change re-renders the whole design at once.
+
 ### ⏳ Upcoming
 - Slice 9b (cont.): forgot-password / reset via SMTP.
 - Slice 9c: OAuth (Google / GitHub) via passport.
@@ -289,6 +301,8 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/api-design/:sessionId`| Fetch a generated API Design                 |
 | POST   | `/api/review/:sessionId/generate`| Run the AI Review (full pipeline required)  |
 | GET    | `/api/review/:sessionId`| Fetch a generated Review report                  |
+| POST   | `/api/chat/:sessionId`  | Refine the design from a chat instruction        |
+| GET    | `/api/chat/:sessionId`  | Fetch the refinement conversation                |
 | GET    | `/api/export/:sessionId/json`| Full artifact bundle (JSON)                 |
 | GET    | `/api/export/:sessionId/markdown`| Markdown report                         |
 | GET    | `/api/export/:sessionId/openapi`| OpenAPI 3.0 spec (JSON)                   |

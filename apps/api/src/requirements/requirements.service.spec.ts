@@ -6,6 +6,7 @@ import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.age
 import { InterviewService } from '../interview/interview.service';
 import { InMemoryInterviewSessionRepository } from '../interview/in-memory-interview-session.repository';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
+import { InterviewerAgent } from '../llm/agents/interviewer.agent';
 import { MockLlmProvider } from '../llm/mock-llm.provider';
 import { TOTAL_QUESTIONS } from '../interview/question-plan';
 
@@ -16,7 +17,11 @@ function makeInterview(
   repo: InMemoryInterviewSessionRepository,
   mock: MockLlmProvider,
 ) {
-  return new InterviewService(repo, new ProductAnalystAgent(mock));
+  return new InterviewService(
+    repo,
+    new ProductAnalystAgent(mock),
+    new InterviewerAgent(mock),
+  );
 }
 
 async function confirmedSession(

@@ -1,5 +1,6 @@
 import type {
   InterviewExchange,
+  InterviewQuestion,
   InterviewStatus,
   IntentAnalysis,
   RequirementsSummary,
@@ -17,6 +18,13 @@ export interface InterviewSession {
   intent: IntentAnalysis | null;
   /** Answered questions, in the order they were asked. */
   history: InterviewExchange[];
+  /**
+   * The question currently awaiting an answer (adaptive questions are generated,
+   * so the pending one must be stored rather than recomputed). Null at the gate.
+   */
+  pendingQuestion: InterviewQuestion | null;
+  /** Latest requirement-coverage estimate, 0..1 (drives the progress bar). */
+  coverage: number;
   summary: RequirementsSummary | null;
   createdAt: Date;
   updatedAt: Date;

@@ -10,6 +10,7 @@ import { DatabaseDesignModule } from './database-design/database-design.module';
 import { ApiDesignModule } from './api-design/api-design.module';
 import { ReviewModule } from './review/review.module';
 import { ExportModule } from './export/export.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -35,6 +36,8 @@ import { ExportModule } from './export/export.module';
     ReviewModule,
     // Slice 8: Export (JSON / Markdown / OpenAPI / GitHub structure).
     ExportModule,
+    // Slice 10: post-generation AI chat (refine the design in natural language).
+    ChatModule,
   ],
 })
 export class AppModule {}

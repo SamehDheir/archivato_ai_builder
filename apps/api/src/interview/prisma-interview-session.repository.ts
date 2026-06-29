@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
   InterviewExchange,
+  InterviewQuestion,
   InterviewStatus,
   IntentAnalysis,
   RequirementsSummary,
@@ -28,6 +29,8 @@ export class PrismaInterviewSessionRepository
         status: session.status,
         intent: toJson(session.intent),
         history: toJsonArray(session.history),
+        pendingQuestion: toJson(session.pendingQuestion),
+        coverage: session.coverage,
         summary: toJson(session.summary),
       },
     });
@@ -46,6 +49,8 @@ export class PrismaInterviewSessionRepository
         status: session.status,
         intent: toJson(session.intent),
         history: toJsonArray(session.history),
+        pendingQuestion: toJson(session.pendingQuestion),
+        coverage: session.coverage,
         summary: toJson(session.summary),
       },
     });
@@ -74,6 +79,8 @@ function toEntity(row: {
   status: string;
   intent: Prisma.JsonValue;
   history: Prisma.JsonValue;
+  pendingQuestion: Prisma.JsonValue;
+  coverage: number;
   summary: Prisma.JsonValue;
   createdAt: Date;
   updatedAt: Date;
@@ -89,6 +96,9 @@ function toEntity(row: {
     status: row.status as InterviewStatus,
     intent: (row.intent as IntentAnalysis | null) ?? null,
     history: (row.history as unknown as InterviewExchange[]) ?? [],
+    pendingQuestion:
+      (row.pendingQuestion as unknown as InterviewQuestion | null) ?? null,
+    coverage: row.coverage ?? 0,
     summary: (row.summary as RequirementsSummary | null) ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

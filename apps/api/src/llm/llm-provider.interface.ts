@@ -30,8 +30,15 @@ export interface LlmProvider {
   ): Promise<T>;
 }
 
-/** DI token for injecting the active `LlmProvider`. */
+/** DI token for injecting the active `LlmProvider` (used by all design agents). */
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
+
+/**
+ * DI token for the provider used specifically by the adaptive interview. Lets us
+ * run real AI for the interview (e.g. Groq) while the rest of the pipeline stays
+ * on the default provider — see `LlmModule`.
+ */
+export const INTERVIEW_LLM_PROVIDER = Symbol('INTERVIEW_LLM_PROVIDER');
 
 /** Thrown when an LLM response can't be parsed as the expected JSON. */
 export class LlmJsonParseError extends Error {

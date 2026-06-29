@@ -1,12 +1,14 @@
 import type {
   ApiDesign,
   AuthUser,
+  ChatMessage,
   DatabaseDesign,
   ExportBundle,
   InterviewState,
   LoginInput,
   ProjectIdeaInput,
   ProjectStructure,
+  RefineResult,
   RegisterInput,
   RequirementDocument,
   ReviewReport,
@@ -131,6 +133,19 @@ export const reviewApi = {
     }),
 
   get: (sessionId: string) => request<ReviewReport>(`/review/${sessionId}`),
+};
+
+export const chatApi = {
+  /** Send a refinement instruction; returns the updated artifacts + transcript. */
+  refine: (sessionId: string, instruction: string) =>
+    request<RefineResult>(`/chat/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ instruction }),
+    }),
+
+  /** Load the saved conversation for a session. */
+  messages: (sessionId: string) =>
+    request<ChatMessage[]>(`/chat/${sessionId}`),
 };
 
 async function requestText(path: string): Promise<string> {

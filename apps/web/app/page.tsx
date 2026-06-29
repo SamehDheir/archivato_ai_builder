@@ -6,6 +6,7 @@ import type {
   DatabaseDesign,
   InterviewState,
   ProjectScale,
+  RefineResult,
   RequirementDocument,
   RequirementsSummary,
   ReviewReport,
@@ -25,6 +26,7 @@ import { DatabaseDesignView } from './DatabaseDesignView';
 import { ApiDesignView } from './ApiDesignView';
 import { ReviewView } from './ReviewView';
 import { ExportView } from './ExportView';
+import { ChatPanel } from './ChatPanel';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
@@ -135,6 +137,15 @@ export default function Home() {
     if (!state) return;
     const generated = await run(() => reviewApi.generate(state.sessionId));
     if (generated) setReview(generated);
+  }
+
+  /** Apply a chat refinement: replace every artifact the backend regenerated. */
+  function handleRefined(result: RefineResult) {
+    setDoc(result.requirementDocument);
+    setDesign(result.systemDesign);
+    setDbDesign(result.databaseDesign);
+    setApiDesign(result.apiDesign);
+    if (result.reviewReport) setReview(result.reviewReport);
   }
 
   function reset() {
@@ -375,6 +386,12 @@ export default function Home() {
                             <>
                               <h3 style={{ marginTop: 20 }}>API Design</h3>
                               <ApiDesignView design={apiDesign} />
+
+                              <h3 style={{ marginTop: 20 }}>AI Chat</h3>
+                              <ChatPanel
+                                sessionId={state.sessionId}
+                                onRefined={handleRefined}
+                              />
 
                               {!review && (
                                 <>

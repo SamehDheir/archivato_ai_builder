@@ -76,6 +76,8 @@ model InterviewSession {
   status         String   @default("collecting")
   intent         Json?
   history        Json // InterviewExchange[]
+  pendingQuestion Json? // the question awaiting an answer (adaptive interview)
+  coverage       Float    @default(0)
   summary        Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -85,8 +87,23 @@ model InterviewSession {
   databaseDesign      DatabaseDesign?
   apiDesign           ApiDesign?
   reviewReport        ReviewReport?
+  chatMessages        ChatMessage[]
 
   @@map("interview_sessions")
+}
+
+// Post-generation refinement chat (Slice 10). One row per message; the design
+// artifacts themselves live in their own tables and are overwritten in place.
+model ChatMessage {
+  id        String           @id @default(uuid())
+  sessionId String
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String // 'user' | 'assistant'
+  content   String
+  createdAt DateTime         @default(now())
+
+  @@index([sessionId])
+  @@map("chat_messages")
 }
 
 model RequirementDocument {

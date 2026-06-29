@@ -20,7 +20,7 @@ import { PrismaDatabaseDesignRepository } from './prisma-database-design.reposit
       useClass: PrismaDatabaseDesignRepository,
     },
   ],
-  // Export the schema store so downstream stages (API Design) read it.
-  exports: [DATABASE_DESIGN_REPOSITORY],
+  // Export the schema store (downstream stages) + the service (chat refinement).
+  exports: [DATABASE_DESIGN_REPOSITORY, DatabaseDesignService],
 })
 export class DatabaseDesignModule {}
