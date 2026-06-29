@@ -248,7 +248,24 @@ DB Design → API Design → Review → Export
   - **Resume across refresh:** `apps/web/app/page.tsx` saves the active
     sessionId in localStorage and rehydrates the interview + all artifacts on
     load (backend already persists everything).
-  - **OAuth (9c) still NOT done.**
+- **Slice 9c OAuth — DONE (2026-06-29):** Google + GitHub sign-in.
+  - `apps/api/src/auth/oauth.service.ts`: manual authorization-code flow via
+    native `fetch` (no passport/SDK dep). `buildAuthorizeUrl`, `loginWithCode`
+    (exchange code → fetch profile → link/create). Links by VERIFIED email
+    (attach provider to existing account; else create password-less,
+    emailVerified user). Per-provider enabled only when CLIENT_ID+SECRET set.
+  - `oauth.controller.ts` (`/auth/oauth`): GET `providers`, `:provider/start`
+    (CSRF `state` cookie → redirect to provider), `:provider/callback` (verify
+    state → login → `AuthService.createSessionFor` → set cookies → redirect to
+    WEB_ORIGIN; failures → `WEB_ORIGIN/login?error=…`). New public method
+    `AuthService.createSessionFor(user)`.
+  - Env: `GOOGLE_/GITHUB_CLIENT_ID/SECRET`, `API_ORIGIN` (callback base).
+    Callbacks: `http://localhost:3001/api/auth/oauth/{google,github}/callback`.
+  - Frontend: "Continue with Google/GitHub" buttons in `AuthForm` (shown via
+    `GET /auth/oauth/providers`); `?error=` surfaced on `/login`.
+  - Verified: 86/86 tests (5 new, fetch mocked); build clean; smoke (providers
+    false/false, disabled start → 302 error, unknown provider → 400). Full
+    round-trip needs real OAuth app credentials (user to create the apps).
 - **Auth bugfix (2026-06-28):** guarded routes 401'd right after login because
   `JWT_ACCESS_TTL_SECONDS` from `.env` is a STRING ("900"); `jsonwebtoken`
   reads a numeric string `expiresIn` as MILLISECONDS, so tokens expired

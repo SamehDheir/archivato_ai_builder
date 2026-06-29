@@ -3,7 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
+import { OAuthController } from './oauth.controller';
 import { AuthService } from './auth.service';
+import { OAuthService } from './oauth.service';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 import { MailService } from './mail.service';
@@ -40,9 +42,10 @@ import { PrismaPasswordResetTokenRepository } from './prisma-password-reset-toke
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, OAuthController],
   providers: [
     AuthService,
+    OAuthService,
     PasswordService,
     TokenService,
     MailService,

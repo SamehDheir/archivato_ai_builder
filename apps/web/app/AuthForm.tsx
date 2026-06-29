@@ -1,9 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AuthUser } from '@archivato/shared';
 import { authApi } from '../lib/api';
 import { ForgotPasswordForm } from './ForgotPasswordForm';
+
+const OAUTH_ERRORS: Record<string, string> = {
+  oauth_unavailable: 'That sign-in provider is not configured.',
+  oauth_state: 'Sign-in expired or was interrupted. Please try again.',
+  oauth_failed: 'Sign-in failed. Please try again.',
+};
 
 /**
  * The login/register form. Reused by the inline gate (`AuthGate`) and by the
@@ -31,6 +37,12 @@ export function AuthForm({
   const [notice, setNotice] = useState<string | null>(null);
 
   const isRegister = mode === 'register';
+
+  useEffect(() => {
+    // Surface an ?error=… handed back by a failed OAuth callback redirect.
+    const err = new URLSearchParams(window.location.search).get('error');
+    if (err && OAUTH_ERRORS[err]) setError(OAUTH_ERRORS[err]);
+  }, []);
 
   if (forgot) {
     return (
@@ -163,6 +175,32 @@ export function AuthForm({
         </button>
         {error && <div className="error">{error}</div>}
       </form>
+
+      <div className="oauth">
+        <div className="oauth-divider">
+          <span>or {isRegister ? 'sign up' : 'continue'} with</span>
+        </div>
+        <div className="row">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              window.location.href = authApi.oauthStartUrl('google');
+            }}
+          >
+            Google
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              window.location.href = authApi.oauthStartUrl('github');
+            }}
+          >
+            GitHub
+          </button>
+        </div>
+      </div>
 
       <p className="subtitle" style={{ textAlign: 'center' }}>
         {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}

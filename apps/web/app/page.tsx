@@ -14,6 +14,7 @@ import type {
 } from '@archivato/shared';
 import {
   apiDesignApi,
+  authApi,
   databaseDesignApi,
   interviewApi,
   requirementsApi,
@@ -30,8 +31,14 @@ import { ChatPanel } from './ChatPanel';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
-/** localStorage key holding the active interview session id (for resume). */
-const SESSION_KEY = 'archivato.sessionId';
+/**
+ * localStorage key for the active session id, scoped PER USER so signing in as a
+ * different account (incl. Google/GitHub) never resurrects someone else's
+ * project on the homepage.
+ */
+const sessionKey = (userId: string) => `archivato.sessionId:${userId}`;
+/** Old global key (pre per-user scoping) — cleared on load. */
+const LEGACY_SESSION_KEY = 'archivato.sessionId';
 
 export default function Home() {
   const [state, setState] = useState<InterviewState | null>(null);
@@ -39,6 +46,8 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   // True while we attempt to restore a saved session on first load.
   const [restoring, setRestoring] = useState(true);
+  // The signed-in user's id (resume is scoped to it).
+  const [userId, setUserId] = useState<string | null>(null);
 
   // Start form
   const [idea, setIdea] = useState('');
@@ -63,19 +72,33 @@ export default function Home() {
   // Review report (Slice 7)
   const [review, setReview] = useState<ReviewReport | null>(null);
 
-  // Resume a saved session on first load: fetch the interview state and every
-  // artifact that was already generated, so a refresh continues where you left
-  // off instead of starting over. All data lives in the backend (Postgres).
+  // Resume a saved session on first load — but only the one belonging to the
+  // CURRENT user. Fetch the user, then their saved session + every generated
+  // artifact, so a refresh continues where they left off. All data is in the
+  // backend (Postgres); the per-user key just reconnects the right browser.
   useEffect(() => {
-    const saved =
-      typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
-    if (!saved) {
-      setRestoring(false);
-      return;
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(LEGACY_SESSION_KEY); // drop the old global key
     }
     let cancelled = false;
     (async () => {
+      let uid: string | null = null;
       try {
+        const me = await authApi.me();
+        if (cancelled) return;
+        if (!me) {
+          setRestoring(false);
+          return;
+        }
+        uid = me.id;
+        setUserId(uid);
+
+        const saved = localStorage.getItem(sessionKey(uid));
+        if (!saved) {
+          setRestoring(false);
+          return;
+        }
+
         const restored = await interviewApi.get(saved);
         if (cancelled) return;
         setState(restored);
@@ -95,7 +118,7 @@ export default function Home() {
         if (rv.status === 'fulfilled') setReview(rv.value);
       } catch {
         // The saved session no longer exists — forget it and start fresh.
-        localStorage.removeItem(SESSION_KEY);
+        if (uid) localStorage.removeItem(sessionKey(uid));
       } finally {
         if (!cancelled) setRestoring(false);
       }
@@ -105,10 +128,12 @@ export default function Home() {
     };
   }, []);
 
-  // Remember the active session id so a refresh can resume it.
+  // Remember the active session id (under the current user) for resume.
   useEffect(() => {
-    if (state?.sessionId) localStorage.setItem(SESSION_KEY, state.sessionId);
-  }, [state?.sessionId]);
+    if (userId && state?.sessionId) {
+      localStorage.setItem(sessionKey(userId), state.sessionId);
+    }
+  }, [userId, state?.sessionId]);
 
   async function run<T>(fn: () => Promise<T>) {
     setBusy(true);
@@ -201,7 +226,9 @@ export default function Home() {
   }
 
   function reset() {
-    if (typeof window !== 'undefined') localStorage.removeItem(SESSION_KEY);
+    if (userId && typeof window !== 'undefined') {
+      localStorage.removeItem(sessionKey(userId));
+    }
     setState(null);
     setDoc(null);
     setDesign(null);

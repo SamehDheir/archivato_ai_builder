@@ -295,8 +295,18 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   interview + every generated artifact on load, so a refresh continues where you
   left off.
 
+### ✅ Slice 9c — OAuth (Google / GitHub)
+- Sign in with Google or GitHub via a server-side authorization-code flow (no
+  extra SDK — native `fetch`). Accounts are **linked by verified email**: an
+  OAuth login for an existing email attaches the provider; otherwise a new
+  password-less, email-verified account is created. CSRF-protected with a `state`
+  cookie; a provider is enabled only when its client id + secret are set.
+- REST API (`GET /auth/oauth/providers`, `GET /auth/oauth/:provider/start`,
+  `GET /auth/oauth/:provider/callback`).
+- **Frontend**: "Continue with Google / GitHub" buttons on the auth screen,
+  shown only for configured providers; callback errors surface on `/login`.
+
 ### ⏳ Upcoming
-- Slice 9c: OAuth (Google / GitHub) via passport.
 - BullMQ/Redis for async generation; user-scoped pipeline ("my projects").
 - BullMQ/Redis for async generation; YAML OpenAPI; per-user pipeline ownership.
 

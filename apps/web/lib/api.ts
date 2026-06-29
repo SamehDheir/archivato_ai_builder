@@ -204,6 +204,14 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ email, code, newPassword }),
     }),
+
+  /** Which OAuth providers are configured on the server. */
+  oauthProviders: () =>
+    request<{ google: boolean; github: boolean }>('/auth/oauth/providers'),
+
+  /** Full-page URL that starts an OAuth login (browser navigates here). */
+  oauthStartUrl: (provider: 'google' | 'github') =>
+    `${API_URL}/auth/oauth/${provider}/start`,
 };
 
 export const exportApi = {

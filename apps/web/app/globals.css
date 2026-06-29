@@ -576,6 +576,28 @@ h3 {
   cursor: pointer;
 }
 
+/* OAuth provider buttons (Slice 9c). */
+.oauth {
+  margin-top: 8px;
+}
+
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.oauth-divider::before,
+.oauth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 /* Login / Register tabs on the auth screen. */
 .tabs {
   display: flex;

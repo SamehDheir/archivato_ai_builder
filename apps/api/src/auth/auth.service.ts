@@ -90,6 +90,11 @@ export class AuthService {
     return toAuthUser(user);
   }
 
+  /** Issue a session for an already-authenticated user (e.g. via OAuth). */
+  createSessionFor(user: User): Promise<AuthSession> {
+    return this.startSession(user);
+  }
+
   private async startSession(user: User): Promise<AuthSession> {
     const refresh = await this.tokens.issueRefreshToken(user.id);
     return {
