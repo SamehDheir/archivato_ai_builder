@@ -229,11 +229,22 @@ export class InterviewService {
     }
   }
 
-  /** Deterministic backbone: next unanswered plan question + length coverage. */
+  /**
+   * Deterministic backbone. Picks the next plan question BY POSITION (not "first
+   * unanswered id") so that an adaptive→plan fallback mid-interview continues
+   * forward instead of restarting at question 1 — adaptive questions use `q*`
+   * ids that never match the plan's `a1/b1/…` ids. Coverage is non-decreasing so
+   * a transient model failure never drops the progress bar.
+   *
+   * In pure plan mode this is equivalent to the old behaviour: after N answers
+   * (a1..aN, answered in order) `QUESTION_PLAN[N]` is exactly the next question.
+   */
   private planDecision(session: InterviewSession): InterviewDecision {
-    const answeredIds = new Set(session.history.map((h) => h.question.id));
-    const question = QUESTION_PLAN.find((q) => !answeredIds.has(q.id)) ?? null;
-    const coverage = session.history.length / TOTAL_QUESTIONS;
+    const question = QUESTION_PLAN[session.history.length] ?? null;
+    const coverage = Math.max(
+      session.coverage,
+      session.history.length / TOTAL_QUESTIONS,
+    );
     const done = question === null || coverage >= COMPLETENESS_THRESHOLD;
     return { done, coverage, question: done ? null : question };
   }

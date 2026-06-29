@@ -53,6 +53,18 @@ export class MailService {
     await this.send({ to, subject, text, html }, verifyUrl);
   }
 
+  async sendPasswordResetOtp(to: string, code: string): Promise<void> {
+    const subject = 'Your Archivato password reset code';
+    const text = `Your password reset code is ${code}.\n\nIt expires in 10 minutes. If you didn't request this, you can ignore this email.`;
+    const html =
+      `<p>Your Archivato password reset code is:</p>` +
+      `<p style="font-size:24px;font-weight:bold;letter-spacing:3px">${code}</p>` +
+      `<p>It expires in 10 minutes. If you didn't request this, you can ignore this email.</p>`;
+
+    // Pass the code as the "link" so the dev/console fallback still shows it.
+    await this.send({ to, subject, text, html }, `reset code: ${code}`);
+  }
+
   private async send(
     message: { to: string; subject: string; text: string; html: string },
     link: string,

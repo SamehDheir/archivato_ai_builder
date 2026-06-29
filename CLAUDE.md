@@ -224,7 +224,31 @@ DB Design → API Design → Review → Export
     Gmail SMTP ("Email sent … via SMTP"). User's `apps/api/.env` now carries
     `JWT_ACCESS_SECRET` (real, not the insecure fallback), `WEB_ORIGIN`,
     `MAIL_PREVIEW=true`, and Gmail `SMTP_*`.
-  - **Forgot-password NOT done yet** (the other half of 9b).
+- **Slice 9b forgot-password — DONE (2026-06-29):** email OTP reset.
+  - `apps/api/src/auth/password-reset.service.ts`: `request(email)` emails a
+    uniform 6-digit OTP (only SHA-256 hash stored; 10-min expiry, single active
+    per user, max 5 attempts); `reset(email, code, newPassword)` verifies the
+    code, sets the new bcrypt hash, marks email verified, **revokes all refresh
+    tokens**. Generic error + always-200 request = no email enumeration. New repo
+    `PASSWORD_RESET_TOKEN_REPOSITORY` (in-memory + Prisma); `MailService.
+    sendPasswordResetOtp`. Prisma `password_reset_tokens`; migration
+    `add_password_reset_tokens` (applied). REST: POST `/auth/forgot-password`,
+    POST `/auth/reset-password`.
+  - Frontend: `ForgotPasswordForm` (request code → enter code + new password)
+    reached via a "Forgot password?" link in `AuthForm` login mode; success
+    notice on return to login.
+  - Verified: 81/81 tests (7 new); live smoke (register → forgot 200 + OTP
+    logged → reset 200 → old login 401 → new login 200 → code reuse 400).
+- **Review fixes (2026-06-29):** (1) interview adaptive→plan fallback now picks
+  the plan question BY POSITION (`QUESTION_PLAN[history.length]`) instead of the
+  first unanswered id, so a transient Groq failure mid-interview continues
+  forward instead of restarting at `a1`; coverage is non-decreasing. (2)
+  `ChatPanel` rolls back the optimistic user bubble (and restores the input
+  text) if a refine call fails.
+  - **Resume across refresh:** `apps/web/app/page.tsx` saves the active
+    sessionId in localStorage and rehydrates the interview + all artifacts on
+    load (backend already persists everything).
+  - **OAuth (9c) still NOT done.**
 - **Auth bugfix (2026-06-28):** guarded routes 401'd right after login because
   `JWT_ACCESS_TTL_SECONDS` from `.env` is a STRING ("900"); `jsonwebtoken`
   reads a numeric string `expiresIn` as MILLISECONDS, so tokens expired

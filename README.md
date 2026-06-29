@@ -255,7 +255,15 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - REST API (`/auth/verify-email`, `/auth/resend-verification`).
 - **Frontend**: a `/verify` landing page that confirms the token, plus an
   "unverified" banner with a **Resend** action for signed-in users.
-- *Forgot-password (the reset half of 9b) is still upcoming.*
+
+### ✅ Slice 9b — Forgot password (email OTP)
+- **One-time 6-digit code** emailed on request (only its SHA-256 hash is stored;
+  10-minute expiry, single-use, bounded attempts). Verifying the code sets a new
+  password, **revokes all sessions**, and marks the email verified. Responses
+  never reveal whether an email exists.
+- REST API (`/auth/forgot-password`, `/auth/reset-password`).
+- **Frontend**: a "Forgot password?" flow on the login screen — request a code,
+  then enter the code + a new password.
 
 ### ✅ Slice 10 — AI Chat After Generation (+ UI)
 - Once the design is complete, a chat panel lets you refine it in natural
@@ -269,9 +277,27 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - **Frontend**: a `ChatPanel` after the API design with example prompts; applying
   a change re-renders the whole design at once.
 
+### ✅ Slice — Adaptive interview + free Groq AI
+- The interview now asks **AI-generated, concept-aware questions** instead of a
+  fixed plan. A `GroqLlmProvider` (free, OpenAI-compatible) drives the interview
+  when `GROQ_API_KEY` is set, via a dedicated `INTERVIEW_LLM_PROVIDER` — so the
+  free key flips only the interview to real AI while design agents stay on the
+  default. Falls back to the deterministic question plan when unavailable.
+
+### ✅ Slice 10 — AI Chat After Generation
+- A post-generation chat refines the design in natural language ("Add
+  notifications", "Make it scalable to 5M users"): the requirements are amended
+  and the system/database/API designs (and the review, if present) regenerate
+  together. Conversation persisted; `POST/GET /chat/:sessionId`.
+
+### Resume
+- The web app remembers the active session (localStorage) and rehydrates the
+  interview + every generated artifact on load, so a refresh continues where you
+  left off.
+
 ### ⏳ Upcoming
-- Slice 9b (cont.): forgot-password / reset via SMTP.
 - Slice 9c: OAuth (Google / GitHub) via passport.
+- BullMQ/Redis for async generation; user-scoped pipeline ("my projects").
 - BullMQ/Redis for async generation; YAML OpenAPI; per-user pipeline ownership.
 
 ---

@@ -34,3 +34,16 @@ export interface LoginInput {
   email: string;
   password: string;
 }
+
+/** Payload for POST /auth/forgot-password — emails a one-time reset code. */
+export interface ForgotPasswordInput {
+  email: string;
+}
+
+/** Payload for POST /auth/reset-password — the emailed OTP + a new password. */
+export interface ResetPasswordInput {
+  email: string;
+  /** The 6-digit one-time code from the email. */
+  code: string;
+  newPassword: string;
+}

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { AuthUser } from '@archivato/shared';
 import { authApi } from '../lib/api';
+import { ForgotPasswordForm } from './ForgotPasswordForm';
 
 /**
  * The login/register form. Reused by the inline gate (`AuthGate`) and by the
@@ -25,12 +26,30 @@ export function AuthForm({
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Forgot-password sub-flow + a one-off notice (e.g. after a successful reset).
+  const [forgot, setForgot] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const isRegister = mode === 'register';
+
+  if (forgot) {
+    return (
+      <ForgotPasswordForm
+        initialEmail={email}
+        onBackToLogin={(message) => {
+          setForgot(false);
+          setMode('login');
+          setError(null);
+          if (message) setNotice(message);
+        }}
+      />
+    );
+  }
 
   function switchMode(next: 'login' | 'register') {
     setMode(next);
     setError(null);
+    setNotice(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -76,6 +95,8 @@ export function AuthForm({
         </button>
       </div>
 
+      {notice && <div className="notice ok">{notice}</div>}
+
       <form className="panel" onSubmit={handleSubmit}>
         <h3>{isRegister ? 'Create your account' : 'Welcome back'}</h3>
 
@@ -112,6 +133,21 @@ export function AuthForm({
           minLength={isRegister ? 8 : undefined}
           required
         />
+
+        {!isRegister && (
+          <p style={{ textAlign: 'right', margin: '2px 0 0' }}>
+            <button
+              type="button"
+              className="linklike"
+              onClick={() => {
+                setNotice(null);
+                setForgot(true);
+              }}
+            >
+              Forgot password?
+            </button>
+          </p>
+        )}
 
         <button
           type="submit"

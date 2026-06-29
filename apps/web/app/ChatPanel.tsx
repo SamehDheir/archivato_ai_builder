@@ -36,11 +36,12 @@ export function ChatPanel({
     if (!trimmed || busy) return;
     setBusy(true);
     setError(null);
-    // Optimistically show the user's message.
+    // Optimistically show the user's message (tracked so we can roll it back).
+    const optimisticId = `pending-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
       {
-        id: `pending-${Date.now()}`,
+        id: optimisticId,
         sessionId,
         role: 'user',
         content: trimmed,
@@ -54,6 +55,9 @@ export function ChatPanel({
       onRefined(result); // re-render the whole design with the updated artifacts
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      // Roll back the optimistic message and restore the text to the input.
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      setInstruction(trimmed);
     } finally {
       setBusy(false);
     }

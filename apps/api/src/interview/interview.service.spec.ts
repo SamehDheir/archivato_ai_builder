@@ -174,4 +174,42 @@ describe('InterviewService', () => {
     const state = await svc.start(IDEA);
     expect(state.currentQuestion?.id).toBe('a1');
   });
+
+  it('on a mid-interview fallback, continues forward and keeps coverage', async () => {
+    const mock = new MockLlmProvider();
+    let turn = 0;
+    mock.setResponder((messages) => {
+      const text = messages.map((m) => m.content).join('\n');
+      if (!text.includes('NEXT question')) {
+        return JSON.stringify({ provider: 'mock' }); // intent → fallback
+      }
+      turn += 1;
+      if (turn <= 2) {
+        return JSON.stringify({
+          done: false,
+          coverage: 0.5,
+          phase: 'features',
+          question: `Q${turn}?`,
+        });
+      }
+      return 'not json'; // 3rd turn fails → plan fallback
+    });
+
+    const svc = makeService(mock);
+    const { sessionId } = await svc.start(sessionIdea());
+    await svc.answer(sessionId, 'a'); // → Q2?
+    const s = await svc.answer(sessionId, 'b'); // adaptive fails → plan fallback
+
+    // Did NOT restart at the first plan question…
+    expect(s.currentQuestion?.id).not.toBe('a1');
+    // …picked the next plan question by position (a1, a2, [b1])…
+    expect(s.currentQuestion?.id).toBe('b1');
+    // …and coverage did not drop back to the length ratio (2/11 ≈ 0.18).
+    expect(s.completeness).toBe(0.5);
+  });
 });
+
+/** A fresh idea object (avoids sharing the module-level IDEA across mutations). */
+function sessionIdea() {
+  return { idea: 'A clinic management system with appointments and billing' };
+}

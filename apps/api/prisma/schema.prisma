@@ -28,10 +28,28 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  refreshTokens     RefreshToken[]
+  refreshTokens      RefreshToken[]
   verificationTokens EmailVerificationToken[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
+}
+
+// One-time password (OTP) codes for forgot-password (Slice 9b). Only the
+// SHA-256 hash of the 6-digit code is stored; short-lived and single-use, with
+// an attempt counter to bound guessing.
+model PasswordResetToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 // Single-use email-verification tokens (Slice 9b). Like refresh tokens, only a

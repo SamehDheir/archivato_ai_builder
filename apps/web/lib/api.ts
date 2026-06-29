@@ -190,6 +190,20 @@ export const authApi = {
     request<{ success: true }>('/auth/resend-verification', {
       method: 'POST',
     }),
+
+  /** Request a password-reset OTP by email (always succeeds — no enumeration). */
+  forgotPassword: (email: string) =>
+    request<{ success: true }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  /** Submit the emailed OTP + a new password. */
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    request<{ success: true }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, code, newPassword }),
+    }),
 };
 
 export const exportApi = {

@@ -8,6 +8,7 @@ import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 import { MailService } from './mail.service';
 import { EmailVerificationService } from './email-verification.service';
+import { PasswordResetService } from './password-reset.service';
 import { JwtStrategy } from './jwt.strategy';
 import { USER_REPOSITORY } from './user.repository';
 import { PrismaUserRepository } from './prisma-user.repository';
@@ -15,6 +16,8 @@ import { REFRESH_TOKEN_REPOSITORY } from './refresh-token.repository';
 import { PrismaRefreshTokenRepository } from './prisma-refresh-token.repository';
 import { EMAIL_VERIFICATION_TOKEN_REPOSITORY } from './email-verification-token.repository';
 import { PrismaEmailVerificationTokenRepository } from './prisma-email-verification-token.repository';
+import { PASSWORD_RESET_TOKEN_REPOSITORY } from './password-reset-token.repository';
+import { PrismaPasswordResetTokenRepository } from './prisma-password-reset-token.repository';
 
 /**
  * Authentication (Slice 9a): local register/login, rotating refresh tokens, and
@@ -44,12 +47,17 @@ import { PrismaEmailVerificationTokenRepository } from './prisma-email-verificat
     TokenService,
     MailService,
     EmailVerificationService,
+    PasswordResetService,
     JwtStrategy,
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
     { provide: REFRESH_TOKEN_REPOSITORY, useClass: PrismaRefreshTokenRepository },
     {
       provide: EMAIL_VERIFICATION_TOKEN_REPOSITORY,
       useClass: PrismaEmailVerificationTokenRepository,
+    },
+    {
+      provide: PASSWORD_RESET_TOKEN_REPOSITORY,
+      useClass: PrismaPasswordResetTokenRepository,
     },
   ],
   // Export so later modules (ownership enforcement) can reuse the guard/strategy.

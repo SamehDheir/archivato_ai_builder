@@ -14,9 +14,12 @@ import type { AuthUser } from '@archivato/shared';
 import { AuthService } from './auth.service';
 import { TokenService } from './token.service';
 import { EmailVerificationService } from './email-verification.service';
+import { PasswordResetService } from './password-reset.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import { REFRESH_TOKEN_COOKIE } from './auth.constants';
@@ -33,6 +36,7 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly tokens: TokenService,
     private readonly emailVerification: EmailVerificationService,
+    private readonly passwordReset: PasswordResetService,
     private readonly config: ConfigService,
   ) {}
 
@@ -78,6 +82,26 @@ export class AuthController {
   ): Promise<{ success: true }> {
     await this.auth.logout(readRefreshCookie(req));
     clearAuthCookies(res, this.config);
+    return { success: true };
+  }
+
+  /** Email a one-time reset code if the account exists. Public, no enumeration. */
+  @Post('forgot-password')
+  @HttpCode(200)
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+  ): Promise<{ success: true }> {
+    await this.passwordReset.request(dto.email);
+    return { success: true };
+  }
+
+  /** Verify the OTP and set a new password (revokes all sessions). Public. */
+  @Post('reset-password')
+  @HttpCode(200)
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+  ): Promise<{ success: true }> {
+    await this.passwordReset.reset(dto.email, dto.code, dto.newPassword);
     return { success: true };
   }
 
