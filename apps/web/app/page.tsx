@@ -9,6 +9,7 @@ import type {
   JobStatus,
   PipelineStageName,
   ProjectScale,
+  ProjectSnapshot,
   ProjectSummary,
   RefineResult,
   RequirementDocument,
@@ -47,6 +48,7 @@ import { ApiDesignView } from './ApiDesignView';
 import { ReviewView } from './ReviewView';
 import { ExportView } from './ExportView';
 import { ChatPanel } from './ChatPanel';
+import { VersionHistory } from './VersionHistory';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
@@ -91,6 +93,9 @@ export default function Home() {
 
   // The async generation job currently running (drives the progress bar).
   const [job, setJob] = useState<ActiveJob | null>(null);
+
+  // Bumped whenever artifacts change, so Version History reloads its list.
+  const [versionsReload, setVersionsReload] = useState(0);
 
   async function loadSession(sessionId: string) {
     const restored = await interviewApi.get(sessionId);
@@ -176,6 +181,7 @@ export default function Home() {
         setJob({ stage, progress: s.progress }),
       );
       setter(result);
+      setVersionsReload((k) => k + 1);
       void refreshProjects();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -243,6 +249,18 @@ export default function Home() {
     setDbDesign(result.databaseDesign);
     setApiDesign(result.apiDesign);
     if (result.reviewReport) setReview(result.reviewReport);
+    setVersionsReload((k) => k + 1);
+  }
+
+  /** Apply a restored version: replace every artifact with the snapshot's. */
+  function handleRestored(snapshot: ProjectSnapshot) {
+    setDoc(snapshot.requirements);
+    setDesign(snapshot.systemDesign);
+    setDbDesign(snapshot.databaseDesign);
+    setApiDesign(snapshot.apiDesign);
+    setReview(snapshot.review);
+    setVersionsReload((k) => k + 1);
+    void refreshProjects();
   }
 
   function reset() {
@@ -716,6 +734,14 @@ export default function Home() {
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {state.status === 'confirmed' && doc && (
+            <VersionHistory
+              sessionId={state.sessionId}
+              reloadKey={versionsReload}
+              onRestored={handleRestored}
+            />
           )}
         </div>
       )}

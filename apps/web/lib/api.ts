@@ -9,8 +9,11 @@ import type {
   LoginInput,
   PipelineStageName,
   ProjectIdeaInput,
+  ProjectSnapshot,
   ProjectStructure,
   ProjectSummary,
+  ProjectVersionDetail,
+  ProjectVersionMeta,
   RefineResult,
   RegisterInput,
   RequirementDocument,
@@ -189,6 +192,22 @@ export const jobsApi = {
     }
     throw new Error('Generation timed out. Please try again.');
   },
+};
+
+export const versionsApi = {
+  /** Version history for a project (newest first). */
+  list: (sessionId: string) =>
+    request<ProjectVersionMeta[]>(`/versions/${sessionId}`),
+
+  /** One version with its full artifact snapshot (for compare). */
+  get: (sessionId: string, version: number) =>
+    request<ProjectVersionDetail>(`/versions/${sessionId}/${version}`),
+
+  /** Restore the project to a version; returns the restored snapshot. */
+  restore: (sessionId: string, version: number) =>
+    request<ProjectSnapshot>(`/versions/${sessionId}/${version}/restore`, {
+      method: 'POST',
+    }),
 };
 
 async function requestText(path: string): Promise<string> {
