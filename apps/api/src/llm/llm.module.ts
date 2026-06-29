@@ -1,4 +1,4 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   INTERVIEW_LLM_PROVIDER,
@@ -29,12 +29,39 @@ function createProvider(kind: string, config: ConfigService): LlmProvider {
 }
 
 /**
- * Wires the active providers from env:
- *   - LLM_PROVIDER (default "mock") → used by every design agent.
- *   - INTERVIEW_LLM_PROVIDER → used only by the adaptive interview. Defaults to
- *     "groq" when GROQ_API_KEY is set (so configuring the free key flips the
- *     interview to real AI without touching the rest of the pipeline), else it
- *     falls back to the default LLM_PROVIDER.
+ * Resolve the provider kind for ALL agents (design + interview unless the
+ * interview is overridden). One switch:
+ *   1. an explicit `LLM_PROVIDER` (mock|claude|groq) forces that provider;
+ *   2. otherwise, when GROQ_API_KEY is set, everything uses the free Groq;
+ *   3. otherwise mock (offline, deterministic).
+ * Empty strings count as unset (env files often leave `KEY=` blank).
+ */
+export function selectProviderKind(
+  forced: string | undefined,
+  groqApiKey: string | undefined,
+): string {
+  if (forced && forced.trim()) return forced.trim();
+  return groqApiKey && groqApiKey.trim() ? 'groq' : 'mock';
+}
+
+/**
+ * The interview can still be pinned independently via INTERVIEW_LLM_PROVIDER;
+ * otherwise it follows the same one-switch resolution as every other agent.
+ */
+export function selectInterviewKind(
+  interview: string | undefined,
+  forced: string | undefined,
+  groqApiKey: string | undefined,
+): string {
+  if (interview && interview.trim()) return interview.trim();
+  return selectProviderKind(forced, groqApiKey);
+}
+
+/**
+ * Wires the active providers from env. Setting GROQ_API_KEY flips the WHOLE
+ * pipeline (every design agent + the interview) to real AI on the free Groq;
+ * `LLM_PROVIDER=mock|claude|groq` forces a specific provider for everything;
+ * `INTERVIEW_LLM_PROVIDER` can still pin just the interview.
  *
  * Global so any module can inject either token without re-importing.
  */
@@ -44,17 +71,28 @@ function createProvider(kind: string, config: ConfigService): LlmProvider {
     {
       provide: LLM_PROVIDER,
       inject: [ConfigService],
-      useFactory: (config: ConfigService): LlmProvider =>
-        createProvider(config.get<string>('LLM_PROVIDER', 'mock'), config),
+      useFactory: (config: ConfigService): LlmProvider => {
+        const kind = selectProviderKind(
+          config.get<string>('LLM_PROVIDER'),
+          config.get<string>('GROQ_API_KEY'),
+        );
+        const provider = createProvider(kind, config);
+        new Logger('LlmModule').log(`Agent LLM provider: ${provider.name}`);
+        return provider;
+      },
     },
     {
       provide: INTERVIEW_LLM_PROVIDER,
       inject: [ConfigService],
       useFactory: (config: ConfigService): LlmProvider => {
-        const fallback = config.get<string>('LLM_PROVIDER', 'mock');
-        const explicit = config.get<string>('INTERVIEW_LLM_PROVIDER');
-        const auto = config.get<string>('GROQ_API_KEY') ? 'groq' : fallback;
-        return createProvider(explicit || auto, config);
+        const kind = selectInterviewKind(
+          config.get<string>('INTERVIEW_LLM_PROVIDER'),
+          config.get<string>('LLM_PROVIDER'),
+          config.get<string>('GROQ_API_KEY'),
+        );
+        const provider = createProvider(kind, config);
+        new Logger('LlmModule').log(`Interview LLM provider: ${provider.name}`);
+        return provider;
       },
     },
   ],
