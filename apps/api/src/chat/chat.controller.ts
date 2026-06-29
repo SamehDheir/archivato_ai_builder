@@ -1,8 +1,11 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import type { ChatMessage, RefineResult } from '@archivato/shared';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SessionOwnerGuard } from '../interview/session-owner.guard';
 import { RefinementService } from './refinement.service';
 import { RefineDto } from './dto/refine.dto';
 
+@UseGuards(JwtAuthGuard, SessionOwnerGuard)
 @Controller('chat')
 export class ChatController {
   constructor(private readonly refinement: RefinementService) {}

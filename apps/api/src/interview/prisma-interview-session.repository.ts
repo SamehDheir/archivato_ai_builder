@@ -22,6 +22,7 @@ export class PrismaInterviewSessionRepository
     const row = await this.prisma.interviewSession.create({
       data: {
         id: session.id,
+        userId: session.userId,
         idea: session.input.idea,
         industry: session.input.industry ?? null,
         scale: session.input.scale ?? null,
@@ -40,6 +41,14 @@ export class PrismaInterviewSessionRepository
   async findById(id: string): Promise<InterviewSession | null> {
     const row = await this.prisma.interviewSession.findUnique({ where: { id } });
     return row ? toEntity(row) : null;
+  }
+
+  async findByUserId(userId: string): Promise<InterviewSession[]> {
+    const rows = await this.prisma.interviewSession.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+    });
+    return rows.map(toEntity);
   }
 
   async save(session: InterviewSession): Promise<InterviewSession> {
@@ -72,6 +81,7 @@ function toJsonArray(value: unknown[]): Prisma.InputJsonValue {
 /** Map a DB row back to the domain entity. */
 function toEntity(row: {
   id: string;
+  userId: string | null;
   idea: string;
   industry: string | null;
   scale: string | null;
@@ -87,6 +97,7 @@ function toEntity(row: {
 }): InterviewSession {
   return {
     id: row.id,
+    userId: row.userId ?? null,
     input: {
       idea: row.idea,
       industry: row.industry ?? undefined,

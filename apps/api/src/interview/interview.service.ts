@@ -15,6 +15,7 @@ import {
   type InterviewState,
   type IntentAnalysis,
   type ProjectIdeaInput,
+  type ProjectSummary,
   type RequirementsSummary,
 } from '@archivato/shared';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
@@ -48,11 +49,20 @@ export class InterviewService {
     private readonly interviewer: InterviewerAgent,
   ) {}
 
-  /** Start a new interview from a raw idea and return the first question. */
-  async start(input: ProjectIdeaInput): Promise<InterviewState> {
+  /**
+   * Start a new interview from a raw idea and return the first question. The
+   * session is stamped with the owner so only they can read or advance it later
+   * (`userId` is null only in unit tests, which exercise the state machine
+   * directly without the auth layer).
+   */
+  async start(
+    input: ProjectIdeaInput,
+    userId: string | null = null,
+  ): Promise<InterviewState> {
     const now = new Date();
     const session: InterviewSession = {
       id: randomUUID(),
+      userId,
       input,
       status: 'collecting',
       intent: await this.analyzeIntent(input),
@@ -108,6 +118,18 @@ export class InterviewService {
 
   async getState(sessionId: string): Promise<InterviewState> {
     return this.toState(await this.require(sessionId));
+  }
+
+  /** List the projects owned by a user, most recently updated first. */
+  async list(userId: string): Promise<ProjectSummary[]> {
+    const sessions = await this.repo.findByUserId(userId);
+    return sessions.map((s) => ({
+      sessionId: s.id,
+      idea: s.input.idea,
+      status: s.status,
+      completeness: round2(s.coverage),
+      updatedAt: s.updatedAt.toISOString(),
+    }));
   }
 
   // ── internals ─────────────────────────────────────────────────────────

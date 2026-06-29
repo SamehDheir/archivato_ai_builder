@@ -111,6 +111,25 @@ describe('InterviewService', () => {
     );
   });
 
+  // ── ownership / "my projects" ─────────────────────────────────────────────
+
+  it('stamps the owner on start and lists only that user\'s projects', async () => {
+    const svc = makeService();
+    await svc.start(IDEA, 'user-1');
+    await svc.start({ idea: 'A second unrelated project idea' }, 'user-1');
+    await svc.start({ idea: 'Someone else entirely owns this one' }, 'user-2');
+
+    const mine = await svc.list('user-1');
+    expect(mine).toHaveLength(2);
+    expect(mine.every((p) => typeof p.sessionId === 'string')).toBe(true);
+    expect(mine[0]).toHaveProperty('status', 'collecting');
+
+    const theirs = await svc.list('user-2');
+    expect(theirs).toHaveLength(1);
+
+    expect(await svc.list('nobody')).toEqual([]);
+  });
+
   // ── adaptive interview (real-AI path, scripted via the mock) ──────────────
 
   /** A mock that answers the interviewer with scripted, adaptive decisions. */

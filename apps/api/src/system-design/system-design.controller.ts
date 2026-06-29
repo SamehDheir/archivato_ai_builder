@@ -1,7 +1,10 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import type { SystemDesign } from '@archivato/shared';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SessionOwnerGuard } from '../interview/session-owner.guard';
 import { SystemDesignService } from './system-design.service';
 
+@UseGuards(JwtAuthGuard, SessionOwnerGuard)
 @Controller('system-design')
 export class SystemDesignController {
   constructor(private readonly systemDesign: SystemDesignService) {}

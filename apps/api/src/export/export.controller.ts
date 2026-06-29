@@ -1,7 +1,10 @@
-import { Controller, Get, Header, Param } from '@nestjs/common';
+import { Controller, Get, Header, Param, UseGuards } from '@nestjs/common';
 import type { ExportBundle, ProjectStructure } from '@archivato/shared';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SessionOwnerGuard } from '../interview/session-owner.guard';
 import { ExportService } from './export.service';
 
+@UseGuards(JwtAuthGuard, SessionOwnerGuard)
 @Controller('export')
 export class ExportController {
   constructor(private readonly exporter: ExportService) {}

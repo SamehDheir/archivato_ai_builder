@@ -31,6 +31,8 @@ model User {
   refreshTokens      RefreshToken[]
   verificationTokens EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
+  // Pipeline projects owned by this user (ownership enforcement).
+  interviewSessions  InterviewSession[]
 
   @@map("users")
 }
@@ -87,6 +89,10 @@ model RefreshToken {
 
 model InterviewSession {
   id             String   @id @default(uuid())
+  // Owner of this project. Nullable so pre-ownership rows survive the migration;
+  // every session created from now on is stamped with the authenticated user.
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   idea           String
   industry       String?
   scale          String?
@@ -107,6 +113,7 @@ model InterviewSession {
   reviewReport        ReviewReport?
   chatMessages        ChatMessage[]
 
+  @@index([userId])
   @@map("interview_sessions")
 }
 

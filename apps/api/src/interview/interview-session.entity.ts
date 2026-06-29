@@ -13,6 +13,8 @@ import type {
  */
 export interface InterviewSession {
   id: string;
+  /** Owner (authenticated user id). Null only for legacy pre-ownership rows. */
+  userId: string | null;
   input: ProjectIdeaInput;
   status: InterviewStatus;
   intent: IntentAnalysis | null;

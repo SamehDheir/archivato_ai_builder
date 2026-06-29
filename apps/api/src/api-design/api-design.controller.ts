@@ -1,7 +1,10 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import type { ApiDesign } from '@archivato/shared';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SessionOwnerGuard } from '../interview/session-owner.guard';
 import { ApiDesignService } from './api-design.service';
 
+@UseGuards(JwtAuthGuard, SessionOwnerGuard)
 @Controller('api-design')
 export class ApiDesignController {
   constructor(private readonly apiDesign: ApiDesignService) {}

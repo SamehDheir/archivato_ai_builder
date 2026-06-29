@@ -14,4 +14,6 @@ export interface InterviewSessionRepository {
   create(session: InterviewSession): Promise<InterviewSession>;
   findById(id: string): Promise<InterviewSession | null>;
   save(session: InterviewSession): Promise<InterviewSession>;
+  /** All sessions owned by a user, most recently updated first ("my projects"). */
+  findByUserId(userId: string): Promise<InterviewSession[]>;
 }

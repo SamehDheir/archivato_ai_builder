@@ -26,4 +26,10 @@ export class InMemoryInterviewSessionRepository
     this.sessions.set(session.id, session);
     return session;
   }
+
+  async findByUserId(userId: string): Promise<InterviewSession[]> {
+    return [...this.sessions.values()]
+      .filter((s) => s.userId === userId)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  }
 }

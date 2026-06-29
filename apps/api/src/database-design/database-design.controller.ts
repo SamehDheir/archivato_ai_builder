@@ -1,7 +1,10 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import type { DatabaseDesign } from '@archivato/shared';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SessionOwnerGuard } from '../interview/session-owner.guard';
 import { DatabaseDesignService } from './database-design.service';
 
+@UseGuards(JwtAuthGuard, SessionOwnerGuard)
 @Controller('database-design')
 export class DatabaseDesignController {
   constructor(private readonly databaseDesign: DatabaseDesignService) {}

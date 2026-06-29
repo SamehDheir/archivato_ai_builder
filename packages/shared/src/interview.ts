@@ -72,6 +72,20 @@ export interface RequirementsSummary {
   assumptions: string[];
 }
 
+/**
+ * A lightweight row for the "my projects" list — one per interview session the
+ * signed-in user owns. The heavy artifacts are fetched on demand when opened.
+ */
+export interface ProjectSummary {
+  sessionId: string;
+  idea: string;
+  status: InterviewStatus;
+  /** 0..1 requirement completeness (drives a small progress indicator). */
+  completeness: number;
+  /** ISO timestamp of the last change, for "most recently worked on" ordering. */
+  updatedAt: string;
+}
+
 /** The full interview state returned to clients. */
 export interface InterviewState {
   sessionId: string;

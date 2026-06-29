@@ -1,7 +1,10 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import type { ReviewReport } from '@archivato/shared';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SessionOwnerGuard } from '../interview/session-owner.guard';
 import { ReviewService } from './review.service';
 
+@UseGuards(JwtAuthGuard, SessionOwnerGuard)
 @Controller('review')
 export class ReviewController {
   constructor(private readonly review: ReviewService) {}
