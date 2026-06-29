@@ -35,10 +35,17 @@ export function AuthForm({
   // Forgot-password sub-flow + a one-off notice (e.g. after a successful reset).
   const [forgot, setForgot] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // OAuth providers configured on the server (buttons shown only for these).
+  const [oauth, setOauth] = useState<{ google: boolean; github: boolean }>({
+    google: false,
+    github: false,
+  });
 
   const isRegister = mode === 'register';
 
   useEffect(() => {
+    // Show buttons only for providers the server has configured.
+    authApi.oauthProviders().then(setOauth).catch(() => undefined);
     // Surface an ?error=… handed back by a failed OAuth callback redirect.
     const err = new URLSearchParams(window.location.search).get('error');
     if (err && OAUTH_ERRORS[err]) setError(OAUTH_ERRORS[err]);
@@ -176,31 +183,37 @@ export function AuthForm({
         {error && <div className="error">{error}</div>}
       </form>
 
-      <div className="oauth">
-        <div className="oauth-divider">
-          <span>or {isRegister ? 'sign up' : 'continue'} with</span>
+      {(oauth.google || oauth.github) && (
+        <div className="oauth">
+          <div className="oauth-divider">
+            <span>or {isRegister ? 'sign up' : 'continue'} with</span>
+          </div>
+          <div className="row">
+            {oauth.google && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  window.location.href = authApi.oauthStartUrl('google');
+                }}
+              >
+                Google
+              </button>
+            )}
+            {oauth.github && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  window.location.href = authApi.oauthStartUrl('github');
+                }}
+              >
+                GitHub
+              </button>
+            )}
+          </div>
         </div>
-        <div className="row">
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => {
-              window.location.href = authApi.oauthStartUrl('google');
-            }}
-          >
-            Google
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => {
-              window.location.href = authApi.oauthStartUrl('github');
-            }}
-          >
-            GitHub
-          </button>
-        </div>
-      </div>
+      )}
 
       <p className="subtitle" style={{ textAlign: 'center' }}>
         {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
