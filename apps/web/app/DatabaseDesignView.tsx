@@ -1,11 +1,14 @@
 import type { DatabaseDesign, EntityColumn } from '@archivato/shared';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { DownloadButton } from './DownloadButton';
+import { Empty, Section } from './RequirementDocumentView';
 
 export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
   return (
     <div>
-      <div className="view-header">
-        <p className="subtitle">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
           {design.databaseType} · generated{' '}
           {new Date(design.generatedAt).toLocaleString()}
         </p>
@@ -16,69 +19,77 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
         />
       </div>
 
-      <div className="summary-section">
-        <h4>Entities</h4>
-        <div className="entity-grid">
+      <Section title="Entities">
+        <div className="grid gap-3 sm:grid-cols-2">
           {design.entities.map((entity) => (
-            <div className="entity-card" key={entity.name}>
-              <div className="entity-name mono">{entity.name}</div>
-              <div className="subtitle">{entity.description}</div>
-              <ul className="col-list">
-                {entity.columns.map((col) => (
-                  <li className="col-row" key={col.name}>
-                    <span className="col-name mono">{col.name}</span>
-                    <span className="col-type subtitle">{col.type}</span>
-                    <span className="col-badges">{columnBadges(col)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Card key={entity.name}>
+              <CardContent className="p-4">
+                <div className="font-mono text-sm font-semibold">
+                  {entity.name}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {entity.description}
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {entity.columns.map((col) => (
+                    <li
+                      key={col.name}
+                      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
+                    >
+                      <span className="font-mono text-xs">{col.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {col.type}
+                      </span>
+                      <span className="flex flex-wrap gap-1">
+                        <ColumnBadges col={col} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
           ))}
         </div>
-      </div>
+      </Section>
 
-      <div className="summary-section">
-        <h4>Relations</h4>
+      <Section title="Relations">
         {design.relations.length ? (
-          <ul className="clean">
+          <ul className="space-y-1.5 text-sm">
             {design.relations.map((r, i) => (
               <li key={i}>
-                <span className="mono">{r.from}</span>{' '}
-                <span className="pill">{r.type}</span>{' '}
-                <span className="mono">{r.to}</span>
+                <span className="font-mono text-xs">{r.from}</span>{' '}
+                <Badge variant="secondary">{r.type}</Badge>{' '}
+                <span className="font-mono text-xs">{r.to}</span>
                 {r.description && (
-                  <span className="subtitle"> — {r.description}</span>
+                  <span className="text-muted-foreground"> — {r.description}</span>
                 )}
               </li>
             ))}
           </ul>
         ) : (
-          <span className="subtitle">—</span>
+          <Empty />
         )}
-      </div>
+      </Section>
     </div>
   );
 }
 
-function columnBadges(col: EntityColumn) {
-  const badges: string[] = [];
-  if (col.primaryKey) badges.push('PK');
-  if (col.references) badges.push(`FK → ${col.references.entity}`);
-  if (col.unique) badges.push('unique');
-  if (!col.nullable && !col.primaryKey) badges.push('not null');
-  return badges.map((b) => (
-    <span
-      className="pill"
-      key={b}
-      style={
-        b === 'PK'
-          ? { color: '#fbbf24' }
-          : b.startsWith('FK')
-            ? { color: '#6d8bff' }
-            : undefined
-      }
-    >
-      {b}
-    </span>
-  ));
+function ColumnBadges({ col }: { col: EntityColumn }) {
+  const badges: { label: string; variant: 'warning' | 'primary' | 'secondary' }[] =
+    [];
+  if (col.primaryKey) badges.push({ label: 'PK', variant: 'warning' });
+  if (col.references)
+    badges.push({ label: `FK → ${col.references.entity}`, variant: 'primary' });
+  if (col.unique) badges.push({ label: 'unique', variant: 'secondary' });
+  if (!col.nullable && !col.primaryKey)
+    badges.push({ label: 'not null', variant: 'secondary' });
+  return (
+    <>
+      {badges.map((b) => (
+        <Badge key={b.label} variant={b.variant}>
+          {b.label}
+        </Badge>
+      ))}
+    </>
+  );
 }

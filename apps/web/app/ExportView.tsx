@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { Download, Printer } from 'lucide-react';
 import { exportApi } from '../lib/api';
+import { Button } from '@/components/ui/button';
 
 /** Triggers a client-side file download for a string payload. */
 function download(filename: string, content: string, mime: string) {
@@ -56,12 +58,12 @@ export function ExportView({ sessionId }: { sessionId: string }) {
 
   return (
     <div>
-      <p className="subtitle">
+      <p className="text-sm text-muted-foreground">
         Download the complete system design in your preferred format.
       </p>
-      <div className="export-grid">
-        <button
-          className="secondary"
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          variant="secondary"
           disabled={!!busy}
           onClick={() =>
             run('json', async () => {
@@ -74,11 +76,11 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          ⬇ {label('json', 'JSON bundle')}
-        </button>
+          <Download /> {label('json', 'JSON bundle')}
+        </Button>
 
-        <button
-          className="secondary"
+        <Button
+          variant="secondary"
           disabled={!!busy}
           onClick={() =>
             run('md', async () => {
@@ -87,11 +89,11 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          ⬇ {label('md', 'Markdown')}
-        </button>
+          <Download /> {label('md', 'Markdown')}
+        </Button>
 
-        <button
-          className="secondary"
+        <Button
+          variant="secondary"
           disabled={!!busy}
           onClick={() =>
             run('openapi', async () => {
@@ -104,11 +106,11 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          ⬇ {label('openapi', 'OpenAPI')}
-        </button>
+          <Download /> {label('openapi', 'OpenAPI')}
+        </Button>
 
-        <button
-          className="secondary"
+        <Button
+          variant="secondary"
           disabled={!!busy}
           onClick={() =>
             run('structure', async () => {
@@ -121,10 +123,10 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          ⬇ {label('structure', 'Project structure')}
-        </button>
+          <Download /> {label('structure', 'Project structure')}
+        </Button>
 
-        <button
+        <Button
           disabled={!!busy}
           onClick={() =>
             run('pdf', async () => {
@@ -133,10 +135,10 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          🖨 {label('pdf', 'Print / Save as PDF')}
-        </button>
+          <Printer /> {label('pdf', 'Print / Save as PDF')}
+        </Button>
       </div>
-      {error && <div className="error">{error}</div>}
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
     </div>
   );
 }

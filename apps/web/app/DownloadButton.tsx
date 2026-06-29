@@ -1,8 +1,10 @@
 'use client';
 
+import { Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
 /**
  * Downloads any artifact as a pretty-printed JSON file, client-side.
- * (PDF / Markdown / OpenAPI exports arrive with the Export slice.)
  */
 export function DownloadButton({
   filename,
@@ -28,8 +30,8 @@ export function DownloadButton({
   }
 
   return (
-    <button type="button" className="secondary download-btn" onClick={handleDownload}>
-      ⬇ {label}
-    </button>
+    <Button type="button" variant="secondary" size="sm" onClick={handleDownload}>
+      <Download /> {label}
+    </Button>
   );
 }

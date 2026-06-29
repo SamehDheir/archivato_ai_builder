@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 import { authApi } from '../../lib/api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 /**
  * Email-verification landing page (Slice 9b). The verification email links here
  * with `?token=…`; we confirm it against the API and report the result.
- *
- * Reads the token from `window.location` (instead of `useSearchParams`) to keep
- * the page a simple client component with no Suspense boundary requirement.
  */
 export default function VerifyPage() {
   const [status, setStatus] = useState<'verifying' | 'ok' | 'error'>(
@@ -40,41 +41,43 @@ export default function VerifyPage() {
   }, []);
 
   return (
-    <div className="container">
-      <h1 className="title">Email verification</h1>
+    <div className="mx-auto max-w-md px-5 py-12">
+      <h1 className="mb-6 text-2xl font-bold">Email verification</h1>
 
       {status === 'verifying' && (
-        <div className="loading-screen">
-          <div className="spinner" />
-          <p className="subtitle" style={{ margin: 0 }}>
-            Verifying your email…
-          </p>
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <p className="text-sm">Verifying your email…</p>
         </div>
       )}
 
       {status === 'ok' && (
-        <div className="panel">
-          <span className="badge">✓ Verified</span>
-          <p style={{ marginTop: 12 }}>{message}</p>
-          <a href="/">
-            <button type="button">Continue to Archivato</button>
-          </a>
-        </div>
+        <Card>
+          <CardContent className="p-5">
+            <Badge className="gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Verified
+            </Badge>
+            <p className="mt-3">{message}</p>
+            <Button asChild className="mt-4">
+              <a href="/">Continue to Archivato</a>
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {status === 'error' && (
-        <div className="panel">
-          <h3>Verification failed</h3>
-          <p className="error">{message}</p>
-          <p className="subtitle">
-            Sign in and use “Resend email” to get a fresh link.
-          </p>
-          <a href="/">
-            <button type="button" className="secondary">
-              Back to sign in
-            </button>
-          </a>
-        </div>
+        <Card>
+          <CardContent className="p-5">
+            <h3 className="font-semibold">Verification failed</h3>
+            <p className="mt-1 text-sm text-destructive">{message}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Sign in and use “Resend email” to get a fresh link.
+            </p>
+            <Button asChild variant="secondary" className="mt-4">
+              <a href="/">Back to sign in</a>
+            </Button>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

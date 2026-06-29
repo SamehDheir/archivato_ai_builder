@@ -1,8 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import type { ChatMessage, RefineResult } from '@archivato/shared';
 import { chatApi } from '../lib/api';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 const EXAMPLES = [
   'Add notifications',
@@ -36,7 +40,6 @@ export function ChatPanel({
     if (!trimmed || busy) return;
     setBusy(true);
     setError(null);
-    // Optimistically show the user's message (tracked so we can roll it back).
     const optimisticId = `pending-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
@@ -51,11 +54,10 @@ export function ChatPanel({
     setInstruction('');
     try {
       const result = await chatApi.refine(sessionId, trimmed);
-      setMessages(result.messages); // authoritative transcript from the server
-      onRefined(result); // re-render the whole design with the updated artifacts
+      setMessages(result.messages);
+      onRefined(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      // Roll back the optimistic message and restore the text to the input.
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       setInstruction(trimmed);
     } finally {
@@ -64,65 +66,87 @@ export function ChatPanel({
   }
 
   return (
-    <div className="panel">
-      <h3>Refine with AI</h3>
-      <p className="subtitle">
+    <div>
+      <p className="text-sm text-muted-foreground">
         Ask for a change and the requirements, architecture, database, and APIs
         update together.
       </p>
 
       {messages.length > 0 && (
-        <div className="chat-log">
+        <div className="mt-3 space-y-2">
           {messages.map((m) => (
-            <div key={m.id} className={`bubble ${m.role === 'user' ? 'a' : 'q'}`}>
-              {m.role === 'assistant' && (
-                <span className="phase-tag">AI</span>
-              )}
-              <div>{m.content}</div>
-            </div>
+            <Bubble key={m.id} role={m.role}>
+              {m.content}
+            </Bubble>
           ))}
           {busy && (
-            <div className="bubble q">
-              <span className="phase-tag">AI</span>
-              <div className="chat-thinking">
-                <span className="spinner small" /> Redesigning…
-              </div>
-            </div>
+            <Bubble role="assistant">
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Redesigning…
+              </span>
+            </Bubble>
           )}
         </div>
       )}
 
-      <div className="chat-examples">
+      <div className="mt-3 flex flex-wrap gap-2">
         {EXAMPLES.map((ex) => (
-          <button
+          <Button
             key={ex}
             type="button"
-            className="chip"
+            variant="outline"
+            size="sm"
             onClick={() => send(ex)}
             disabled={busy}
           >
             {ex}
-          </button>
+          </Button>
         ))}
       </div>
 
       <form
+        className="mt-3 space-y-2"
         onSubmit={(e) => {
           e.preventDefault();
           send(instruction);
         }}
       >
-        <textarea
+        <Textarea
           placeholder="e.g. Add notifications, or make it scalable to 5M users…"
           value={instruction}
           onChange={(e) => setInstruction(e.target.value)}
           disabled={busy}
         />
-        <button type="submit" disabled={busy || instruction.trim().length < 3}>
+        <Button type="submit" disabled={busy || instruction.trim().length < 3}>
           {busy ? 'Applying…' : 'Send'}
-        </button>
+        </Button>
       </form>
-      {error && <div className="error">{error}</div>}
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+function Bubble({
+  role,
+  children,
+}: {
+  role: 'user' | 'assistant';
+  children: React.ReactNode;
+}) {
+  const isUser = role === 'user';
+  return (
+    <div
+      className={cn(
+        'max-w-[85%] rounded-lg border px-3 py-2 text-sm',
+        isUser
+          ? 'ml-auto border-primary/40 bg-primary/10'
+          : 'mr-auto border-border bg-card',
+      )}
+    >
+      {!isUser && (
+        <span className="mb-1 block text-xs font-semibold text-primary">AI</span>
+      )}
+      <div>{children}</div>
     </div>
   );
 }

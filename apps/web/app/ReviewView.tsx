@@ -1,24 +1,26 @@
 import type { ReviewFinding, ReviewReport, Severity } from '@archivato/shared';
+import { cn } from '@/lib/utils';
 import { DownloadButton } from './DownloadButton';
+import { Empty, Section } from './RequirementDocumentView';
 
-const SEVERITY_COLORS: Record<Severity, string> = {
-  low: '#9aa3b2',
-  medium: '#fbbf24',
-  high: '#fb923c',
-  critical: '#f87171',
+const SEVERITY_CLASS: Record<Severity, string> = {
+  low: 'text-muted-foreground',
+  medium: 'text-warning',
+  high: 'text-[#fb923c]',
+  critical: 'text-destructive',
 };
 
-function scoreColor(score: number): string {
-  if (score >= 80) return '#4ade80';
-  if (score >= 60) return '#fbbf24';
-  return '#f87171';
+function scoreClass(score: number): string {
+  if (score >= 80) return 'text-success border-success';
+  if (score >= 60) return 'text-warning border-warning';
+  return 'text-destructive border-destructive';
 }
 
 export function ReviewView({ report }: { report: ReviewReport }) {
   return (
     <div>
-      <div className="view-header">
-        <p className="subtitle">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
           Generated {new Date(report.generatedAt).toLocaleString()}
         </p>
         <DownloadButton
@@ -28,20 +30,21 @@ export function ReviewView({ report }: { report: ReviewReport }) {
         />
       </div>
 
-      <div className="score-row">
+      <div className="flex items-center gap-4">
         <div
-          className="score-ring"
-          style={{ borderColor: scoreColor(report.scalabilityScore) }}
+          className={cn(
+            'flex h-24 w-24 shrink-0 flex-col items-center justify-center rounded-full border-4',
+            scoreClass(report.scalabilityScore),
+          )}
         >
-          <span
-            className="score-num"
-            style={{ color: scoreColor(report.scalabilityScore) }}
-          >
+          <span className="text-2xl font-bold leading-none">
             {report.scalabilityScore}
           </span>
-          <span className="score-label">scalability</span>
+          <span className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            scalability
+          </span>
         </div>
-        <p className="subtitle review-summary">{report.summary}</p>
+        <p className="text-sm text-muted-foreground">{report.summary}</p>
       </div>
 
       <FindingSection
@@ -60,11 +63,7 @@ export function ReviewView({ report }: { report: ReviewReport }) {
         items={report.missingFeatures}
         emptyText="Nothing obvious missing."
       />
-      <ListSection
-        title="Recommendations"
-        items={report.recommendations}
-        emptyText="—"
-      />
+      <ListSection title="Recommendations" items={report.recommendations} emptyText="—" />
     </div>
   );
 }
@@ -79,29 +78,30 @@ function FindingSection({
   emptyText: string;
 }) {
   return (
-    <div className="summary-section">
-      <h4>{title}</h4>
+    <Section title={title}>
       {findings.length ? (
-        <div className="finding-list">
+        <div className="space-y-2">
           {findings.map((f, i) => (
-            <div className="finding" key={i}>
-              <div className="finding-head">
+            <div key={i} className="rounded-lg border border-border bg-card p-3">
+              <div className="flex items-center gap-2">
                 <span
-                  className="pill"
-                  style={{ color: SEVERITY_COLORS[f.severity] }}
+                  className={cn(
+                    'text-xs font-semibold uppercase',
+                    SEVERITY_CLASS[f.severity],
+                  )}
                 >
                   {f.severity}
                 </span>
-                <strong>{f.title}</strong>
+                <span className="font-medium">{f.title}</span>
               </div>
-              <div className="subtitle">{f.detail}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{f.detail}</div>
             </div>
           ))}
         </div>
       ) : (
-        <span className="subtitle">{emptyText}</span>
+        <span className="text-sm text-muted-foreground">{emptyText}</span>
       )}
-    </div>
+    </Section>
   );
 }
 
@@ -115,17 +115,18 @@ function ListSection({
   emptyText: string;
 }) {
   return (
-    <div className="summary-section">
-      <h4>{title}</h4>
+    <Section title={title}>
       {items.length ? (
-        <ul className="clean">
+        <ul className="list-disc space-y-1 pl-5 text-sm">
           {items.map((it, i) => (
             <li key={i}>{it}</li>
           ))}
         </ul>
+      ) : emptyText === '—' ? (
+        <Empty />
       ) : (
-        <span className="subtitle">{emptyText}</span>
+        <span className="text-sm text-muted-foreground">{emptyText}</span>
       )}
-    </div>
+    </Section>
   );
 }

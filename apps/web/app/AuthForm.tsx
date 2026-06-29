@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react';
 import type { AuthUser } from '@archivato/shared';
 import { authApi } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ForgotPasswordForm } from './ForgotPasswordForm';
 
 const OAUTH_ERRORS: Record<string, string> = {
@@ -14,10 +19,6 @@ const OAUTH_ERRORS: Record<string, string> = {
 /**
  * The login/register form. Reused by the inline gate (`AuthGate`) and by the
  * dedicated `/login` and `/register` routes.
- *
- * `onSuccess` lets the caller decide what happens after auth: the inline gate
- * updates its own state; the standalone pages do a hard navigation so the
- * layout-level gate re-checks the session.
  */
 export function AuthForm({
   initialMode = 'login',
@@ -32,10 +33,8 @@ export function AuthForm({
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Forgot-password sub-flow + a one-off notice (e.g. after a successful reset).
   const [forgot, setForgot] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  // OAuth providers configured on the server (buttons shown only for these).
   const [oauth, setOauth] = useState<{ google: boolean; github: boolean }>({
     google: false,
     github: false,
@@ -44,9 +43,7 @@ export function AuthForm({
   const isRegister = mode === 'register';
 
   useEffect(() => {
-    // Show buttons only for providers the server has configured.
     authApi.oauthProviders().then(setOauth).catch(() => undefined);
-    // Surface an ?error=… handed back by a failed OAuth callback redirect.
     const err = new URLSearchParams(window.location.search).get('error');
     if (err && OAUTH_ERRORS[err]) setError(OAUTH_ERRORS[err]);
   }, []);
@@ -88,142 +85,154 @@ export function AuthForm({
   }
 
   return (
-    <div className="container">
-      <h1 className="title">Archivato AI Builder</h1>
-      <p className="subtitle">
+    <div className="mx-auto max-w-md px-5 py-12">
+      <h1 className="text-2xl font-bold">Archivato AI Builder</h1>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">
         AI Software Architecture Generator — sign in to start designing systems.
       </p>
 
-      {/* Explicit tabs so Login and Register are always one click apart. */}
-      <div className="tabs" role="tablist">
-        <button
-          type="button"
-          className={!isRegister ? 'active' : ''}
-          aria-selected={!isRegister}
-          onClick={() => switchMode('login')}
-        >
-          Login
-        </button>
-        <button
-          type="button"
-          className={isRegister ? 'active' : ''}
-          aria-selected={isRegister}
-          onClick={() => switchMode('register')}
-        >
-          Register
-        </button>
-      </div>
+      <Tabs
+        value={mode}
+        onValueChange={(v) => switchMode(v as 'login' | 'register')}
+        className="mb-4"
+      >
+        <TabsList>
+          <TabsTrigger value="login">Login</TabsTrigger>
+          <TabsTrigger value="register">Register</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      {notice && <div className="notice ok">{notice}</div>}
+      {notice && (
+        <div className="mb-4 rounded-lg border border-success/40 bg-success/10 px-4 py-3 text-sm">
+          {notice}
+        </div>
+      )}
 
-      <form className="panel" onSubmit={handleSubmit}>
-        <h3>{isRegister ? 'Create your account' : 'Welcome back'}</h3>
+      <Card>
+        <CardContent className="p-5">
+          <form className="space-y-3" onSubmit={handleSubmit}>
+            <h3 className="font-semibold">
+              {isRegister ? 'Create your account' : 'Welcome back'}
+            </h3>
 
-        {isRegister && (
-          <>
-            <label htmlFor="displayName">Name</label>
-            <input
-              id="displayName"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Ada Lovelace"
-              required
-            />
-          </>
-        )}
+            {isRegister && (
+              <div className="space-y-1.5">
+                <Label htmlFor="displayName">Name</Label>
+                <Input
+                  id="displayName"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Ada Lovelace"
+                  required
+                />
+              </div>
+            )}
 
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          required
-        />
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+              />
+            </div>
 
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder={isRegister ? 'At least 8 characters' : '••••••••'}
-          minLength={isRegister ? 8 : undefined}
-          required
-        />
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={isRegister ? 'At least 8 characters' : '••••••••'}
+                minLength={isRegister ? 8 : undefined}
+                required
+              />
+            </div>
 
-        {!isRegister && (
-          <p style={{ textAlign: 'right', margin: '2px 0 0' }}>
-            <button
-              type="button"
-              className="linklike"
-              onClick={() => {
-                setNotice(null);
-                setForgot(true);
-              }}
+            {!isRegister && (
+              <div className="text-right">
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0"
+                  onClick={() => {
+                    setNotice(null);
+                    setForgot(true);
+                  }}
+                >
+                  Forgot password?
+                </Button>
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={busy || !email || password.length < (isRegister ? 8 : 1)}
             >
-              Forgot password?
-            </button>
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={busy || !email || password.length < (isRegister ? 8 : 1)}
-        >
-          {busy
-            ? isRegister
-              ? 'Creating…'
-              : 'Signing in…'
-            : isRegister
-              ? 'Create account'
-              : 'Sign in'}
-        </button>
-        {error && <div className="error">{error}</div>}
-      </form>
+              {busy
+                ? isRegister
+                  ? 'Creating…'
+                  : 'Signing in…'
+                : isRegister
+                  ? 'Create account'
+                  : 'Sign in'}
+            </Button>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </form>
+        </CardContent>
+      </Card>
 
       {(oauth.google || oauth.github) && (
-        <div className="oauth">
-          <div className="oauth-divider">
+        <div className="mt-4">
+          <div className="my-3 flex items-center gap-3 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
             <span>or {isRegister ? 'sign up' : 'continue'} with</span>
           </div>
-          <div className="row">
+          <div className="flex gap-2">
             {oauth.google && (
-              <button
+              <Button
                 type="button"
-                className="secondary"
+                variant="secondary"
+                className="flex-1"
                 onClick={() => {
                   window.location.href = authApi.oauthStartUrl('google');
                 }}
               >
                 Google
-              </button>
+              </Button>
             )}
             {oauth.github && (
-              <button
+              <Button
                 type="button"
-                className="secondary"
+                variant="secondary"
+                className="flex-1"
                 onClick={() => {
                   window.location.href = authApi.oauthStartUrl('github');
                 }}
               >
                 GitHub
-              </button>
+              </Button>
             )}
           </div>
         </div>
       )}
 
-      <p className="subtitle" style={{ textAlign: 'center' }}>
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
-        <button
+        <Button
           type="button"
-          className="linklike"
+          variant="link"
+          size="sm"
+          className="h-auto p-0"
           onClick={() => switchMode(isRegister ? 'login' : 'register')}
         >
           {isRegister ? 'Login' : 'Register'}
-        </button>
+        </Button>
       </p>
     </div>
   );

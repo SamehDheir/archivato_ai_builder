@@ -1,11 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import type {
   ApiDesign,
   DatabaseDesign,
   InterviewState,
+  JobStatus,
+  PipelineStageName,
   ProjectScale,
+  ProjectSummary,
   RefineResult,
   RequirementDocument,
   RequirementsSummary,
@@ -17,10 +21,25 @@ import {
   authApi,
   databaseDesignApi,
   interviewApi,
+  jobsApi,
   requirementsApi,
   reviewApi,
   systemDesignApi,
 } from '../lib/api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { RequirementDocumentView } from './RequirementDocumentView';
 import { SystemDesignView } from './SystemDesignView';
 import { DatabaseDesignView } from './DatabaseDesignView';
@@ -31,23 +50,27 @@ import { ChatPanel } from './ChatPanel';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
-/**
- * localStorage key for the active session id, scoped PER USER so signing in as a
- * different account (incl. Google/GitHub) never resurrects someone else's
- * project on the homepage.
- */
+const STAGE_LABEL: Record<PipelineStageName, string> = {
+  requirements: 'requirement document',
+  'system-design': 'system design',
+  'database-design': 'database design',
+  'api-design': 'API design',
+  review: 'AI review',
+};
+
+/** localStorage key for the active session id, scoped PER USER. */
 const sessionKey = (userId: string) => `archivato.sessionId:${userId}`;
-/** Old global key (pre per-user scoping) — cleared on load. */
 const LEGACY_SESSION_KEY = 'archivato.sessionId';
+
+type ActiveJob = { stage: PipelineStageName; progress: number };
 
 export default function Home() {
   const [state, setState] = useState<InterviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // True while we attempt to restore a saved session on first load.
   const [restoring, setRestoring] = useState(true);
-  // The signed-in user's id (resume is scoped to it).
   const [userId, setUserId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
 
   // Start form
   const [idea, setIdea] = useState('');
@@ -57,67 +80,61 @@ export default function Home() {
   // Answer box
   const [answer, setAnswer] = useState('');
 
-  // Requirement document (Slice 3)
+  // Generated artifacts
   const [doc, setDoc] = useState<RequirementDocument | null>(null);
-
-  // System design (Slice 4)
   const [design, setDesign] = useState<SystemDesign | null>(null);
-
-  // Database design (Slice 5)
   const [dbDesign, setDbDesign] = useState<DatabaseDesign | null>(null);
-
-  // API design (Slice 6)
   const [apiDesign, setApiDesign] = useState<ApiDesign | null>(null);
-
-  // Review report (Slice 7)
   const [review, setReview] = useState<ReviewReport | null>(null);
 
-  // Resume a saved session on first load — but only the one belonging to the
-  // CURRENT user. Fetch the user, then their saved session + every generated
-  // artifact, so a refresh continues where they left off. All data is in the
-  // backend (Postgres); the per-user key just reconnects the right browser.
+  // The async generation job currently running (drives the progress bar).
+  const [job, setJob] = useState<ActiveJob | null>(null);
+
+  async function loadSession(sessionId: string) {
+    const restored = await interviewApi.get(sessionId);
+    setState(restored);
+    const [r, sd, db, ad, rv] = await Promise.allSettled([
+      requirementsApi.get(sessionId),
+      systemDesignApi.get(sessionId),
+      databaseDesignApi.get(sessionId),
+      apiDesignApi.get(sessionId),
+      reviewApi.get(sessionId),
+    ]);
+    setDoc(r.status === 'fulfilled' ? r.value : null);
+    setDesign(sd.status === 'fulfilled' ? sd.value : null);
+    setDbDesign(db.status === 'fulfilled' ? db.value : null);
+    setApiDesign(ad.status === 'fulfilled' ? ad.value : null);
+    setReview(rv.status === 'fulfilled' ? rv.value : null);
+  }
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(LEGACY_SESSION_KEY); // drop the old global key
+      localStorage.removeItem(LEGACY_SESSION_KEY);
     }
     let cancelled = false;
     (async () => {
       let uid: string | null = null;
       try {
         const me = await authApi.me();
-        if (cancelled) return;
-        if (!me) {
-          setRestoring(false);
+        if (cancelled || !me) {
+          if (!cancelled) setRestoring(false);
           return;
         }
         uid = me.id;
         setUserId(uid);
+
+        interviewApi
+          .list()
+          .then((list) => !cancelled && setProjects(list))
+          .catch(() => undefined);
 
         const saved = localStorage.getItem(sessionKey(uid));
         if (!saved) {
           setRestoring(false);
           return;
         }
-
-        const restored = await interviewApi.get(saved);
-        if (cancelled) return;
-        setState(restored);
-        // Restore each downstream artifact if it exists (get() rejects if not).
-        const [r, sd, db, ad, rv] = await Promise.allSettled([
-          requirementsApi.get(saved),
-          systemDesignApi.get(saved),
-          databaseDesignApi.get(saved),
-          apiDesignApi.get(saved),
-          reviewApi.get(saved),
-        ]);
-        if (cancelled) return;
-        if (r.status === 'fulfilled') setDoc(r.value);
-        if (sd.status === 'fulfilled') setDesign(sd.value);
-        if (db.status === 'fulfilled') setDbDesign(db.value);
-        if (ad.status === 'fulfilled') setApiDesign(ad.value);
-        if (rv.status === 'fulfilled') setReview(rv.value);
+        await loadSession(saved);
       } catch {
-        // The saved session no longer exists — forget it and start fresh.
         if (uid) localStorage.removeItem(sessionKey(uid));
       } finally {
         if (!cancelled) setRestoring(false);
@@ -128,12 +145,19 @@ export default function Home() {
     };
   }, []);
 
-  // Remember the active session id (under the current user) for resume.
   useEffect(() => {
     if (userId && state?.sessionId) {
       localStorage.setItem(sessionKey(userId), state.sessionId);
     }
   }, [userId, state?.sessionId]);
+
+  async function refreshProjects() {
+    try {
+      setProjects(await interviewApi.list());
+    } catch {
+      /* non-fatal */
+    }
+  }
 
   async function run<T>(fn: () => Promise<T>) {
     setBusy(true);
@@ -148,6 +172,36 @@ export default function Home() {
     }
   }
 
+  /** Generate one stage asynchronously (BullMQ), tracking live progress. */
+  async function generateStage<T>(
+    stage: PipelineStageName,
+    setter: (value: T) => void,
+  ) {
+    if (!state) return;
+    setBusy(true);
+    setError(null);
+    setJob({ stage, progress: 0 });
+    try {
+      const result = await jobsApi.run<T>(state.sessionId, stage, (s: JobStatus) =>
+        setJob({ stage, progress: s.progress }),
+      );
+      setter(result);
+      void refreshProjects();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+      setJob(null);
+    }
+  }
+
+  async function openProject(sessionId: string) {
+    await run(async () => {
+      await loadSession(sessionId);
+      if (userId) localStorage.setItem(sessionKey(userId), sessionId);
+    });
+  }
+
   async function handleStart(e: React.FormEvent) {
     e.preventDefault();
     const next = await run(() =>
@@ -157,7 +211,10 @@ export default function Home() {
         scale: scale || undefined,
       }),
     );
-    if (next) setState(next);
+    if (next) {
+      setState(next);
+      void refreshProjects();
+    }
   }
 
   async function handleAnswer(e: React.FormEvent) {
@@ -178,45 +235,17 @@ export default function Home() {
     if (next) setState(next);
   }
 
-  async function handleGenerate() {
-    if (!state) return;
-    const generated = await run(() =>
-      requirementsApi.generate(state.sessionId),
-    );
-    if (generated) setDoc(generated);
-  }
+  const handleGenerate = () =>
+    generateStage<RequirementDocument>('requirements', setDoc);
+  const handleGenerateDesign = () =>
+    generateStage<SystemDesign>('system-design', setDesign);
+  const handleGenerateDbDesign = () =>
+    generateStage<DatabaseDesign>('database-design', setDbDesign);
+  const handleGenerateApiDesign = () =>
+    generateStage<ApiDesign>('api-design', setApiDesign);
+  const handleGenerateReview = () =>
+    generateStage<ReviewReport>('review', setReview);
 
-  async function handleGenerateDesign() {
-    if (!state) return;
-    const generated = await run(() =>
-      systemDesignApi.generate(state.sessionId),
-    );
-    if (generated) setDesign(generated);
-  }
-
-  async function handleGenerateDbDesign() {
-    if (!state) return;
-    const generated = await run(() =>
-      databaseDesignApi.generate(state.sessionId),
-    );
-    if (generated) setDbDesign(generated);
-  }
-
-  async function handleGenerateApiDesign() {
-    if (!state) return;
-    const generated = await run(() =>
-      apiDesignApi.generate(state.sessionId),
-    );
-    if (generated) setApiDesign(generated);
-  }
-
-  async function handleGenerateReview() {
-    if (!state) return;
-    const generated = await run(() => reviewApi.generate(state.sessionId));
-    if (generated) setReview(generated);
-  }
-
-  /** Apply a chat refinement: replace every artifact the backend regenerated. */
   function handleRefined(result: RefineResult) {
     setDoc(result.requirementDocument);
     setDesign(result.systemDesign);
@@ -244,315 +273,404 @@ export default function Home() {
 
   if (restoring) {
     return (
-      <div className="container">
-        <div className="loading-screen">
-          <div className="spinner" />
-          <p className="subtitle" style={{ margin: 0 }}>
-            Restoring your session…
-          </p>
-        </div>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-muted-foreground">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+        <p className="text-sm">Restoring your session…</p>
       </div>
     );
   }
 
   return (
-    <div className="container">
-      <h1 className="title">Archivato AI Builder</h1>
-      <p className="subtitle">
-        AI Software Architecture Generator — Step 2: the requirements interview.
+    <div className="mx-auto max-w-3xl px-5 py-8">
+      <h1 className="text-2xl font-bold">Archivato AI Builder</h1>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">
+        AI Software Architecture Generator — turn an idea into a full system
+        design.
       </p>
 
+      {!state && projects.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>My projects</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y divide-border">
+              {projects.map((p) => (
+                <li
+                  key={p.sessionId}
+                  className="flex items-center justify-between gap-3 py-2.5"
+                >
+                  <button
+                    className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-primary hover:underline disabled:opacity-50"
+                    onClick={() => openProject(p.sessionId)}
+                    disabled={busy}
+                    title={p.idea}
+                  >
+                    {p.idea}
+                  </button>
+                  <span className="flex items-center gap-2 whitespace-nowrap">
+                    <Badge variant="secondary">
+                      {p.status.replace(/_/g, ' ')}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {Math.round(p.completeness * 100)}% ·{' '}
+                      {new Date(p.updatedAt).toLocaleDateString()}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {!state && (
-        <form className="panel" onSubmit={handleStart}>
-          <h3>Describe your idea</h3>
-          <label htmlFor="idea">Project idea</label>
-          <textarea
-            id="idea"
-            placeholder="e.g. A  management systclinicem with appointments, billing, doctors, and patient records."
-            value={idea}
-            onChange={(e) => setIdea(e.target.value)}
-            required
-          />
-          <div className="row">
-            <div>
-              <label htmlFor="industry">Industry (optional)</label>
-              <input
-                id="industry"
-                placeholder="healthcare"
-                value={industry}
-                onChange={(e) => setIndustry(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="scale">Scale (optional)</label>
-              <select
-                id="scale"
-                value={scale}
-                onChange={(e) => setScale(e.target.value as ProjectScale | '')}
-              >
-                <option value="">—</option>
-                {SCALES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <button type="submit" disabled={busy || idea.trim().length < 10}>
-            {busy ? 'Starting…' : 'Start interview'}
-          </button>
-          {error && <div className="error">{error}</div>}
-        </form>
+        <Card>
+          <CardHeader>
+            <CardTitle>Describe your idea</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-3" onSubmit={handleStart}>
+              <div className="space-y-1.5">
+                <Label htmlFor="idea">Project idea</Label>
+                <Textarea
+                  id="idea"
+                  placeholder="e.g. A clinic management system with appointments, billing, doctors, and patient records."
+                  value={idea}
+                  onChange={(e) => setIdea(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="industry">Industry (optional)</Label>
+                  <Input
+                    id="industry"
+                    placeholder="healthcare"
+                    value={industry}
+                    onChange={(e) => setIndustry(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="scale">Scale (optional)</Label>
+                  <Select
+                    value={scale}
+                    onValueChange={(v) => setScale(v as ProjectScale)}
+                  >
+                    <SelectTrigger id="scale">
+                      <SelectValue placeholder="—" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SCALES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button type="submit" disabled={busy || idea.trim().length < 10}>
+                {busy ? 'Starting…' : 'Start interview'}
+              </Button>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </form>
+          </CardContent>
+        </Card>
       )}
 
       {state && (
-        <>
+        <div className="space-y-4">
           <ProgressPanel state={state} />
 
           {state.history.length > 0 && (
-            <div className="panel">
-              <h3>Conversation</h3>
-              {state.history.map((ex, i) => (
-                <div key={i}>
-                  <div className="bubble q">
-                    <span className="phase-tag">{ex.question.phase}</span>
-                    <div>{ex.question.prompt}</div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Conversation</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {state.history.map((ex, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <div className="rounded-lg border border-border bg-card px-3 py-2 text-sm">
+                      <Badge variant="secondary" className="mb-1">
+                        {ex.question.phase}
+                      </Badge>
+                      <div>{ex.question.prompt}</div>
+                    </div>
+                    <div className="ml-auto max-w-[85%] rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm">
+                      {ex.answer}
+                    </div>
                   </div>
-                  <div className="bubble a">{ex.answer}</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </CardContent>
+            </Card>
           )}
 
           {state.status === 'collecting' && state.currentQuestion && (
-            <form className="panel" onSubmit={handleAnswer}>
-              <span className="phase-tag">{state.currentQuestion.phase}</span>
-              <h3>{state.currentQuestion.prompt}</h3>
-              <textarea
-                placeholder="Type your answer…"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                autoFocus
-              />
-              <button type="submit" disabled={busy || !answer.trim()}>
-                {busy ? 'Sending…' : 'Answer'}
-              </button>
-              {error && <div className="error">{error}</div>}
-            </form>
+            <Card>
+              <CardContent className="p-5">
+                <form className="space-y-3" onSubmit={handleAnswer}>
+                  <Badge variant="secondary">
+                    {state.currentQuestion.phase}
+                  </Badge>
+                  <h3 className="text-base font-semibold">
+                    {state.currentQuestion.prompt}
+                  </h3>
+                  <Textarea
+                    placeholder="Type your answer…"
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    autoFocus
+                  />
+                  <Button type="submit" disabled={busy || !answer.trim()}>
+                    {busy ? 'Sending…' : 'Answer'}
+                  </Button>
+                  {error && <p className="text-sm text-destructive">{error}</p>}
+                </form>
+              </CardContent>
+            </Card>
           )}
 
           {state.status === 'awaiting_confirmation' && state.summary && (
-            <div className="panel">
-              <h3>Requirements summary</h3>
-              <p className="subtitle">
-                Completeness reached the threshold. Review and confirm to lock
-                the requirements before design begins.
-              </p>
-              <SummaryView summary={state.summary} />
-              <div className="row">
-                <button
-                  className="success"
-                  onClick={handleConfirm}
-                  disabled={busy}
-                >
-                  {busy ? 'Confirming…' : 'Confirm requirements'}
-                </button>
-                <button className="secondary" onClick={reset} disabled={busy}>
-                  Start over
-                </button>
-              </div>
-              {error && <div className="error">{error}</div>}
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Requirements summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Completeness reached the threshold. Review and confirm to lock
+                  the requirements before design begins.
+                </p>
+                <SummaryView summary={state.summary} />
+                <div className="mt-4 flex gap-2">
+                  <Button variant="success" onClick={handleConfirm} disabled={busy}>
+                    {busy ? 'Confirming…' : 'Confirm requirements'}
+                  </Button>
+                  <Button variant="secondary" onClick={reset} disabled={busy}>
+                    Start over
+                  </Button>
+                </div>
+                {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+              </CardContent>
+            </Card>
           )}
 
           {state.status === 'confirmed' && (
-            <div className="panel">
-              <span className="badge">✓ Requirements confirmed</span>
-              {!doc && (
-                <>
-                  <p className="subtitle" style={{ marginTop: 12 }}>
-                    Generate the formal Requirement Document from this interview.
-                  </p>
-                  {state.summary && <SummaryView summary={state.summary} />}
-                  <div className="row">
-                    <button onClick={handleGenerate} disabled={busy}>
-                      {busy ? 'Generating…' : 'Generate Requirement Document'}
-                    </button>
-                    <button
-                      className="secondary"
-                      onClick={reset}
-                      disabled={busy}
-                    >
-                      Start over
-                    </button>
+            <Card>
+              <CardContent className="p-5">
+                <Badge className="gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Requirements confirmed
+                </Badge>
+
+                {job && (
+                  <div className="mt-4">
+                    <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                      <span>Generating {STAGE_LABEL[job.stage]}…</span>
+                      <span>{job.progress}%</span>
+                    </div>
+                    <Progress value={job.progress} />
                   </div>
-                  {error && <div className="error">{error}</div>}
-                </>
-              )}
+                )}
 
-              {doc && (
-                <>
-                  <h3 style={{ marginTop: 12 }}>Requirement Document</h3>
-                  <RequirementDocumentView doc={doc} />
-
-                  {!design && (
-                    <>
-                      <p className="subtitle" style={{ marginTop: 16 }}>
-                        Next: design the system architecture from these
-                        requirements.
-                      </p>
-                      <div className="row">
-                        <button onClick={handleGenerateDesign} disabled={busy}>
-                          {busy ? 'Designing…' : 'Generate System Design'}
-                        </button>
-                        <button
-                          className="secondary"
-                          onClick={handleGenerate}
-                          disabled={busy}
-                        >
-                          Regenerate requirements
-                        </button>
+                {!doc && (
+                  <>
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      Generate the formal Requirement Document from this
+                      interview.
+                    </p>
+                    {state.summary && (
+                      <div className="mt-3">
+                        <SummaryView summary={state.summary} />
                       </div>
-                    </>
-                  )}
+                    )}
+                    <div className="mt-4 flex gap-2">
+                      <Button onClick={handleGenerate} disabled={busy}>
+                        {busy ? 'Generating…' : 'Generate Requirement Document'}
+                      </Button>
+                      <Button variant="secondary" onClick={reset} disabled={busy}>
+                        Start over
+                      </Button>
+                    </div>
+                    {error && (
+                      <p className="mt-2 text-sm text-destructive">{error}</p>
+                    )}
+                  </>
+                )}
 
-                  {design && (
-                    <>
-                      <h3 style={{ marginTop: 20 }}>System Design</h3>
-                      <SystemDesignView design={design} />
+                {doc && (
+                  <>
+                    <h3 className="mt-4 text-base font-semibold">
+                      Requirement Document
+                    </h3>
+                    <RequirementDocumentView doc={doc} />
 
-                      {!dbDesign && (
-                        <>
-                          <p className="subtitle" style={{ marginTop: 16 }}>
-                            Next: design the database schema from the services
-                            and roles.
-                          </p>
-                          <div className="row">
-                            <button
-                              onClick={handleGenerateDbDesign}
-                              disabled={busy}
-                            >
-                              {busy ? 'Designing…' : 'Generate Database Design'}
-                            </button>
-                            <button
-                              className="secondary"
-                              onClick={handleGenerateDesign}
-                              disabled={busy}
-                            >
-                              Regenerate system design
-                            </button>
-                          </div>
-                        </>
-                      )}
+                    {!design && (
+                      <>
+                        <p className="mt-4 text-sm text-muted-foreground">
+                          Next: design the system architecture from these
+                          requirements.
+                        </p>
+                        <div className="mt-3 flex gap-2">
+                          <Button onClick={handleGenerateDesign} disabled={busy}>
+                            {busy ? 'Designing…' : 'Generate System Design'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={handleGenerate}
+                            disabled={busy}
+                          >
+                            Regenerate requirements
+                          </Button>
+                        </div>
+                      </>
+                    )}
 
-                      {dbDesign && (
-                        <>
-                          <h3 style={{ marginTop: 20 }}>Database Design</h3>
-                          <DatabaseDesignView design={dbDesign} />
+                    {design && (
+                      <>
+                        <h3 className="mt-5 text-base font-semibold">
+                          System Design
+                        </h3>
+                        <SystemDesignView design={design} />
 
-                          {!apiDesign && (
-                            <>
-                              <p className="subtitle" style={{ marginTop: 16 }}>
-                                Next: design the REST API from the entities and
-                                services.
-                              </p>
-                              <div className="row">
-                                <button
-                                  onClick={handleGenerateApiDesign}
-                                  disabled={busy}
-                                >
-                                  {busy ? 'Designing…' : 'Generate API Design'}
-                                </button>
-                                <button
-                                  className="secondary"
-                                  onClick={handleGenerateDbDesign}
-                                  disabled={busy}
-                                >
-                                  Regenerate schema
-                                </button>
-                              </div>
-                            </>
-                          )}
+                        {!dbDesign && (
+                          <>
+                            <p className="mt-4 text-sm text-muted-foreground">
+                              Next: design the database schema from the services
+                              and roles.
+                            </p>
+                            <div className="mt-3 flex gap-2">
+                              <Button
+                                onClick={handleGenerateDbDesign}
+                                disabled={busy}
+                              >
+                                {busy ? 'Designing…' : 'Generate Database Design'}
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                onClick={handleGenerateDesign}
+                                disabled={busy}
+                              >
+                                Regenerate system design
+                              </Button>
+                            </div>
+                          </>
+                        )}
 
-                          {apiDesign && (
-                            <>
-                              <h3 style={{ marginTop: 20 }}>API Design</h3>
-                              <ApiDesignView design={apiDesign} />
+                        {dbDesign && (
+                          <>
+                            <h3 className="mt-5 text-base font-semibold">
+                              Database Design
+                            </h3>
+                            <DatabaseDesignView design={dbDesign} />
 
-                              <h3 style={{ marginTop: 20 }}>AI Chat</h3>
-                              <ChatPanel
-                                sessionId={state.sessionId}
-                                onRefined={handleRefined}
-                              />
-
-                              {!review && (
-                                <>
-                                  <p
-                                    className="subtitle"
-                                    style={{ marginTop: 16 }}
+                            {!apiDesign && (
+                              <>
+                                <p className="mt-4 text-sm text-muted-foreground">
+                                  Next: design the REST API from the entities and
+                                  services.
+                                </p>
+                                <div className="mt-3 flex gap-2">
+                                  <Button
+                                    onClick={handleGenerateApiDesign}
+                                    disabled={busy}
                                   >
-                                    Finally: run the AI review of the whole
-                                    system.
-                                  </p>
-                                  <div className="row">
-                                    <button
-                                      onClick={handleGenerateReview}
-                                      disabled={busy}
-                                    >
-                                      {busy ? 'Reviewing…' : 'Run AI Review'}
-                                    </button>
-                                    <button
-                                      className="secondary"
-                                      onClick={handleGenerateApiDesign}
-                                      disabled={busy}
-                                    >
-                                      Regenerate API
-                                    </button>
-                                  </div>
-                                </>
-                              )}
+                                    {busy ? 'Designing…' : 'Generate API Design'}
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    onClick={handleGenerateDbDesign}
+                                    disabled={busy}
+                                  >
+                                    Regenerate schema
+                                  </Button>
+                                </div>
+                              </>
+                            )}
 
-                              {review && (
-                                <>
-                                  <h3 style={{ marginTop: 20 }}>
-                                    AI Review
-                                  </h3>
-                                  <ReviewView report={review} />
+                            {apiDesign && (
+                              <>
+                                <h3 className="mt-5 text-base font-semibold">
+                                  API Design
+                                </h3>
+                                <ApiDesignView design={apiDesign} />
 
-                                  <h3 style={{ marginTop: 20 }}>Export</h3>
-                                  <ExportView sessionId={state.sessionId} />
+                                <h3 className="mt-5 text-base font-semibold">
+                                  Refine with AI
+                                </h3>
+                                <ChatPanel
+                                  sessionId={state.sessionId}
+                                  onRefined={handleRefined}
+                                />
 
-                                  <div className="row" style={{ marginTop: 16 }}>
-                                    <button
-                                      className="secondary"
-                                      onClick={handleGenerateReview}
-                                      disabled={busy}
-                                    >
-                                      {busy ? 'Regenerating…' : 'Regenerate review'}
-                                    </button>
-                                    <button
-                                      className="secondary"
-                                      onClick={reset}
-                                      disabled={busy}
-                                    >
-                                      Start a new interview
-                                    </button>
-                                  </div>
-                                </>
-                              )}
-                            </>
-                          )}
-                        </>
-                      )}
-                    </>
-                  )}
-                  {error && <div className="error">{error}</div>}
-                </>
-              )}
-            </div>
+                                {!review && (
+                                  <>
+                                    <p className="mt-4 text-sm text-muted-foreground">
+                                      Finally: run the AI review of the whole
+                                      system.
+                                    </p>
+                                    <div className="mt-3 flex gap-2">
+                                      <Button
+                                        onClick={handleGenerateReview}
+                                        disabled={busy}
+                                      >
+                                        {busy ? 'Reviewing…' : 'Run AI Review'}
+                                      </Button>
+                                      <Button
+                                        variant="secondary"
+                                        onClick={handleGenerateApiDesign}
+                                        disabled={busy}
+                                      >
+                                        Regenerate API
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
+
+                                {review && (
+                                  <>
+                                    <h3 className="mt-5 text-base font-semibold">
+                                      AI Review
+                                    </h3>
+                                    <ReviewView report={review} />
+
+                                    <h3 className="mt-5 text-base font-semibold">
+                                      Export
+                                    </h3>
+                                    <ExportView sessionId={state.sessionId} />
+
+                                    <div className="mt-4 flex gap-2">
+                                      <Button
+                                        variant="secondary"
+                                        onClick={handleGenerateReview}
+                                        disabled={busy}
+                                      >
+                                        {busy ? 'Regenerating…' : 'Regenerate review'}
+                                      </Button>
+                                      <Button
+                                        variant="secondary"
+                                        onClick={reset}
+                                        disabled={busy}
+                                      >
+                                        Start a new interview
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+                    {error && (
+                      <p className="mt-2 text-sm text-destructive">{error}</p>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -561,19 +679,19 @@ export default function Home() {
 function ProgressPanel({ state }: { state: InterviewState }) {
   const pct = Math.round(state.completeness * 100);
   return (
-    <div className="panel">
-      <div className="meta">
-        <span>Requirement completeness</span>
-        <span>{pct}%</span>
-      </div>
-      <div className="progress">
-        <span style={{ width: `${pct}%` }} />
-      </div>
-      <div className="meta">
-        <span>Status: {state.status.replace(/_/g, ' ')}</span>
-        {state.phase && <span>Phase: {state.phase.replace(/_/g, ' ')}</span>}
-      </div>
-    </div>
+    <Card>
+      <CardContent className="p-5">
+        <div className="mb-1.5 flex justify-between text-sm">
+          <span>Requirement completeness</span>
+          <span>{pct}%</span>
+        </div>
+        <Progress value={pct} />
+        <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+          <span>Status: {state.status.replace(/_/g, ' ')}</span>
+          {state.phase && <span>Phase: {state.phase.replace(/_/g, ' ')}</span>}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -587,25 +705,25 @@ function SummaryView({ summary }: { summary: RequirementsSummary }) {
     ['Assumptions', summary.assumptions],
   ];
   return (
-    <>
+    <div className="space-y-3">
       {sections.map(([heading, value]) => (
-        <div className="summary-section" key={heading}>
-          <h4>{heading}</h4>
+        <div key={heading}>
+          <h4 className="mb-1 text-sm font-semibold">{heading}</h4>
           {Array.isArray(value) ? (
             value.length ? (
-              <ul className="clean">
+              <ul className="list-disc space-y-1 pl-5 text-sm">
                 {value.map((v, i) => (
                   <li key={i}>{v}</li>
                 ))}
               </ul>
             ) : (
-              <span className="subtitle">—</span>
+              <span className="text-sm text-muted-foreground">—</span>
             )
           ) : (
-            <div>{value}</div>
+            <div className="text-sm">{value}</div>
           )}
         </div>
       ))}
-    </>
+    </div>
   );
 }

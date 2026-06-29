@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import type { AuthUser } from '@archivato/shared';
 import { authApi } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { AuthForm } from './AuthForm';
 
 /** Always-public routes (rendered regardless of auth state). */
@@ -13,27 +16,17 @@ const GUEST_ONLY_PATHS = ['/login', '/register'];
 
 function LoadingScreen({ label }: { label: string }) {
   return (
-    <div className="container">
-      <div className="loading-screen">
-        <div className="spinner" />
-        <p className="subtitle" style={{ margin: 0 }}>
-          {label}
-        </p>
-      </div>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 text-muted-foreground">
+      <Loader2 className="h-6 w-6 animate-spin" />
+      <p className="text-sm">{label}</p>
     </div>
   );
 }
 
 /**
- * Gates the app behind authentication (Slice 9). Checks the session on mount
- * via the httpOnly access cookie; shows a login/register screen when signed
- * out, and a header (with email-verification prompt + sign out) when signed in.
- *
- * Routing rules:
- *  - `/verify*` is public (the email link works whether or not you're signed in).
- *  - `/login` and `/register` are guest-only — signed-in users are redirected
- *    to `/` and cannot view them.
- *  - everything else requires a session.
+ * Gates the app behind authentication (Slice 9). Shows a login/register screen
+ * when signed out, and a header (with email-verification prompt + sign out)
+ * when signed in.
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -51,7 +44,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       .finally(() => setChecking(false));
   }, []);
 
-  // Keep signed-in users out of the login/register pages.
   useEffect(() => {
     if (!checking && user && isGuestOnly) {
       router.replace('/');
@@ -63,7 +55,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setUser(null);
   }
 
-  // Always-public routes render for everyone.
   if (isPublic) {
     return <>{children}</>;
   }
@@ -72,7 +63,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return <LoadingScreen label="Loading your workspace…" />;
   }
 
-  // Guest-only pages: render the form when signed out; redirect (above) otherwise.
   if (isGuestOnly) {
     if (user) return <LoadingScreen label="Redirecting…" />;
     return <>{children}</>;
@@ -84,20 +74,19 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <header className="authbar">
-        <span className="brand">Archivato</span>
-        <span className="authbar-spacer" />
-        <span className="authbar-user">
+      <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur">
+        <span className="font-bold">Archivato</span>
+        <span className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
           {user.displayName}
           {!user.emailVerified && (
-            <span className="badge-warn" title="Email not verified">
+            <Badge variant="warning" title="Email not verified">
               unverified
-            </span>
+            </Badge>
           )}
         </span>
-        <button className="secondary" onClick={handleLogout}>
+        <Button variant="secondary" size="sm" onClick={handleLogout}>
           Sign out
-        </button>
+        </Button>
       </header>
 
       {!user.emailVerified && <VerifyBanner email={user.email} />}
@@ -124,25 +113,25 @@ function VerifyBanner({ email }: { email: string }) {
   }
 
   return (
-    <div className="container" style={{ paddingBottom: 0 }}>
-      <div className="notice info">
+    <div className="mx-auto max-w-3xl px-5 pt-5">
+      <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
         Please verify your email (<strong>{email}</strong>) — check your inbox
         for the confirmation link.{' '}
         {state === 'sent' ? (
           <strong>Verification email sent.</strong>
         ) : (
-          <button
-            className="linklike"
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto p-0"
             onClick={resend}
             disabled={state === 'sending'}
           >
             {state === 'sending' ? 'Sending…' : 'Resend email'}
-          </button>
+          </Button>
         )}
         {state === 'error' && (
-          <span className="error" style={{ marginLeft: 8 }}>
-            Could not send — try again.
-          </span>
+          <span className="ml-2 text-destructive">Could not send — try again.</span>
         )}
       </div>
     </div>

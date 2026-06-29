@@ -1,5 +1,16 @@
 import type { SystemDesign } from '@archivato/shared';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { DownloadButton } from './DownloadButton';
+import { Section } from './RequirementDocumentView';
 
 const ARCH_LABEL: Record<string, string> = {
   monolith: 'Monolith',
@@ -10,8 +21,8 @@ const ARCH_LABEL: Record<string, string> = {
 export function SystemDesignView({ design }: { design: SystemDesign }) {
   return (
     <div>
-      <div className="view-header">
-        <p className="subtitle">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
           Generated {new Date(design.generatedAt).toLocaleString()}
         </p>
         <DownloadButton
@@ -21,61 +32,62 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
         />
       </div>
 
-      <div className="summary-section">
-        <h4>Architecture</h4>
-        <span className="pill">
+      <Section title="Architecture">
+        <Badge variant="primary">
           {ARCH_LABEL[design.architecture] ?? design.architecture}
-        </span>
-        <div className="subtitle" style={{ marginTop: 6 }}>
+        </Badge>
+        <p className="mt-1.5 text-sm text-muted-foreground">
           {design.architectureRationale}
-        </div>
-      </div>
+        </p>
+      </Section>
 
-      <div className="summary-section">
-        <h4>Tech stack</h4>
-        <table className="req-table">
-          <thead>
-            <tr>
-              <th>Layer</th>
-              <th>Technology</th>
-              <th>Why</th>
-            </tr>
-          </thead>
-          <tbody>
+      <Section title="Tech stack">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-32">Layer</TableHead>
+              <TableHead>Technology</TableHead>
+              <TableHead>Why</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {design.techStack.map((t) => (
-              <tr key={t.layer + t.technology}>
-                <td className="mono">{t.layer}</td>
-                <td>
-                  <strong>{t.technology}</strong>
-                </td>
-                <td className="subtitle">{t.rationale}</td>
-              </tr>
+              <TableRow key={t.layer + t.technology}>
+                <TableCell className="font-mono text-xs">{t.layer}</TableCell>
+                <TableCell className="font-medium">{t.technology}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {t.rationale}
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </Section>
 
-      <div className="summary-section">
-        <h4>Services</h4>
-        <div className="service-grid">
+      <Section title="Services">
+        <div className="grid gap-3 sm:grid-cols-2">
           {design.services.map((s) => (
-            <div className="service-card" key={s.name}>
-              <strong>{s.name}</strong>
-              <div className="subtitle">{s.responsibility}</div>
-              {s.dependencies.length > 0 && (
-                <div className="deps">
-                  depends on:{' '}
-                  {s.dependencies.map((d) => (
-                    <span className="pill" key={d}>
-                      {d}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Card key={s.name}>
+              <CardContent className="p-4">
+                <div className="font-semibold">{s.name}</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {s.responsibility}
+                </p>
+                {s.dependencies.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                    depends on:
+                    {s.dependencies.map((d) => (
+                      <Badge variant="secondary" key={d}>
+                        {d}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           ))}
         </div>
-      </div>
+      </Section>
     </div>
   );
 }

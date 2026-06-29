@@ -5,9 +5,12 @@ import type {
   DatabaseDesign,
   ExportBundle,
   InterviewState,
+  JobStatus,
   LoginInput,
+  PipelineStageName,
   ProjectIdeaInput,
   ProjectStructure,
+  ProjectSummary,
   RefineResult,
   RegisterInput,
   RequirementDocument,
@@ -66,6 +69,9 @@ async function request<T>(
 }
 
 export const interviewApi = {
+  /** The signed-in user's projects, most recently updated first. */
+  list: () => request<ProjectSummary[]>('/interview'),
+
   start: (input: ProjectIdeaInput) =>
     request<InterviewState>('/interview', {
       method: 'POST',
@@ -146,6 +152,43 @@ export const chatApi = {
   /** Load the saved conversation for a session. */
   messages: (sessionId: string) =>
     request<ChatMessage[]>(`/chat/${sessionId}`),
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export const jobsApi = {
+  /** Enqueue async generation of a pipeline stage. */
+  enqueue: (sessionId: string, stage: PipelineStageName) =>
+    request<JobStatus>(`/jobs/${sessionId}/${stage}`, { method: 'POST' }),
+
+  /** Poll a single job's status. */
+  status: (sessionId: string, jobId: string) =>
+    request<JobStatus>(`/jobs/${sessionId}/${jobId}`),
+
+  /**
+   * Enqueue a stage, then poll until it finishes, returning the generated
+   * artifact (typed by the caller). `onProgress` receives each status update so
+   * the UI can show a live progress bar.
+   */
+  run: async <T>(
+    sessionId: string,
+    stage: PipelineStageName,
+    onProgress?: (status: JobStatus) => void,
+  ): Promise<T> => {
+    const job = await jobsApi.enqueue(sessionId, stage);
+    let status = job;
+    onProgress?.(status);
+    for (let i = 0; i < 180; i++) {
+      if (status.state === 'completed') return status.result as T;
+      if (status.state === 'failed') {
+        throw new Error(status.error || 'Generation failed.');
+      }
+      await sleep(700);
+      status = await jobsApi.status(sessionId, job.id);
+      onProgress?.(status);
+    }
+    throw new Error('Generation timed out. Please try again.');
+  },
 };
 
 async function requestText(path: string): Promise<string> {

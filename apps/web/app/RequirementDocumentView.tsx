@@ -1,21 +1,29 @@
 import type { RequirementDocument } from '@archivato/shared';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { DownloadButton } from './DownloadButton';
 
-const PRIORITY_COLORS: Record<string, string> = {
-  must: '#f87171',
-  should: '#fbbf24',
-  could: '#9aa3b2',
+const PRIORITY_VARIANT: Record<
+  string,
+  'destructive' | 'warning' | 'secondary'
+> = {
+  must: 'destructive',
+  should: 'warning',
+  could: 'secondary',
 };
 
-export function RequirementDocumentView({
-  doc,
-}: {
-  doc: RequirementDocument;
-}) {
+export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
   return (
     <div>
-      <div className="view-header">
-        <p className="subtitle">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
           Generated {new Date(doc.generatedAt).toLocaleString()}
         </p>
         <DownloadButton
@@ -25,65 +33,62 @@ export function RequirementDocumentView({
         />
       </div>
 
-      <div className="summary-section">
-        <h4>Functional requirements</h4>
+      <Section title="Functional requirements">
         {doc.functional.length ? (
-          <table className="req-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Requirement</th>
-                <th>Priority</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-16">ID</TableHead>
+                <TableHead>Requirement</TableHead>
+                <TableHead className="w-24">Priority</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {doc.functional.map((fr) => (
-                <tr key={fr.id}>
-                  <td className="mono">{fr.id}</td>
-                  <td>
-                    <strong>{fr.title}</strong>
+                <TableRow key={fr.id}>
+                  <TableCell className="font-mono text-xs">{fr.id}</TableCell>
+                  <TableCell>
+                    <span className="font-medium">{fr.title}</span>
                     {fr.description && fr.description !== fr.title && (
-                      <div className="subtitle">{fr.description}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {fr.description}
+                      </div>
                     )}
-                  </td>
-                  <td>
-                    <span
-                      className="pill"
-                      style={{ color: PRIORITY_COLORS[fr.priority] }}
-                    >
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={PRIORITY_VARIANT[fr.priority] ?? 'secondary'}>
                       {fr.priority}
-                    </span>
-                  </td>
-                </tr>
+                    </Badge>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         ) : (
-          <span className="subtitle">—</span>
+          <Empty />
         )}
-      </div>
+      </Section>
 
-      <div className="summary-section">
-        <h4>Non-functional requirements</h4>
-        <ul className="clean">
+      <Section title="Non-functional requirements">
+        <ul className="space-y-1.5">
           {doc.nonFunctional.map((nfr) => (
-            <li key={nfr.id}>
-              <span className="mono">{nfr.id}</span>{' '}
-              <span className="pill">{nfr.category}</span> {nfr.description}
+            <li key={nfr.id} className="text-sm">
+              <span className="font-mono text-xs">{nfr.id}</span>{' '}
+              <Badge variant="secondary">{nfr.category}</Badge> {nfr.description}
             </li>
           ))}
         </ul>
-      </div>
+      </Section>
 
-      <div className="summary-section">
-        <h4>User roles</h4>
+      <Section title="User roles">
         {doc.roles.length ? (
-          <ul className="clean">
+          <ul className="space-y-1.5 text-sm">
             {doc.roles.map((role) => (
               <li key={role.name}>
-                <strong>{role.name}</strong> — {role.description}
+                <span className="font-medium">{role.name}</span> —{' '}
+                {role.description}
                 {role.permissions.length > 0 && (
-                  <span className="subtitle">
+                  <span className="text-muted-foreground">
                     {' '}
                     [{role.permissions.join(', ')}]
                   </span>
@@ -92,30 +97,51 @@ export function RequirementDocumentView({
             ))}
           </ul>
         ) : (
-          <span className="subtitle">—</span>
+          <Empty />
         )}
-      </div>
+      </Section>
 
-      <ListSection title="Business rules" items={doc.businessRules.map((b) => `${b.id}: ${b.description}`)} />
+      <ListSection
+        title="Business rules"
+        items={doc.businessRules.map((b) => `${b.id}: ${b.description}`)}
+      />
       <ListSection title="Constraints" items={doc.constraints} />
       <ListSection title="Assumptions" items={doc.assumptions} />
     </div>
   );
 }
 
+export function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-5">
+      <h4 className="mb-2 text-sm font-semibold">{title}</h4>
+      {children}
+    </div>
+  );
+}
+
+export function Empty() {
+  return <span className="text-sm text-muted-foreground">—</span>;
+}
+
 function ListSection({ title, items }: { title: string; items: string[] }) {
   return (
-    <div className="summary-section">
-      <h4>{title}</h4>
+    <Section title={title}>
       {items.length ? (
-        <ul className="clean">
+        <ul className="list-disc space-y-1 pl-5 text-sm">
           {items.map((it, i) => (
             <li key={i}>{it}</li>
           ))}
         </ul>
       ) : (
-        <span className="subtitle">—</span>
+        <Empty />
       )}
-    </div>
+    </Section>
   );
 }
