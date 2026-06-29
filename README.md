@@ -326,6 +326,13 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - The entire web app was migrated to **Tailwind CSS + shadcn/ui** with a cohesive
   dark theme (Card, Button, Badge, Input, Select, Tabs, Table, Progress, Alert…).
 
+### ✅ UI — Tabbed project view
+- The confirmed project view is organized into **tabs** (Requirements · System ·
+  Database · API · Review · Export · Refine · History) instead of one long
+  scroll — one stage at a time, with downstream tabs unlocking as artifacts are
+  generated. `page.tsx` was split into focused components
+  (`ProjectsDashboard`, `InterviewPanel`, `ProjectStages`, …).
+
 ### ✅ Slice 12 — Project version history (compare + restore)
 - **Every modification snapshots the whole project** (all artifacts together) as
   the next sequential version — captured after each async stage generation and

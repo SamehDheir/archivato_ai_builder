@@ -420,6 +420,21 @@ DB Design → API Design → Review → Export
     env's Docker Desktop pulls via `mirror.gcr.io` which fails DNS — Redis only
     ran because the image was cached; a fresh pull needs that mirror fixed.
 
+- **UI refactor (2026-06-29): tabbed project view + page.tsx split.**
+  - The confirmed project view was one long vertical stack (requirements →
+    system → db → api → chat → review → export → versions). Replaced with shadcn
+    **`Tabs`** (`apps/web/app/ProjectStages.tsx`): one stage per tab, downstream
+    tabs disabled until their prerequisite artifact exists, each tab generates
+    its stage + has a "Next →" link; the job progress bar sits above the tabs.
+    A guard resets to the Requirements tab if a restore removes the active tab's
+    artifact (so the panel never blanks).
+  - **`page.tsx` split** from ~770 lines into focused components:
+    `ProjectsDashboard.tsx` (the post-login hub), `InterviewPanel.tsx` (Q&A +
+    confirm gate, owns the answer input), `ProjectStages.tsx` (the tabs),
+    `ProgressPanel.tsx`, `SummaryView.tsx`. `page.tsx` is now a slim orchestrator
+    (state + handlers). Container widened to `max-w-4xl` for the design tables.
+  - Verified: web type-check + `next build` clean; dev server serves Tailwind.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`
