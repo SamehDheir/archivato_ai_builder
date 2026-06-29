@@ -337,6 +337,14 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - The entire web app was migrated to **Tailwind CSS + shadcn/ui** with a cohesive
   dark theme (Card, Button, Badge, Input, Select, Tabs, Table, Progress, Alert…).
 
+### ✅ Slice 13 — Architecture diagrams (Mermaid)
+- The structured designs are turned into **rendered diagrams** shown in a
+  **Diagrams** tab: **Flow Chart, Sequence, Class, ERD, Microservices,
+  Deployment**. Source is built deterministically from the system / database /
+  API designs (no LLM) as **Mermaid** and rendered to SVG in the browser, with
+  a "View source / Copy Mermaid" option (paste into Mermaid Live, PlantUML, or
+  draw.io). REST API (`GET /diagrams/:sessionId`), owner-scoped.
+
 ### ✅ UI — Tabbed project view
 - The confirmed project view is organized into **tabs** (Requirements · System ·
   Database · API · Review · Export · Refine · History) instead of one long
@@ -392,6 +400,7 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/versions/:sessionId` | List a project's version history             |
 | GET    | `/api/versions/:sessionId/:version` | Fetch one version's full snapshot   |
 | POST   | `/api/versions/:sessionId/:version/restore` | Restore the project to a version |
+| GET    | `/api/diagrams/:sessionId` | Architecture diagrams (Mermaid source per kind) |
 | GET    | `/api/export/:sessionId/json`| Full artifact bundle (JSON)                 |
 | GET    | `/api/export/:sessionId/markdown`| Markdown report                         |
 | GET    | `/api/export/:sessionId/openapi`| OpenAPI 3.0 spec (JSON)                   |

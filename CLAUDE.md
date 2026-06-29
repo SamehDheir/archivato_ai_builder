@@ -452,6 +452,33 @@ DB Design → API Design → Review → Export
   pasting `GROQ_API_KEY` flips the pipeline. (`apps/api/.env` is gitignored — the
   user must paste the real key there; verify via the startup log line.)
 
+- **Slice 13 — DONE (2026-06-29): Architecture diagrams (Mermaid, in-browser).**
+  - Decision: **Mermaid** rendered client-side (best for "display on the site")
+    + **deterministic** builders (no LLM — pure, like the export builders).
+  - Shared `diagrams.ts`: `DiagramKind` (flowchart|sequence|class|erd|
+    microservices|deployment), `Diagram` (mermaid string + optional `note`),
+    `ProjectDiagrams`, `DIAGRAM_KINDS`.
+  - `apps/api/src/diagrams`: `mermaid.builders.ts` — pure builders per kind
+    (ERD+Class ← database design, microservices+deployment+flowchart ← system
+    design, sequence ← API design). Node ids/labels sanitized for valid Mermaid.
+    `DiagramsService` gathers the artifacts and returns all 6 (a missing
+    prerequisite yields a `note` instead of source). Owner-guarded
+    `GET /diagrams/:sessionId`. Module imports the 3 design modules + Interview
+    (guard). Builders unit-tested (`mermaid.builders.spec.ts`); 115 API tests.
+  - Frontend: `mermaid@11` (dynamic `import()` → code-split, ~no First-Load
+    cost). `DiagramsView.tsx` renders the selected diagram to SVG
+    (`mermaid.render`, theme dark, securityLevel strict), with a kind picker,
+    "View source"/"Copy Mermaid", and a source fallback if a diagram won't
+    parse. New **Diagrams tab** in `ProjectStages` (enabled once the system
+    design exists; refetches on the `versionsReload` signal). `diagramsApi`.
+  - **GOTCHA (fixed):** installing `mermaid` hoisted `@types/d3-*` /
+    `@types/geojson` into the monorepo node_modules; the API's `tsc` implicitly
+    loaded ALL `@types/*` and broke on `@types/d3-array` (TS1010 under TS 5.4).
+    Fixed by pinning `apps/api/tsconfig.json` `"types": ["node", "jest"]`.
+  - Verified live (real Groq): full pipeline → `GET /diagrams` returns 6 valid
+    diagrams (erDiagram/flowchart/sequenceDiagram/classDiagram present);
+    attacker 404. Web type-check + `next build` clean (mermaid code-split).
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`
