@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type {
   ApiDesign,
   DatabaseDesign,
@@ -30,10 +30,15 @@ import { ChatPanel } from './ChatPanel';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
+/** localStorage key holding the active interview session id (for resume). */
+const SESSION_KEY = 'archivato.sessionId';
+
 export default function Home() {
   const [state, setState] = useState<InterviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // True while we attempt to restore a saved session on first load.
+  const [restoring, setRestoring] = useState(true);
 
   // Start form
   const [idea, setIdea] = useState('');
@@ -57,6 +62,53 @@ export default function Home() {
 
   // Review report (Slice 7)
   const [review, setReview] = useState<ReviewReport | null>(null);
+
+  // Resume a saved session on first load: fetch the interview state and every
+  // artifact that was already generated, so a refresh continues where you left
+  // off instead of starting over. All data lives in the backend (Postgres).
+  useEffect(() => {
+    const saved =
+      typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
+    if (!saved) {
+      setRestoring(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const restored = await interviewApi.get(saved);
+        if (cancelled) return;
+        setState(restored);
+        // Restore each downstream artifact if it exists (get() rejects if not).
+        const [r, sd, db, ad, rv] = await Promise.allSettled([
+          requirementsApi.get(saved),
+          systemDesignApi.get(saved),
+          databaseDesignApi.get(saved),
+          apiDesignApi.get(saved),
+          reviewApi.get(saved),
+        ]);
+        if (cancelled) return;
+        if (r.status === 'fulfilled') setDoc(r.value);
+        if (sd.status === 'fulfilled') setDesign(sd.value);
+        if (db.status === 'fulfilled') setDbDesign(db.value);
+        if (ad.status === 'fulfilled') setApiDesign(ad.value);
+        if (rv.status === 'fulfilled') setReview(rv.value);
+      } catch {
+        // The saved session no longer exists — forget it and start fresh.
+        localStorage.removeItem(SESSION_KEY);
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Remember the active session id so a refresh can resume it.
+  useEffect(() => {
+    if (state?.sessionId) localStorage.setItem(SESSION_KEY, state.sessionId);
+  }, [state?.sessionId]);
 
   async function run<T>(fn: () => Promise<T>) {
     setBusy(true);
@@ -149,6 +201,7 @@ export default function Home() {
   }
 
   function reset() {
+    if (typeof window !== 'undefined') localStorage.removeItem(SESSION_KEY);
     setState(null);
     setDoc(null);
     setDesign(null);
@@ -160,6 +213,19 @@ export default function Home() {
     setScale('');
     setAnswer('');
     setError(null);
+  }
+
+  if (restoring) {
+    return (
+      <div className="container">
+        <div className="loading-screen">
+          <div className="spinner" />
+          <p className="subtitle" style={{ margin: 0 }}>
+            Restoring your session…
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
