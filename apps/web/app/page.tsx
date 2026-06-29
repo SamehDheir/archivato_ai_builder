@@ -71,6 +71,8 @@ export default function Home() {
   const [restoring, setRestoring] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  // True while the "New project" form is open on the projects dashboard.
+  const [creating, setCreating] = useState(false);
 
   // Start form
   const [idea, setIdea] = useState('');
@@ -107,35 +109,23 @@ export default function Home() {
     setReview(rv.status === 'fulfilled' ? rv.value : null);
   }
 
+  // After login, land on the projects dashboard (NOT auto-opened into the last
+  // session) — the user picks which project to work on. Everything is persisted
+  // server-side, so opening a project rehydrates its full state on demand.
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(LEGACY_SESSION_KEY);
     }
     let cancelled = false;
     (async () => {
-      let uid: string | null = null;
       try {
         const me = await authApi.me();
-        if (cancelled || !me) {
-          if (!cancelled) setRestoring(false);
-          return;
-        }
-        uid = me.id;
-        setUserId(uid);
-
-        interviewApi
-          .list()
-          .then((list) => !cancelled && setProjects(list))
-          .catch(() => undefined);
-
-        const saved = localStorage.getItem(sessionKey(uid));
-        if (!saved) {
-          setRestoring(false);
-          return;
-        }
-        await loadSession(saved);
+        if (cancelled || !me) return;
+        setUserId(me.id);
+        const list = await interviewApi.list();
+        if (!cancelled) setProjects(list);
       } catch {
-        if (uid) localStorage.removeItem(sessionKey(uid));
+        /* not signed in / list failed — show the empty dashboard */
       } finally {
         if (!cancelled) setRestoring(false);
       }
@@ -213,6 +203,7 @@ export default function Home() {
     );
     if (next) {
       setState(next);
+      setCreating(false);
       void refreshProjects();
     }
   }
@@ -271,14 +262,28 @@ export default function Home() {
     setError(null);
   }
 
+  /**
+   * Return to the projects dashboard without deleting anything — the current
+   * project stays in the database and reappears in the (refreshed) list.
+   */
+  function backToProjects() {
+    reset();
+    setCreating(false);
+    void refreshProjects();
+  }
+
   if (restoring) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-muted-foreground">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
-        <p className="text-sm">Restoring your session…</p>
+        <p className="text-sm">Loading your projects…</p>
       </div>
     );
   }
+
+  // On the dashboard, show the "new project" form when explicitly creating or
+  // when the user has no projects yet (first run); otherwise show the list.
+  const showForm = creating || projects.length === 0;
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-8">
@@ -288,99 +293,137 @@ export default function Home() {
         design.
       </p>
 
-      {!state && projects.length > 0 && (
-        <Card className="mb-4">
-          <CardHeader>
-            <CardTitle>My projects</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y divide-border">
-              {projects.map((p) => (
-                <li
-                  key={p.sessionId}
-                  className="flex items-center justify-between gap-3 py-2.5"
-                >
-                  <button
-                    className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-primary hover:underline disabled:opacity-50"
-                    onClick={() => openProject(p.sessionId)}
-                    disabled={busy}
-                    title={p.idea}
-                  >
-                    {p.idea}
-                  </button>
-                  <span className="flex items-center gap-2 whitespace-nowrap">
-                    <Badge variant="secondary">
-                      {p.status.replace(/_/g, ' ')}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {Math.round(p.completeness * 100)}% ·{' '}
-                      {new Date(p.updatedAt).toLocaleDateString()}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
       {!state && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Describe your idea</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-3" onSubmit={handleStart}>
-              <div className="space-y-1.5">
-                <Label htmlFor="idea">Project idea</Label>
-                <Textarea
-                  id="idea"
-                  placeholder="e.g. A clinic management system with appointments, billing, doctors, and patient records."
-                  value={idea}
-                  onChange={(e) => setIdea(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="industry">Industry (optional)</Label>
-                  <Input
-                    id="industry"
-                    placeholder="healthcare"
-                    value={industry}
-                    onChange={(e) => setIndustry(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="scale">Scale (optional)</Label>
-                  <Select
-                    value={scale}
-                    onValueChange={(v) => setScale(v as ProjectScale)}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Projects</h2>
+            {projects.length > 0 &&
+              (creating ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setCreating(false);
+                    setError(null);
+                  }}
+                >
+                  ← Back to projects
+                </Button>
+              ) : (
+                <Button onClick={() => setCreating(true)}>+ New project</Button>
+              ))}
+          </div>
+
+          {showForm ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {projects.length === 0
+                    ? 'Start your first project'
+                    : 'New project'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-3" onSubmit={handleStart}>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="idea">Project idea</Label>
+                    <Textarea
+                      id="idea"
+                      placeholder="e.g. A clinic management system with appointments, billing, doctors, and patient records."
+                      value={idea}
+                      onChange={(e) => setIdea(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="industry">Industry (optional)</Label>
+                      <Input
+                        id="industry"
+                        placeholder="healthcare"
+                        value={industry}
+                        onChange={(e) => setIndustry(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="scale">Scale (optional)</Label>
+                      <Select
+                        value={scale}
+                        onValueChange={(v) => setScale(v as ProjectScale)}
+                      >
+                        <SelectTrigger id="scale">
+                          <SelectValue placeholder="—" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SCALES.map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {s}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={busy || idea.trim().length < 10}
                   >
-                    <SelectTrigger id="scale">
-                      <SelectValue placeholder="—" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SCALES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <Button type="submit" disabled={busy || idea.trim().length < 10}>
-                {busy ? 'Starting…' : 'Start interview'}
-              </Button>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-            </form>
-          </CardContent>
-        </Card>
+                    {busy ? 'Starting…' : 'Start interview'}
+                  </Button>
+                  {error && <p className="text-sm text-destructive">{error}</p>}
+                </form>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-2">
+                <ul className="divide-y divide-border">
+                  {projects.map((p) => (
+                    <li
+                      key={p.sessionId}
+                      className="flex items-center justify-between gap-3 px-2 py-3"
+                    >
+                      <button
+                        className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-primary hover:underline disabled:opacity-50"
+                        onClick={() => openProject(p.sessionId)}
+                        disabled={busy}
+                        title={p.idea}
+                      >
+                        {p.idea}
+                      </button>
+                      <span className="flex items-center gap-2 whitespace-nowrap">
+                        <Badge variant="secondary">
+                          {p.status.replace(/_/g, ' ')}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {Math.round(p.completeness * 100)}% ·{' '}
+                          {new Date(p.updatedAt).toLocaleDateString()}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {state && (
         <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="secondary" size="sm" onClick={backToProjects}>
+              ← Projects
+            </Button>
+            {state.intent?.summary && (
+              <span
+                className="min-w-0 truncate text-sm text-muted-foreground"
+                title={state.intent.summary}
+              >
+                {state.intent.summary}
+              </span>
+            )}
+          </div>
+
           <ProgressPanel state={state} />
 
           {state.history.length > 0 && (
@@ -446,8 +489,12 @@ export default function Home() {
                   <Button variant="success" onClick={handleConfirm} disabled={busy}>
                     {busy ? 'Confirming…' : 'Confirm requirements'}
                   </Button>
-                  <Button variant="secondary" onClick={reset} disabled={busy}>
-                    Start over
+                  <Button
+                    variant="secondary"
+                    onClick={backToProjects}
+                    disabled={busy}
+                  >
+                    Back to projects
                   </Button>
                 </div>
                 {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
@@ -648,10 +695,10 @@ export default function Home() {
                                       </Button>
                                       <Button
                                         variant="secondary"
-                                        onClick={reset}
+                                        onClick={backToProjects}
                                         disabled={busy}
                                       >
-                                        Start a new interview
+                                        Back to projects
                                       </Button>
                                     </div>
                                   </>

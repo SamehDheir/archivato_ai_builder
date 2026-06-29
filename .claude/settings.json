@@ -29,7 +29,8 @@
       "Bash(curl -s -o /dev/null -w '%{http_code}\\\\n' -X POST http://localhost:3001/api/jobs/x/requirements)",
       "Bash(curl -s -o /dev/null --retry 40 --retry-connrefused --retry-delay 1 http://localhost:3001/api/auth/oauth/providers)",
       "Bash(ls next.config.*)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(echo \"=== tsc exit $? ===\")"
     ]
   }
 }
