@@ -11,6 +11,7 @@ import { ApiDesignModule } from './api-design/api-design.module';
 import { ReviewModule } from './review/review.module';
 import { ExportModule } from './export/export.module';
 import { ChatModule } from './chat/chat.module';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
   imports: [
@@ -38,6 +39,8 @@ import { ChatModule } from './chat/chat.module';
     ExportModule,
     // Slice 10: post-generation AI chat (refine the design in natural language).
     ChatModule,
+    // Async pipeline generation (BullMQ/Redis): enqueue + poll job status.
+    JobsModule,
   ],
 })
 export class AppModule {}

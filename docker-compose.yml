@@ -17,5 +17,16 @@ services:
     volumes:
       - archivato_pgdata:/var/lib/postgresql/data
 
+  # Redis for BullMQ async pipeline generation.
+  redis:
+    image: redis:7-alpine
+    container_name: archivato-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - archivato_redisdata:/data
+
 volumes:
   archivato_pgdata:
+  archivato_redisdata:

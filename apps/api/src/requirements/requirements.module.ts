@@ -19,7 +19,7 @@ import { PrismaRequirementDocumentRepository } from './prisma-requirement-docume
       useClass: PrismaRequirementDocumentRepository,
     },
   ],
-  // Export the doc store so downstream stages (System Design) read the same data.
-  exports: [REQUIREMENT_DOCUMENT_REPOSITORY],
+  // Export the doc store (downstream stages) + the service (async job worker).
+  exports: [REQUIREMENT_DOCUMENT_REPOSITORY, RequirementsService],
 })
 export class RequirementsModule {}
