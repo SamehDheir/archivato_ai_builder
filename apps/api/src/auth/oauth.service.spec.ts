@@ -57,7 +57,7 @@ describe('OAuthService', () => {
   it('creates a new, email-verified, password-less account', async () => {
     mockFetch([
       { access_token: 'tok' },
-      { email: 'new@example.com', name: 'New User' },
+      { email: 'new@example.com', name: 'New User', verified_email: true },
     ]);
 
     const user = await service.loginWithCode('google', 'code123');
@@ -77,7 +77,7 @@ describe('OAuthService', () => {
     });
     mockFetch([
       { access_token: 'tok' },
-      { email: 'me@example.com', name: 'Me' },
+      { email: 'me@example.com', name: 'Me', verified_email: true },
     ]);
 
     const user = await service.loginWithCode('google', 'code');
@@ -90,5 +90,22 @@ describe('OAuthService', () => {
   it('rejects a profile with no email', async () => {
     mockFetch([{ access_token: 'tok' }, { name: 'No Email' }]);
     await expect(service.loginWithCode('google', 'code')).rejects.toThrow();
+  });
+
+  it('rejects an UNVERIFIED provider email (account-linking guard)', async () => {
+    await users.create({
+      email: 'victim@example.com',
+      passwordHash: 'hash',
+      displayName: 'Victim',
+      providers: ['password'],
+    });
+    mockFetch([
+      { access_token: 'tok' },
+      { email: 'victim@example.com', name: 'X', verified_email: false },
+    ]);
+    await expect(service.loginWithCode('google', 'code')).rejects.toThrow();
+    // The victim account was NOT linked.
+    const victim = await users.findByEmail('victim@example.com');
+    expect(victim?.providers).toEqual(['password']);
   });
 });

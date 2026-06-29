@@ -11,6 +11,8 @@ export type OAuthProvider = 'google' | 'github';
 interface OAuthProfile {
   email: string;
   displayName: string;
+  /** Whether the provider asserts the email is verified (gate for linking). */
+  emailVerified: boolean;
 }
 
 interface ProviderEndpoints {
@@ -64,8 +66,10 @@ export class OAuthService {
   async loginWithCode(provider: OAuthProvider, code: string): Promise<User> {
     const accessToken = await this.exchangeCode(provider, code);
     const profile = await this.endpoints(provider).fetchProfile(accessToken);
-    if (!profile.email) {
-      throw new Error('OAuth provider returned no email');
+    // Require a verified email: linking accounts by an unverified email is an
+    // account-takeover vector.
+    if (!profile.email || !profile.emailVerified) {
+      throw new Error('OAuth provider did not return a verified email');
     }
     return this.linkOrCreate(provider, profile);
   }
@@ -139,8 +143,16 @@ export class OAuthService {
             { headers: { Authorization: `Bearer ${token}` } },
           );
           if (!r.ok) throw new Error('google profile fetch failed');
-          const u = (await r.json()) as { email?: string; name?: string };
-          return { email: u.email ?? '', displayName: u.name ?? '' };
+          const u = (await r.json()) as {
+            email?: string;
+            name?: string;
+            verified_email?: boolean;
+          };
+          return {
+            email: u.email ?? '',
+            displayName: u.name ?? '',
+            emailVerified: u.verified_email === true,
+          };
         },
       };
     }
@@ -173,7 +185,12 @@ export class OAuthService {
             emails.find((e) => e.verified)?.email ??
             '';
         }
-        return { email, displayName: u.name ?? u.login ?? '' };
+        // `email` is only ever set from a verified GitHub email above.
+        return {
+          email,
+          displayName: u.name ?? u.login ?? '',
+          emailVerified: email !== '',
+        };
       },
     };
   }
