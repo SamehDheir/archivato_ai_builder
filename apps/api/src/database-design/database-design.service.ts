@@ -84,4 +84,22 @@ export class DatabaseDesignService {
     }
     return design;
   }
+
+  /** Persist a user-edited database design (must already exist). */
+  async save(
+    sessionId: string,
+    edited: Omit<DatabaseDesign, 'sessionId' | 'generatedAt'>,
+  ): Promise<DatabaseDesign> {
+    const existing = await this.databaseDesigns.findBySessionId(sessionId);
+    if (!existing) {
+      throw new ConflictException(
+        'Generate the database design before editing it.',
+      );
+    }
+    return this.databaseDesigns.upsert({
+      ...edited,
+      sessionId,
+      generatedAt: new Date().toISOString(),
+    });
+  }
 }

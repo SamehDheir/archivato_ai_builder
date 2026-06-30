@@ -62,4 +62,26 @@ export class RequirementsService {
     }
     return doc;
   }
+
+  /**
+   * Persist a user-edited requirement document. Only an already-generated
+   * document may be edited (you can't bypass the pipeline via PUT); the saved
+   * artifact's sessionId/generatedAt are stamped server-side.
+   */
+  async save(
+    sessionId: string,
+    edited: Omit<RequirementDocument, 'sessionId' | 'generatedAt'>,
+  ): Promise<RequirementDocument> {
+    const existing = await this.docs.findBySessionId(sessionId);
+    if (!existing) {
+      throw new ConflictException(
+        'Generate the requirement document before editing it.',
+      );
+    }
+    return this.docs.upsert({
+      ...edited,
+      sessionId,
+      generatedAt: new Date().toISOString(),
+    });
+  }
 }

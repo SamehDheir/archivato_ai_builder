@@ -73,4 +73,22 @@ export class SystemDesignService {
     }
     return design;
   }
+
+  /** Persist a user-edited system design (must already exist). */
+  async save(
+    sessionId: string,
+    edited: Omit<SystemDesign, 'sessionId' | 'generatedAt'>,
+  ): Promise<SystemDesign> {
+    const existing = await this.designs.findBySessionId(sessionId);
+    if (!existing) {
+      throw new ConflictException(
+        'Generate the system design before editing it.',
+      );
+    }
+    return this.designs.upsert({
+      ...edited,
+      sessionId,
+      generatedAt: new Date().toISOString(),
+    });
+  }
 }

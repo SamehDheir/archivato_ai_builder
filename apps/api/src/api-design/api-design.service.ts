@@ -93,4 +93,20 @@ export class ApiDesignService {
     }
     return design;
   }
+
+  /** Persist a user-edited API design (must already exist). */
+  async save(
+    sessionId: string,
+    edited: Omit<ApiDesign, 'sessionId' | 'generatedAt'>,
+  ): Promise<ApiDesign> {
+    const existing = await this.apiDesigns.findBySessionId(sessionId);
+    if (!existing) {
+      throw new ConflictException('Generate the API design before editing it.');
+    }
+    return this.apiDesigns.upsert({
+      ...edited,
+      sessionId,
+      generatedAt: new Date().toISOString(),
+    });
+  }
 }

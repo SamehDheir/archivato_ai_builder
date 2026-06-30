@@ -4,7 +4,12 @@
  * System Design. Includes entities, primary keys, foreign keys, and relations.
  */
 
-export type ColumnType =
+/**
+ * Common column types we suggest in the UI. Real models (and real databases)
+ * emit many more (e.g. `varchar(255)`, `bigint`, `timestamp with time zone`),
+ * so the column `type` is an open string — these are just the suggestions.
+ */
+export type CommonColumnType =
   | 'uuid'
   | 'string'
   | 'text'
@@ -15,6 +20,24 @@ export type ColumnType =
   | 'date'
   | 'json'
   | 'enum';
+
+/** A column's SQL type: a common suggestion OR any free-form string. */
+// eslint-disable-next-line @typescript-eslint/ban-types
+export type ColumnType = CommonColumnType | (string & {});
+
+/** The common column types, for editor suggestions / dropdowns. */
+export const COMMON_COLUMN_TYPES: CommonColumnType[] = [
+  'uuid',
+  'string',
+  'text',
+  'integer',
+  'decimal',
+  'boolean',
+  'timestamp',
+  'date',
+  'json',
+  'enum',
+];
 
 /** A foreign-key target. */
 export interface ColumnReference {

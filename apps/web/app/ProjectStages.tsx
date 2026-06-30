@@ -19,9 +19,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RequirementDocumentView } from './RequirementDocumentView';
+import { RequirementDocumentEditor } from './RequirementDocumentEditor';
 import { SystemDesignView } from './SystemDesignView';
+import { SystemDesignEditor } from './SystemDesignEditor';
 import { DatabaseDesignView } from './DatabaseDesignView';
+import { DatabaseDesignEditor } from './DatabaseDesignEditor';
 import { ApiDesignView } from './ApiDesignView';
+import { ApiDesignEditor } from './ApiDesignEditor';
 import { ReviewView } from './ReviewView';
 import { ExportView } from './ExportView';
 import { OpenApiView } from './OpenApiView';
@@ -74,6 +78,10 @@ export function ProjectStages({
   onGenerateDatabase,
   onGenerateApi,
   onGenerateReview,
+  onSavedDoc,
+  onSavedDesign,
+  onSavedDbDesign,
+  onSavedApiDesign,
   onRefined,
   onRestored,
 }: {
@@ -93,10 +101,16 @@ export function ProjectStages({
   onGenerateDatabase: () => void;
   onGenerateApi: () => void;
   onGenerateReview: () => void;
+  onSavedDoc: (doc: RequirementDocument) => void;
+  onSavedDesign: (design: SystemDesign) => void;
+  onSavedDbDesign: (design: DatabaseDesign) => void;
+  onSavedApiDesign: (design: ApiDesign) => void;
   onRefined: (result: RefineResult) => void;
   onRestored: (snapshot: ProjectSnapshot) => void;
 }) {
   const [tab, setTab] = useState<TabKey>('requirements');
+  // Which stage tab is currently in edit mode (null = viewing).
+  const [editing, setEditing] = useState<TabKey | null>(null);
 
   const available: Record<TabKey, boolean> = {
     requirements: true,
@@ -112,9 +126,11 @@ export function ProjectStages({
   };
 
   // If a restore removes the artifact behind the active tab, fall back to the
-  // requirements tab so the panel never goes blank.
+  // requirements tab so the panel never goes blank. Also exit any edit mode so a
+  // restored/regenerated artifact isn't being edited against stale state.
   useEffect(() => {
     if (!available[tab]) setTab('requirements');
+    setEditing(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc, design, dbDesign, apiDesign]);
 
@@ -135,7 +151,13 @@ export function ProjectStages({
           </div>
         )}
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            setTab(v as TabKey);
+            setEditing(null);
+          }}
+        >
           <TabsList className="flex h-auto flex-wrap justify-start gap-1">
             <TabsTrigger value="requirements">Requirements</TabsTrigger>
             <TabsTrigger value="system" disabled={!available.system}>
@@ -179,12 +201,23 @@ export function ProjectStages({
                   {busy ? 'Generating…' : 'Generate Requirement Document'}
                 </Button>
               </>
+            ) : editing === 'requirements' ? (
+              <RequirementDocumentEditor
+                doc={doc}
+                sessionId={sessionId}
+                onSaved={(d) => {
+                  onSavedDoc(d);
+                  setEditing(null);
+                }}
+                onCancel={() => setEditing(null)}
+              />
             ) : (
               <>
                 <RequirementDocumentView doc={doc} />
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateRequirements}
+                  onEdit={() => setEditing('requirements')}
                   next={{ label: 'System Design', go: () => setTab('system') }}
                 />
               </>
@@ -200,12 +233,23 @@ export function ProjectStages({
                 label="Generate System Design"
                 onGenerate={onGenerateSystem}
               />
+            ) : editing === 'system' ? (
+              <SystemDesignEditor
+                design={design}
+                sessionId={sessionId}
+                onSaved={(d) => {
+                  onSavedDesign(d);
+                  setEditing(null);
+                }}
+                onCancel={() => setEditing(null)}
+              />
             ) : (
               <>
                 <SystemDesignView design={design} />
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateSystem}
+                  onEdit={() => setEditing('system')}
                   next={{ label: 'Database', go: () => setTab('database') }}
                 />
               </>
@@ -221,12 +265,23 @@ export function ProjectStages({
                 label="Generate Database Design"
                 onGenerate={onGenerateDatabase}
               />
+            ) : editing === 'database' ? (
+              <DatabaseDesignEditor
+                design={dbDesign}
+                sessionId={sessionId}
+                onSaved={(d) => {
+                  onSavedDbDesign(d);
+                  setEditing(null);
+                }}
+                onCancel={() => setEditing(null)}
+              />
             ) : (
               <>
                 <DatabaseDesignView design={dbDesign} />
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateDatabase}
+                  onEdit={() => setEditing('database')}
                   next={{ label: 'API', go: () => setTab('api') }}
                 />
               </>
@@ -242,12 +297,23 @@ export function ProjectStages({
                 label="Generate API Design"
                 onGenerate={onGenerateApi}
               />
+            ) : editing === 'api' ? (
+              <ApiDesignEditor
+                design={apiDesign}
+                sessionId={sessionId}
+                onSaved={(d) => {
+                  onSavedApiDesign(d);
+                  setEditing(null);
+                }}
+                onCancel={() => setEditing(null)}
+              />
             ) : (
               <>
                 <ApiDesignView design={apiDesign} />
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateApi}
+                  onEdit={() => setEditing('api')}
                   next={{ label: 'Review', go: () => setTab('review') }}
                 />
               </>
@@ -336,16 +402,23 @@ function GenerateStage({
 function StageActions({
   busy,
   onRegenerate,
+  onEdit,
   regenerateLabel = 'Regenerate',
   next,
 }: {
   busy: boolean;
   onRegenerate: () => void;
+  onEdit?: () => void;
   regenerateLabel?: string;
   next?: { label: string; go: () => void };
 }) {
   return (
     <div className="flex flex-wrap gap-2">
+      {onEdit && (
+        <Button variant="secondary" onClick={onEdit} disabled={busy}>
+          Edit
+        </Button>
+      )}
       <Button variant="secondary" onClick={onRegenerate} disabled={busy}>
         {regenerateLabel}
       </Button>

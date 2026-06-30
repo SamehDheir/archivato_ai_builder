@@ -552,6 +552,37 @@ DB Design → API Design → Review → Export
   the project view (BOTH the interview and confirmed phases), below the
   ←Projects/summary header. Pure presentational; web type-check clean.
 
+- **Editable documents — structured editors + save (2026-06-30).** The 4
+  generated artifacts (Requirements, Architecture/SystemDesign, Database, API)
+  are no longer read-only; each has an **Edit** button that swaps the View for a
+  structured form, then **Save**.
+  - **Backend:** each service gained `save(sessionId, edited)` (gate: the
+    artifact must already exist → 409 otherwise, so PUT can't bypass the pipeline
+    order; sessionId/generatedAt are stamped server-side, not trusted from the
+    body) calling the repo's existing `upsert`. New owner-guarded `PUT
+    /:sessionId` on all 4 controllers. **DTOs** with class-validator nested
+    validation (`@ValidateNested({each:true})` + `@Type`): `UpdateRequirement
+    DocumentDto`, `UpdateSystemDesignDto`, `UpdateDatabaseDesignDto`,
+    `UpdateApiDesignDto` (enums via `@IsIn`; the global ValidationPipe is
+    `whitelist:true, transform:true`, so unknown props incl. sessionId/
+    generatedAt are stripped).
+  - **Frontend:** `apps/web/app/editor-kit.tsx` (shared `EditorBar`,
+    `AddButton`, `RemoveButton`, `Check`, line/csv list helpers) + four editors
+    (`RequirementDocumentEditor`, `SystemDesignEditor`, `DatabaseDesignEditor`,
+    `ApiDesignEditor`). Each holds a draft via `useState` and edits it
+    immutably with a `structuredClone`-then-mutate `patch()` helper (clean for
+    the deep entities/columns + modules/endpoints/schema nesting). `lib/api.ts`
+    gained `update()` on the 4 artifact clients (`PUT`). `ProjectStages` tracks
+    an `editing` tab (cleared on tab change / restore / regenerate); the 4 stage
+    tabs render the editor when editing, else View + an **Edit** button in
+    `StageActions`. On save, `page.tsx` `handleSaved*` updates the in-view
+    artifact + bumps `versionsReload`.
+  - Note: editing is **client-validated lightly + server-validated by DTO**;
+    a save doesn't cascade downstream (unlike chat refine) — editing the DB
+    won't auto-regenerate the API. Use Regenerate or Refine for cascades.
+  - Verified: **118 API tests** (+2: save gate + stamp/round-trip); api build +
+    web type-check clean.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`

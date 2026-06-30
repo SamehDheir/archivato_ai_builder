@@ -97,6 +97,9 @@ export const interviewApi = {
     request<InterviewState>(`/interview/${sessionId}`),
 };
 
+/** The editable fields of an artifact (sessionId/generatedAt are server-set). */
+type Editable<T> = Omit<T, 'sessionId' | 'generatedAt'>;
+
 export const requirementsApi = {
   generate: (sessionId: string) =>
     request<RequirementDocument>(`/requirements/${sessionId}/generate`, {
@@ -105,6 +108,12 @@ export const requirementsApi = {
 
   get: (sessionId: string) =>
     request<RequirementDocument>(`/requirements/${sessionId}`),
+
+  update: (sessionId: string, doc: Editable<RequirementDocument>) =>
+    request<RequirementDocument>(`/requirements/${sessionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(doc),
+    }),
 };
 
 export const systemDesignApi = {
@@ -115,6 +124,12 @@ export const systemDesignApi = {
 
   get: (sessionId: string) =>
     request<SystemDesign>(`/system-design/${sessionId}`),
+
+  update: (sessionId: string, design: Editable<SystemDesign>) =>
+    request<SystemDesign>(`/system-design/${sessionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(design),
+    }),
 };
 
 export const databaseDesignApi = {
@@ -125,6 +140,12 @@ export const databaseDesignApi = {
 
   get: (sessionId: string) =>
     request<DatabaseDesign>(`/database-design/${sessionId}`),
+
+  update: (sessionId: string, design: Editable<DatabaseDesign>) =>
+    request<DatabaseDesign>(`/database-design/${sessionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(design),
+    }),
 };
 
 export const apiDesignApi = {
@@ -134,6 +155,12 @@ export const apiDesignApi = {
     }),
 
   get: (sessionId: string) => request<ApiDesign>(`/api-design/${sessionId}`),
+
+  update: (sessionId: string, design: Editable<ApiDesign>) =>
+    request<ApiDesign>(`/api-design/${sessionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(design),
+    }),
 };
 
 export const reviewApi = {

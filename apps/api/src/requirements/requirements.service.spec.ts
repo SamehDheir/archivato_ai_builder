@@ -109,4 +109,44 @@ describe('RequirementsService', () => {
     const fetched = await service.get(sessionId);
     expect(fetched.sessionId).toBe(sessionId);
   });
+
+  it('save() refuses to edit a document that was never generated', async () => {
+    const sessionId = await confirmedSession(interview);
+    await expect(
+      service.save(sessionId, {
+        functional: [],
+        nonFunctional: [],
+        roles: [],
+        businessRules: [],
+        constraints: [],
+        assumptions: [],
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('save() persists edits and stamps sessionId/generatedAt', async () => {
+    const sessionId = await confirmedSession(interview);
+    await service.generate(sessionId);
+
+    const saved = await service.save(sessionId, {
+      functional: [
+        { id: 'FR-1', title: 'Edited', description: 'by user', priority: 'must' },
+      ],
+      nonFunctional: [],
+      roles: [],
+      businessRules: [],
+      constraints: ['edited constraint'],
+      assumptions: [],
+    });
+
+    expect(saved.sessionId).toBe(sessionId);
+    expect(typeof saved.generatedAt).toBe('string');
+    expect(saved.functional).toHaveLength(1);
+    expect(saved.functional[0].title).toBe('Edited');
+    expect(saved.constraints).toEqual(['edited constraint']);
+
+    // Round-trips through the repository.
+    const fetched = await service.get(sessionId);
+    expect(fetched.functional[0].title).toBe('Edited');
+  });
 });

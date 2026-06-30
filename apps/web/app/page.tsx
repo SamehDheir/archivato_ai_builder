@@ -192,6 +192,25 @@ export default function Home() {
     if (next) setState(next);
   }
 
+  /** After saving edits to an artifact: update it in view + bump version list. */
+  function handleSavedDoc(value: RequirementDocument) {
+    setDoc(value);
+    setVersionsReload((k) => k + 1);
+    void refreshProjects();
+  }
+  function handleSavedDesign(value: SystemDesign) {
+    setDesign(value);
+    setVersionsReload((k) => k + 1);
+  }
+  function handleSavedDbDesign(value: DatabaseDesign) {
+    setDbDesign(value);
+    setVersionsReload((k) => k + 1);
+  }
+  function handleSavedApiDesign(value: ApiDesign) {
+    setApiDesign(value);
+    setVersionsReload((k) => k + 1);
+  }
+
   function handleRefined(result: RefineResult) {
     setDoc(result.requirementDocument);
     setDesign(result.systemDesign);
@@ -339,6 +358,10 @@ export default function Home() {
               onGenerateReview={() =>
                 generateStage<ReviewReport>('review', setReview)
               }
+              onSavedDoc={handleSavedDoc}
+              onSavedDesign={handleSavedDesign}
+              onSavedDbDesign={handleSavedDbDesign}
+              onSavedApiDesign={handleSavedApiDesign}
               onRefined={handleRefined}
               onRestored={handleRestored}
             />
