@@ -28,6 +28,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ProjectsDashboard } from './ProjectsDashboard';
 import { ProgressPanel } from './ProgressPanel';
+import { ProjectWizard } from './ProjectWizard';
 import { InterviewPanel } from './InterviewPanel';
 import { ProjectStages, type ActiveJob } from './ProjectStages';
 
@@ -287,6 +288,15 @@ export default function Home() {
               </span>
             )}
           </div>
+
+          <ProjectWizard
+            state={state}
+            doc={doc}
+            design={design}
+            dbDesign={dbDesign}
+            apiDesign={apiDesign}
+            review={review}
+          />
 
           {state.status !== 'confirmed' && (
             <>

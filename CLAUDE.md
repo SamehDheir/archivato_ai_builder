@@ -541,6 +541,17 @@ DB Design → API Design → Review → Export
     (don't clobber its `.next`); installing a new dep may need a `next dev`
     restart before the API Docs tab compiles.
 
+- **Project Wizard — pipeline progress stepper (2026-06-30).**
+  `apps/web/app/ProjectWizard.tsx`: a top-level horizontal stepper across the 7
+  stages (Interview → Requirements → Architecture → Database → API → Review →
+  Export). Each step is "done" when its artifact exists (Interview =
+  `status==='confirmed'`; Export = ready once `apiDesign` exists, review
+  optional); done steps show a check + filled circle, the first not-done step is
+  the highlighted "current", connectors fill primary up to progress. Display-only
+  (the `ProjectStages` tabs own navigation). Rendered in `page.tsx` at the top of
+  the project view (BOTH the interview and confirmed phases), below the
+  ←Projects/summary header. Pure presentational; web type-check clean.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`
