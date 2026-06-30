@@ -519,6 +519,28 @@ DB Design → API Design → Review → Export
     — after editing shared, `npm run build --workspace @archivato/shared` AND
     restart `next dev` (next doesn't hot-reload a workspace dep's `dist`).
 
+- **OpenAPI viewer — on-site Swagger UI (2026-06-30).** Export already served
+  the generated OpenAPI 3.0 spec at `GET /export/:sessionId/openapi` (download
+  only); now you can VIEW it interactively in the app.
+  - `apps/web`: added `swagger-ui-react@5` (+ `@types/swagger-ui-react`).
+    `SwaggerUiClient.tsx` is a thin client wrapper that imports the library AND
+    its CSS (`swagger-ui-react/swagger-ui.css`); `OpenApiView.tsx` fetches the
+    spec via `exportApi.openapi(sessionId)` (already credentialed — no second
+    unauthenticated request) and renders it. Swagger UI is **loaded via
+    `next/dynamic` with `ssr:false`** (it touches `window` and ships a large
+    bundle → code-split, no SSR eval, no First-Load cost). **Dark-themed** via
+    `swagger-dark.css` (scoped to `.swagger-ui`, imported AFTER the base CSS in
+    `SwaggerUiClient` so it wins), recolored to the app palette; container is
+    `bg-card`.
+  - New **"API Docs" tab** in `ProjectStages` after Export (enabled once the API
+    design exists: `apidocs: !!apiDesign`); refetches on `versionsReload`.
+  - No backend change (the spec endpoint already existed). swagger-ui-react is
+    CJS and hoists to root `node_modules`; resolves fine in Next 14 App Router
+    without `transpilePackages`. Verified: web type-check clean. NOTE: a build
+    smoke (`next build`) was skipped because a `next dev` was live on :3000
+    (don't clobber its `.next`); installing a new dep may need a `next dev`
+    restart before the API Docs tab compiles.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`

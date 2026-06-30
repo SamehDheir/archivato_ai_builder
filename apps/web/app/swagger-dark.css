@@ -1,0 +1,160 @@
+/*
+ * Dark theme for swagger-ui-react, scoped to `.swagger-ui`. Swagger UI ships a
+ * light theme only; these overrides recolor it to match the app (bg #0f1117,
+ * panels #171a23, accent #6d8bff). Loaded right after the base CSS in
+ * SwaggerUiClient so it always wins.
+ */
+
+.swagger-ui {
+  --sw-bg: #0f1117;
+  --sw-panel: #171a23;
+  --sw-border: #2a2f3a;
+  --sw-text: #e6e8ee;
+  --sw-muted: #9aa3b2;
+  --sw-accent: #6d8bff;
+  background: var(--sw-bg);
+  color: var(--sw-text);
+}
+
+/* Generic text */
+.swagger-ui,
+.swagger-ui .info .title,
+.swagger-ui .info li,
+.swagger-ui .info p,
+.swagger-ui .info a,
+.swagger-ui label,
+.swagger-ui .opblock-tag,
+.swagger-ui .opblock-tag small,
+.swagger-ui .opblock .opblock-summary-operation-id,
+.swagger-ui .opblock .opblock-summary-path,
+.swagger-ui .opblock .opblock-summary-path__deprecated,
+.swagger-ui .opblock .opblock-summary-description,
+.swagger-ui .opblock-description-wrapper p,
+.swagger-ui .opblock-external-docs-wrapper p,
+.swagger-ui .opblock-title_normal p,
+.swagger-ui .opblock-section-header h4,
+.swagger-ui .opblock-section-header > label,
+.swagger-ui .tab li,
+.swagger-ui .parameter__name,
+.swagger-ui .parameter__type,
+.swagger-ui .parameter__in,
+.swagger-ui .prop-type,
+.swagger-ui .response-col_status,
+.swagger-ui .response-col_links,
+.swagger-ui table thead tr td,
+.swagger-ui table thead tr th,
+.swagger-ui .model-title,
+.swagger-ui .model,
+.swagger-ui section.models h4,
+.swagger-ui section.models h5,
+.swagger-ui .servers-title,
+.swagger-ui .scheme-container .schemes > label {
+  color: var(--sw-text);
+}
+
+.swagger-ui .opblock-tag small,
+.swagger-ui .parameter__in,
+.swagger-ui .markdown code,
+.swagger-ui .renderedMarkdown code {
+  color: var(--sw-muted);
+}
+
+/* Links / accents */
+.swagger-ui .info a,
+.swagger-ui a.nostyle,
+.swagger-ui .opblock-summary-path a {
+  color: var(--sw-accent);
+}
+
+/* Section (tag) headers */
+.swagger-ui .opblock-tag {
+  border-bottom-color: var(--sw-border);
+}
+
+/* Operation blocks */
+.swagger-ui .opblock {
+  background: var(--sw-panel);
+  border-color: var(--sw-border);
+  box-shadow: none;
+}
+.swagger-ui .opblock .opblock-section-header {
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+}
+.swagger-ui .opblock-body pre.microlight,
+.swagger-ui .highlight-code > .microlight {
+  background: #0b0d12 !important;
+  color: #e6e8ee;
+}
+
+/* Tables (params, responses) */
+.swagger-ui table thead tr td,
+.swagger-ui table thead tr th {
+  border-bottom-color: var(--sw-border);
+}
+.swagger-ui table tbody tr td {
+  border-color: var(--sw-border);
+  color: var(--sw-text);
+}
+
+/* Models */
+.swagger-ui .model-box,
+.swagger-ui section.models,
+.swagger-ui section.models .model-container {
+  background: var(--sw-panel);
+}
+.swagger-ui section.models {
+  border-color: var(--sw-border);
+}
+.swagger-ui section.models .model-container {
+  border-color: var(--sw-border);
+}
+.swagger-ui .model .property.primitive,
+.swagger-ui .prop-format {
+  color: var(--sw-muted);
+}
+
+/* Inputs / selects */
+.swagger-ui input[type='text'],
+.swagger-ui input[type='password'],
+.swagger-ui input[type='search'],
+.swagger-ui input[type='email'],
+.swagger-ui textarea,
+.swagger-ui select {
+  background: #0b0d12;
+  color: var(--sw-text);
+  border: 1px solid var(--sw-border);
+}
+
+/* Scheme / servers bar */
+.swagger-ui .scheme-container {
+  background: var(--sw-panel);
+  box-shadow: none;
+  border: 1px solid var(--sw-border);
+}
+
+/* "Try it out" / Execute buttons keep accent; recolor the cancel/auth btns */
+.swagger-ui .btn {
+  color: var(--sw-text);
+  border-color: var(--sw-border);
+}
+.swagger-ui .btn.execute {
+  background: var(--sw-accent);
+  border-color: var(--sw-accent);
+  color: #0b0d12;
+}
+
+/* Tabs */
+.swagger-ui .tab li.active {
+  color: var(--sw-text);
+}
+
+/* Make the inline SVG arrows visible on dark */
+.swagger-ui .opblock-summary-control svg,
+.swagger-ui .expand-operation svg,
+.swagger-ui .model-toggle:after {
+  fill: var(--sw-muted);
+}
+.swagger-ui svg.arrow {
+  fill: var(--sw-muted);
+}

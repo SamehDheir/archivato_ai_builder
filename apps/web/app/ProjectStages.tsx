@@ -24,6 +24,7 @@ import { DatabaseDesignView } from './DatabaseDesignView';
 import { ApiDesignView } from './ApiDesignView';
 import { ReviewView } from './ReviewView';
 import { ExportView } from './ExportView';
+import { OpenApiView } from './OpenApiView';
 import { ChatPanel } from './ChatPanel';
 import { VersionHistory } from './VersionHistory';
 import { DiagramsView } from './DiagramsView';
@@ -47,6 +48,7 @@ type TabKey =
   | 'diagrams'
   | 'review'
   | 'export'
+  | 'apidocs'
   | 'refine'
   | 'history';
 
@@ -104,6 +106,7 @@ export function ProjectStages({
     diagrams: !!design,
     review: !!apiDesign,
     export: !!apiDesign,
+    apidocs: !!apiDesign,
     refine: !!apiDesign,
     history: !!doc,
   };
@@ -152,6 +155,9 @@ export function ProjectStages({
             </TabsTrigger>
             <TabsTrigger value="export" disabled={!available.export}>
               Export
+            </TabsTrigger>
+            <TabsTrigger value="apidocs" disabled={!available.apidocs}>
+              API Docs
             </TabsTrigger>
             <TabsTrigger value="refine" disabled={!available.refine}>
               Refine
@@ -278,6 +284,11 @@ export function ProjectStages({
           {/* Export */}
           <TabsContent value="export" className="mt-4">
             <ExportView sessionId={sessionId} />
+          </TabsContent>
+
+          {/* API Docs (Swagger UI) */}
+          <TabsContent value="apidocs" className="mt-4">
+            <OpenApiView sessionId={sessionId} reloadKey={versionsReload} />
           </TabsContent>
 
           {/* Refine (chat) */}
