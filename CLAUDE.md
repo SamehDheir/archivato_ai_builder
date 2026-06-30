@@ -642,6 +642,27 @@ DB Design → API Design → Review → Export
     are non-interactive. `TabKey` is now exported from `ProjectStages`.
   - Verified: web type-check clean. No backend change.
 
+- **Light/dark theme toggle (2026-06-30).** The app was dark-only; now it has a
+  real theme switch.
+  - `apps/web/app/theme.tsx`: `ThemeProvider` (context, persists to
+    `localStorage 'archivato.theme'`, defaults dark) + `useTheme()` + a
+    sun/moon `ThemeToggle` button. The `dark` class on `<html>` is set
+    **pre-paint by an inline script** in `layout.tsx` (no flash);
+    `suppressHydrationWarning` on `<html>`. Provider order: Theme → Toast →
+    AuthGate.
+  - `globals.css` split into **light tokens on `:root`** + **dark tokens on
+    `.dark`** (Tailwind `darkMode:'class'`). Dark values are the original
+    palette; light is a clean white/slate set with a slightly darker primary so
+    white button text stays readable.
+  - Toggle placed in the `AuthGate` header (signed-in) and fixed top-right on the
+    signed-out auth screen.
+  - **Third-party dark skins made theme-aware:** `swagger-dark.css` selectors are
+    now all prefixed `.dark .swagger-ui` (light mode → Swagger's default light
+    theme); `MermaidView` initializes mermaid with `theme: dark|default` from
+    `useTheme()` and re-renders on toggle (added `theme` to the effect deps). All
+    app surfaces already use the HSL tokens, so they adapt automatically.
+  - Verified: web type-check clean. No backend change.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`

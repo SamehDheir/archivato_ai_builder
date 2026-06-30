@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useTheme } from './theme';
 
 /**
  * Renders Mermaid source to SVG client-side (mermaid.js, dynamically imported so
@@ -11,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 export function MermaidView({ code }: { code: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     let active = true;
@@ -20,7 +22,7 @@ export function MermaidView({ code }: { code: string }) {
         const mermaid = (await import('mermaid')).default;
         mermaid.initialize({
           startOnLoad: false,
-          theme: 'dark',
+          theme: theme === 'dark' ? 'dark' : 'default',
           securityLevel: 'strict',
         });
         // Validate BEFORE rendering: on a parse error mermaid.render injects its
@@ -44,7 +46,7 @@ export function MermaidView({ code }: { code: string }) {
     return () => {
       active = false;
     };
-  }, [code]);
+  }, [code, theme]);
 
   if (error) {
     return (

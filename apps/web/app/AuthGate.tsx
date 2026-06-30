@@ -8,6 +8,7 @@ import { authApi } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AuthForm } from './AuthForm';
+import { ThemeToggle } from './theme';
 
 /** Always-public routes (rendered regardless of auth state). */
 const PUBLIC_PATHS = ['/verify'];
@@ -69,7 +70,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    return <AuthForm onSuccess={setUser} />;
+    return (
+      <>
+        <ThemeToggle className="fixed right-4 top-4 z-50" />
+        <AuthForm onSuccess={setUser} />
+      </>
+    );
   }
 
   return (
@@ -84,6 +90,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             </Badge>
           )}
         </span>
+        <ThemeToggle />
         <Button variant="secondary" size="sm" onClick={handleLogout}>
           Sign out
         </Button>
