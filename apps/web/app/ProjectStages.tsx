@@ -32,6 +32,7 @@ import { OpenApiView } from './OpenApiView';
 import { ChatPanel } from './ChatPanel';
 import { VersionHistory } from './VersionHistory';
 import { DiagramsView } from './DiagramsView';
+import { DesignCanvas } from './DesignCanvas';
 import { SummaryView } from './SummaryView';
 
 export type ActiveJob = { stage: PipelineStageName; progress: number };
@@ -50,6 +51,7 @@ type TabKey =
   | 'database'
   | 'api'
   | 'diagrams'
+  | 'canvas'
   | 'review'
   | 'export'
   | 'apidocs'
@@ -118,6 +120,7 @@ export function ProjectStages({
     database: !!design,
     api: !!dbDesign,
     diagrams: !!design,
+    canvas: !!design,
     review: !!apiDesign,
     export: !!apiDesign,
     apidocs: !!apiDesign,
@@ -171,6 +174,9 @@ export function ProjectStages({
             </TabsTrigger>
             <TabsTrigger value="diagrams" disabled={!available.diagrams}>
               Diagrams
+            </TabsTrigger>
+            <TabsTrigger value="canvas" disabled={!available.canvas}>
+              Canvas
             </TabsTrigger>
             <TabsTrigger value="review" disabled={!available.review}>
               Review
@@ -323,6 +329,17 @@ export function ProjectStages({
           {/* Architecture diagrams */}
           <TabsContent value="diagrams" className="mt-4">
             <DiagramsView sessionId={sessionId} reloadKey={versionsReload} />
+          </TabsContent>
+
+          {/* Interactive canvas (React Flow) */}
+          <TabsContent value="canvas" className="mt-4">
+            <DesignCanvas
+              sessionId={sessionId}
+              design={design}
+              dbDesign={dbDesign}
+              onSavedDesign={onSavedDesign}
+              onSavedDbDesign={onSavedDbDesign}
+            />
           </TabsContent>
 
           {/* Review */}

@@ -594,6 +594,33 @@ DB Design → API Design → Review → Export
   functional), roles as cards with permission badges. `Section`/`Empty` exports
   unchanged (editors/other views still import them). Web type-check clean.
 
+- **Interactive design Canvas — React Flow (2026-06-30).** A new **Canvas** tab
+  turns the static Mermaid diagram into an editable node board (Figma/Miro-style)
+  for BOTH Architecture and Database, saving back via the editable-documents PUT
+  endpoints.
+  - `reactflow@11` (client-only, code-split via `next/dynamic` ssr:false in
+    `DesignCanvas.tsx`; its CSS imported inside the canvas components).
+  - `ArchitectureCanvas.tsx`: services = draggable nodes (custom `ServiceNode`
+    with editable name + responsibility via `useReactFlow().setNodes`),
+    dependencies = directed edges. + Add service, select+Delete, drag a handle to
+    another node to add a dependency. Save serializes nodes→services (deps =
+    outgoing edge targets, mapped id→name) → `systemDesignApi.update`.
+  - `DatabaseCanvas.tsx`: entities = nodes (editable name + read-only column
+    preview; the **full Entity is kept in node.data so columns survive the
+    round-trip** — column editing stays in the form editor), relations = edges
+    with a type label; **click an edge to cycle** one-to-many→one-to-one→
+    many-to-many. + Add entity (seeds a uuid PK), connect to add a relation.
+    Save → `databaseDesignApi.update`.
+  - **Layout persistence = browser** (`lib/canvas-storage.ts`): node x/y saved to
+    localStorage per `session+kind`, keyed by node NAME (the artifact has no ids;
+    nodes get synthetic `svc-i`/`ent-i` ids rebuilt each load). No schema change;
+    structure persists in the DB, positions on the device. Auto grid layout when
+    no saved position.
+  - `DesignCanvas.tsx` wraps both with an Architecture/Database toggle; wired into
+    `ProjectStages` as the Canvas tab (enabled once `design` exists; DB sub-view
+    shows a hint until the db design exists). Reuses the existing `onSavedDesign`/
+    `onSavedDbDesign` handlers. Web type-check clean; no backend change.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`
