@@ -479,6 +479,46 @@ DB Design → API Design → Review → Export
     diagrams (erDiagram/flowchart/sequenceDiagram/classDiagram present);
     attacker 404. Web type-check + `next build` clean (mermaid code-split).
 
+- **Inline ER diagram + Mermaid hardening (2026-06-30).** The Database Design
+  tab now LEADS with a rendered ER diagram (entity boxes + relationship lines),
+  not just table cards; the detailed entity/relations tables stay below it.
+  - **Builders moved to `@archivato/shared`** (`packages/shared/src/
+    mermaid.builders.ts`) — they're pure + type-only-import, so both the API
+    (`diagrams.service.ts` now imports `buildAllDiagrams` from the shared
+    package) and the web client use ONE source of truth. Deleted
+    `apps/api/src/diagrams/mermaid.builders.ts`; its spec now imports from
+    `@archivato/shared`. `DatabaseDesignView` calls `buildErd(design)` inline.
+  - **Reusable `MermaidView`** extracted to `apps/web/app/MermaidView.tsx`
+    (was a private fn in `DiagramsView`); used by both the Diagrams tab and the
+    inline DB ERD.
+  - **BUG #1 (real-AI ERD broke):** the builders sanitized column NAMES but
+    pasted `col.type` RAW. Real models (Groq) emit SQL types with spaces/parens/
+    commas (`timestamp with time zone`, `decimal(10,2)`, `varchar(255)`), and
+    Mermaid's attribute grammar wants a single-token type → `Parse error`. Fixed
+    with `typeName()` (collapse anything outside `[a-zA-Z0-9_]` to `_`), applied
+    in `buildErd` + `buildClassDiagram`. NB the unit tests only assert STRING
+    content, never that Mermaid can actually PARSE the output — added a
+    regression test; validated headlessly with `mermaid.parse` v11.16.0. (Note:
+    `varchar(255)` alone actually parses; SPACES in multi-word types are the
+    real killer.)
+  - **BUG #2 ("Syntax error" bombs on every page):** on a parse error
+    `mermaid.render` INJECTS its error "bomb" SVG into `document.body` and leaves
+    it there — orphans pile up (one per failed render) and survive SPA nav, so a
+    bad diagram litters the whole app (even the dashboard). Fixed by validating
+    with `mermaid.parse(code, { suppressErrors:true })` BEFORE `render`, so
+    render only runs on valid input and never injects a bomb; a bad diagram stays
+    the local "showing the source instead" fallback.
+  - **GOTCHA (self-inflicted, then fixed):** my first cleanup did
+    `document.getElementById(id).remove()` in a `finally` — but `mermaid.render`
+    gives the returned `<svg>` THAT SAME `id`, so it deleted every diagram the
+    instant it rendered ("all diagrams disappeared"). Lesson: never
+    getElementById(id).remove() the render id; the parse() pre-check alone
+    prevents the bomb, no body cleanup needed on success.
+  - Verified: **116 API tests** (+1 type-sanitization regression); web
+    type-check clean. **Run note:** the web imports the BUILT `@archivato/shared`
+    — after editing shared, `npm run build --workspace @archivato/shared` AND
+    restart `next dev` (next doesn't hot-reload a workspace dep's `dist`).
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`

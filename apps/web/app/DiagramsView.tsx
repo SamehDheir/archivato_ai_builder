@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Diagram, ProjectDiagrams } from '@archivato/shared';
 import { diagramsApi } from '../lib/api';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { MermaidView } from './MermaidView';
 
 /**
  * Architecture diagrams: fetches the project's Mermaid source set and renders
@@ -101,56 +102,5 @@ export function DiagramsView({
           <MermaidView code={active.mermaid} />
         ))}
     </div>
-  );
-}
-
-/** Renders Mermaid source to SVG client-side; shows the source on parse error. */
-function MermaidView({ code }: { code: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const mermaid = (await import('mermaid')).default;
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: 'dark',
-          securityLevel: 'strict',
-        });
-        const id = `mmd-${Math.random().toString(36).slice(2)}`;
-        const { svg } = await mermaid.render(id, code);
-        if (active && ref.current) {
-          ref.current.innerHTML = svg;
-          setError(null);
-        }
-      } catch (e) {
-        if (active) setError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [code]);
-
-  if (error) {
-    return (
-      <div className="space-y-2">
-        <p className="text-sm text-destructive">
-          Couldn’t render this diagram — showing the source instead.
-        </p>
-        <pre className="max-h-[28rem] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs">
-          {code}
-        </pre>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={ref}
-      className="overflow-auto rounded-md border border-border bg-card p-4 [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
-    />
   );
 }

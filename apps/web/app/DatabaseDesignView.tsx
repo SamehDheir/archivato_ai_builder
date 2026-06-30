@@ -1,7 +1,10 @@
-import type { DatabaseDesign, EntityColumn } from '@archivato/shared';
+'use client';
+
+import { buildErd, type DatabaseDesign, type EntityColumn } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { DownloadButton } from './DownloadButton';
+import { MermaidView } from './MermaidView';
 import { Empty, Section } from './RequirementDocumentView';
 
 export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
@@ -18,6 +21,14 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
           label="Download schema"
         />
       </div>
+
+      <Section title="ER Diagram">
+        {design.entities.length ? (
+          <MermaidView code={buildErd(design)} />
+        ) : (
+          <Empty />
+        )}
+      </Section>
 
       <Section title="Entities">
         <div className="grid gap-3 sm:grid-cols-2">

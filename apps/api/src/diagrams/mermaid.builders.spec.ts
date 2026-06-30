@@ -1,8 +1,3 @@
-import type {
-  ApiDesign,
-  DatabaseDesign,
-  SystemDesign,
-} from '@archivato/shared';
 import {
   buildAllDiagrams,
   buildClassDiagram,
@@ -11,7 +6,10 @@ import {
   buildFlowchart,
   buildMicroservices,
   buildSequence,
-} from './mermaid.builders';
+  type ApiDesign,
+  type DatabaseDesign,
+  type SystemDesign,
+} from '@archivato/shared';
 
 const db: DatabaseDesign = {
   sessionId: 's1',
@@ -91,6 +89,38 @@ describe('mermaid builders', () => {
     expect(m).toContain('uuid id PK');
     expect(m).toContain('uuid user_id FK');
     expect(m).toContain('USERS ||--o{ INVOICES');
+  });
+
+  it('sanitizes free-text SQL column types so Mermaid can parse them', () => {
+    // Real models emit types with spaces/parens/commas, which break Mermaid's
+    // attribute grammar unless collapsed to a single token.
+    const messy: DatabaseDesign = {
+      sessionId: 's1',
+      generatedAt: 'now',
+      databaseType: 'PostgreSQL',
+      entities: [
+        {
+          name: 'users',
+          description: 'u',
+          columns: [
+            { name: 'id', type: 'uuid', nullable: false, primaryKey: true },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            { name: 'ts', type: 'timestamp with time zone' as any, nullable: false },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            { name: 'amt', type: 'decimal(10,2)' as any, nullable: false },
+          ],
+        },
+      ],
+      relations: [],
+    };
+    const erd = buildErd(messy);
+    const cls = buildClassDiagram(messy);
+    expect(erd).toContain('timestamp_with_time_zone ts');
+    expect(erd).toContain('decimal_10_2 amt');
+    expect(cls).toContain('timestamp_with_time_zone ts');
+    // No spaces/parens/commas survive in attribute type tokens.
+    expect(erd).not.toMatch(/timestamp with time zone/);
+    expect(erd).not.toMatch(/\(|\)/);
   });
 
   it('class diagram emits classes + attributes', () => {

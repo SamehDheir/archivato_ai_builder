@@ -1,15 +1,14 @@
-import type {
-  ApiDesign,
-  DatabaseDesign,
-  Diagram,
-  Relation,
-  SystemDesign,
-} from '@archivato/shared';
+import type { ApiDesign } from './api-design';
+import type { DatabaseDesign, Relation } from './database-design';
+import type { Diagram } from './diagrams';
+import type { SystemDesign } from './system-design';
 
 /**
  * Deterministic Mermaid builders: turn the structured design artifacts into
- * Mermaid source (rendered client-side). Pure + dependency-free, like the
- * export builders. Each builder defends against empty/partial input.
+ * Mermaid source (rendered client-side). Pure + dependency-free, so they live in
+ * the shared package and are used by BOTH the API (the `diagrams` module) and
+ * the web client (e.g. the ER diagram on the Database Design view). Each builder
+ * defends against empty/partial input.
  */
 
 export interface DiagramInputs {
@@ -76,7 +75,7 @@ export function buildErd(db: DatabaseDesign): string {
           : col.unique
             ? ' UK'
             : '';
-      lines.push(`    ${col.type} ${ident(col.name)}${key}`);
+      lines.push(`    ${typeName(col.type)} ${ident(col.name)}${key}`);
     }
     lines.push('  }');
   }
@@ -113,7 +112,7 @@ export function buildClassDiagram(db: DatabaseDesign): string {
     lines.push(`  class ${className(entity.name)} {`);
     for (const col of entity.columns) {
       const marker = col.primaryKey ? '+' : col.references ? '#' : '-';
-      lines.push(`    ${marker}${col.type} ${ident(col.name)}`);
+      lines.push(`    ${marker}${typeName(col.type)} ${ident(col.name)}`);
     }
     lines.push('  }');
   }
@@ -279,6 +278,20 @@ function className(name: string): string {
 /** A column/identifier safe for Mermaid attribute lines. */
 function ident(name: string): string {
   return name.replace(/[^a-zA-Z0-9_]/g, '_');
+}
+
+/**
+ * A Mermaid-safe attribute TYPE token. Real models emit SQL types like
+ * `varchar(255)`, `decimal(10,2)`, or `timestamp with time zone`; the
+ * parentheses, commas, and spaces break Mermaid's ERD/class attribute grammar
+ * (which expects a single `type name` token pair). Collapse anything outside
+ * `[a-zA-Z0-9_]` to underscores so the type stays one readable token.
+ */
+function typeName(type: string): string {
+  const cleaned = (type ?? '')
+    .replace(/[^a-zA-Z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return cleaned || 'string';
 }
 
 /** Escape a quoted label (strip characters that break Mermaid). */

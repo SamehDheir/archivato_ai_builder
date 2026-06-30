@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import type { ProjectDiagrams } from '@archivato/shared';
+import { buildAllDiagrams, type ProjectDiagrams } from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -16,7 +16,6 @@ import {
   API_DESIGN_REPOSITORY,
   type ApiDesignRepository,
 } from '../api-design/api-design.repository';
-import { buildAllDiagrams } from './mermaid.builders';
 
 /**
  * Assembles the architecture diagrams (Mermaid) for a project from its design
