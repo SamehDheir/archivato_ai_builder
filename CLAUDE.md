@@ -583,6 +583,17 @@ DB Design → API Design → Review → Export
   - Verified: **118 API tests** (+2: save gate + stamp/round-trip); api build +
     web type-check clean.
 
+- **Presentation polish (2026-06-30).** (1) Interview **Conversation**
+  ("speech") restyled as a clear chat: each turn labels the **Interviewer**
+  (phase chip + Q number) and **You**, asymmetric bubbles, `whitespace-pre-wrap`
+  so multi-line answers keep their formatting; the current-question form shows
+  phase + "Question N". (2) **Requirement Document** page given a professional
+  document layout: a title header with counts + generated date + download, a
+  divider, and section headers with item-count chips (`Section` gained an
+  optional `count`); non-functional + business rules now render as tables (like
+  functional), roles as cards with permission badges. `Section`/`Empty` exports
+  unchanged (editors/other views still import them). Web type-check clean.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`

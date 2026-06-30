@@ -42,17 +42,34 @@ export function InterviewPanel({
           <CardHeader>
             <CardTitle>Conversation</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-5">
             {state.history.map((ex, i) => (
-              <div key={i} className="space-y-1.5">
-                <div className="rounded-lg border border-border bg-card px-3 py-2 text-sm">
-                  <Badge variant="secondary" className="mb-1">
-                    {ex.question.phase}
-                  </Badge>
-                  <div>{ex.question.prompt}</div>
+              <div key={i} className="space-y-2">
+                {/* Interviewer question */}
+                <div className="max-w-[88%]">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      Interviewer
+                    </span>
+                    <Badge variant="secondary" className="text-[10px] uppercase">
+                      {ex.question.phase}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">
+                      Q{i + 1}
+                    </span>
+                  </div>
+                  <div className="rounded-lg rounded-tl-sm border border-border bg-muted/40 px-3.5 py-2.5 text-sm leading-relaxed">
+                    {ex.question.prompt}
+                  </div>
                 </div>
-                <div className="ml-auto max-w-[85%] rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm">
-                  {ex.answer}
+                {/* User answer */}
+                <div className="ml-auto max-w-[88%]">
+                  <div className="mb-1 text-right text-xs font-semibold text-primary">
+                    You
+                  </div>
+                  <div className="whitespace-pre-wrap rounded-lg rounded-tr-sm border border-primary/40 bg-primary/10 px-3.5 py-2.5 text-sm leading-relaxed">
+                    {ex.answer}
+                  </div>
                 </div>
               </div>
             ))}
@@ -64,8 +81,15 @@ export function InterviewPanel({
         <Card>
           <CardContent className="p-5">
             <form className="space-y-3" onSubmit={submitAnswer}>
-              <Badge variant="secondary">{state.currentQuestion.phase}</Badge>
-              <h3 className="text-base font-semibold">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-[10px] uppercase">
+                  {state.currentQuestion.phase}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  Question {state.history.length + 1}
+                </span>
+              </div>
+              <h3 className="text-base font-semibold leading-snug">
                 {state.currentQuestion.prompt}
               </h3>
               <Textarea

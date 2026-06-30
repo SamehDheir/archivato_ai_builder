@@ -1,5 +1,7 @@
 import type { RequirementDocument } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import {
   Table,
   TableBody,
@@ -22,10 +24,18 @@ const PRIORITY_VARIANT: Record<
 export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Generated {new Date(doc.generatedAt).toLocaleString()}
-        </p>
+      {/* Document header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold tracking-tight">
+            Requirement Document
+          </h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {doc.functional.length} functional · {doc.nonFunctional.length}{' '}
+            non-functional · {doc.roles.length} roles · generated{' '}
+            {new Date(doc.generatedAt).toLocaleString()}
+          </p>
+        </div>
         <DownloadButton
           filename={`requirements-${doc.sessionId}.json`}
           data={doc}
@@ -33,7 +43,9 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
         />
       </div>
 
-      <Section title="Functional requirements">
+      <Separator className="mt-3" />
+
+      <Section title="Functional requirements" count={doc.functional.length}>
         {doc.functional.length ? (
           <Table>
             <TableHeader>
@@ -46,16 +58,18 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
             <TableBody>
               {doc.functional.map((fr) => (
                 <TableRow key={fr.id}>
-                  <TableCell className="font-mono text-xs">{fr.id}</TableCell>
+                  <TableCell className="align-top font-mono text-xs text-muted-foreground">
+                    {fr.id}
+                  </TableCell>
                   <TableCell>
-                    <span className="font-medium">{fr.title}</span>
+                    <div className="font-medium">{fr.title}</div>
                     {fr.description && fr.description !== fr.title && (
-                      <div className="text-sm text-muted-foreground">
+                      <div className="mt-0.5 text-sm text-muted-foreground">
                         {fr.description}
                       </div>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="align-top">
                     <Badge variant={PRIORITY_VARIANT[fr.priority] ?? 'secondary'}>
                       {fr.priority}
                     </Badge>
@@ -69,58 +83,124 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
         )}
       </Section>
 
-      <Section title="Non-functional requirements">
-        <ul className="space-y-1.5">
-          {doc.nonFunctional.map((nfr) => (
-            <li key={nfr.id} className="text-sm">
-              <span className="font-mono text-xs">{nfr.id}</span>{' '}
-              <Badge variant="secondary">{nfr.category}</Badge> {nfr.description}
-            </li>
-          ))}
-        </ul>
+      <Section
+        title="Non-functional requirements"
+        count={doc.nonFunctional.length}
+      >
+        {doc.nonFunctional.length ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-16">ID</TableHead>
+                <TableHead className="w-36">Category</TableHead>
+                <TableHead>Requirement</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {doc.nonFunctional.map((nfr) => (
+                <TableRow key={nfr.id}>
+                  <TableCell className="align-top font-mono text-xs text-muted-foreground">
+                    {nfr.id}
+                  </TableCell>
+                  <TableCell className="align-top">
+                    <Badge variant="secondary">{nfr.category}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">{nfr.description}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <Empty />
+        )}
       </Section>
 
-      <Section title="User roles">
+      <Section title="User roles" count={doc.roles.length}>
         {doc.roles.length ? (
-          <ul className="space-y-1.5 text-sm">
+          <div className="grid gap-3 sm:grid-cols-2">
             {doc.roles.map((role) => (
-              <li key={role.name}>
-                <span className="font-medium">{role.name}</span> —{' '}
-                {role.description}
-                {role.permissions.length > 0 && (
-                  <span className="text-muted-foreground">
-                    {' '}
-                    [{role.permissions.join(', ')}]
-                  </span>
-                )}
-              </li>
+              <Card key={role.name}>
+                <CardContent className="p-4">
+                  <div className="font-semibold">{role.name}</div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {role.description}
+                  </p>
+                  {role.permissions.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {role.permissions.map((p) => (
+                        <Badge variant="secondary" key={p}>
+                          {p}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             ))}
-          </ul>
+          </div>
+        ) : (
+          <Empty />
+        )}
+      </Section>
+
+      <Section title="Business rules" count={doc.businessRules.length}>
+        {doc.businessRules.length ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-16">ID</TableHead>
+                <TableHead>Rule</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {doc.businessRules.map((br) => (
+                <TableRow key={br.id}>
+                  <TableCell className="align-top font-mono text-xs text-muted-foreground">
+                    {br.id}
+                  </TableCell>
+                  <TableCell className="text-sm">{br.description}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         ) : (
           <Empty />
         )}
       </Section>
 
       <ListSection
-        title="Business rules"
-        items={doc.businessRules.map((b) => `${b.id}: ${b.description}`)}
+        title="Constraints"
+        count={doc.constraints.length}
+        items={doc.constraints}
       />
-      <ListSection title="Constraints" items={doc.constraints} />
-      <ListSection title="Assumptions" items={doc.assumptions} />
+      <ListSection
+        title="Assumptions"
+        count={doc.assumptions.length}
+        items={doc.assumptions}
+      />
     </div>
   );
 }
 
 export function Section({
   title,
+  count,
   children,
 }: {
   title: string;
+  count?: number;
   children: React.ReactNode;
 }) {
   return (
-    <div className="mt-5">
-      <h4 className="mb-2 text-sm font-semibold">{title}</h4>
+    <div className="mt-6">
+      <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        {title}
+        {typeof count === 'number' && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
+            {count}
+          </span>
+        )}
+      </h4>
       {children}
     </div>
   );
@@ -130,11 +210,19 @@ export function Empty() {
   return <span className="text-sm text-muted-foreground">—</span>;
 }
 
-function ListSection({ title, items }: { title: string; items: string[] }) {
+function ListSection({
+  title,
+  count,
+  items,
+}: {
+  title: string;
+  count?: number;
+  items: string[];
+}) {
   return (
-    <Section title={title}>
+    <Section title={title} count={count}>
       {items.length ? (
-        <ul className="list-disc space-y-1 pl-5 text-sm">
+        <ul className="list-disc space-y-1 pl-5 text-sm marker:text-muted-foreground">
           {items.map((it, i) => (
             <li key={i}>{it}</li>
           ))}
