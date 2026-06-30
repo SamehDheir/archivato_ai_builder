@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { MermaidView } from './MermaidView';
 
 /**
@@ -48,7 +49,13 @@ export function DiagramsView({
   }, [load, reloadKey]);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
-  if (!data) return <p className="text-sm text-muted-foreground">Loading diagrams…</p>;
+  if (!data)
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-[26rem] w-full" />
+      </div>
+    );
 
   const active: Diagram | undefined =
     data.diagrams.find((d) => d.kind === kind) ?? data.diagrams[0];

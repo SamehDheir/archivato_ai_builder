@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthGate } from './AuthGate';
+import { ToastProvider } from './toast';
 
 export const metadata: Metadata = {
   title: 'Archivato AI Builder',
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen antialiased">
-        <AuthGate>{children}</AuthGate>
+        <ToastProvider>
+          <AuthGate>{children}</AuthGate>
+        </ToastProvider>
       </body>
     </html>
   );

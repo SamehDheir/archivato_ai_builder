@@ -9,6 +9,7 @@ import { versionsApi } from '../lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -34,6 +35,7 @@ export function VersionHistory({
   const [toV, setToV] = useState<number | null>(null);
   const [diff, setDiff] = useState<DiffRow[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -45,6 +47,8 @@ export function VersionHistory({
       setFromV((prev) => prev ?? list[1]?.version ?? list[0]?.version ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoaded(true);
     }
   }, [sessionId]);
 
@@ -89,6 +93,21 @@ export function VersionHistory({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (!loaded) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Version history</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-9 w-full" />
+          ))}
+        </CardContent>
+      </Card>
+    );
   }
 
   if (versions.length === 0) {

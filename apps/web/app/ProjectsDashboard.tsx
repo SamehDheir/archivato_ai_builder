@@ -1,11 +1,13 @@
 'use client';
 
-import type { ProjectScale, ProjectSummary } from '@archivato/shared';
+import { ArrowRight } from 'lucide-react';
+import type { InterviewStatus, ProjectScale, ProjectSummary } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -16,6 +18,15 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
+
+const STATUS_META: Record<
+  InterviewStatus,
+  { label: string; variant: 'secondary' | 'warning' | 'primary' }
+> = {
+  collecting: { label: 'Interviewing', variant: 'secondary' },
+  awaiting_confirmation: { label: 'Review & confirm', variant: 'warning' },
+  confirmed: { label: 'Confirmed', variant: 'primary' },
+};
 
 /**
  * The post-login hub: a list of the user's projects (open any to resume) plus a
@@ -123,37 +134,61 @@ export function ProjectsDashboard({
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-2">
-            <ul className="divide-y divide-border">
-              {projects.map((p) => (
-                <li
-                  key={p.sessionId}
-                  className="flex items-center justify-between gap-3 px-2 py-3"
-                >
-                  <button
-                    className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-primary hover:underline disabled:opacity-50"
-                    onClick={() => onOpen(p.sessionId)}
-                    disabled={busy}
-                    title={p.idea}
-                  >
-                    {p.idea}
-                  </button>
-                  <span className="flex items-center gap-2 whitespace-nowrap">
-                    <Badge variant="secondary">
-                      {p.status.replace(/_/g, ' ')}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {Math.round(p.completeness * 100)}% ·{' '}
-                      {new Date(p.updatedAt).toLocaleDateString()}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {projects.map((p) => (
+            <ProjectCard
+              key={p.sessionId}
+              project={p}
+              busy={busy}
+              onOpen={() => onOpen(p.sessionId)}
+            />
+          ))}
+        </div>
       )}
     </div>
+  );
+}
+
+/** A single project tile on the dashboard grid. */
+function ProjectCard({
+  project,
+  busy,
+  onOpen,
+}: {
+  project: ProjectSummary;
+  busy: boolean;
+  onOpen: () => void;
+}) {
+  const status = STATUS_META[project.status];
+  const pct = Math.round(project.completeness * 100);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={busy}
+      className="group flex flex-col rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-primary/60 disabled:opacity-50"
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <Badge variant={status.variant}>{status.label}</Badge>
+        <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+      </div>
+      <p className="line-clamp-2 text-sm font-semibold" title={project.idea}>
+        {project.idea}
+      </p>
+      <div className="mt-auto pt-3">
+        {project.status !== 'confirmed' && (
+          <>
+            <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
+              <span>Completeness</span>
+              <span>{pct}%</span>
+            </div>
+            <Progress value={pct} className="h-1.5" />
+          </>
+        )}
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Updated {new Date(project.updatedAt).toLocaleDateString()}
+        </p>
+      </div>
+    </button>
   );
 }

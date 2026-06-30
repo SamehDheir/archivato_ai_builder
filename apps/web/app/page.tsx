@@ -26,17 +26,27 @@ import {
   systemDesignApi,
 } from '../lib/api';
 import { Button } from '@/components/ui/button';
+import { useToast } from './toast';
 import { ProjectsDashboard } from './ProjectsDashboard';
 import { ProgressPanel } from './ProgressPanel';
 import { ProjectWizard } from './ProjectWizard';
 import { InterviewPanel } from './InterviewPanel';
-import { ProjectStages, type ActiveJob } from './ProjectStages';
+import { ProjectStages, type ActiveJob, type TabKey } from './ProjectStages';
+
+const STAGE_LABEL: Record<PipelineStageName, string> = {
+  requirements: 'Requirement document',
+  'system-design': 'System design',
+  'database-design': 'Database design',
+  'api-design': 'API design',
+  review: 'AI review',
+};
 
 /** localStorage key for the active session id, scoped PER USER. */
 const sessionKey = (userId: string) => `archivato.sessionId:${userId}`;
 const LEGACY_SESSION_KEY = 'archivato.sessionId';
 
 export default function Home() {
+  const toast = useToast();
   const [state, setState] = useState<InterviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,6 +72,8 @@ export default function Home() {
   const [job, setJob] = useState<ActiveJob | null>(null);
   // Bumped whenever artifacts change, so Version History reloads its list.
   const [versionsReload, setVersionsReload] = useState(0);
+  // The active stage tab (lifted here so the Project Wizard can navigate to it).
+  const [stageTab, setStageTab] = useState<TabKey>('requirements');
 
   async function loadSession(sessionId: string) {
     const restored = await interviewApi.get(sessionId);
@@ -149,8 +161,15 @@ export default function Home() {
       setter(result);
       setVersionsReload((k) => k + 1);
       void refreshProjects();
+      toast({ title: `${STAGE_LABEL[stage]} generated`, variant: 'success' });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      toast({
+        title: `Could not generate the ${STAGE_LABEL[stage].toLowerCase()}`,
+        description: msg,
+        variant: 'error',
+      });
     } finally {
       setBusy(false);
       setJob(null);
@@ -158,6 +177,7 @@ export default function Home() {
   }
 
   async function openProject(sessionId: string) {
+    setStageTab('requirements');
     await run(async () => {
       await loadSession(sessionId);
       if (userId) localStorage.setItem(sessionKey(userId), sessionId);
@@ -197,18 +217,22 @@ export default function Home() {
     setDoc(value);
     setVersionsReload((k) => k + 1);
     void refreshProjects();
+    toast({ title: 'Requirements saved', variant: 'success' });
   }
   function handleSavedDesign(value: SystemDesign) {
     setDesign(value);
     setVersionsReload((k) => k + 1);
+    toast({ title: 'Architecture saved', variant: 'success' });
   }
   function handleSavedDbDesign(value: DatabaseDesign) {
     setDbDesign(value);
     setVersionsReload((k) => k + 1);
+    toast({ title: 'Database saved', variant: 'success' });
   }
   function handleSavedApiDesign(value: ApiDesign) {
     setApiDesign(value);
     setVersionsReload((k) => k + 1);
+    toast({ title: 'API design saved', variant: 'success' });
   }
 
   function handleRefined(result: RefineResult) {
@@ -218,6 +242,7 @@ export default function Home() {
     setApiDesign(result.apiDesign);
     if (result.reviewReport) setReview(result.reviewReport);
     setVersionsReload((k) => k + 1);
+    toast({ title: 'Design refined', variant: 'success' });
   }
 
   /** Apply a restored version: replace every artifact with the snapshot's. */
@@ -229,6 +254,7 @@ export default function Home() {
     setReview(snapshot.review);
     setVersionsReload((k) => k + 1);
     void refreshProjects();
+    toast({ title: 'Project restored to selected version', variant: 'success' });
   }
 
   function reset() {
@@ -315,6 +341,11 @@ export default function Home() {
             dbDesign={dbDesign}
             apiDesign={apiDesign}
             review={review}
+            onNavigate={
+              state.status === 'confirmed'
+                ? (t) => setStageTab(t as TabKey)
+                : undefined
+            }
           />
 
           {state.status !== 'confirmed' && (
@@ -343,6 +374,8 @@ export default function Home() {
               job={job}
               error={error}
               versionsReload={versionsReload}
+              tab={stageTab}
+              onTabChange={setStageTab}
               onGenerateRequirements={() =>
                 generateStage<RequirementDocument>('requirements', setDoc)
               }

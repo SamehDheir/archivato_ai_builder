@@ -45,7 +45,7 @@ const STAGE_LABEL: Record<PipelineStageName, string> = {
   review: 'AI review',
 };
 
-type TabKey =
+export type TabKey =
   | 'requirements'
   | 'system'
   | 'database'
@@ -75,6 +75,8 @@ export function ProjectStages({
   job,
   error,
   versionsReload,
+  tab,
+  onTabChange,
   onGenerateRequirements,
   onGenerateSystem,
   onGenerateDatabase,
@@ -98,6 +100,8 @@ export function ProjectStages({
   job: ActiveJob | null;
   error: string | null;
   versionsReload: number;
+  tab: TabKey;
+  onTabChange: (tab: TabKey) => void;
   onGenerateRequirements: () => void;
   onGenerateSystem: () => void;
   onGenerateDatabase: () => void;
@@ -110,7 +114,9 @@ export function ProjectStages({
   onRefined: (result: RefineResult) => void;
   onRestored: (snapshot: ProjectSnapshot) => void;
 }) {
-  const [tab, setTab] = useState<TabKey>('requirements');
+  // `tab` is controlled by the parent (so the Project Wizard can navigate to a
+  // stage); `setTab` is just an alias to the parent's setter.
+  const setTab = onTabChange;
   // Which stage tab is currently in edit mode (null = viewing).
   const [editing, setEditing] = useState<TabKey | null>(null);
 

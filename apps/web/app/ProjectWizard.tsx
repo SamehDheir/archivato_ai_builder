@@ -24,6 +24,7 @@ export function ProjectWizard({
   dbDesign,
   apiDesign,
   review,
+  onNavigate,
 }: {
   state: InterviewState;
   doc: RequirementDocument | null;
@@ -31,16 +32,19 @@ export function ProjectWizard({
   dbDesign: DatabaseDesign | null;
   apiDesign: ApiDesign | null;
   review: ReviewReport | null;
+  /** Jump to a stage tab (only wired once the interview is confirmed). The
+   * `tab` strings match ProjectStages' TabKey; `undefined` steps aren't links. */
+  onNavigate?: (tab: string) => void;
 }) {
-  const steps = [
+  const steps: { label: string; done: boolean; tab?: string }[] = [
     { label: 'Interview', done: state.status === 'confirmed' },
-    { label: 'Requirements', done: !!doc },
-    { label: 'Architecture', done: !!design },
-    { label: 'Database', done: !!dbDesign },
-    { label: 'API', done: !!apiDesign },
-    { label: 'Review', done: !!review },
+    { label: 'Requirements', done: !!doc, tab: 'requirements' },
+    { label: 'Architecture', done: !!design, tab: 'system' },
+    { label: 'Database', done: !!dbDesign, tab: 'database' },
+    { label: 'API', done: !!apiDesign, tab: 'api' },
+    { label: 'Review', done: !!review, tab: 'review' },
     // Export is "ready" once the API design exists (review is optional for it).
-    { label: 'Export', done: !!apiDesign },
+    { label: 'Export', done: !!apiDesign, tab: 'export' },
   ];
   const doneCount = steps.filter((s) => s.done).length;
   // The current step is the first not-done one (-1 once everything is complete).
@@ -59,9 +63,22 @@ export function ProjectWizard({
         <ol className="flex items-start gap-1 overflow-x-auto pb-1">
           {steps.map((step, i) => {
             const isCurrent = i === currentIndex;
+            const navigable =
+              !!onNavigate && !!step.tab && (step.done || isCurrent);
             return (
               <li key={step.label} className="flex flex-1 items-start">
-                <div className="flex min-w-0 flex-col items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={!navigable}
+                  onClick={() => navigable && onNavigate?.(step.tab as string)}
+                  title={navigable ? `Go to ${step.label}` : undefined}
+                  className={cn(
+                    'flex min-w-0 flex-col items-center gap-1.5',
+                    navigable
+                      ? 'cursor-pointer'
+                      : 'cursor-default',
+                  )}
+                >
                   <span
                     className={cn(
                       'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-medium transition-colors',
@@ -73,6 +90,7 @@ export function ProjectWizard({
                       !step.done &&
                         !isCurrent &&
                         'border-border text-muted-foreground',
+                      navigable && 'group-hover:opacity-90 hover:scale-105',
                     )}
                     aria-current={isCurrent ? 'step' : undefined}
                   >
@@ -84,11 +102,12 @@ export function ProjectWizard({
                       step.done || isCurrent
                         ? 'font-medium text-foreground'
                         : 'text-muted-foreground',
+                      navigable && 'hover:underline',
                     )}
                   >
                     {step.label}
                   </span>
-                </div>
+                </button>
                 {i < steps.length - 1 && (
                   <span
                     className={cn(

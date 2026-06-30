@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState } from 'react';
 import { exportApi } from '../lib/api';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Swagger UI touches `window` and ships a large bundle, so load it client-only
 // and code-split. The CSS is imported lazily inside the loader (below) so it
@@ -45,7 +46,12 @@ export function OpenApiView({
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!spec)
-    return <p className="text-sm text-muted-foreground">Loading spec…</p>;
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-5 w-72" />
+        <Skeleton className="h-72 w-full" />
+      </div>
+    );
 
   return (
     <div className="space-y-3">

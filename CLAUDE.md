@@ -621,6 +621,27 @@ DB Design → API Design → Review → Export
     shows a hint until the db design exists). Reuses the existing `onSavedDesign`/
     `onSavedDbDesign` handlers. Web type-check clean; no backend change.
 
+- **UI/UX polish — toasts, skeletons, dashboard cards, clickable wizard
+  (2026-06-30).**
+  - **Toasts:** dependency-free `apps/web/app/toast.tsx` (`ToastProvider` +
+    `useToast()` context + bottom-right Toaster, auto-dismiss, success/error/info
+    variants), mounted in `layout.tsx` wrapping `AuthGate`. Wired into `page.tsx`
+    handlers: artifact saves, async generate success/fail, refine, restore.
+  - **Skeletons:** `components/ui/skeleton` now used for the loading states of
+    `DiagramsView`, `OpenApiView`, and `VersionHistory` (added a `loaded` flag so
+    the initial load shows skeleton rows, not the empty-state copy).
+  - **Dashboard cards:** `ProjectsDashboard` project list → responsive 2-col grid
+    of `ProjectCard`s (status badge w/ label map, completeness `Progress` for
+    non-confirmed, updated-date, hover arrow). Whole card is the open button.
+  - **Clickable Project Wizard:** the stage `tab` was lifted from `ProjectStages`
+    into `page.tsx` (`stageTab`/`setStageTab`); `ProjectStages` is now
+    tab-controlled (`tab` + `onTabChange` props; internal `setTab` aliases the
+    setter). `ProjectWizard` takes `onNavigate?(tab)` (passed only once the
+    interview is confirmed) and each step maps to a TabKey — done/current steps
+    are clickable buttons that jump to that stage tab; Interview + locked steps
+    are non-interactive. `TabKey` is now exported from `ProjectStages`.
+  - Verified: web type-check clean. No backend change.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`
