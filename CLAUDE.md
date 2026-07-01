@@ -663,6 +663,19 @@ DB Design → API Design → Review → Export
     app surfaces already use the HSL tokens, so they adapt automatically.
   - Verified: web type-check clean. No backend change.
 
+- **Breadcrumbs / clearer header (2026-06-30).** `apps/web/app/Breadcrumbs.tsx`
+  renders a "Projects / ‹project name› / ‹current stage›" trail so users always
+  know where they are. In `page.tsx`: the app `<h1>`/subtitle now show ONLY on
+  the dashboard (no project open); the project view leads with the breadcrumb
+  instead of the old "← Projects" button + summary row. Crumbs: **Projects**
+  (→ `backToProjects`), **project name** (idea text from the `projects` list,
+  truncated to 36 chars, → jumps to the Requirements tab when confirmed),
+  **current stage** (last/non-clickable — `TAB_LABEL[stageTab]` when confirmed,
+  else "Interview"). New `TAB_LABEL: Record<TabKey,string>` maps every stage tab
+  to a label; the intent summary stays as a subtitle under the trail. Uses the
+  lifted `stageTab` so the crumb tracks the active tab live. Web type-check
+  clean; no backend change.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`

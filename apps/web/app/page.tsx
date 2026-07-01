@@ -25,8 +25,8 @@ import {
   reviewApi,
   systemDesignApi,
 } from '../lib/api';
-import { Button } from '@/components/ui/button';
 import { useToast } from './toast';
+import { Breadcrumbs, type Crumb } from './Breadcrumbs';
 import { ProjectsDashboard } from './ProjectsDashboard';
 import { ProgressPanel } from './ProgressPanel';
 import { ProjectWizard } from './ProjectWizard';
@@ -39,6 +39,21 @@ const STAGE_LABEL: Record<PipelineStageName, string> = {
   'database-design': 'Database design',
   'api-design': 'API design',
   review: 'AI review',
+};
+
+/** Human label for each stage tab (used by the breadcrumb trail). */
+const TAB_LABEL: Record<TabKey, string> = {
+  requirements: 'Requirements',
+  system: 'Architecture',
+  database: 'Database',
+  api: 'API',
+  diagrams: 'Diagrams',
+  canvas: 'Canvas',
+  review: 'Review',
+  export: 'Export',
+  apidocs: 'API Docs',
+  refine: 'Refine',
+  history: 'History',
 };
 
 /** localStorage key for the active session id, scoped PER USER. */
@@ -292,47 +307,71 @@ export default function Home() {
     );
   }
 
+  // Breadcrumb trail: Projects / ‹project name› / ‹current stage›.
+  let crumbs: Crumb[] = [];
+  if (state) {
+    const ideaText =
+      projects.find((p) => p.sessionId === state.sessionId)?.idea ??
+      state.intent?.summary ??
+      'Project';
+    const projectName =
+      ideaText.length > 36 ? `${ideaText.slice(0, 36).trimEnd()}…` : ideaText;
+    crumbs = [
+      { label: 'Projects', onClick: backToProjects },
+      {
+        label: projectName,
+        title: ideaText,
+        onClick:
+          state.status === 'confirmed'
+            ? () => setStageTab('requirements')
+            : undefined,
+      },
+      {
+        label:
+          state.status === 'confirmed' ? TAB_LABEL[stageTab] : 'Interview',
+      },
+    ];
+  }
+
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
-      <h1 className="text-2xl font-bold">Archivato AI Builder</h1>
-      <p className="mb-6 mt-1 text-sm text-muted-foreground">
-        AI Software Architecture Generator — turn an idea into a full system
-        design.
-      </p>
-
       {!state && (
-        <ProjectsDashboard
-          projects={projects}
-          creating={creating}
-          setCreating={setCreating}
-          busy={busy}
-          error={error}
-          idea={idea}
-          setIdea={setIdea}
-          industry={industry}
-          setIndustry={setIndustry}
-          scale={scale}
-          setScale={setScale}
-          onStart={handleStart}
-          onOpen={openProject}
-        />
+        <>
+          <h1 className="text-2xl font-bold">Archivato AI Builder</h1>
+          <p className="mb-6 mt-1 text-sm text-muted-foreground">
+            AI Software Architecture Generator — turn an idea into a full system
+            design.
+          </p>
+
+          <ProjectsDashboard
+            projects={projects}
+            creating={creating}
+            setCreating={setCreating}
+            busy={busy}
+            error={error}
+            idea={idea}
+            setIdea={setIdea}
+            industry={industry}
+            setIndustry={setIndustry}
+            scale={scale}
+            setScale={setScale}
+            onStart={handleStart}
+            onOpen={openProject}
+          />
+        </>
       )}
 
       {state && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <Button variant="secondary" size="sm" onClick={backToProjects}>
-              ← Projects
-            </Button>
-            {state.intent?.summary && (
-              <span
-                className="min-w-0 truncate text-sm text-muted-foreground"
-                title={state.intent.summary}
-              >
-                {state.intent.summary}
-              </span>
-            )}
-          </div>
+          <Breadcrumbs items={crumbs} />
+          {state.intent?.summary && (
+            <p
+              className="-mt-2 truncate text-sm text-muted-foreground"
+              title={state.intent.summary}
+            >
+              {state.intent.summary}
+            </p>
+          )}
 
           <ProjectWizard
             state={state}
