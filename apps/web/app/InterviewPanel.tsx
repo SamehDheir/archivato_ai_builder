@@ -28,11 +28,23 @@ export function InterviewPanel({
 }) {
   const [answer, setAnswer] = useState('');
 
-  function submitAnswer(e: React.FormEvent) {
-    e.preventDefault();
-    if (!answer.trim()) return;
+  function send() {
+    if (busy || !answer.trim()) return;
     onAnswer(answer.trim());
     setAnswer('');
+  }
+
+  function submitAnswer(e: React.FormEvent) {
+    e.preventDefault();
+    send();
+  }
+
+  // Cmd/Ctrl+Enter submits from the textarea (Enter alone inserts a newline).
+  function onAnswerKeyDown(e: React.KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      send();
+    }
   }
 
   return (
@@ -96,11 +108,21 @@ export function InterviewPanel({
                 placeholder="Type your answer…"
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
+                onKeyDown={onAnswerKeyDown}
                 autoFocus
               />
-              <Button type="submit" disabled={busy || !answer.trim()}>
-                {busy ? 'Sending…' : 'Answer'}
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={busy || !answer.trim()}>
+                  {busy ? 'Sending…' : 'Answer'}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Press{' '}
+                  <kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">
+                    ⌘/Ctrl+Enter
+                  </kbd>{' '}
+                  to send
+                </span>
+              </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </form>
           </CardContent>

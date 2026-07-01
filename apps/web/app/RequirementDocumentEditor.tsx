@@ -18,13 +18,43 @@ import {
   AddButton,
   EditorBar,
   RemoveButton,
+  ValidationSummary,
+  invalidIf,
   linesToList,
   listToLines,
+  useEscapeKey,
 } from './editor-kit';
 
 type Draft = Omit<RequirementDocument, 'sessionId' | 'generatedAt'>;
 
 const PRIORITIES: RequirementPriority[] = ['must', 'should', 'could'];
+
+/** Human-readable list of empty required fields (empty = valid). */
+function validate(d: Draft): string[] {
+  const errs: string[] = [];
+  d.functional.forEach((fr, i) => {
+    if (!fr.id.trim()) errs.push(`Functional requirement ${i + 1} needs an ID.`);
+    if (!fr.title.trim())
+      errs.push(`Functional requirement ${fr.id.trim() || i + 1} needs a title.`);
+  });
+  d.nonFunctional.forEach((nfr, i) => {
+    if (!nfr.id.trim())
+      errs.push(`Non-functional requirement ${i + 1} needs an ID.`);
+    if (!nfr.description.trim())
+      errs.push(
+        `Non-functional requirement ${nfr.id.trim() || i + 1} needs a description.`,
+      );
+  });
+  d.roles.forEach((r, i) => {
+    if (!r.name.trim()) errs.push(`Role ${i + 1} needs a name.`);
+  });
+  d.businessRules.forEach((br, i) => {
+    if (!br.id.trim()) errs.push(`Business rule ${i + 1} needs an ID.`);
+    if (!br.description.trim())
+      errs.push(`Business rule ${br.id.trim() || i + 1} needs a description.`);
+  });
+  return errs;
+}
 
 export function RequirementDocumentEditor({
   doc,
@@ -50,6 +80,15 @@ export function RequirementDocumentEditor({
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Only surface field-level errors once the user has tried to save.
+  const [attempted, setAttempted] = useState(false);
+
+  const errors = validate(draft);
+  const show = attempted; // highlight required-but-empty fields
+
+  useEscapeKey(() => {
+    if (!saving) onCancel();
+  });
 
   /** Immutably edit the draft via a structured clone + mutation. */
   const patch = (fn: (d: Draft) => void) => {
@@ -62,6 +101,8 @@ export function RequirementDocumentEditor({
   };
 
   async function save() {
+    setAttempted(true);
+    if (errors.length > 0) return; // block save; the summary tells them why
     setSaving(true);
     setError(null);
     try {
@@ -81,7 +122,7 @@ export function RequirementDocumentEditor({
             <div key={i} className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-2">
                 <Input
-                  className="w-24 font-mono text-xs"
+                  className={`w-24 font-mono text-xs ${invalidIf(show && !fr.id.trim())}`}
                   value={fr.id}
                   placeholder="FR-1"
                   onChange={(e) => patch((d) => (d.functional[i].id = e.target.value))}
@@ -107,7 +148,7 @@ export function RequirementDocumentEditor({
                 <RemoveButton onClick={() => patch((d) => d.functional.splice(i, 1))} />
               </div>
               <Input
-                className="mt-2"
+                className={`mt-2 ${invalidIf(show && !fr.title.trim())}`}
                 value={fr.title}
                 placeholder="Short title"
                 onChange={(e) => patch((d) => (d.functional[i].title = e.target.value))}
@@ -145,7 +186,7 @@ export function RequirementDocumentEditor({
             <div key={i} className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-2">
                 <Input
-                  className="w-24 font-mono text-xs"
+                  className={`w-24 font-mono text-xs ${invalidIf(show && !nfr.id.trim())}`}
                   value={nfr.id}
                   placeholder="NFR-1"
                   onChange={(e) => patch((d) => (d.nonFunctional[i].id = e.target.value))}
@@ -162,7 +203,7 @@ export function RequirementDocumentEditor({
                 />
               </div>
               <Textarea
-                className="mt-2"
+                className={`mt-2 ${invalidIf(show && !nfr.description.trim())}`}
                 value={nfr.description}
                 placeholder="Description"
                 onChange={(e) =>
@@ -193,6 +234,7 @@ export function RequirementDocumentEditor({
             <div key={i} className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-2">
                 <Input
+                  className={invalidIf(show && !role.name.trim())}
                   value={role.name}
                   placeholder="Role name"
                   onChange={(e) => patch((d) => (d.roles[i].name = e.target.value))}
@@ -234,12 +276,13 @@ export function RequirementDocumentEditor({
           {draft.businessRules.map((br, i) => (
             <div key={i} className="flex items-start gap-2">
               <Input
-                className="w-24 font-mono text-xs"
+                className={`w-24 font-mono text-xs ${invalidIf(show && !br.id.trim())}`}
                 value={br.id}
                 placeholder="BR-1"
                 onChange={(e) => patch((d) => (d.businessRules[i].id = e.target.value))}
               />
               <Textarea
+                className={invalidIf(show && !br.description.trim())}
                 value={br.description}
                 placeholder="Rule"
                 onChange={(e) =>
@@ -278,6 +321,7 @@ export function RequirementDocumentEditor({
         />
       </Section>
 
+      {show && <ValidationSummary errors={errors} />}
       <EditorBar saving={saving} error={error} onSave={save} onCancel={onCancel} />
     </div>
   );

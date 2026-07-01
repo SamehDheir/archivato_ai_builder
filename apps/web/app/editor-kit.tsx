@@ -1,7 +1,32 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+/**
+ * Call `handler` when Escape is pressed — but NOT while a dropdown (Radix
+ * popper) or a modal dialog is open, since those consume Escape themselves.
+ * Used to cancel an open editor.
+ */
+export function useEscapeKey(handler: () => void) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // A Select/dropdown or a confirm dialog is open — let it handle Escape.
+      if (
+        document.querySelector(
+          '[data-radix-popper-content-wrapper],[role="dialog"],[role="alertdialog"]',
+        )
+      ) {
+        return;
+      }
+      handler();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [handler]);
+}
 
 /** Save / Cancel action bar shared by every artifact editor. */
 export function EditorBar({
@@ -24,6 +49,40 @@ export function EditorBar({
         Cancel
       </Button>
       {error && <span className="text-sm text-destructive">{error}</span>}
+    </div>
+  );
+}
+
+/** Tailwind classes marking an input/select as invalid (red border + ring). */
+export const INVALID_FIELD =
+  'border-destructive focus-visible:ring-destructive';
+
+/** Returns the invalid classes when `cond` is true, else an empty string. */
+export function invalidIf(cond: boolean): string {
+  return cond ? INVALID_FIELD : '';
+}
+
+/**
+ * A summary of validation problems, shown above the EditorBar once the user has
+ * attempted to save. Lets us flag empty required fields in-app instead of
+ * bouncing off the API's 400.
+ */
+export function ValidationSummary({ errors }: { errors: string[] }) {
+  if (errors.length === 0) return null;
+  return (
+    <div
+      role="alert"
+      className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+    >
+      <p className="font-medium">
+        Fix {errors.length} issue{errors.length > 1 ? 's' : ''} before saving:
+      </p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5">
+        {errors.slice(0, 8).map((e, i) => (
+          <li key={i}>{e}</li>
+        ))}
+        {errors.length > 8 && <li>…and {errors.length - 8} more</li>}
+      </ul>
     </div>
   );
 }
@@ -62,7 +121,7 @@ export function AddButton({
     <button
       type="button"
       onClick={onClick}
-      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-2 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-2 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <Plus className="h-4 w-4" /> {children}
     </button>

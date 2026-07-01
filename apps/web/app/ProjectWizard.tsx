@@ -73,10 +73,8 @@ export function ProjectWizard({
                   onClick={() => navigable && onNavigate?.(step.tab as string)}
                   title={navigable ? `Go to ${step.label}` : undefined}
                   className={cn(
-                    'flex min-w-0 flex-col items-center gap-1.5',
-                    navigable
-                      ? 'cursor-pointer'
-                      : 'cursor-default',
+                    'flex min-w-0 flex-col items-center gap-1.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                    navigable ? 'cursor-pointer' : 'cursor-default',
                   )}
                 >
                   <span

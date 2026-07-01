@@ -17,7 +17,15 @@ import {
 } from '@/components/ui/select';
 import { databaseDesignApi } from '../lib/api';
 import { Section } from './RequirementDocumentView';
-import { AddButton, Check, EditorBar, RemoveButton } from './editor-kit';
+import {
+  AddButton,
+  Check,
+  EditorBar,
+  RemoveButton,
+  ValidationSummary,
+  invalidIf,
+  useEscapeKey,
+} from './editor-kit';
 
 type Draft = Omit<DatabaseDesign, 'sessionId' | 'generatedAt'>;
 
@@ -29,6 +37,27 @@ const RELATION_TYPES: RelationType[] = [
   'one-to-many',
   'many-to-many',
 ];
+
+function validate(d: Draft): string[] {
+  const errs: string[] = [];
+  if (!d.databaseType.trim()) errs.push('Database type is required.');
+  d.entities.forEach((entity, ei) => {
+    const label = entity.name.trim() || `Entity ${ei + 1}`;
+    if (!entity.name.trim()) errs.push(`Entity ${ei + 1} needs a name.`);
+    if (entity.columns.length === 0)
+      errs.push(`${label} needs at least one column.`);
+    entity.columns.forEach((col, ci) => {
+      if (!col.name.trim()) errs.push(`${label}: column ${ci + 1} needs a name.`);
+      if (!col.type.trim())
+        errs.push(`${label}: column ${col.name.trim() || ci + 1} needs a type.`);
+    });
+  });
+  d.relations.forEach((rel, i) => {
+    if (!rel.from.trim() || !rel.to.trim())
+      errs.push(`Relation ${i + 1} needs both a "from" and a "to".`);
+  });
+  return errs;
+}
 
 export function DatabaseDesignEditor({
   design,
@@ -50,6 +79,14 @@ export function DatabaseDesignEditor({
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
+
+  const errors = validate(draft);
+  const show = attempted;
+
+  useEscapeKey(() => {
+    if (!saving) onCancel();
+  });
 
   const patch = (fn: (d: Draft) => void) => {
     onDirty?.();
@@ -61,6 +98,8 @@ export function DatabaseDesignEditor({
   };
 
   async function save() {
+    setAttempted(true);
+    if (errors.length > 0) return;
     setSaving(true);
     setError(null);
     try {
@@ -82,7 +121,7 @@ export function DatabaseDesignEditor({
 
       <Section title="Database">
         <Input
-          className="w-56"
+          className={`w-56 ${invalidIf(show && !draft.databaseType.trim())}`}
           value={draft.databaseType}
           placeholder="PostgreSQL"
           onChange={(e) => patch((d) => (d.databaseType = e.target.value))}
@@ -95,7 +134,7 @@ export function DatabaseDesignEditor({
             <div key={ei} className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-2">
                 <Input
-                  className="w-48 font-mono text-sm"
+                  className={`w-48 font-mono text-sm ${invalidIf(show && !entity.name.trim())}`}
                   value={entity.name}
                   placeholder="table_name"
                   onChange={(e) =>
@@ -125,7 +164,7 @@ export function DatabaseDesignEditor({
                     className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/20 p-2"
                   >
                     <Input
-                      className="w-36 font-mono text-xs"
+                      className={`w-36 font-mono text-xs ${invalidIf(show && !col.name.trim())}`}
                       value={col.name}
                       placeholder="column"
                       onChange={(e) =>
@@ -134,7 +173,7 @@ export function DatabaseDesignEditor({
                     />
                     <Input
                       list={COLUMN_TYPE_LIST}
-                      className="w-36 font-mono text-xs"
+                      className={`w-36 font-mono text-xs ${invalidIf(show && !col.type.trim())}`}
                       value={col.type}
                       placeholder="type"
                       onChange={(e) =>
@@ -233,7 +272,7 @@ export function DatabaseDesignEditor({
           {draft.relations.map((rel, i) => (
             <div key={i} className="flex flex-wrap items-center gap-2">
               <Input
-                className="w-36 font-mono text-xs"
+                className={`w-36 font-mono text-xs ${invalidIf(show && !rel.from.trim())}`}
                 value={rel.from}
                 placeholder="from"
                 onChange={(e) => patch((d) => (d.relations[i].from = e.target.value))}
@@ -256,7 +295,7 @@ export function DatabaseDesignEditor({
                 </SelectContent>
               </Select>
               <Input
-                className="w-36 font-mono text-xs"
+                className={`w-36 font-mono text-xs ${invalidIf(show && !rel.to.trim())}`}
                 value={rel.to}
                 placeholder="to"
                 onChange={(e) => patch((d) => (d.relations[i].to = e.target.value))}
@@ -283,6 +322,7 @@ export function DatabaseDesignEditor({
         </div>
       </Section>
 
+      {show && <ValidationSummary errors={errors} />}
       <EditorBar saving={saving} error={error} onSave={save} onCancel={onCancel} />
     </div>
   );

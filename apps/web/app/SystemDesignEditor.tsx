@@ -14,7 +14,15 @@ import {
 } from '@/components/ui/select';
 import { systemDesignApi } from '../lib/api';
 import { Section } from './RequirementDocumentView';
-import { AddButton, EditorBar, RemoveButton, csvToList } from './editor-kit';
+import {
+  AddButton,
+  EditorBar,
+  RemoveButton,
+  ValidationSummary,
+  csvToList,
+  invalidIf,
+  useEscapeKey,
+} from './editor-kit';
 
 type Draft = Omit<SystemDesign, 'sessionId' | 'generatedAt'>;
 
@@ -23,6 +31,21 @@ const ARCHITECTURES: { value: ArchitectureType; label: string }[] = [
   { value: 'modular_monolith', label: 'Modular Monolith' },
   { value: 'microservices', label: 'Microservices' },
 ];
+
+function validate(d: Draft): string[] {
+  const errs: string[] = [];
+  if (!d.architectureRationale.trim())
+    errs.push('Architecture rationale is required.');
+  d.techStack.forEach((t, i) => {
+    if (!t.layer.trim()) errs.push(`Tech choice ${i + 1} needs a layer.`);
+    if (!t.technology.trim())
+      errs.push(`Tech choice ${t.layer.trim() || i + 1} needs a technology.`);
+  });
+  d.services.forEach((s, i) => {
+    if (!s.name.trim()) errs.push(`Service ${i + 1} needs a name.`);
+  });
+  return errs;
+}
 
 export function SystemDesignEditor({
   design,
@@ -45,6 +68,14 @@ export function SystemDesignEditor({
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
+
+  const errors = validate(draft);
+  const show = attempted;
+
+  useEscapeKey(() => {
+    if (!saving) onCancel();
+  });
 
   const patch = (fn: (d: Draft) => void) => {
     onDirty?.();
@@ -56,6 +87,8 @@ export function SystemDesignEditor({
   };
 
   async function save() {
+    setAttempted(true);
+    if (errors.length > 0) return;
     setSaving(true);
     setError(null);
     try {
@@ -87,7 +120,7 @@ export function SystemDesignEditor({
         </Select>
         <Label className="mt-2 block text-xs text-muted-foreground">Rationale</Label>
         <Textarea
-          className="mt-1"
+          className={`mt-1 ${invalidIf(show && !draft.architectureRationale.trim())}`}
           value={draft.architectureRationale}
           onChange={(e) => patch((d) => (d.architectureRationale = e.target.value))}
         />
@@ -98,13 +131,13 @@ export function SystemDesignEditor({
           {draft.techStack.map((t, i) => (
             <div key={i} className="flex items-start gap-2">
               <Input
-                className="w-32"
+                className={`w-32 ${invalidIf(show && !t.layer.trim())}`}
                 value={t.layer}
                 placeholder="layer"
                 onChange={(e) => patch((d) => (d.techStack[i].layer = e.target.value))}
               />
               <Input
-                className="w-40"
+                className={`w-40 ${invalidIf(show && !t.technology.trim())}`}
                 value={t.technology}
                 placeholder="technology"
                 onChange={(e) =>
@@ -139,6 +172,7 @@ export function SystemDesignEditor({
             <div key={i} className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-2">
                 <Input
+                  className={invalidIf(show && !s.name.trim())}
                   value={s.name}
                   placeholder="Service name"
                   onChange={(e) => patch((d) => (d.services[i].name = e.target.value))}
@@ -178,6 +212,7 @@ export function SystemDesignEditor({
         </div>
       </Section>
 
+      {show && <ValidationSummary errors={errors} />}
       <EditorBar saving={saving} error={error} onSave={save} onCancel={onCancel} />
     </div>
   );

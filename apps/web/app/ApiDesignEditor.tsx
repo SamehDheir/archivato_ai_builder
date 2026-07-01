@@ -13,11 +13,33 @@ import {
 } from '@/components/ui/select';
 import { apiDesignApi } from '../lib/api';
 import { Section } from './RequirementDocumentView';
-import { AddButton, Check, EditorBar, RemoveButton } from './editor-kit';
+import {
+  AddButton,
+  Check,
+  EditorBar,
+  RemoveButton,
+  ValidationSummary,
+  invalidIf,
+  useEscapeKey,
+} from './editor-kit';
 
 type Draft = Omit<ApiDesign, 'sessionId' | 'generatedAt'>;
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
+function validate(d: Draft): string[] {
+  const errs: string[] = [];
+  d.modules.forEach((m, mi) => {
+    const label = m.name.trim() || `Module ${mi + 1}`;
+    if (!m.name.trim()) errs.push(`Module ${mi + 1} needs a name.`);
+    if (!m.basePath.trim()) errs.push(`${label} needs a base path.`);
+    m.endpoints.forEach((ep, ei) => {
+      if (!ep.path.trim())
+        errs.push(`${label}: endpoint ${ei + 1} needs a path.`);
+    });
+  });
+  return errs;
+}
 
 /** Parse a comma list of status codes into a numeric array (drops non-numbers). */
 function parseCodes(value: string): number[] {
@@ -43,6 +65,14 @@ export function ApiDesignEditor({
   const [draft, setDraft] = useState<Draft>(() => ({ modules: design.modules }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
+
+  const errors = validate(draft);
+  const show = attempted;
+
+  useEscapeKey(() => {
+    if (!saving) onCancel();
+  });
 
   const patch = (fn: (d: Draft) => void) => {
     onDirty?.();
@@ -54,6 +84,8 @@ export function ApiDesignEditor({
   };
 
   async function save() {
+    setAttempted(true);
+    if (errors.length > 0) return;
     setSaving(true);
     setError(null);
     try {
@@ -118,13 +150,13 @@ export function ApiDesignEditor({
             <div key={mi} className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-2">
                 <Input
-                  className="w-48"
+                  className={`w-48 ${invalidIf(show && !module.name.trim())}`}
                   value={module.name}
                   placeholder="Module name"
                   onChange={(e) => patch((d) => (d.modules[mi].name = e.target.value))}
                 />
                 <Input
-                  className="font-mono text-xs"
+                  className={`font-mono text-xs ${invalidIf(show && !module.basePath.trim())}`}
                   value={module.basePath}
                   placeholder="/api/users"
                   onChange={(e) =>
@@ -168,7 +200,7 @@ export function ApiDesignEditor({
                         </SelectContent>
                       </Select>
                       <Input
-                        className="w-56 font-mono text-xs"
+                        className={`w-56 font-mono text-xs ${invalidIf(show && !ep.path.trim())}`}
                         value={ep.path}
                         placeholder="/api/users/:id"
                         onChange={(e) =>
@@ -251,6 +283,7 @@ export function ApiDesignEditor({
         </div>
       </Section>
 
+      {show && <ValidationSummary errors={errors} />}
       <EditorBar saving={saving} error={error} onSave={save} onCancel={onCancel} />
     </div>
   );

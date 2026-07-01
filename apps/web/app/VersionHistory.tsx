@@ -6,6 +6,7 @@ import type {
   ProjectVersionMeta,
 } from '@archivato/shared';
 import { versionsApi } from '../lib/api';
+import { useConfirm } from './confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +38,7 @@ export function VersionHistory({
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const load = useCallback(async () => {
     try {
@@ -74,13 +76,15 @@ export function VersionHistory({
   }
 
   async function restore(version: number) {
-    if (
-      !window.confirm(
-        `Restore the project to version ${version}? Current artifacts will be replaced (this is saved as a new version, so nothing is lost).`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Restore to version ${version}?`,
+      description:
+        'Your current artifacts will be replaced with this version. This is saved as a new version, so nothing is lost.',
+      confirmLabel: 'Restore',
+      cancelLabel: 'Cancel',
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     try {

@@ -13,6 +13,7 @@ import ReactFlow, {
   Controls,
   Handle,
   MarkerType,
+  MiniMap,
   Position,
   useEdgesState,
   useNodesState,
@@ -34,6 +35,8 @@ import {
   savePositions,
   type PositionMap,
 } from '../lib/canvas-storage';
+import { CanvasLegend } from './CanvasLegend';
+import { styleFor } from '../lib/node-category';
 
 /** Each node carries the full Entity (so columns survive the round-trip) + its
  * editable display name. */
@@ -58,16 +61,22 @@ function EntityNode({ id, data }: NodeProps<EntityData>) {
       nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, name: value } } : n)),
     );
   };
+  const cat = styleFor(data.name);
   return (
-    <div className="min-w-[180px] rounded-lg border border-border bg-card shadow-sm">
+    <div
+      className={`min-w-[180px] rounded-lg border-2 ${cat.border} bg-card shadow-sm`}
+    >
       <Handle type="target" position={Position.Left} className="!bg-primary" />
-      <div className="border-b border-border px-2 py-1.5">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-1.5">
         <input
           className="nodrag w-full bg-transparent font-mono text-sm font-semibold outline-none"
           value={data.name}
           placeholder="table_name"
           onChange={(e) => rename(e.target.value)}
         />
+        <span className={`shrink-0 text-[10px] font-semibold ${cat.text}`}>
+          {cat.label}
+        </span>
       </div>
       <ul className="max-h-32 overflow-auto px-2 py-1.5 text-xs text-muted-foreground">
         {data.entity.columns.length ? (
@@ -279,6 +288,7 @@ export function DatabaseCanvas({
         </Button>
       </div>
       {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
+      <CanvasLegend className="mb-2" />
       <div className="h-[560px] rounded-md border border-border bg-muted/10">
         <DirtyContext.Provider value={() => onDirty(true)}>
           <ReactFlow
@@ -301,6 +311,16 @@ export function DatabaseCanvas({
           >
             <Background />
             <Controls />
+            <MiniMap
+              pannable
+              zoomable
+              className="!bg-card"
+              maskColor="hsl(var(--muted) / 0.6)"
+              nodeColor={(n) =>
+                styleFor((n.data as EntityData | undefined)?.name ?? '').hex
+              }
+              nodeStrokeWidth={2}
+            />
           </ReactFlow>
         </DirtyContext.Provider>
       </div>

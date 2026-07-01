@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   History,
+  Loader2,
   MessageSquare,
   Network,
   Shapes,
@@ -27,6 +28,7 @@ import type {
   ReviewReport,
   SystemDesign,
 } from '@archivato/shared';
+import { PIPELINE_STAGES } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -49,6 +51,7 @@ import { DiagramsView } from './DiagramsView';
 import { DesignCanvas } from './DesignCanvas';
 import { EmptyState } from './EmptyState';
 import { SummaryView } from './SummaryView';
+import { useConfirm } from './confirm-dialog';
 
 export type ActiveJob = { stage: PipelineStageName; progress: number };
 
@@ -195,24 +198,16 @@ export function ProjectStages({
           <CheckCircle2 className="h-3.5 w-3.5" /> Requirements confirmed
         </Badge>
 
-        {job && (
-          <div>
-            <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-              <span>Generating {STAGE_LABEL[job.stage]}…</span>
-              <span>{job.progress}%</span>
-            </div>
-            <Progress value={job.progress} />
-          </div>
-        )}
+        {job && <JobProgress job={job} />}
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
-          <TabsList className="sticky top-16 z-30 flex h-auto flex-wrap justify-start gap-1 shadow-sm">
+          <TabsList className="sticky top-16 z-30 flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto shadow-sm md:flex-wrap md:overflow-visible">
             {TABS.map(({ value, label, icon: Icon }) => (
               <TabsTrigger
                 key={value}
                 value={value}
                 disabled={!available[value]}
-                className="gap-1.5"
+                className="shrink-0 gap-1.5"
               >
                 <Icon className="h-3.5 w-3.5" />
                 {label}
@@ -472,6 +467,34 @@ export function ProjectStages({
   );
 }
 
+/** Live progress for the running async generation job (stage + step + sheen). */
+function JobProgress({ job }: { job: ActiveJob }) {
+  const step = PIPELINE_STAGES.indexOf(job.stage) + 1;
+  const total = PIPELINE_STAGES.length;
+  return (
+    <div
+      className="rounded-md border border-border bg-muted/30 p-3"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
+        <span className="flex items-center gap-2 font-medium">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+          Generating {STAGE_LABEL[job.stage]}…
+        </span>
+        <span className="text-muted-foreground">
+          {step > 0 ? `Step ${step} of ${total} · ` : ''}
+          {job.progress}%
+        </span>
+      </div>
+      <Progress
+        value={job.progress}
+        indicatorClassName="bg-[linear-gradient(90deg,hsl(var(--primary))_0%,hsl(var(--primary)_/_0.6)_50%,hsl(var(--primary))_100%)] bg-[length:200%_100%] animate-shimmer"
+      />
+    </div>
+  );
+}
+
 function GenerateStage({
   icon,
   title,
@@ -509,6 +532,21 @@ function StageActions({
   regenerateLabel?: string;
   next?: { label: string; go: () => void };
 }) {
+  const confirm = useConfirm();
+
+  // Regenerate replaces the current (possibly hand-edited) artifact, so confirm.
+  async function confirmRegenerate() {
+    const ok = await confirm({
+      title: 'Regenerate this stage?',
+      description:
+        'This replaces the current content — including any manual edits — with a freshly generated version.',
+      confirmLabel: 'Regenerate',
+      cancelLabel: 'Cancel',
+      destructive: true,
+    });
+    if (ok) onRegenerate();
+  }
+
   return (
     <div className="flex flex-wrap gap-2">
       {onEdit && (
@@ -516,7 +554,7 @@ function StageActions({
           Edit
         </Button>
       )}
-      <Button variant="secondary" onClick={onRegenerate} disabled={busy}>
+      <Button variant="secondary" onClick={confirmRegenerate} disabled={busy}>
         {regenerateLabel}
       </Button>
       {next && (
