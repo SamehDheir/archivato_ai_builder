@@ -111,6 +111,7 @@ model InterviewSession {
   databaseDesign      DatabaseDesign?
   apiDesign           ApiDesign?
   reviewReport        ReviewReport?
+  productVision       ProductVision?
   chatMessages        ChatMessage[]
   versions            ProjectVersion[]
 
@@ -196,4 +197,16 @@ model ReviewReport {
   updatedAt DateTime         @updatedAt
 
   @@map("review_reports")
+}
+
+// Product Vision (Product Manager stage). Standalone artifact — a product
+// strategy view (vision/goals/MVP/roadmap/metrics/personas) of the session.
+model ProductVision {
+  sessionId String           @id
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("product_visions")
 }

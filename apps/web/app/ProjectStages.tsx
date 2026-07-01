@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Network,
   Shapes,
+  Sparkles,
   Webhook,
   Workflow,
   type LucideIcon,
@@ -51,6 +52,7 @@ import { DiagramsView } from './DiagramsView';
 import { DesignCanvas } from './DesignCanvas';
 import { EmptyState } from './EmptyState';
 import { SummaryView } from './SummaryView';
+import { ProductVisionPanel } from './ProductVisionPanel';
 import { useConfirm } from './confirm-dialog';
 
 export type ActiveJob = { stage: PipelineStageName; progress: number };
@@ -65,6 +67,7 @@ const STAGE_LABEL: Record<PipelineStageName, string> = {
 
 /** Tab order + labels + icons (drives the tab bar). */
 const TABS: { value: TabKey; label: string; icon: LucideIcon }[] = [
+  { value: 'vision', label: 'Vision', icon: Sparkles },
   { value: 'requirements', label: 'Requirements', icon: FileText },
   { value: 'system', label: 'System', icon: Network },
   { value: 'database', label: 'Database', icon: DatabaseIcon },
@@ -79,6 +82,7 @@ const TABS: { value: TabKey; label: string; icon: LucideIcon }[] = [
 ];
 
 export type TabKey =
+  | 'vision'
   | 'requirements'
   | 'system'
   | 'database'
@@ -160,6 +164,7 @@ export function ProjectStages({
   const [editing, setEditing] = useState<TabKey | null>(null);
 
   const available: Record<TabKey, boolean> = {
+    vision: true,
     requirements: true,
     system: !!doc,
     database: !!design,
@@ -214,6 +219,14 @@ export function ProjectStages({
               </TabsTrigger>
             ))}
           </TabsList>
+
+          {/* Product Vision (standalone) */}
+          <TabsContent value="vision" className="mt-4">
+            <ProductVisionPanel
+              sessionId={sessionId}
+              reloadKey={versionsReload}
+            />
+          </TabsContent>
 
           {/* Requirements */}
           <TabsContent value="requirements" className="mt-4 space-y-3">

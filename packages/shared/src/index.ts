@@ -17,6 +17,7 @@ export * from './system-design';
 export * from './database-design';
 export * from './api-design';
 export * from './review';
+export * from './product-vision';
 export * from './export';
 export * from './auth';
 export * from './chat';

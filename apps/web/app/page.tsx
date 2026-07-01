@@ -44,6 +44,7 @@ const STAGE_LABEL: Record<PipelineStageName, string> = {
 
 /** Human label for each stage tab (used by the breadcrumb trail). */
 const TAB_LABEL: Record<TabKey, string> = {
+  vision: 'Vision',
   requirements: 'Requirements',
   system: 'Architecture',
   database: 'Database',

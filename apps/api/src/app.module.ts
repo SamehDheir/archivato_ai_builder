@@ -9,6 +9,7 @@ import { SystemDesignModule } from './system-design/system-design.module';
 import { DatabaseDesignModule } from './database-design/database-design.module';
 import { ApiDesignModule } from './api-design/api-design.module';
 import { ReviewModule } from './review/review.module';
+import { ProductVisionModule } from './product-vision/product-vision.module';
 import { ExportModule } from './export/export.module';
 import { ChatModule } from './chat/chat.module';
 import { JobsModule } from './jobs/jobs.module';
@@ -37,6 +38,8 @@ import { DiagramsModule } from './diagrams/diagrams.module';
     ApiDesignModule,
     // Slice 7: Review Engine (scalability, security, performance, recommendations).
     ReviewModule,
+    // Product Manager stage: standalone Product Vision (vision/goals/MVP/roadmap).
+    ProductVisionModule,
     // Slice 8: Export (JSON / Markdown / OpenAPI / GitHub structure).
     ExportModule,
     // Slice 10: post-generation AI chat (refine the design in natural language).

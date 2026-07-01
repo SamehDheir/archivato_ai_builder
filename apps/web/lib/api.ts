@@ -12,6 +12,7 @@ import type {
   ProjectDiagrams,
   ProjectSnapshot,
   ProjectStructure,
+  ProductVision,
   ProjectSummary,
   ProjectVersionDetail,
   ProjectVersionMeta,
@@ -170,6 +171,16 @@ export const reviewApi = {
     }),
 
   get: (sessionId: string) => request<ReviewReport>(`/review/${sessionId}`),
+};
+
+export const productVisionApi = {
+  generate: (sessionId: string) =>
+    request<ProductVision>(`/product-vision/${sessionId}/generate`, {
+      method: 'POST',
+    }),
+
+  get: (sessionId: string) =>
+    request<ProductVision>(`/product-vision/${sessionId}`),
 };
 
 export const chatApi = {

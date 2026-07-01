@@ -11,6 +11,8 @@ export enum AgentRole {
   DatabaseDesigner = 'database_designer',
   ApiDesigner = 'api_designer',
   Reviewer = 'reviewer',
+  /** Frames the product like a PM: vision, goals, MVP, roadmap, metrics, personas. */
+  ProductManager = 'product_manager',
   /** Applies post-generation chat instructions by amending the requirements. */
   Refiner = 'refiner',
 }
