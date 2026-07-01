@@ -1,6 +1,6 @@
 'use client';
 
-import { AuthForm } from '../AuthForm';
+import { AuthForm } from '@/components/auth/AuthForm';
 
 /**
  * Dedicated /login route. Reachable by URL even when already signed in (so you

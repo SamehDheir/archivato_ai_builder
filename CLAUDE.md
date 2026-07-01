@@ -82,14 +82,21 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 
 ## Frontend Notes
 
+- **Structure:** `app/` holds routes only — `layout.tsx`, `page.tsx` (redirects
+  `/` → `/dashboard`; no landing page), and route dirs `dashboard/`, `login/`,
+  `register/`, `verify/`. Feature components live in `components/<domain>/`
+  (`auth`, `interview`, `design`, `review`, `product`, `roadmap`, `project`,
+  `shared`) alongside `components/ui/`. Import via the `@/*` alias (→ web root),
+  e.g. `@/components/project/ProjectStages`, `@/lib/api`.
 - Design system: Tailwind + shadcn/ui under `components/ui/`. Colors are HSL CSS
   vars in `globals.css` (light on `:root`, dark on `.dark`); theme toggled by
   `ThemeProvider`. Providers: Theme → Toast → Confirm → AuthGate.
 - Confirmed project view = `ProjectStages` (tabbed, one stage per tab, downstream
-  tabs disabled until prereqs exist). `page.tsx` is the slim orchestrator.
+  tabs disabled until prereqs exist). `app/dashboard/page.tsx` is the slim
+  orchestrator.
 - Structured **editors** (PUT per artifact) + **canvas** (React Flow) both save
-  via the same update endpoints. Unsaved-edit leave guard lives in `page.tsx`
-  (`dirty` + `confirmLeave()` + in-app `useConfirm`).
+  via the same update endpoints. Unsaved-edit leave guard lives in the dashboard
+  page (`dirty` + `confirmLeave()` + in-app `useConfirm`).
 
 ## Gotchas (read before you trip on them)
 

@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { AuthGate } from './AuthGate';
-import { ToastProvider } from './toast';
-import { ThemeProvider } from './theme';
-import { ConfirmProvider } from './confirm-dialog';
+import { AuthGate } from '@/components/auth/AuthGate';
+import { ToastProvider } from '@/components/shared/toast';
+import { ThemeProvider } from '@/components/shared/theme';
+import { ConfirmProvider } from '@/components/shared/confirm-dialog';
 
 export const metadata: Metadata = {
   title: 'Archivato AI Builder',

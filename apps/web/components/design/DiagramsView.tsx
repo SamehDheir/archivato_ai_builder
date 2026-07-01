@@ -1,0 +1,113 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import type { Diagram, ProjectDiagrams } from '@archivato/shared';
+import { diagramsApi } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { MermaidView } from '@/components/design/MermaidView';
+
+/**
+ * Architecture diagrams: fetches the project's Mermaid source set and renders
+ * the selected one to SVG in the browser (mermaid.js). Falls back to showing
+ * the source if a diagram fails to render.
+ */
+export function DiagramsView({
+  sessionId,
+  reloadKey,
+}: {
+  sessionId: string;
+  reloadKey: number;
+}) {
+  const [data, setData] = useState<ProjectDiagrams | null>(null);
+  const [kind, setKind] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showSource, setShowSource] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await diagramsApi.get(sessionId);
+      setData(res);
+      setKind(
+        (prev) =>
+          prev ?? res.diagrams.find((d) => d.mermaid)?.kind ?? res.diagrams[0]?.kind ?? null,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    void load();
+  }, [load, reloadKey]);
+
+  if (error) return <p className="text-sm text-destructive">{error}</p>;
+  if (!data)
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-[26rem] w-full" />
+      </div>
+    );
+
+  const active: Diagram | undefined =
+    data.diagrams.find((d) => d.kind === kind) ?? data.diagrams[0];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={active?.kind} onValueChange={(v) => setKind(v)}>
+          <SelectTrigger className="w-64">
+            <SelectValue placeholder="Choose a diagram" />
+          </SelectTrigger>
+          <SelectContent>
+            {data.diagrams.map((d) => (
+              <SelectItem key={d.kind} value={d.kind}>
+                {d.title}
+                {!d.mermaid ? ' (locked)' : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {active?.mermaid && (
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowSource((s) => !s)}
+            >
+              {showSource ? 'Show diagram' : 'View source'}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigator.clipboard?.writeText(active.mermaid)}
+            >
+              Copy Mermaid
+            </Button>
+          </>
+        )}
+      </div>
+
+      {active && !active.mermaid && (
+        <p className="text-sm text-muted-foreground">{active.note}</p>
+      )}
+
+      {active?.mermaid &&
+        (showSource ? (
+          <pre className="max-h-[28rem] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs">
+            {active.mermaid}
+          </pre>
+        ) : (
+          <MermaidView code={active.mermaid} />
+        ))}
+    </div>
+  );
+}
