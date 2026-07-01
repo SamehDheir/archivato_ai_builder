@@ -9,9 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { ThemeToggle } from '@/components/shared/theme';
+import { Logo } from '@/components/shared/Logo';
 
-/** Always-public routes (rendered regardless of auth state). */
-const PUBLIC_PATHS = ['/verify'];
+/** Always-public routes, matched by prefix (rendered regardless of auth state). */
+const PUBLIC_PREFIXES = ['/verify'];
+/** Always-public routes, matched exactly (e.g. the marketing landing at `/`). */
+const PUBLIC_EXACT = ['/'];
 /** Guest-only routes: signed-in users are redirected home, can't view these. */
 const GUEST_ONLY_PATHS = ['/login', '/register'];
 
@@ -35,19 +38,27 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const isPublic = PUBLIC_PATHS.some((p) => pathname?.startsWith(p));
+  const isPublic =
+    PUBLIC_EXACT.includes(pathname ?? '') ||
+    PUBLIC_PREFIXES.some((p) => pathname?.startsWith(p));
   const isGuestOnly = GUEST_ONLY_PATHS.some((p) => pathname === p);
 
   useEffect(() => {
+    // Public routes (landing, verify) render without knowing the user — skip the
+    // auth round-trip (and its 401 → refresh attempt) entirely.
+    if (isPublic) {
+      setChecking(false);
+      return;
+    }
     authApi
       .me()
       .then(setUser)
       .finally(() => setChecking(false));
-  }, []);
+  }, [isPublic]);
 
   useEffect(() => {
     if (!checking && user && isGuestOnly) {
-      router.replace('/');
+      router.replace('/dashboard');
     }
   }, [checking, user, isGuestOnly, router]);
 
@@ -81,7 +92,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <>
       <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur">
-        <span className="font-bold">Archivato</span>
+        <Logo />
         <span className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
           {user.displayName}
           {!user.emailVerified && (

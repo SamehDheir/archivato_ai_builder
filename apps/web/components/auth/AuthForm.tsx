@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
+import { LogoMark } from '@/components/shared/Logo';
 
 const OAUTH_ERRORS: Record<string, string> = {
   oauth_unavailable: 'That sign-in provider is not configured.',
@@ -86,8 +87,11 @@ export function AuthForm({
 
   return (
     <div className="mx-auto max-w-md px-5 py-12">
-      <h1 className="text-2xl font-bold">Archivato AI Builder</h1>
-      <p className="mb-6 mt-1 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2.5">
+        <LogoMark className="h-9 w-9" />
+        <h1 className="text-2xl font-bold">Archivato AI Builder</h1>
+      </div>
+      <p className="mb-6 mt-2 text-sm text-muted-foreground">
         AI Software Architecture Generator — sign in to start designing systems.
       </p>
 

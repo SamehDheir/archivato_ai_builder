@@ -82,15 +82,30 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 
 ## Frontend Notes
 
-- **Structure:** `app/` holds routes only — `layout.tsx`, `page.tsx` (redirects
-  `/` → `/dashboard`; no landing page), and route dirs `dashboard/`, `login/`,
+- **Structure:** `app/` holds routes only — `layout.tsx`, `page.tsx` (public
+  marketing **landing** at `/`), and route dirs `dashboard/`, `login/`,
   `register/`, `verify/`. Feature components live in `components/<domain>/`
   (`auth`, `interview`, `design`, `review`, `product`, `roadmap`, `project`,
-  `shared`) alongside `components/ui/`. Import via the `@/*` alias (→ web root),
-  e.g. `@/components/project/ProjectStages`, `@/lib/api`.
+  `shared`, `marketing`) alongside `components/ui/`. Import via the `@/*` alias
+  (→ web root), e.g. `@/components/project/ProjectStages`, `@/lib/api`.
+- **Auth gating:** `AuthGate` (in the layout) wraps everything. `/` and
+  `/verify` are public (`PUBLIC_EXACT` / `PUBLIC_PREFIXES`); `/login`+`/register`
+  are guest-only (signed-in users bounce to `/dashboard`); every other route
+  shows the `AuthForm` when signed out. The app itself lives at `/dashboard`.
 - Design system: Tailwind + shadcn/ui under `components/ui/`. Colors are HSL CSS
   vars in `globals.css` (light on `:root`, dark on `.dark`); theme toggled by
   `ThemeProvider`. Providers: Theme → Toast → Confirm → AuthGate.
+- **Branding:** the logo lives in `components/shared/Logo.tsx` (`Logo` = mark +
+  wordmark, `LogoMark` = inline SVG mark); the browser favicon is `app/icon.svg`.
+  Raw brand SVGs (favicon/icon/full/mono) sit in `apps/web/public/` — keep
+  `app/icon.svg` and `LogoMark` visually in sync. A `currentColor` SVG loaded via
+  `<img>` does **not** inherit the page color (renders black), so theme-adaptive
+  logos must be inlined, not `<img>`-referenced.
+- **Landing** (`components/marketing/`): a self-contained public marketing page
+  (`LandingPage`) with a looping, auto-playing `IdeaToProductDemo` reel
+  (client-only, respects `prefers-reduced-motion`), a horizontal pipeline flow
+  rail, and an artistic staggered "how it works". Purely presentational — safe to
+  restyle without touching the app.
 - Confirmed project view = `ProjectStages` (tabbed, one stage per tab, downstream
   tabs disabled until prereqs exist). `app/dashboard/page.tsx` is the slim
   orchestrator.

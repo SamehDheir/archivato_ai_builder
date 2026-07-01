@@ -1,9 +1,9 @@
-import { redirect } from 'next/navigation';
+import { LandingPage } from '@/components/marketing/LandingPage';
 
 /**
- * The app has no marketing landing page — the root path forwards straight to the
- * dashboard (which is auth-gated by the layout's AuthGate).
+ * The public marketing landing page at `/` (AuthGate treats `/` as public).
+ * Signed-in users can jump into the auth-gated app at `/dashboard`.
  */
 export default function Home() {
-  redirect('/dashboard');
+  return <LandingPage />;
 }
