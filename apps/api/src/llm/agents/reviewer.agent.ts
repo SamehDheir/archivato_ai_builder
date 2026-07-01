@@ -7,6 +7,8 @@ import {
   type RequirementDocument,
   type ReviewFinding,
   type ReviewReport,
+  type ReviewScores,
+  type Severity,
   type SystemDesign,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
@@ -36,9 +38,11 @@ export class ReviewerAgent extends BaseAgent {
 
   protected readonly systemPrompt = [
     'You are a rigorous Principal Engineer performing an architecture review.',
-    'Assess scalability (score 0-100), security issues, performance risks,',
-    'missing features, and concrete recommendations. Be specific and honest;',
-    'cite the design artifacts. Prefer high-signal findings over generic advice.',
+    'Assess the design across four dimensions — security, scalability,',
+    'performance, and cost — each with a 0-100 sub-score and specific findings,',
+    'then give an overall 0-100 score, the missing requirements, and concrete',
+    'suggestions. Be specific and honest; cite the design artifacts. Prefer',
+    'high-signal findings over generic advice.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -55,7 +59,9 @@ export class ReviewerAgent extends BaseAgent {
         this.buildPrompt(ctx),
       );
       if (this.isValid(raw)) {
-        return { ...(raw as ReviewReport), sessionId, generatedAt };
+        // Trust the model's content but backfill any dimension it omitted so the
+        // report shape is always complete (scores, cost, scalability findings).
+        return this.normalize({ ...raw, sessionId, generatedAt }, ctx);
       }
       this.logger.debug('Review malformed; using deterministic build.');
     } catch (err) {
@@ -75,21 +81,67 @@ export class ReviewerAgent extends BaseAgent {
         .map((n) => n.category)
         .join(', ')}`,
       '',
-      'Return JSON with keys: scalabilityScore (0-100), summary, ' +
-        'securityIssues[] {title,detail,severity}, performanceRisks[] ' +
-        '{title,detail,severity}, missingFeatures[] (strings), ' +
-        'recommendations[] (strings). severity ∈ low|medium|high|critical.',
+      'Return JSON with keys: overallScore (0-100), scores {security,' +
+        'scalability,performance,cost} (each 0-100), summary, securityIssues[] ' +
+        '{title,detail,severity}, scalabilityIssues[] {title,detail,severity}, ' +
+        'performanceRisks[] {title,detail,severity}, costOptimizations[] ' +
+        '{title,detail,severity}, missingFeatures[] (strings), recommendations[] ' +
+        '(strings). severity ∈ low|medium|high|critical.',
     ].join('\n');
   }
 
   private isValid(value: Partial<ReviewReport> | null): boolean {
     return (
       !!value &&
-      typeof value.scalabilityScore === 'number' &&
+      (typeof value.overallScore === 'number' ||
+        typeof value.scalabilityScore === 'number') &&
       Array.isArray(value.securityIssues) &&
       Array.isArray(value.performanceRisks) &&
       Array.isArray(value.recommendations)
     );
+  }
+
+  /**
+   * Fill in any dimension the model left out so every report has the full shape.
+   * Provided values win; missing scores are derived from finding severities.
+   */
+  private normalize(raw: Partial<ReviewReport>, ctx: ReviewContext): ReviewReport {
+    const securityIssues = raw.securityIssues ?? [];
+    const scalabilityIssues = raw.scalabilityIssues ?? [];
+    const performanceRisks = raw.performanceRisks ?? [];
+    const costOptimizations = raw.costOptimizations ?? [];
+
+    const scores: ReviewScores = raw.scores ?? {
+      security: this.scoreFrom(securityIssues),
+      scalability:
+        typeof raw.scalabilityScore === 'number'
+          ? raw.scalabilityScore
+          : this.scoreFrom(scalabilityIssues),
+      performance: this.scoreFrom(performanceRisks),
+      cost: this.scoreFrom(costOptimizations),
+    };
+    const overallScore =
+      typeof raw.overallScore === 'number'
+        ? raw.overallScore
+        : this.overall(scores);
+
+    return {
+      sessionId: raw.sessionId!,
+      generatedAt: raw.generatedAt!,
+      overallScore,
+      scores,
+      scalabilityScore:
+        typeof raw.scalabilityScore === 'number'
+          ? raw.scalabilityScore
+          : scores.scalability,
+      summary: raw.summary ?? this.summary(ctx),
+      securityIssues,
+      scalabilityIssues,
+      performanceRisks,
+      costOptimizations,
+      missingFeatures: raw.missingFeatures ?? [],
+      recommendations: raw.recommendations ?? [],
+    };
   }
 
   // ── deterministic fallback ──────────────────────────────────────────────
@@ -103,18 +155,126 @@ export class ReviewerAgent extends BaseAgent {
     const hasQueue = /bullmq|redis|queue|kafka|rabbit/.test(haystack);
     const hasCache = /redis|cache|cdn/.test(haystack);
     const securityIssues = this.securityIssues(ctx, haystack);
+    const scalabilityIssues = this.scalabilityIssues(ctx, hasQueue);
     const performanceRisks = this.performanceRisks(ctx, hasCache);
+    const costOptimizations = this.costOptimizations(ctx, hasCache);
+
+    const scores: ReviewScores = {
+      security: this.scoreFrom(securityIssues),
+      scalability: this.scalabilityScore(ctx, hasQueue, hasCache),
+      performance: this.scoreFrom(performanceRisks),
+      cost: this.scoreFrom(costOptimizations),
+    };
 
     return {
       sessionId,
       generatedAt,
-      scalabilityScore: this.scalabilityScore(ctx, hasQueue, hasCache),
+      overallScore: this.overall(scores),
+      scores,
+      scalabilityScore: scores.scalability,
       summary: this.summary(ctx),
       securityIssues,
+      scalabilityIssues,
       performanceRisks,
+      costOptimizations,
       missingFeatures: this.missingFeatures(ctx, haystack),
       recommendations: this.recommendations(ctx, hasCache),
     };
+  }
+
+  /** Turn a set of findings into a 0-100 health score (heavier issues cost more). */
+  private scoreFrom(findings: ReviewFinding[]): number {
+    const penalty: Record<Severity, number> = {
+      critical: 25,
+      high: 15,
+      medium: 8,
+      low: 3,
+    };
+    const total = findings.reduce((s, f) => s + (penalty[f.severity] ?? 5), 0);
+    return Math.max(0, Math.min(100, 100 - total));
+  }
+
+  private overall(scores: ReviewScores): number {
+    return Math.round(
+      (scores.security + scores.scalability + scores.performance + scores.cost) /
+        4,
+    );
+  }
+
+  private scalabilityIssues(
+    ctx: ReviewContext,
+    hasQueue: boolean,
+  ): ReviewFinding[] {
+    const issues: ReviewFinding[] = [];
+
+    if (ctx.systemDesign.architecture === 'monolith') {
+      issues.push({
+        title: 'Monolith scales as a single unit',
+        detail:
+          'A single deployable cannot scale hot paths independently. Extract high-load workflows into services or background workers so they scale in isolation.',
+        severity: 'medium',
+      });
+    }
+
+    if (!hasQueue) {
+      issues.push({
+        title: 'No asynchronous processing',
+        detail:
+          'Heavy work (emails, reports, exports) runs inline with requests. Without a queue + workers these block request threads and cap throughput under load.',
+        severity: 'medium',
+      });
+    }
+
+    if (ctx.systemDesign.services.length <= 1) {
+      issues.push({
+        title: 'Single service boundary',
+        detail:
+          'With one service, scaling is all-or-nothing. Define clear module/service seams so bottlenecks can be scaled without scaling everything.',
+        severity: 'low',
+      });
+    }
+
+    return issues;
+  }
+
+  private costOptimizations(
+    ctx: ReviewContext,
+    hasCache: boolean,
+  ): ReviewFinding[] {
+    const recs: ReviewFinding[] = [];
+
+    if (!hasCache) {
+      recs.push({
+        title: 'Add a caching layer',
+        detail:
+          'Cache hot reads (Redis / CDN) to cut repeated database queries — this reduces both compute and database cost under load.',
+        severity: 'medium',
+      });
+    }
+
+    if (ctx.systemDesign.architecture === 'microservices') {
+      recs.push({
+        title: 'Consolidate low-traffic services',
+        detail:
+          'Always-on microservices incur idle infrastructure cost. Merge low-traffic services, or run them serverless, to pay per use instead of for idle capacity.',
+        severity: 'low',
+      });
+    }
+
+    recs.push({
+      title: 'Right-size and autoscale compute',
+      detail:
+        'Set autoscaling with sensible floors/ceilings and right-sized instances so you are not paying for idle capacity off-peak.',
+      severity: 'low',
+    });
+    recs.push({
+      title: 'Index and pool the database',
+      detail:
+        'Proper indexes and connection pooling reduce query time and the number of instances needed to serve the same load, lowering DB spend.',
+      severity: 'low',
+    });
+
+    return recs;
   }
 
   private haystack(ctx: ReviewContext): string {

@@ -102,25 +102,36 @@ export function buildMarkdown(bundle: ExportBundle): string {
   if (bundle.review) {
     const rev = bundle.review;
     h(2, 'AI Review');
-    p(`**Scalability score:** ${rev.scalabilityScore}/100`);
+    p(`**Overall score:** ${rev.overallScore ?? rev.scalabilityScore}/100`);
+    if (rev.scores) {
+      p(
+        `**Security:** ${rev.scores.security}/100 · ` +
+          `**Scalability:** ${rev.scores.scalability}/100 · ` +
+          `**Performance:** ${rev.scores.performance}/100 · ` +
+          `**Cost:** ${rev.scores.cost}/100`,
+      );
+    }
     p(rev.summary);
-    if (rev.securityIssues.length) {
-      h(3, 'Security issues');
-      for (const f of rev.securityIssues) li(`[${f.severity}] **${f.title}** — ${f.detail}`);
-      blank();
+    const findingSections: [string, typeof rev.securityIssues][] = [
+      ['Security issues', rev.securityIssues ?? []],
+      ['Scalability problems', rev.scalabilityIssues ?? []],
+      ['Performance risks', rev.performanceRisks ?? []],
+      ['Cost optimization', rev.costOptimizations ?? []],
+    ];
+    for (const [title, findings] of findingSections) {
+      if (findings.length) {
+        h(3, title);
+        for (const f of findings) li(`[${f.severity}] **${f.title}** — ${f.detail}`);
+        blank();
+      }
     }
-    if (rev.performanceRisks.length) {
-      h(3, 'Performance risks');
-      for (const f of rev.performanceRisks) li(`[${f.severity}] **${f.title}** — ${f.detail}`);
-      blank();
-    }
-    if (rev.missingFeatures.length) {
-      h(3, 'Missing features');
+    if (rev.missingFeatures?.length) {
+      h(3, 'Missing requirements');
       for (const m of rev.missingFeatures) li(m);
       blank();
     }
-    if (rev.recommendations.length) {
-      h(3, 'Recommendations');
+    if (rev.recommendations?.length) {
+      h(3, 'Suggestions');
       for (const rec of rev.recommendations) li(rec);
       blank();
     }

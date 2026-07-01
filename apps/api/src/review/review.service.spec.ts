@@ -143,14 +143,22 @@ describe('ReviewService', () => {
 
     const report = await h.service.generate(sessionId);
     expect(report.sessionId).toBe(sessionId);
-    expect(report.scalabilityScore).toBeGreaterThan(0);
-    expect(report.scalabilityScore).toBeLessThanOrEqual(100);
+    expect(report.overallScore).toBeGreaterThan(0);
+    expect(report.overallScore).toBeLessThanOrEqual(100);
+    // Every dimension gets a 0-100 sub-score, and the legacy alias mirrors it.
+    for (const dim of ['security', 'scalability', 'performance', 'cost'] as const) {
+      expect(report.scores[dim]).toBeGreaterThanOrEqual(0);
+      expect(report.scores[dim]).toBeLessThanOrEqual(100);
+    }
+    expect(report.scalabilityScore).toBe(report.scores.scalability);
     expect(report.summary).toBeTruthy();
     // Pagination exists in the API design, so no "unbounded list" risk.
     expect(
       report.performanceRisks.find((r) => r.title.includes('Unbounded')),
     ).toBeUndefined();
-    expect(Array.isArray(report.recommendations)).toBe(true);
+    // Cost optimization is always populated (new dimension).
+    expect(report.costOptimizations.length).toBeGreaterThan(0);
+    expect(Array.isArray(report.scalabilityIssues)).toBe(true);
     expect(report.recommendations.length).toBeGreaterThan(0);
   });
 
