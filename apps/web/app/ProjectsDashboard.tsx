@@ -172,7 +172,7 @@ function ProjectCard({
       type="button"
       onClick={onOpen}
       disabled={busy}
-      className="group flex flex-col rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-primary/60 disabled:opacity-50"
+      className="group flex flex-col rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md disabled:pointer-events-none disabled:opacity-50"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <Badge variant={status.variant}>{status.label}</Badge>

@@ -93,6 +93,14 @@
     font-family:
       ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
       Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  /* Slightly tighter tracking on headings for a denser, more deliberate feel. */
+  h1, h2, h3, h4 {
+    @apply tracking-tight;
   }
 }
 
