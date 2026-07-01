@@ -1,3 +1,4 @@
+import { Package } from 'lucide-react';
 import type { ApiDesign, ApiEndpoint, SchemaField } from '@archivato/shared';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +35,7 @@ export function ApiDesignView({ design }: { design: ApiDesign }) {
       {design.modules.map((module) => (
         <div className="mt-5" key={module.name}>
           <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+            <Package className="h-4 w-4 text-muted-foreground" />
             {module.name}
             <span className="font-mono text-xs text-muted-foreground">
               {module.basePath}

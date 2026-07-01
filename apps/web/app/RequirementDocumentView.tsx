@@ -1,3 +1,12 @@
+import {
+  Ban,
+  Gauge,
+  Lightbulb,
+  ListChecks,
+  Scale,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import type { RequirementDocument } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -45,7 +54,11 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
 
       <Separator className="mt-3" />
 
-      <Section title="Functional requirements" count={doc.functional.length}>
+      <Section
+        title="Functional requirements"
+        count={doc.functional.length}
+        icon={ListChecks}
+      >
         {doc.functional.length ? (
           <Table>
             <TableHeader>
@@ -86,6 +99,7 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
       <Section
         title="Non-functional requirements"
         count={doc.nonFunctional.length}
+        icon={Gauge}
       >
         {doc.nonFunctional.length ? (
           <Table>
@@ -115,7 +129,7 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
         )}
       </Section>
 
-      <Section title="User roles" count={doc.roles.length}>
+      <Section title="User roles" count={doc.roles.length} icon={Users}>
         {doc.roles.length ? (
           <div className="grid gap-3 sm:grid-cols-2">
             {doc.roles.map((role) => (
@@ -143,7 +157,11 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
         )}
       </Section>
 
-      <Section title="Business rules" count={doc.businessRules.length}>
+      <Section
+        title="Business rules"
+        count={doc.businessRules.length}
+        icon={Scale}
+      >
         {doc.businessRules.length ? (
           <Table>
             <TableHeader>
@@ -171,11 +189,13 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
       <ListSection
         title="Constraints"
         count={doc.constraints.length}
+        icon={Ban}
         items={doc.constraints}
       />
       <ListSection
         title="Assumptions"
         count={doc.assumptions.length}
+        icon={Lightbulb}
         items={doc.assumptions}
       />
     </div>
@@ -185,15 +205,18 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
 export function Section({
   title,
   count,
+  icon: Icon,
   children,
 }: {
   title: string;
   count?: number;
+  icon?: LucideIcon;
   children: React.ReactNode;
 }) {
   return (
     <div className="mt-6">
       <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
         {title}
         {typeof count === 'number' && (
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
@@ -213,14 +236,16 @@ export function Empty() {
 function ListSection({
   title,
   count,
+  icon,
   items,
 }: {
   title: string;
   count?: number;
+  icon?: LucideIcon;
   items: string[];
 }) {
   return (
-    <Section title={title} count={count}>
+    <Section title={title} count={count} icon={icon}>
       {items.length ? (
         <ul className="list-disc space-y-1 pl-5 text-sm marker:text-muted-foreground">
           {items.map((it, i) => (

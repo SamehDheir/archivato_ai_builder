@@ -710,6 +710,20 @@ DB Design → API Design → Review → Export
     AuthGate). Replaced every `window.confirm` (page nav guard + canvas sub-view
     toggle). Web type-check clean; no backend change.
 
+- **Consistent iconography (2026-06-30).** lucide icons on tab triggers +
+  section headers for faster scanning.
+  - `ProjectStages`: the 11 tab triggers are now rendered from a `TABS` config
+    (`{value,label,icon}`) mapped into `<TabsTrigger className="gap-1.5">` with a
+    3.5-icon — Requirements=FileText, System=Network, Database=Database,
+    API=Webhook, Diagrams=Workflow, Canvas=Shapes, Review=ClipboardCheck,
+    Export=Download, API Docs=BookOpen, Refine=MessageSquare, History=History.
+  - Shared `Section` (in `RequirementDocumentView`) gained an optional
+    `icon?: LucideIcon` rendered before the title (used by every View; editors
+    that reuse Section just omit it). Icons wired into RequirementDocumentView
+    (ListChecks/Gauge/Users/Scale/Ban/Lightbulb), SystemDesignView
+    (Network/Layers/Boxes), DatabaseDesignView (Workflow/Table2/Share2), and the
+    ApiDesignView module headers (Package). Web type-check clean; no backend.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`

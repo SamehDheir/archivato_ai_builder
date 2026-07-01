@@ -1,3 +1,4 @@
+import { Boxes, Layers, Network } from 'lucide-react';
 import type { SystemDesign } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,7 +33,7 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
         />
       </div>
 
-      <Section title="Architecture">
+      <Section title="Architecture" icon={Network}>
         <Badge variant="primary">
           {ARCH_LABEL[design.architecture] ?? design.architecture}
         </Badge>
@@ -41,7 +42,7 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
         </p>
       </Section>
 
-      <Section title="Tech stack">
+      <Section title="Tech stack" icon={Layers}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -64,7 +65,7 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
         </Table>
       </Section>
 
-      <Section title="Services">
+      <Section title="Services" icon={Boxes}>
         <div className="grid gap-3 sm:grid-cols-2">
           {design.services.map((s) => (
             <Card key={s.name}>

@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import {
+  BookOpen,
   CheckCircle2,
   ClipboardCheck,
   Database as DatabaseIcon,
+  Download,
   FileText,
+  History,
+  MessageSquare,
   Network,
+  Shapes,
   Webhook,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
 import type {
@@ -53,6 +59,21 @@ const STAGE_LABEL: Record<PipelineStageName, string> = {
   'api-design': 'API design',
   review: 'AI review',
 };
+
+/** Tab order + labels + icons (drives the tab bar). */
+const TABS: { value: TabKey; label: string; icon: LucideIcon }[] = [
+  { value: 'requirements', label: 'Requirements', icon: FileText },
+  { value: 'system', label: 'System', icon: Network },
+  { value: 'database', label: 'Database', icon: DatabaseIcon },
+  { value: 'api', label: 'API', icon: Webhook },
+  { value: 'diagrams', label: 'Diagrams', icon: Workflow },
+  { value: 'canvas', label: 'Canvas', icon: Shapes },
+  { value: 'review', label: 'Review', icon: ClipboardCheck },
+  { value: 'export', label: 'Export', icon: Download },
+  { value: 'apidocs', label: 'API Docs', icon: BookOpen },
+  { value: 'refine', label: 'Refine', icon: MessageSquare },
+  { value: 'history', label: 'History', icon: History },
+];
 
 export type TabKey =
   | 'requirements'
@@ -186,37 +207,17 @@ export function ProjectStages({
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
           <TabsList className="sticky top-16 z-30 flex h-auto flex-wrap justify-start gap-1 shadow-sm">
-            <TabsTrigger value="requirements">Requirements</TabsTrigger>
-            <TabsTrigger value="system" disabled={!available.system}>
-              System
-            </TabsTrigger>
-            <TabsTrigger value="database" disabled={!available.database}>
-              Database
-            </TabsTrigger>
-            <TabsTrigger value="api" disabled={!available.api}>
-              API
-            </TabsTrigger>
-            <TabsTrigger value="diagrams" disabled={!available.diagrams}>
-              Diagrams
-            </TabsTrigger>
-            <TabsTrigger value="canvas" disabled={!available.canvas}>
-              Canvas
-            </TabsTrigger>
-            <TabsTrigger value="review" disabled={!available.review}>
-              Review
-            </TabsTrigger>
-            <TabsTrigger value="export" disabled={!available.export}>
-              Export
-            </TabsTrigger>
-            <TabsTrigger value="apidocs" disabled={!available.apidocs}>
-              API Docs
-            </TabsTrigger>
-            <TabsTrigger value="refine" disabled={!available.refine}>
-              Refine
-            </TabsTrigger>
-            <TabsTrigger value="history" disabled={!available.history}>
-              History
-            </TabsTrigger>
+            {TABS.map(({ value, label, icon: Icon }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                disabled={!available[value]}
+                className="gap-1.5"
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           {/* Requirements */}

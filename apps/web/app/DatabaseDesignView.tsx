@@ -1,5 +1,6 @@
 'use client';
 
+import { Share2, Table2, Workflow } from 'lucide-react';
 import { buildErd, type DatabaseDesign, type EntityColumn } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -22,7 +23,7 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
         />
       </div>
 
-      <Section title="ER Diagram">
+      <Section title="ER Diagram" icon={Workflow}>
         {design.entities.length ? (
           <MermaidView code={buildErd(design)} />
         ) : (
@@ -30,7 +31,7 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
         )}
       </Section>
 
-      <Section title="Entities">
+      <Section title="Entities" icon={Table2}>
         <div className="grid gap-3 sm:grid-cols-2">
           {design.entities.map((entity) => (
             <Card key={entity.name}>
@@ -63,7 +64,7 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
         </div>
       </Section>
 
-      <Section title="Relations">
+      <Section title="Relations" icon={Share2}>
         {design.relations.length ? (
           <ul className="space-y-1.5 text-sm">
             {design.relations.map((r, i) => (
