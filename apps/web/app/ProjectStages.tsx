@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  ClipboardCheck,
+  Database as DatabaseIcon,
+  FileText,
+  Network,
+  Webhook,
+  type LucideIcon,
+} from 'lucide-react';
 import type {
   ApiDesign,
   DatabaseDesign,
@@ -33,6 +41,7 @@ import { ChatPanel } from './ChatPanel';
 import { VersionHistory } from './VersionHistory';
 import { DiagramsView } from './DiagramsView';
 import { DesignCanvas } from './DesignCanvas';
+import { EmptyState } from './EmptyState';
 import { SummaryView } from './SummaryView';
 
 export type ActiveJob = { stage: PipelineStageName; progress: number };
@@ -205,13 +214,23 @@ export function ProjectStages({
           <TabsContent value="requirements" className="mt-4 space-y-3">
             {!doc ? (
               <>
-                <p className="text-sm text-muted-foreground">
-                  Generate the formal Requirement Document from this interview.
-                </p>
-                {summary && <SummaryView summary={summary} />}
-                <Button onClick={onGenerateRequirements} disabled={busy}>
-                  {busy ? 'Generating…' : 'Generate Requirement Document'}
-                </Button>
+                <EmptyState
+                  icon={FileText}
+                  title="Generate the requirement document"
+                  description="Turn this interview into a formal document: functional & non-functional requirements, user roles, business rules, constraints, and assumptions."
+                >
+                  <Button onClick={onGenerateRequirements} disabled={busy}>
+                    {busy ? 'Generating…' : 'Generate Requirement Document'}
+                  </Button>
+                </EmptyState>
+                {summary && (
+                  <div className="mt-2">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Interview preview
+                    </p>
+                    <SummaryView summary={summary} />
+                  </div>
+                )}
               </>
             ) : editing === 'requirements' ? (
               <RequirementDocumentEditor
@@ -240,7 +259,9 @@ export function ProjectStages({
           <TabsContent value="system" className="mt-4 space-y-3">
             {!design ? (
               <GenerateStage
-                hint="Design the system architecture from the requirements."
+                icon={Network}
+                title="Design the architecture"
+                hint="Turn the requirements into an architecture: the pattern (monolith / microservices), a tech stack, and the service modules."
                 busy={busy}
                 label="Generate System Design"
                 onGenerate={onGenerateSystem}
@@ -272,7 +293,9 @@ export function ProjectStages({
           <TabsContent value="database" className="mt-4 space-y-3">
             {!dbDesign ? (
               <GenerateStage
-                hint="Design the database schema from the services and roles."
+                icon={DatabaseIcon}
+                title="Design the database"
+                hint="Derive the schema — entities, columns, primary/foreign keys, and relationships — from the services and roles."
                 busy={busy}
                 label="Generate Database Design"
                 onGenerate={onGenerateDatabase}
@@ -304,7 +327,9 @@ export function ProjectStages({
           <TabsContent value="api" className="mt-4 space-y-3">
             {!apiDesign ? (
               <GenerateStage
-                hint="Design the REST API from the entities and services."
+                icon={Webhook}
+                title="Design the API"
+                hint="Generate the REST API — endpoints grouped by module, with request/response schemas and status codes — from the entities and services."
                 busy={busy}
                 label="Generate API Design"
                 onGenerate={onGenerateApi}
@@ -352,7 +377,9 @@ export function ProjectStages({
           <TabsContent value="review" className="mt-4 space-y-3">
             {!review ? (
               <GenerateStage
-                hint="Run the AI review of the whole system."
+                icon={ClipboardCheck}
+                title="Review the whole system"
+                hint="Run the AI architecture review: a scalability score, security & performance findings, missing features, and recommendations."
                 busy={busy}
                 label="Run AI Review"
                 onGenerate={onGenerateReview}
@@ -402,23 +429,26 @@ export function ProjectStages({
 }
 
 function GenerateStage({
+  icon,
+  title,
   hint,
   label,
   busy,
   onGenerate,
 }: {
+  icon: LucideIcon;
+  title: string;
   hint: string;
   label: string;
   busy: boolean;
   onGenerate: () => void;
 }) {
   return (
-    <>
-      <p className="text-sm text-muted-foreground">{hint}</p>
+    <EmptyState icon={icon} title={title} description={hint}>
       <Button onClick={onGenerate} disabled={busy}>
         {busy ? 'Working…' : label}
       </Button>
-    </>
+    </EmptyState>
   );
 }
 

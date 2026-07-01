@@ -2,8 +2,10 @@
 
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
+import { Database as DatabaseIcon, Network } from 'lucide-react';
 import type { DatabaseDesign, SystemDesign } from '@archivato/shared';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from './EmptyState';
 
 // React Flow touches the DOM and ships a large bundle → client-only + code-split.
 const ArchitectureCanvas = dynamic(
@@ -72,7 +74,11 @@ export function DesignCanvas({
             onSaved={onSavedDesign}
           />
         ) : (
-          <Hint>Generate the system design first to edit it on the canvas.</Hint>
+          <EmptyState
+            icon={Network}
+            title="No architecture yet"
+            description="Generate the system design first (System tab), then drag its services around and wire up dependencies here."
+          />
         )
       ) : dbDesign ? (
         <DatabaseCanvas
@@ -81,12 +87,12 @@ export function DesignCanvas({
           onSaved={onSavedDbDesign}
         />
       ) : (
-        <Hint>Generate the database design first to edit it on the canvas.</Hint>
+        <EmptyState
+          icon={DatabaseIcon}
+          title="No database yet"
+          description="Generate the database design first (Database tab), then arrange its entities and draw relations here."
+        />
       )}
     </div>
   );
-}
-
-function Hint({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-muted-foreground">{children}</p>;
 }

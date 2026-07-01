@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
 import type { InterviewStatus, ProjectScale, ProjectSummary } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -81,9 +81,15 @@ export function ProjectsDashboard({
       {showForm ? (
         <Card>
           <CardHeader>
-            <CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
               {projects.length === 0 ? 'Start your first project' : 'New project'}
             </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Describe your idea — the AI interviews you to clarify it, then
+              generates the full system design: requirements, architecture,
+              database, API, review, and export.
+            </p>
           </CardHeader>
           <CardContent>
             <form className="space-y-3" onSubmit={onStart}>

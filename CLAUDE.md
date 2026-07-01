@@ -676,6 +676,18 @@ DB Design → API Design → Review → Export
   lifted `stageTab` so the crumb tracks the active tab live. Web type-check
   clean; no backend change.
 
+- **Empty states with guidance (2026-06-30).** Bare "Generate X" buttons
+  replaced with a friendly placeholder: `apps/web/app/EmptyState.tsx` (dashed
+  card — a circular icon, a title, a one-line "what this produces", and the
+  action as children). `ProjectStages` `GenerateStage` now renders `EmptyState`
+  and each stage passes a lucide icon + title + fuller description
+  (Requirements=FileText, System=Network, Database=Database, API=Webhook,
+  Review=ClipboardCheck); the Requirements empty state keeps the interview
+  `SummaryView` below under an "Interview preview" label. `DesignCanvas`'s
+  missing-artifact hints became `EmptyState`s. `ProjectsDashboard` first-run form
+  gained a Sparkles icon + one-line explanation of the pipeline. Web type-check
+  clean; no backend change.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`
