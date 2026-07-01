@@ -52,6 +52,7 @@ const TAB_LABEL: Record<TabKey, string> = {
   diagrams: 'Diagrams',
   canvas: 'Canvas',
   review: 'Review',
+  roadmap: 'Roadmap',
   export: 'Export',
   apidocs: 'API Docs',
   refine: 'Refine',

@@ -8,6 +8,7 @@ import {
   Database as DatabaseIcon,
   Download,
   FileText,
+  Flag,
   History,
   Loader2,
   MessageSquare,
@@ -44,6 +45,7 @@ import { DatabaseDesignEditor } from './DatabaseDesignEditor';
 import { ApiDesignView } from './ApiDesignView';
 import { ApiDesignEditor } from './ApiDesignEditor';
 import { ReviewView } from './ReviewView';
+import { RoadmapPanel } from './RoadmapPanel';
 import { ExportView } from './ExportView';
 import { OpenApiView } from './OpenApiView';
 import { ChatPanel } from './ChatPanel';
@@ -75,6 +77,7 @@ const TABS: { value: TabKey; label: string; icon: LucideIcon }[] = [
   { value: 'diagrams', label: 'Diagrams', icon: Workflow },
   { value: 'canvas', label: 'Canvas', icon: Shapes },
   { value: 'review', label: 'Review', icon: ClipboardCheck },
+  { value: 'roadmap', label: 'Roadmap', icon: Flag },
   { value: 'export', label: 'Export', icon: Download },
   { value: 'apidocs', label: 'API Docs', icon: BookOpen },
   { value: 'refine', label: 'Refine', icon: MessageSquare },
@@ -90,6 +93,7 @@ export type TabKey =
   | 'diagrams'
   | 'canvas'
   | 'review'
+  | 'roadmap'
   | 'export'
   | 'apidocs'
   | 'refine'
@@ -172,6 +176,7 @@ export function ProjectStages({
     diagrams: !!design,
     canvas: !!design,
     review: !!apiDesign,
+    roadmap: !!apiDesign,
     export: !!apiDesign,
     apidocs: !!apiDesign,
     refine: !!apiDesign,
@@ -447,6 +452,11 @@ export function ProjectStages({
                 />
               </>
             )}
+          </TabsContent>
+
+          {/* Roadmap (standalone, gated on the full pipeline) */}
+          <TabsContent value="roadmap" className="mt-4">
+            <RoadmapPanel sessionId={sessionId} reloadKey={versionsReload} />
           </TabsContent>
 
           {/* Export */}

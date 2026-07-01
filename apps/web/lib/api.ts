@@ -13,6 +13,7 @@ import type {
   ProjectSnapshot,
   ProjectStructure,
   ProductVision,
+  ProjectRoadmap,
   ProjectSummary,
   ProjectVersionDetail,
   ProjectVersionMeta,
@@ -181,6 +182,15 @@ export const productVisionApi = {
 
   get: (sessionId: string) =>
     request<ProductVision>(`/product-vision/${sessionId}`),
+};
+
+export const roadmapApi = {
+  generate: (sessionId: string) =>
+    request<ProjectRoadmap>(`/roadmap/${sessionId}/generate`, {
+      method: 'POST',
+    }),
+
+  get: (sessionId: string) => request<ProjectRoadmap>(`/roadmap/${sessionId}`),
 };
 
 export const chatApi = {

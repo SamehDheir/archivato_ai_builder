@@ -6,9 +6,12 @@ An AI SaaS that turns a business idea into a complete software system design.
 NOT a chatbot — it's an **AI Software Architecture Generator**.
 
 Pipeline: `Idea → Interview → Requirements → System Design → DB Design →
-API Design → Review → Export`, with a standalone **Product Vision** (PM view of
-the confirmed interview) plus post-generation **chat refine**, **version
-history**, **diagrams/canvas**, and **auth**.
+API Design → Review → Export`. Review is a multi-dimension **AI Architect
+Review** (overall + per-dimension scores for security/scalability/performance/
+cost, findings per category, critical-issues callout). Two standalone artifacts
+hang off the confirmed session: **Product Vision** (PM view of the interview)
+and **Roadmap** (phased implementation plan from the full design). Plus
+post-generation **chat refine**, **version history**, **diagrams/canvas**, **auth**.
 
 ## Tech Stack
 
@@ -43,12 +46,19 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
-  `api-design`, `review`, `product-vision`, `export`, `chat`, `jobs`,
-  `versions`, `diagrams`, `auth`). Modules export their repository token +
+  `api-design`, `review`, `product-vision`, `roadmap`, `export`, `chat`,
+  `jobs`, `versions`, `diagrams`, `auth`). Modules export their repository token +
   service for downstream use.
-- **Standalone stages** (e.g. `product-vision`, the PM agent) generate from the
-  confirmed interview only — they don't gate, and aren't gated by, the design
-  chain. Own artifact table + owner-guarded controller; not in version snapshots.
+- **Standalone stages** generate from the session but don't gate, and aren't
+  gated by, the design chain; each has its own artifact table + owner-guarded
+  controller and is not in version snapshots. `product-vision` needs only the
+  confirmed interview; `roadmap` needs the full pipeline (imports all upstream
+  stores like `review`, 409s until the API design exists).
+- **Agents backfill via `normalize()`.** Where an artifact has many optional
+  parts (e.g. the reviewer's per-dimension scores/findings), the agent trusts a
+  valid LLM response but fills any omitted field deterministically, so the shape
+  is always complete. New optional fields on a JSON-stored artifact need
+  defensive defaults in consumers (view + markdown export) for old rows.
 - **Repository pattern everywhere.** Every store has an interface + in-memory
   impl (used by unit tests, DB-free) + Prisma impl. Feature modules provide the
   Prisma repo.

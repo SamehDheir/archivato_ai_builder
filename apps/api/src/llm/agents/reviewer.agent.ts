@@ -111,14 +111,17 @@ export class ReviewerAgent extends BaseAgent {
     const performanceRisks = raw.performanceRisks ?? [];
     const costOptimizations = raw.costOptimizations ?? [];
 
-    const scores: ReviewScores = raw.scores ?? {
-      security: this.scoreFrom(securityIssues),
+    // Fill each sub-score independently so a partial `scores` object from the
+    // model (e.g. only { security }) still yields a complete, defined set.
+    const scores: ReviewScores = {
+      security: raw.scores?.security ?? this.scoreFrom(securityIssues),
       scalability:
-        typeof raw.scalabilityScore === 'number'
+        raw.scores?.scalability ??
+        (typeof raw.scalabilityScore === 'number'
           ? raw.scalabilityScore
-          : this.scoreFrom(scalabilityIssues),
-      performance: this.scoreFrom(performanceRisks),
-      cost: this.scoreFrom(costOptimizations),
+          : this.scoreFrom(scalabilityIssues)),
+      performance: raw.scores?.performance ?? this.scoreFrom(performanceRisks),
+      cost: raw.scores?.cost ?? this.scoreFrom(costOptimizations),
     };
     const overallScore =
       typeof raw.overallScore === 'number'

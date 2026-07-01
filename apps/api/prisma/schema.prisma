@@ -112,6 +112,7 @@ model InterviewSession {
   apiDesign           ApiDesign?
   reviewReport        ReviewReport?
   productVision       ProductVision?
+  roadmap             ProjectRoadmap?
   chatMessages        ChatMessage[]
   versions            ProjectVersion[]
 
@@ -209,4 +210,16 @@ model ProductVision {
   updatedAt DateTime         @updatedAt
 
   @@map("product_visions")
+}
+
+// Project Roadmap (Roadmap Planner stage). Standalone artifact — a phased
+// implementation plan (phases → milestones → tasks) derived from the pipeline.
+model ProjectRoadmap {
+  sessionId String           @id
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("project_roadmaps")
 }

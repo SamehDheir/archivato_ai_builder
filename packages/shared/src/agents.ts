@@ -13,6 +13,8 @@ export enum AgentRole {
   Reviewer = 'reviewer',
   /** Frames the product like a PM: vision, goals, MVP, roadmap, metrics, personas. */
   ProductManager = 'product_manager',
+  /** Sequences the build into phased milestones + tasks (implementation roadmap). */
+  RoadmapPlanner = 'roadmap_planner',
   /** Applies post-generation chat instructions by amending the requirements. */
   Refiner = 'refiner',
 }

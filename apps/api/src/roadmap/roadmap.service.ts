@@ -1,0 +1,104 @@
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type { ProjectRoadmap } from '@archivato/shared';
+import {
+  INTERVIEW_SESSION_REPOSITORY,
+  type InterviewSessionRepository,
+} from '../interview/interview-session.repository';
+import {
+  REQUIREMENT_DOCUMENT_REPOSITORY,
+  type RequirementDocumentRepository,
+} from '../requirements/requirement-document.repository';
+import {
+  SYSTEM_DESIGN_REPOSITORY,
+  type SystemDesignRepository,
+} from '../system-design/system-design.repository';
+import {
+  DATABASE_DESIGN_REPOSITORY,
+  type DatabaseDesignRepository,
+} from '../database-design/database-design.repository';
+import {
+  API_DESIGN_REPOSITORY,
+  type ApiDesignRepository,
+} from '../api-design/api-design.repository';
+import { RoadmapPlannerAgent } from '../llm/agents/roadmap-planner.agent';
+import {
+  PROJECT_ROADMAP_REPOSITORY,
+  type ProjectRoadmapRepository,
+} from './roadmap.repository';
+
+@Injectable()
+export class RoadmapService {
+  constructor(
+    @Inject(INTERVIEW_SESSION_REPOSITORY)
+    private readonly sessions: InterviewSessionRepository,
+    @Inject(REQUIREMENT_DOCUMENT_REPOSITORY)
+    private readonly requirements: RequirementDocumentRepository,
+    @Inject(SYSTEM_DESIGN_REPOSITORY)
+    private readonly systemDesigns: SystemDesignRepository,
+    @Inject(DATABASE_DESIGN_REPOSITORY)
+    private readonly databaseDesigns: DatabaseDesignRepository,
+    @Inject(API_DESIGN_REPOSITORY)
+    private readonly apiDesigns: ApiDesignRepository,
+    @Inject(PROJECT_ROADMAP_REPOSITORY)
+    private readonly roadmaps: ProjectRoadmapRepository,
+    private readonly planner: RoadmapPlannerAgent,
+  ) {}
+
+  /**
+   * Generate (or regenerate) the implementation roadmap. Requires the full
+   * pipeline (confirmed interview + requirements, system, database, and API
+   * designs) since the roadmap sequences the actual services/entities/endpoints.
+   * Standalone: it does not gate the design pipeline.
+   */
+  async generate(sessionId: string): Promise<ProjectRoadmap> {
+    const session = await this.sessions.findById(sessionId);
+    if (!session) {
+      throw new NotFoundException(`Interview session ${sessionId} not found.`);
+    }
+    if (session.status !== 'confirmed') {
+      throw new ConflictException('The roadmap requires a confirmed interview.');
+    }
+
+    const apiDesign = await this.apiDesigns.findBySessionId(sessionId);
+    if (!apiDesign) {
+      throw new ConflictException(
+        'Generate the API design before planning the roadmap.',
+      );
+    }
+
+    const [requirements, systemDesign, databaseDesign] = await Promise.all([
+      this.requirements.findBySessionId(sessionId),
+      this.systemDesigns.findBySessionId(sessionId),
+      this.databaseDesigns.findBySessionId(sessionId),
+    ]);
+    if (!requirements || !systemDesign || !databaseDesign) {
+      throw new ConflictException('Upstream design artifacts are missing.');
+    }
+
+    const roadmap = await this.planner.generate(sessionId, {
+      idea: session.input.idea,
+      intent: session.intent,
+      requirements,
+      systemDesign,
+      databaseDesign,
+      apiDesign,
+    });
+
+    return this.roadmaps.upsert(roadmap);
+  }
+
+  async get(sessionId: string): Promise<ProjectRoadmap> {
+    const roadmap = await this.roadmaps.findBySessionId(sessionId);
+    if (!roadmap) {
+      throw new NotFoundException(
+        `No roadmap for session ${sessionId}. Generate it first.`,
+      );
+    }
+    return roadmap;
+  }
+}
