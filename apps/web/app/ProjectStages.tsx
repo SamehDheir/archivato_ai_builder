@@ -86,6 +86,8 @@ export function ProjectStages({
   versionsReload,
   tab,
   onTabChange,
+  dirty,
+  onDirty,
   onGenerateRequirements,
   onGenerateSystem,
   onGenerateDatabase,
@@ -111,6 +113,10 @@ export function ProjectStages({
   versionsReload: number;
   tab: TabKey;
   onTabChange: (tab: TabKey) => void;
+  /** Whether the open editor/canvas currently has unsaved edits. */
+  dirty: boolean;
+  /** Report whether the open editor/canvas has unsaved edits (drives the guard). */
+  onDirty: (dirty: boolean) => void;
   onGenerateRequirements: () => void;
   onGenerateSystem: () => void;
   onGenerateDatabase: () => void;
@@ -149,8 +155,17 @@ export function ProjectStages({
   useEffect(() => {
     if (!available[tab]) setTab('requirements');
     setEditing(null);
+    onDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc, design, dbDesign, apiDesign]);
+
+  // Leaving a stage tab exits any open editor (the leave guard already ran in
+  // the parent, so a confirmed switch discards the draft).
+  useEffect(() => {
+    setEditing(null);
+    onDirty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   return (
     <Card>
@@ -169,14 +184,8 @@ export function ProjectStages({
           </div>
         )}
 
-        <Tabs
-          value={tab}
-          onValueChange={(v) => {
-            setTab(v as TabKey);
-            setEditing(null);
-          }}
-        >
-          <TabsList className="flex h-auto flex-wrap justify-start gap-1">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+          <TabsList className="sticky top-16 z-30 flex h-auto flex-wrap justify-start gap-1 shadow-sm">
             <TabsTrigger value="requirements">Requirements</TabsTrigger>
             <TabsTrigger value="system" disabled={!available.system}>
               System
@@ -236,11 +245,16 @@ export function ProjectStages({
               <RequirementDocumentEditor
                 doc={doc}
                 sessionId={sessionId}
+                onDirty={() => onDirty(true)}
                 onSaved={(d) => {
+                  onDirty(false);
                   onSavedDoc(d);
                   setEditing(null);
                 }}
-                onCancel={() => setEditing(null)}
+                onCancel={() => {
+                  onDirty(false);
+                  setEditing(null);
+                }}
               />
             ) : (
               <>
@@ -248,7 +262,10 @@ export function ProjectStages({
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateRequirements}
-                  onEdit={() => setEditing('requirements')}
+                  onEdit={() => {
+                    onDirty(false);
+                    setEditing('requirements');
+                  }}
                   next={{ label: 'System Design', go: () => setTab('system') }}
                 />
               </>
@@ -270,11 +287,16 @@ export function ProjectStages({
               <SystemDesignEditor
                 design={design}
                 sessionId={sessionId}
+                onDirty={() => onDirty(true)}
                 onSaved={(d) => {
+                  onDirty(false);
                   onSavedDesign(d);
                   setEditing(null);
                 }}
-                onCancel={() => setEditing(null)}
+                onCancel={() => {
+                  onDirty(false);
+                  setEditing(null);
+                }}
               />
             ) : (
               <>
@@ -282,7 +304,10 @@ export function ProjectStages({
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateSystem}
-                  onEdit={() => setEditing('system')}
+                  onEdit={() => {
+                    onDirty(false);
+                    setEditing('system');
+                  }}
                   next={{ label: 'Database', go: () => setTab('database') }}
                 />
               </>
@@ -304,11 +329,16 @@ export function ProjectStages({
               <DatabaseDesignEditor
                 design={dbDesign}
                 sessionId={sessionId}
+                onDirty={() => onDirty(true)}
                 onSaved={(d) => {
+                  onDirty(false);
                   onSavedDbDesign(d);
                   setEditing(null);
                 }}
-                onCancel={() => setEditing(null)}
+                onCancel={() => {
+                  onDirty(false);
+                  setEditing(null);
+                }}
               />
             ) : (
               <>
@@ -316,7 +346,10 @@ export function ProjectStages({
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateDatabase}
-                  onEdit={() => setEditing('database')}
+                  onEdit={() => {
+                    onDirty(false);
+                    setEditing('database');
+                  }}
                   next={{ label: 'API', go: () => setTab('api') }}
                 />
               </>
@@ -338,11 +371,16 @@ export function ProjectStages({
               <ApiDesignEditor
                 design={apiDesign}
                 sessionId={sessionId}
+                onDirty={() => onDirty(true)}
                 onSaved={(d) => {
+                  onDirty(false);
                   onSavedApiDesign(d);
                   setEditing(null);
                 }}
-                onCancel={() => setEditing(null)}
+                onCancel={() => {
+                  onDirty(false);
+                  setEditing(null);
+                }}
               />
             ) : (
               <>
@@ -350,7 +388,10 @@ export function ProjectStages({
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateApi}
-                  onEdit={() => setEditing('api')}
+                  onEdit={() => {
+                    onDirty(false);
+                    setEditing('api');
+                  }}
                   next={{ label: 'Review', go: () => setTab('review') }}
                 />
               </>
@@ -368,6 +409,8 @@ export function ProjectStages({
               sessionId={sessionId}
               design={design}
               dbDesign={dbDesign}
+              dirty={dirty}
+              onDirty={onDirty}
               onSavedDesign={onSavedDesign}
               onSavedDbDesign={onSavedDbDesign}
             />

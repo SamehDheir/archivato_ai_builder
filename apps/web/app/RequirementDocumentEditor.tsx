@@ -31,11 +31,14 @@ export function RequirementDocumentEditor({
   sessionId,
   onSaved,
   onCancel,
+  onDirty,
 }: {
   doc: RequirementDocument;
   sessionId: string;
   onSaved: (doc: RequirementDocument) => void;
   onCancel: () => void;
+  /** Called on the first edit so the parent can guard against losing changes. */
+  onDirty?: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => ({
     functional: doc.functional,
@@ -49,12 +52,14 @@ export function RequirementDocumentEditor({
   const [error, setError] = useState<string | null>(null);
 
   /** Immutably edit the draft via a structured clone + mutation. */
-  const patch = (fn: (d: Draft) => void) =>
+  const patch = (fn: (d: Draft) => void) => {
+    onDirty?.();
     setDraft((prev) => {
       const next = structuredClone(prev);
       fn(next);
       return next;
     });
+  };
 
   async function save() {
     setSaving(true);

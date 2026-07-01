@@ -35,11 +35,13 @@ export function DatabaseDesignEditor({
   sessionId,
   onSaved,
   onCancel,
+  onDirty,
 }: {
   design: DatabaseDesign;
   sessionId: string;
   onSaved: (design: DatabaseDesign) => void;
   onCancel: () => void;
+  onDirty?: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => ({
     databaseType: design.databaseType,
@@ -49,12 +51,14 @@ export function DatabaseDesignEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const patch = (fn: (d: Draft) => void) =>
+  const patch = (fn: (d: Draft) => void) => {
+    onDirty?.();
     setDraft((prev) => {
       const next = structuredClone(prev);
       fn(next);
       return next;
     });
+  };
 
   async function save() {
     setSaving(true);

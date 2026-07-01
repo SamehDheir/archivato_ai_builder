@@ -26,6 +26,7 @@ import {
   systemDesignApi,
 } from '../lib/api';
 import { useToast } from './toast';
+import { useConfirm } from './confirm-dialog';
 import { Breadcrumbs, type Crumb } from './Breadcrumbs';
 import { ProjectsDashboard } from './ProjectsDashboard';
 import { ProgressPanel } from './ProgressPanel';
@@ -62,6 +63,7 @@ const LEGACY_SESSION_KEY = 'archivato.sessionId';
 
 export default function Home() {
   const toast = useToast();
+  const confirm = useConfirm();
   const [state, setState] = useState<InterviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -89,6 +91,8 @@ export default function Home() {
   const [versionsReload, setVersionsReload] = useState(0);
   // The active stage tab (lifted here so the Project Wizard can navigate to it).
   const [stageTab, setStageTab] = useState<TabKey>('requirements');
+  // True when an open editor/canvas has unsaved edits (drives the leave guard).
+  const [dirty, setDirty] = useState(false);
 
   async function loadSession(sessionId: string) {
     const restored = await interviewApi.get(sessionId);
@@ -288,15 +292,48 @@ export default function Home() {
     setError(null);
   }
 
+  /** Warn (via the in-app dialog) before discarding unsaved editor/canvas edits. */
+  async function confirmLeave() {
+    if (!dirty) return true;
+    return confirm({
+      title: 'Discard unsaved changes?',
+      description:
+        'You have unsaved edits on this stage. Leaving now will discard them.',
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+      destructive: true,
+    });
+  }
+
+  /** Change the active stage tab, guarding against unsaved edits. */
+  async function goToStage(next: TabKey) {
+    if (!(await confirmLeave())) return;
+    setDirty(false);
+    setStageTab(next);
+  }
+
   /**
    * Return to the projects dashboard without deleting anything — the current
    * project stays in the database and reappears in the (refreshed) list.
    */
-  function backToProjects() {
+  async function backToProjects() {
+    if (!(await confirmLeave())) return;
+    setDirty(false);
     reset();
     setCreating(false);
     void refreshProjects();
   }
+
+  // Native warning if the user closes/reloads the tab with unsaved edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   if (restoring) {
     return (
@@ -323,7 +360,7 @@ export default function Home() {
         title: ideaText,
         onClick:
           state.status === 'confirmed'
-            ? () => setStageTab('requirements')
+            ? () => goToStage('requirements')
             : undefined,
       },
       {
@@ -382,7 +419,7 @@ export default function Home() {
             review={review}
             onNavigate={
               state.status === 'confirmed'
-                ? (t) => setStageTab(t as TabKey)
+                ? (t) => goToStage(t as TabKey)
                 : undefined
             }
           />
@@ -414,7 +451,9 @@ export default function Home() {
               error={error}
               versionsReload={versionsReload}
               tab={stageTab}
-              onTabChange={setStageTab}
+              onTabChange={goToStage}
+              dirty={dirty}
+              onDirty={setDirty}
               onGenerateRequirements={() =>
                 generateStage<RequirementDocument>('requirements', setDoc)
               }

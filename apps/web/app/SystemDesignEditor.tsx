@@ -29,11 +29,13 @@ export function SystemDesignEditor({
   sessionId,
   onSaved,
   onCancel,
+  onDirty,
 }: {
   design: SystemDesign;
   sessionId: string;
   onSaved: (design: SystemDesign) => void;
   onCancel: () => void;
+  onDirty?: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => ({
     architecture: design.architecture,
@@ -44,12 +46,14 @@ export function SystemDesignEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const patch = (fn: (d: Draft) => void) =>
+  const patch = (fn: (d: Draft) => void) => {
+    onDirty?.();
     setDraft((prev) => {
       const next = structuredClone(prev);
       fn(next);
       return next;
     });
+  };
 
   async function save() {
     setSaving(true);

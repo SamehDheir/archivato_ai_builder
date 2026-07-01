@@ -1,6 +1,12 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from 'react';
 import ReactFlow, {
   addEdge,
   Background,
@@ -13,7 +19,9 @@ import ReactFlow, {
   useReactFlow,
   type Connection,
   type Edge,
+  type EdgeChange,
   type Node,
+  type NodeChange,
   type NodeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -37,13 +45,19 @@ const RELATION_CYCLE: RelationType[] = [
   'many-to-many',
 ];
 
+/** Lets custom nodes flag the graph dirty when their fields are edited. */
+const DirtyContext = createContext<() => void>(() => {});
+
 /** A draggable entity box: editable name + a read-only column preview. */
 function EntityNode({ id, data }: NodeProps<EntityData>) {
   const { setNodes } = useReactFlow();
-  const rename = (value: string) =>
+  const markDirty = useContext(DirtyContext);
+  const rename = (value: string) => {
+    markDirty();
     setNodes((nds) =>
       nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, name: value } } : n)),
     );
+  };
   return (
     <div className="min-w-[180px] rounded-lg border border-border bg-card shadow-sm">
       <Handle type="target" position={Position.Left} className="!bg-primary" />
@@ -115,10 +129,12 @@ const nodeTypes = { entity: EntityNode };
 export function DatabaseCanvas({
   design,
   sessionId,
+  onDirty,
   onSaved,
 }: {
   design: DatabaseDesign;
   sessionId: string;
+  onDirty: (dirty: boolean) => void;
   onSaved: (design: DatabaseDesign) => void;
 }) {
   const initial = useMemo(
@@ -126,14 +142,31 @@ export function DatabaseCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [design],
   );
-  const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
+  const [nodes, setNodes, onNodesChangeRaw] = useNodesState(initial.nodes);
+  const [edges, setEdges, onEdgesChangeRaw] = useEdgesState(initial.edges);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addCount, setAddCount] = useState(0);
 
+  // A structural change (not a plain drag/select) makes the canvas dirty.
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      if (changes.some((c) => c.type === 'remove')) onDirty(true);
+      onNodesChangeRaw(changes);
+    },
+    [onNodesChangeRaw, onDirty],
+  );
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      if (changes.some((c) => c.type === 'remove')) onDirty(true);
+      onEdgesChangeRaw(changes);
+    },
+    [onEdgesChangeRaw, onDirty],
+  );
+
   const onConnect = useCallback(
-    (c: Connection) =>
+    (c: Connection) => {
+      onDirty(true);
       setEdges((eds) =>
         addEdge(
           {
@@ -144,13 +177,15 @@ export function DatabaseCanvas({
           },
           eds,
         ),
-      ),
-    [setEdges],
+      );
+    },
+    [setEdges, onDirty],
   );
 
   /** Click a relation to cycle its type (one-to-many → one-to-one → many…). */
   const onEdgeClick = useCallback(
-    (_: React.MouseEvent, edge: Edge) =>
+    (_: React.MouseEvent, edge: Edge) => {
+      onDirty(true);
       setEdges((eds) =>
         eds.map((e) => {
           if (e.id !== edge.id) return e;
@@ -159,8 +194,9 @@ export function DatabaseCanvas({
             RELATION_CYCLE[(RELATION_CYCLE.indexOf(cur) + 1) % RELATION_CYCLE.length];
           return { ...e, label: next, data: { ...e.data, type: next } };
         }),
-      ),
-    [setEdges],
+      );
+    },
+    [setEdges, onDirty],
   );
 
   const persistLayout = useCallback(
@@ -175,6 +211,7 @@ export function DatabaseCanvas({
   function addEntity() {
     const n = addCount + 1;
     setAddCount(n);
+    onDirty(true);
     const name = `new_table_${n}`;
     setNodes((nds) => [
       ...nds,
@@ -217,6 +254,7 @@ export function DatabaseCanvas({
         relations,
       });
       persistLayout(nodes);
+      onDirty(false);
       onSaved(saved);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -242,27 +280,29 @@ export function DatabaseCanvas({
       </div>
       {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
       <div className="h-[560px] rounded-md border border-border bg-muted/10">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onEdgeClick={onEdgeClick}
-          onNodeDragStop={() =>
-            setNodes((nds) => {
-              persistLayout(nds);
-              return nds;
-            })
-          }
-          nodeTypes={nodeTypes}
-          deleteKeyCode={['Backspace', 'Delete']}
-          fitView
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background />
-          <Controls />
-        </ReactFlow>
+        <DirtyContext.Provider value={() => onDirty(true)}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onEdgeClick={onEdgeClick}
+            onNodeDragStop={() =>
+              setNodes((nds) => {
+                persistLayout(nds);
+                return nds;
+              })
+            }
+            nodeTypes={nodeTypes}
+            deleteKeyCode={['Backspace', 'Delete']}
+            fitView
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background />
+            <Controls />
+          </ReactFlow>
+        </DirtyContext.Provider>
       </div>
     </div>
   );

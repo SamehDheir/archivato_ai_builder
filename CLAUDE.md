@@ -688,6 +688,28 @@ DB Design → API Design → Review → Export
   gained a Sparkles icon + one-line explanation of the pipeline. Web type-check
   clean; no backend change.
 
+- **Sticky tabs + unsaved-changes guard + in-app confirm dialog (2026-06-30).**
+  - **Sticky tab bar:** the `ProjectStages` `TabsList` is now `sticky top-16 z-30`
+    (sits just under the sticky AuthGate header) so stage navigation stays visible
+    while scrolling long artifacts.
+  - **Unsaved-changes guard:** a `dirty` flag lives in `page.tsx` (all nav is
+    centralized there via the lifted `stageTab`). The 4 structured editors take an
+    `onDirty?()` and fire it from their `patch()` (any edit); the 2 canvases fire
+    `onDirty(true)` on structural changes only (add/connect/delete via
+    `NodeChange/EdgeChange` `type==='remove'`, edge-type cycle, and node-label
+    edits via a `DirtyContext` consumed by the custom nodes) — plain drag/select
+    do NOT dirty (layout auto-persists to localStorage). Save/cancel/open reset
+    `dirty`. `goToStage`, `backToProjects`, the Project Wizard, and the breadcrumb
+    all route through `confirmLeave()`; a `beforeunload` handler covers tab
+    close/reload while dirty.
+  - **In-app dialog (NOT window.confirm):** `apps/web/app/confirm-dialog.tsx` —
+    `ConfirmProvider` + `useConfirm()` returning `confirm(opts) => Promise<boolean>`
+    (promise settled by the modal buttons). Dependency-free modal (overlay +
+    card, Escape/backdrop = cancel, autofocus confirm, `role="alertdialog"`,
+    destructive variant). Mounted in `layout.tsx` (Theme → Toast → Confirm →
+    AuthGate). Replaced every `window.confirm` (page nav guard + canvas sub-view
+    toggle). Web type-check clean; no backend change.
+
 ## Review rule (added Slice 6)
 
 After finishing each slice, run a **security + code review** (`/security-review`

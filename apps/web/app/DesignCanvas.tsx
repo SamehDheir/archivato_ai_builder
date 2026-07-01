@@ -6,6 +6,7 @@ import { Database as DatabaseIcon, Network } from 'lucide-react';
 import type { DatabaseDesign, SystemDesign } from '@archivato/shared';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from './EmptyState';
+import { useConfirm } from './confirm-dialog';
 
 // React Flow touches the DOM and ships a large bundle → client-only + code-split.
 const ArchitectureCanvas = dynamic(
@@ -36,16 +37,41 @@ export function DesignCanvas({
   sessionId,
   design,
   dbDesign,
+  dirty,
+  onDirty,
   onSavedDesign,
   onSavedDbDesign,
 }: {
   sessionId: string;
   design: SystemDesign | null;
   dbDesign: DatabaseDesign | null;
+  dirty: boolean;
+  onDirty: (dirty: boolean) => void;
   onSavedDesign: (design: SystemDesign) => void;
   onSavedDbDesign: (design: DatabaseDesign) => void;
 }) {
   const [mode, setMode] = useState<Mode>('architecture');
+  const confirm = useConfirm();
+
+  /** Switching the sub-view unmounts the other canvas — guard unsaved edits. */
+  async function switchMode(next: Mode) {
+    if (next === mode) return;
+    if (
+      dirty &&
+      !(await confirm({
+        title: 'Discard unsaved canvas changes?',
+        description:
+          'Switching views will discard the edits you haven’t saved on this canvas.',
+        confirmLabel: 'Discard changes',
+        cancelLabel: 'Keep editing',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
+    onDirty(false);
+    setMode(next);
+  }
 
   return (
     <div className="space-y-3">
@@ -53,14 +79,14 @@ export function DesignCanvas({
         <Button
           size="sm"
           variant={mode === 'architecture' ? 'default' : 'secondary'}
-          onClick={() => setMode('architecture')}
+          onClick={() => switchMode('architecture')}
         >
           Architecture
         </Button>
         <Button
           size="sm"
           variant={mode === 'database' ? 'default' : 'secondary'}
-          onClick={() => setMode('database')}
+          onClick={() => switchMode('database')}
         >
           Database
         </Button>
@@ -71,6 +97,7 @@ export function DesignCanvas({
           <ArchitectureCanvas
             design={design}
             sessionId={sessionId}
+            onDirty={onDirty}
             onSaved={onSavedDesign}
           />
         ) : (
@@ -84,6 +111,7 @@ export function DesignCanvas({
         <DatabaseCanvas
           design={dbDesign}
           sessionId={sessionId}
+          onDirty={onDirty}
           onSaved={onSavedDbDesign}
         />
       ) : (

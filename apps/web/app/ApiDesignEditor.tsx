@@ -32,22 +32,26 @@ export function ApiDesignEditor({
   sessionId,
   onSaved,
   onCancel,
+  onDirty,
 }: {
   design: ApiDesign;
   sessionId: string;
   onSaved: (design: ApiDesign) => void;
   onCancel: () => void;
+  onDirty?: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => ({ modules: design.modules }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const patch = (fn: (d: Draft) => void) =>
+  const patch = (fn: (d: Draft) => void) => {
+    onDirty?.();
     setDraft((prev) => {
       const next = structuredClone(prev);
       fn(next);
       return next;
     });
+  };
 
   async function save() {
     setSaving(true);

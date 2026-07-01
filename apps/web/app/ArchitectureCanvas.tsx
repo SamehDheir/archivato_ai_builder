@@ -1,6 +1,12 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from 'react';
 import ReactFlow, {
   addEdge,
   Background,
@@ -13,7 +19,9 @@ import ReactFlow, {
   useReactFlow,
   type Connection,
   type Edge,
+  type EdgeChange,
   type Node,
+  type NodeChange,
   type NodeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -29,15 +37,21 @@ import {
 
 type SvcData = { name: string; responsibility: string };
 
+/** Lets custom nodes flag the graph dirty when their fields are edited. */
+const DirtyContext = createContext<() => void>(() => {});
+
 /** A draggable service box with an editable name + responsibility. */
 function ServiceNode({ id, data }: NodeProps<SvcData>) {
   const { setNodes } = useReactFlow();
-  const update = (field: keyof SvcData, value: string) =>
+  const markDirty = useContext(DirtyContext);
+  const update = (field: keyof SvcData, value: string) => {
+    markDirty();
     setNodes((nds) =>
       nds.map((n) =>
         n.id === id ? { ...n, data: { ...n.data, [field]: value } } : n,
       ),
     );
+  };
   return (
     <div className="min-w-[180px] rounded-lg border border-primary/50 bg-card shadow-sm">
       <Handle type="target" position={Position.Left} className="!bg-primary" />
@@ -98,10 +112,12 @@ const nodeTypes = { service: ServiceNode };
 export function ArchitectureCanvas({
   design,
   sessionId,
+  onDirty,
   onSaved,
 }: {
   design: SystemDesign;
   sessionId: string;
+  onDirty: (dirty: boolean) => void;
   onSaved: (design: SystemDesign) => void;
 }) {
   const initial = useMemo(
@@ -110,18 +126,36 @@ export function ArchitectureCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [design],
   );
-  const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
+  const [nodes, setNodes, onNodesChangeRaw] = useNodesState(initial.nodes);
+  const [edges, setEdges, onEdgesChangeRaw] = useEdgesState(initial.edges);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addCount, setAddCount] = useState(0);
 
+  // A structural change (not a plain drag/select) makes the canvas dirty.
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      if (changes.some((c) => c.type === 'remove')) onDirty(true);
+      onNodesChangeRaw(changes);
+    },
+    [onNodesChangeRaw, onDirty],
+  );
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      if (changes.some((c) => c.type === 'remove')) onDirty(true);
+      onEdgesChangeRaw(changes);
+    },
+    [onEdgesChangeRaw, onDirty],
+  );
+
   const onConnect = useCallback(
-    (c: Connection) =>
+    (c: Connection) => {
+      onDirty(true);
       setEdges((eds) =>
         addEdge({ ...c, markerEnd: { type: MarkerType.ArrowClosed } }, eds),
-      ),
-    [setEdges],
+      );
+    },
+    [setEdges, onDirty],
   );
 
   /** Persist the dragged layout (keyed by service name). */
@@ -137,6 +171,7 @@ export function ArchitectureCanvas({
   function addService() {
     const n = addCount + 1;
     setAddCount(n);
+    onDirty(true);
     setNodes((nds) => [
       ...nds,
       {
@@ -168,6 +203,7 @@ export function ArchitectureCanvas({
         services,
       });
       persistLayout(nodes);
+      onDirty(false);
       onSaved(saved);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -193,26 +229,28 @@ export function ArchitectureCanvas({
       </div>
       {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
       <div className="h-[560px] rounded-md border border-border bg-muted/10">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeDragStop={() =>
-            setNodes((nds) => {
-              persistLayout(nds);
-              return nds;
-            })
-          }
-          nodeTypes={nodeTypes}
-          deleteKeyCode={['Backspace', 'Delete']}
-          fitView
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background />
-          <Controls />
-        </ReactFlow>
+        <DirtyContext.Provider value={() => onDirty(true)}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeDragStop={() =>
+              setNodes((nds) => {
+                persistLayout(nds);
+                return nds;
+              })
+            }
+            nodeTypes={nodeTypes}
+            deleteKeyCode={['Backspace', 'Delete']}
+            fitView
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background />
+            <Controls />
+          </ReactFlow>
+        </DirtyContext.Provider>
       </div>
     </div>
   );

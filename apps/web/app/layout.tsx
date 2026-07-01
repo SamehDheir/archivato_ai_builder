@@ -3,6 +3,7 @@ import './globals.css';
 import { AuthGate } from './AuthGate';
 import { ToastProvider } from './toast';
 import { ThemeProvider } from './theme';
+import { ConfirmProvider } from './confirm-dialog';
 
 export const metadata: Metadata = {
   title: 'Archivato AI Builder',
@@ -26,7 +27,9 @@ export default function RootLayout({
       <body className="min-h-screen antialiased">
         <ThemeProvider>
           <ToastProvider>
-            <AuthGate>{children}</AuthGate>
+            <ConfirmProvider>
+              <AuthGate>{children}</AuthGate>
+            </ConfirmProvider>
           </ToastProvider>
         </ThemeProvider>
       </body>
