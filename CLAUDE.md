@@ -95,8 +95,10 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   Pro-only generate routes (`api-design`/`review`/`roadmap` generate, all of
   `export`). The async path is gated in `JobsController` (per-stage: `PRO_STAGES
   = {api-design, review}`). The web wall lives on the **API tab** (`ProjectStages`
-  shows an `UpgradeStage` prompt when `!isPro`); downstream tabs stay disabled
-  because a free user never has an `apiDesign`.
+  shows an `UpgradeStage` prompt when `!isPro`); the Pro tabs (`PRO_TABS`: api,
+  review, roadmap, export, apidocs, refine) carry a **lock badge** for free
+  users, and clicking a still-unreachable one opens the upgrade modal
+  (`useUpgrade`) instead of a blank tab.
 - **LLM behind `LlmProvider`.** Agents (`llm/agents/*`) depend only on the
   interface and use `completeJson<T>()` (strips fences, throws
   `LlmJsonParseError`). **Every agent has a deterministic fallback**, so bad/no
@@ -171,10 +173,21 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   restyle without touching the app.
 - Confirmed project view = `ProjectStages` (tabbed, one stage per tab, downstream
   tabs disabled until prereqs exist). `app/dashboard/page.tsx` is the slim
-  orchestrator.
-- Structured **editors** (PUT per artifact) + **canvas** (React Flow) both save
-  via the same update endpoints. Unsaved-edit leave guard lives in the dashboard
-  page (`dirty` + `confirmLeave()` + in-app `useConfirm`).
+  orchestrator. Above it, `ProjectWizard` is the single stage stepper (Interview →
+  Export, `N/7 complete`), and takes `isPro` to lock the Pro stages + show the
+  Free→Pro cutline. Don't add a second progress rail inside `ProjectStages`.
+- **Command palette** (`⌘K`, `components/shared/command-palette.tsx`): the
+  dashboard owns the toggle + builds grouped commands (Actions / Projects /
+  reachable Stages) and passes them in; the palette is presentational + keyboard
+  driven. Loading states use the `Skeleton` primitive, not bare spinners.
+- Structured **editors** (PUT per artifact) **autosave** on a debounce via the
+  shared `EditorBar` (`onAutosave` + a `dirty`/`canSave`/`savedAt` status pill:
+  Unsaved changes · Saving… · Saved). Autosave routes through `onAutosaved` (not
+  `onSaved`) so it persists + syncs parent state **without closing** the editor;
+  `ProjectStages` sets `skipEditingResetRef` so the artifact-change effect doesn't
+  treat the autosave as a restore. Dashboard `handleSaved*` take `{auto}` to stay
+  silent (no toast/version bump) on autosave. Canvas saves stay manual. The
+  leave guard still applies (`dirty` + `confirmLeave()` + `useConfirm`).
 
 ## Gotchas (read before you trip on them)
 

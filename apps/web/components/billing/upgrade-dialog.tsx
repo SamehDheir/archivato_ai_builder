@@ -82,6 +82,7 @@ function UpgradeModal({
   onSettle: (upgraded: boolean) => void;
 }) {
   const toast = useToast();
+  const free = PLANS.free;
   const pro = PLANS.pro;
   const [busy, setBusy] = useState(false);
 
@@ -171,19 +172,45 @@ function UpgradeModal({
         </div>
 
         <div className="space-y-4 p-5">
-          <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-bold">${pro.priceUsd}</span>
-            <span className="text-sm text-muted-foreground">/month</span>
-          </div>
+          {/* Free (current) vs Pro comparison */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-border p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-medium">Free</span>
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Current
+                </span>
+              </div>
+              <ul className="space-y-1.5">
+                {free.features.map((f) => (
+                  <li
+                    key={f}
+                    className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                  >
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          <ul className="space-y-2">
-            {pro.features.map((f) => (
-              <li key={f} className="flex items-start gap-2 text-sm">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span>{f}</span>
-              </li>
-            ))}
-          </ul>
+            <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="text-sm font-semibold">Pro</span>
+                <span className="text-xs font-medium text-primary">
+                  ${pro.priceUsd}/mo
+                </span>
+              </div>
+              <ul className="space-y-1.5">
+                {pro.features.map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-xs">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button

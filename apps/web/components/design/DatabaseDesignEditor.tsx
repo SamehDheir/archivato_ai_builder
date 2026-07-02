@@ -65,12 +65,15 @@ export function DatabaseDesignEditor({
   onSaved,
   onCancel,
   onDirty,
+  onAutosaved,
 }: {
   design: DatabaseDesign;
   sessionId: string;
   onSaved: (design: DatabaseDesign) => void;
   onCancel: () => void;
   onDirty?: () => void;
+  /** Called after a debounced autosave — persists without closing the editor. */
+  onAutosaved?: (design: DatabaseDesign) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => ({
     databaseType: design.databaseType,
@@ -79,6 +82,8 @@ export function DatabaseDesignEditor({
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [attempted, setAttempted] = useState(false);
 
   const errors = validate(draft);
@@ -90,6 +95,7 @@ export function DatabaseDesignEditor({
 
   const patch = (fn: (d: Draft) => void) => {
     onDirty?.();
+    setDirty(true);
     setDraft((prev) => {
       const next = structuredClone(prev);
       fn(next);
@@ -97,13 +103,17 @@ export function DatabaseDesignEditor({
     });
   };
 
-  async function save() {
-    setAttempted(true);
+  async function save(auto = false) {
+    if (!auto) setAttempted(true);
     if (errors.length > 0) return;
     setSaving(true);
     setError(null);
     try {
-      onSaved(await databaseDesignApi.update(sessionId, draft));
+      const result = await databaseDesignApi.update(sessionId, draft);
+      setDirty(false);
+      setSavedAt(Date.now());
+      if (auto) onAutosaved?.(result);
+      else onSaved(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -323,7 +333,16 @@ export function DatabaseDesignEditor({
       </Section>
 
       {show && <ValidationSummary errors={errors} />}
-      <EditorBar saving={saving} error={error} onSave={save} onCancel={onCancel} />
+      <EditorBar
+        saving={saving}
+        error={error}
+        dirty={dirty}
+        canSave={errors.length === 0}
+        savedAt={savedAt}
+        onSave={() => save()}
+        onAutosave={() => save(true)}
+        onCancel={onCancel}
+      />
     </div>
   );
 }

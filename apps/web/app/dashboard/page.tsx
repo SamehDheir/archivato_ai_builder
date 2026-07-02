@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { FolderOpen, LayoutGrid, Plus, Search, Settings } from 'lucide-react';
 import type {
   ApiDesign,
   DatabaseDesign,
@@ -38,6 +40,8 @@ import { ProgressPanel } from '@/components/interview/ProgressPanel';
 import { ProjectWizard } from '@/components/project/ProjectWizard';
 import { InterviewPanel } from '@/components/interview/InterviewPanel';
 import { ProjectStages, type ActiveJob, type TabKey } from '@/components/project/ProjectStages';
+import { Skeleton } from '@/components/ui/skeleton';
+import { CommandPalette, type CommandGroup } from '@/components/shared/command-palette';
 
 const STAGE_LABEL: Record<PipelineStageName, string> = {
   requirements: 'Requirement document',
@@ -64,6 +68,13 @@ const TAB_LABEL: Record<TabKey, string> = {
   history: 'History',
 };
 
+/** Short status label shown next to a project in the command palette. */
+const STATUS_HINT: Record<string, string> = {
+  collecting: 'Interviewing',
+  awaiting_confirmation: 'Review & confirm',
+  confirmed: 'Confirmed',
+};
+
 /** localStorage key for the active session id, scoped PER USER. */
 const sessionKey = (userId: string) => `archivato.sessionId:${userId}`;
 const LEGACY_SESSION_KEY = 'archivato.sessionId';
@@ -72,6 +83,8 @@ export default function Home() {
   const toast = useToast();
   const confirm = useConfirm();
   const openUpgrade = useUpgrade();
+  const router = useRouter();
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [state, setState] = useState<InterviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -281,25 +294,31 @@ export default function Home() {
     if (next) setState(next);
   }
 
-  /** After saving edits to an artifact: update it in view + bump version list. */
-  function handleSavedDoc(value: RequirementDocument) {
+  // After saving edits to an artifact: update it in view. A manual save also
+  // bumps the version list + toasts; a debounced autosave (`opts.auto`) stays
+  // silent so it doesn't spam while the user is still editing.
+  function handleSavedDoc(value: RequirementDocument, opts?: { auto?: boolean }) {
     setDoc(value);
+    if (opts?.auto) return;
     setVersionsReload((k) => k + 1);
     void refreshProjects();
     toast({ title: 'Requirements saved', variant: 'success' });
   }
-  function handleSavedDesign(value: SystemDesign) {
+  function handleSavedDesign(value: SystemDesign, opts?: { auto?: boolean }) {
     setDesign(value);
+    if (opts?.auto) return;
     setVersionsReload((k) => k + 1);
     toast({ title: 'Architecture saved', variant: 'success' });
   }
-  function handleSavedDbDesign(value: DatabaseDesign) {
+  function handleSavedDbDesign(value: DatabaseDesign, opts?: { auto?: boolean }) {
     setDbDesign(value);
+    if (opts?.auto) return;
     setVersionsReload((k) => k + 1);
     toast({ title: 'Database saved', variant: 'success' });
   }
-  function handleSavedApiDesign(value: ApiDesign) {
+  function handleSavedApiDesign(value: ApiDesign, opts?: { auto?: boolean }) {
     setApiDesign(value);
+    if (opts?.auto) return;
     setVersionsReload((k) => k + 1);
     toast({ title: 'API design saved', variant: 'success' });
   }
@@ -374,6 +393,18 @@ export default function Home() {
     void refreshProjects();
   }
 
+  // ⌘K / Ctrl+K toggles the command palette (jump between projects + stages).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Native warning if the user closes/reloads the tab with unsaved edits.
   useEffect(() => {
     if (!dirty) return;
@@ -387,9 +418,19 @@ export default function Home() {
 
   if (restoring) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-muted-foreground">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
-        <p className="text-sm">Loading your projects…</p>
+      <div className="mx-auto max-w-4xl px-5 py-8">
+        <Skeleton className="h-7 w-48" />
+        <Skeleton className="mt-2 h-4 w-full max-w-md" />
+        <Skeleton className="mt-5 h-12 w-full rounded-lg" />
+        <div className="mt-6 mb-4 flex items-center justify-between">
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-9 w-32 rounded-md" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[132px] w-full rounded-lg" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -420,11 +461,100 @@ export default function Home() {
     ];
   }
 
+  // ⌘K command palette: quick actions, jump to a project, or (in a confirmed
+  // project) jump to any reachable stage.
+  const stageAvailable: Record<TabKey, boolean> = {
+    vision: true,
+    requirements: true,
+    system: !!doc,
+    database: !!design,
+    api: !!dbDesign,
+    diagrams: !!design,
+    canvas: !!design,
+    review: !!apiDesign,
+    roadmap: !!apiDesign,
+    export: !!apiDesign,
+    apidocs: !!apiDesign,
+    refine: !!apiDesign,
+    history: !!doc,
+  };
+  const paletteGroups: CommandGroup[] = [
+    {
+      heading: 'Actions',
+      items: [
+        {
+          id: 'new-project',
+          label: 'New project',
+          icon: Plus,
+          run: async () => {
+            await backToProjects();
+            setCreating(true);
+          },
+        },
+        {
+          id: 'all-projects',
+          label: 'Back to projects',
+          icon: LayoutGrid,
+          run: () => void backToProjects(),
+        },
+        {
+          id: 'settings',
+          label: 'Account settings',
+          icon: Settings,
+          run: () => router.push('/settings'),
+        },
+      ],
+    },
+    {
+      heading: 'Projects',
+      items: projects.map((p) => ({
+        id: `project-${p.sessionId}`,
+        label: p.idea,
+        hint: STATUS_HINT[p.status],
+        icon: FolderOpen,
+        run: () => void openProject(p.sessionId),
+      })),
+    },
+    ...(state?.status === 'confirmed'
+      ? [
+          {
+            heading: 'Stages',
+            items: (Object.keys(TAB_LABEL) as TabKey[])
+              .filter((t) => stageAvailable[t])
+              .map((t) => ({
+                id: `stage-${t}`,
+                label: TAB_LABEL[t],
+                hint: 'Stage',
+                run: () => void goToStage(t),
+              })),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        groups={paletteGroups}
+      />
       {!state && (
         <>
-          <h1 className="text-2xl font-bold">Archivato AI Builder</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-2xl font-bold">Archivato AI Builder</h1>
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="hidden items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground sm:flex"
+            >
+              <Search className="h-3.5 w-3.5" />
+              Search
+              <kbd className="rounded border border-border px-1 text-[10px]">
+                ⌘K
+              </kbd>
+            </button>
+          </div>
           <p className="mb-6 mt-1 text-sm text-muted-foreground">
             AI Software Architecture Generator — turn an idea into a full system
             design.
@@ -499,6 +629,7 @@ export default function Home() {
             dbDesign={dbDesign}
             apiDesign={apiDesign}
             review={review}
+            isPro={sub?.plan === 'pro'}
             onNavigate={
               state.status === 'confirmed'
                 ? (t) => goToStage(t as TabKey)

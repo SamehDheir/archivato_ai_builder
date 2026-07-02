@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Check as CheckIcon, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -28,29 +28,106 @@ export function useEscapeKey(handler: () => void) {
   }, [handler]);
 }
 
-/** Save / Cancel action bar shared by every artifact editor. */
+/**
+ * Save / Cancel action bar shared by every artifact editor, with a live save
+ * status (Unsaved changes · Saving… · Saved). When `onAutosave` is supplied,
+ * valid edits persist automatically on a short debounce, so the explicit "Save
+ * changes" button becomes a force-save.
+ */
 export function EditorBar({
   saving,
   error,
   onSave,
   onCancel,
+  dirty = false,
+  canSave = true,
+  savedAt = null,
+  onAutosave,
 }: {
   saving: boolean;
   error: string | null;
   onSave: () => void;
   onCancel: () => void;
+  /** Whether the draft has unsaved edits (drives the status + autosave). */
+  dirty?: boolean;
+  /** Whether the draft passes validation (blocks save/autosave when false). */
+  canSave?: boolean;
+  /** Epoch ms of the last successful save (drives the "Saved" state). */
+  savedAt?: number | null;
+  /** When provided, valid edits autosave on a debounce. */
+  onAutosave?: () => void;
 }) {
+  // Debounced autosave: fire once edits settle and the draft is valid. Each edit
+  // re-runs this effect (new `onAutosave` identity), resetting the timer.
+  useEffect(() => {
+    if (!onAutosave || !dirty || !canSave || saving) return;
+    const t = setTimeout(() => onAutosave(), 1200);
+    return () => clearTimeout(t);
+  }, [onAutosave, dirty, canSave, saving]);
+
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-      <Button onClick={onSave} disabled={saving}>
+      <Button onClick={() => onSave()} disabled={saving || !dirty}>
         {saving ? 'Saving…' : 'Save changes'}
       </Button>
-      <Button variant="secondary" onClick={onCancel} disabled={saving}>
-        Cancel
+      <Button
+        variant="secondary"
+        // With autosave on, "Done" flushes a valid pending edit before closing so
+        // nothing typed in the last debounce window is lost.
+        onClick={() =>
+          onAutosave && dirty && canSave ? onSave() : onCancel()
+        }
+        disabled={saving}
+      >
+        {onAutosave ? 'Done' : 'Cancel'}
       </Button>
+      <SaveStatus saving={saving} dirty={dirty} canSave={canSave} savedAt={savedAt} />
       {error && <span className="text-sm text-destructive">{error}</span>}
     </div>
   );
+}
+
+/** The little "Unsaved changes / Saving… / Saved" pill next to the save button. */
+function SaveStatus({
+  saving,
+  dirty,
+  canSave,
+  savedAt,
+}: {
+  saving: boolean;
+  dirty: boolean;
+  canSave: boolean;
+  savedAt: number | null;
+}) {
+  if (saving) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Saving…
+      </span>
+    );
+  }
+  if (dirty && !canSave) {
+    return (
+      <span className="text-xs font-medium text-amber-600 dark:text-amber-500">
+        Fix errors to save
+      </span>
+    );
+  }
+  if (dirty) {
+    return (
+      <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-500">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Unsaved changes
+      </span>
+    );
+  }
+  if (savedAt) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <CheckIcon className="h-3 w-3 text-primary" /> Saved
+      </span>
+    );
+  }
+  return null;
 }
 
 /** Tailwind classes marking an input/select as invalid (red border + ring). */

@@ -62,6 +62,7 @@ export function RequirementDocumentEditor({
   onSaved,
   onCancel,
   onDirty,
+  onAutosaved,
 }: {
   doc: RequirementDocument;
   sessionId: string;
@@ -69,6 +70,8 @@ export function RequirementDocumentEditor({
   onCancel: () => void;
   /** Called on the first edit so the parent can guard against losing changes. */
   onDirty?: () => void;
+  /** Called after a debounced autosave — persists without closing the editor. */
+  onAutosaved?: (doc: RequirementDocument) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => ({
     functional: doc.functional,
@@ -80,6 +83,8 @@ export function RequirementDocumentEditor({
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   // Only surface field-level errors once the user has tried to save.
   const [attempted, setAttempted] = useState(false);
 
@@ -93,6 +98,7 @@ export function RequirementDocumentEditor({
   /** Immutably edit the draft via a structured clone + mutation. */
   const patch = (fn: (d: Draft) => void) => {
     onDirty?.();
+    setDirty(true);
     setDraft((prev) => {
       const next = structuredClone(prev);
       fn(next);
@@ -100,13 +106,17 @@ export function RequirementDocumentEditor({
     });
   };
 
-  async function save() {
-    setAttempted(true);
+  async function save(auto = false) {
+    if (!auto) setAttempted(true);
     if (errors.length > 0) return; // block save; the summary tells them why
     setSaving(true);
     setError(null);
     try {
-      onSaved(await requirementsApi.update(sessionId, draft));
+      const result = await requirementsApi.update(sessionId, draft);
+      setDirty(false);
+      setSavedAt(Date.now());
+      if (auto) onAutosaved?.(result);
+      else onSaved(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -322,7 +332,16 @@ export function RequirementDocumentEditor({
       </Section>
 
       {show && <ValidationSummary errors={errors} />}
-      <EditorBar saving={saving} error={error} onSave={save} onCancel={onCancel} />
+      <EditorBar
+        saving={saving}
+        error={error}
+        dirty={dirty}
+        canSave={errors.length === 0}
+        savedAt={savedAt}
+        onSave={() => save()}
+        onAutosave={() => save(true)}
+        onCancel={onCancel}
+      />
     </div>
   );
 }

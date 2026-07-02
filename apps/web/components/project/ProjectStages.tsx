@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   BookOpen,
   CheckCircle2,
@@ -102,6 +102,22 @@ export type TabKey =
   | 'history';
 
 /**
+ * Tabs unlocked only on Pro — the API design and everything downstream of it.
+ * For free users these show a lock badge; clicking one that isn't reachable yet
+ * (needs an `apiDesign` they can't generate) opens the upgrade modal. The `api`
+ * tab is the exception: it stays navigable so the free user lands on its in-tab
+ * `UpgradeStage` panel.
+ */
+const PRO_TABS = new Set<TabKey>([
+  'api',
+  'review',
+  'roadmap',
+  'export',
+  'apidocs',
+  'refine',
+]);
+
+/**
  * The confirmed pipeline as tabs: one stage visible at a time (instead of one
  * long vertical stack). Downstream tabs are disabled until their prerequisite
  * artifact exists; each tab generates its own stage and links to the next.
@@ -160,10 +176,10 @@ export function ProjectStages({
   onGenerateDatabase: () => void;
   onGenerateApi: () => void;
   onGenerateReview: () => void;
-  onSavedDoc: (doc: RequirementDocument) => void;
-  onSavedDesign: (design: SystemDesign) => void;
-  onSavedDbDesign: (design: DatabaseDesign) => void;
-  onSavedApiDesign: (design: ApiDesign) => void;
+  onSavedDoc: (doc: RequirementDocument, opts?: { auto?: boolean }) => void;
+  onSavedDesign: (design: SystemDesign, opts?: { auto?: boolean }) => void;
+  onSavedDbDesign: (design: DatabaseDesign, opts?: { auto?: boolean }) => void;
+  onSavedApiDesign: (design: ApiDesign, opts?: { auto?: boolean }) => void;
   onRefined: (result: RefineResult) => void;
   onRestored: (snapshot: ProjectSnapshot) => void;
   /** Called after a successful in-place upgrade so the parent can refresh the plan. */
@@ -172,8 +188,28 @@ export function ProjectStages({
   // `tab` is controlled by the parent (so the Project Wizard can navigate to a
   // stage); `setTab` is just an alias to the parent's setter.
   const setTab = onTabChange;
+  const openUpgrade = useUpgrade();
   // Which stage tab is currently in edit mode (null = viewing).
   const [editing, setEditing] = useState<TabKey | null>(null);
+  // Set right before an autosave updates a parent artifact, so the artifact-change
+  // effect below doesn't mistake the autosave for a restore and close the editor.
+  const skipEditingResetRef = useRef(false);
+
+  /**
+   * Navigate to a tab, applying the freemium gate: a free user reaching for a
+   * still-locked Pro stage gets the upgrade modal; a stage whose upstream isn't
+   * ready yet is a no-op (rather than bouncing to a blank tab).
+   */
+  const goTo = (key: TabKey) => {
+    if (!isPro && PRO_TABS.has(key) && !available[key]) {
+      void openUpgrade({ feature: 'unlock the full pipeline' }).then(
+        (ok) => ok && onUpgraded?.(),
+      );
+      return;
+    }
+    if (!available[key]) return;
+    setTab(key);
+  };
 
   const available: Record<TabKey, boolean> = {
     vision: true,
@@ -193,8 +229,14 @@ export function ProjectStages({
 
   // If a restore removes the artifact behind the active tab, fall back to the
   // requirements tab so the panel never goes blank. Also exit any edit mode so a
-  // restored/regenerated artifact isn't being edited against stale state.
+  // restored/regenerated artifact isn't being edited against stale state. A
+  // debounced autosave also changes the artifact — skip the reset in that case
+  // so the editor stays open.
   useEffect(() => {
+    if (skipEditingResetRef.current) {
+      skipEditingResetRef.current = false;
+      return;
+    }
     if (!available[tab]) setTab('requirements');
     setEditing(null);
     onDirty(false);
@@ -218,19 +260,28 @@ export function ProjectStages({
 
         {job && <JobProgress job={job} />}
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+        <Tabs value={tab} onValueChange={(v) => goTo(v as TabKey)}>
           <TabsList className="sticky top-16 z-30 flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto shadow-sm md:flex-wrap md:overflow-visible">
-            {TABS.map(({ value, label, icon: Icon }) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                disabled={!available[value]}
-                className="shrink-0 gap-1.5"
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-              </TabsTrigger>
-            ))}
+            {TABS.map(({ value, label, icon: Icon }) => {
+              const locked = !isPro && PRO_TABS.has(value);
+              // Locked-but-unreachable tabs stay clickable so the click can open
+              // the upgrade modal (Radix disables un-clickable triggers).
+              const opensModal = locked && !available[value];
+              return (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  disabled={!available[value] && !opensModal}
+                  className={`shrink-0 gap-1.5${locked ? ' opacity-80' : ''}`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                  {locked && (
+                    <Lock className="h-3 w-3 text-muted-foreground" aria-label="Pro" />
+                  )}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
 
           {/* Product Vision (standalone) */}
@@ -272,6 +323,11 @@ export function ProjectStages({
                   onDirty(false);
                   onSavedDoc(d);
                   setEditing(null);
+                }}
+                onAutosaved={(d) => {
+                  skipEditingResetRef.current = true;
+                  onDirty(false);
+                  onSavedDoc(d, { auto: true });
                 }}
                 onCancel={() => {
                   onDirty(false);
@@ -315,6 +371,11 @@ export function ProjectStages({
                   onSavedDesign(d);
                   setEditing(null);
                 }}
+                onAutosaved={(d) => {
+                  skipEditingResetRef.current = true;
+                  onDirty(false);
+                  onSavedDesign(d, { auto: true });
+                }}
                 onCancel={() => {
                   onDirty(false);
                   setEditing(null);
@@ -356,6 +417,11 @@ export function ProjectStages({
                   onDirty(false);
                   onSavedDbDesign(d);
                   setEditing(null);
+                }}
+                onAutosaved={(d) => {
+                  skipEditingResetRef.current = true;
+                  onDirty(false);
+                  onSavedDbDesign(d, { auto: true });
                 }}
                 onCancel={() => {
                   onDirty(false);
@@ -402,6 +468,11 @@ export function ProjectStages({
                   onDirty(false);
                   onSavedApiDesign(d);
                   setEditing(null);
+                }}
+                onAutosaved={(d) => {
+                  skipEditingResetRef.current = true;
+                  onDirty(false);
+                  onSavedApiDesign(d, { auto: true });
                 }}
                 onCancel={() => {
                   onDirty(false);

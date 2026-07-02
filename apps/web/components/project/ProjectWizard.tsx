@@ -1,6 +1,6 @@
 'use client';
 
-import { Check } from 'lucide-react';
+import { Check, Lock } from 'lucide-react';
 import type {
   ApiDesign,
   DatabaseDesign,
@@ -25,6 +25,7 @@ export function ProjectWizard({
   apiDesign,
   review,
   onNavigate,
+  isPro = true,
 }: {
   state: InterviewState;
   doc: RequirementDocument | null;
@@ -35,16 +36,18 @@ export function ProjectWizard({
   /** Jump to a stage tab (only wired once the interview is confirmed). The
    * `tab` strings match ProjectStages' TabKey; `undefined` steps aren't links. */
   onNavigate?: (tab: string) => void;
+  /** When false, the Pro stages (API onward) show a lock + a cutline note. */
+  isPro?: boolean;
 }) {
-  const steps: { label: string; done: boolean; tab?: string }[] = [
+  const steps: { label: string; done: boolean; tab?: string; pro?: boolean }[] = [
     { label: 'Interview', done: state.status === 'confirmed' },
     { label: 'Requirements', done: !!doc, tab: 'requirements' },
     { label: 'Architecture', done: !!design, tab: 'system' },
     { label: 'Database', done: !!dbDesign, tab: 'database' },
-    { label: 'API', done: !!apiDesign, tab: 'api' },
-    { label: 'Review', done: !!review, tab: 'review' },
+    { label: 'API', done: !!apiDesign, tab: 'api', pro: true },
+    { label: 'Review', done: !!review, tab: 'review', pro: true },
     // Export is "ready" once the API design exists (review is optional for it).
-    { label: 'Export', done: !!apiDesign, tab: 'export' },
+    { label: 'Export', done: !!apiDesign, tab: 'export', pro: true },
   ];
   const doneCount = steps.filter((s) => s.done).length;
   // The current step is the first not-done one (-1 once everything is complete).
@@ -63,6 +66,7 @@ export function ProjectWizard({
         <ol className="flex items-start gap-1 overflow-x-auto pb-1">
           {steps.map((step, i) => {
             const isCurrent = i === currentIndex;
+            const locked = !isPro && !!step.pro && !step.done;
             const navigable =
               !!onNavigate && !!step.tab && (step.done || isCurrent);
             return (
@@ -92,7 +96,13 @@ export function ProjectWizard({
                     )}
                     aria-current={isCurrent ? 'step' : undefined}
                   >
-                    {step.done ? <Check className="h-4 w-4" /> : i + 1}
+                    {step.done ? (
+                      <Check className="h-4 w-4" />
+                    ) : locked ? (
+                      <Lock className="h-3.5 w-3.5" />
+                    ) : (
+                      i + 1
+                    )}
                   </span>
                   <span
                     className={cn(
@@ -118,6 +128,13 @@ export function ProjectWizard({
             );
           })}
         </ol>
+
+        {!isPro && (
+          <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Lock className="h-3 w-3" /> API design and everything after it need
+            Pro.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

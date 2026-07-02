@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Loader2, ShieldCheck, Trash2, Zap } from 'lucide-react';
+import { ArrowLeft, Check, ShieldCheck, Trash2, Zap } from 'lucide-react';
 import { PLANS, type AuthUser, type SubscriptionView } from '@archivato/shared';
 import { authApi, billingApi, interviewApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ThemeToggle } from '@/components/shared/theme';
 import { useToast } from '@/components/shared/toast';
 import { useConfirm } from '@/components/shared/confirm-dialog';
@@ -49,8 +50,15 @@ export function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin" />
+      <div className="mx-auto max-w-2xl px-5 py-8">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="mt-4 h-8 w-40" />
+        <Skeleton className="mt-2 h-4 w-full max-w-sm" />
+        <div className="mt-6 space-y-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 w-full rounded-lg" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -303,8 +311,9 @@ function BillingSection() {
       </CardHeader>
       <CardContent className="space-y-4">
         {loading || !sub ? (
-          <div className="flex h-16 items-center text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-lg" />
           </div>
         ) : (
           <>

@@ -55,16 +55,21 @@ export function ApiDesignEditor({
   onSaved,
   onCancel,
   onDirty,
+  onAutosaved,
 }: {
   design: ApiDesign;
   sessionId: string;
   onSaved: (design: ApiDesign) => void;
   onCancel: () => void;
   onDirty?: () => void;
+  /** Called after a debounced autosave — persists without closing the editor. */
+  onAutosaved?: (design: ApiDesign) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => ({ modules: design.modules }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [attempted, setAttempted] = useState(false);
 
   const errors = validate(draft);
@@ -76,6 +81,7 @@ export function ApiDesignEditor({
 
   const patch = (fn: (d: Draft) => void) => {
     onDirty?.();
+    setDirty(true);
     setDraft((prev) => {
       const next = structuredClone(prev);
       fn(next);
@@ -83,13 +89,17 @@ export function ApiDesignEditor({
     });
   };
 
-  async function save() {
-    setAttempted(true);
+  async function save(auto = false) {
+    if (!auto) setAttempted(true);
     if (errors.length > 0) return;
     setSaving(true);
     setError(null);
     try {
-      onSaved(await apiDesignApi.update(sessionId, draft));
+      const result = await apiDesignApi.update(sessionId, draft);
+      setDirty(false);
+      setSavedAt(Date.now());
+      if (auto) onAutosaved?.(result);
+      else onSaved(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -284,7 +294,16 @@ export function ApiDesignEditor({
       </Section>
 
       {show && <ValidationSummary errors={errors} />}
-      <EditorBar saving={saving} error={error} onSave={save} onCancel={onCancel} />
+      <EditorBar
+        saving={saving}
+        error={error}
+        dirty={dirty}
+        canSave={errors.length === 0}
+        savedAt={savedAt}
+        onSave={() => save()}
+        onAutosave={() => save(true)}
+        onCancel={onCancel}
+      />
     </div>
   );
 }
