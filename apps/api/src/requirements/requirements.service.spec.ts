@@ -21,6 +21,7 @@ function makeInterview(
     repo,
     new ProductAnalystAgent(mock),
     new InterviewerAgent(mock),
+    undefined as never, // no billing enforcement for owner-less test sessions
   );
 }
 

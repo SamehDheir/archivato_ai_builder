@@ -5,6 +5,7 @@ import { SystemDesignModule } from '../system-design/system-design.module';
 import { DatabaseDesignModule } from '../database-design/database-design.module';
 import { ApiDesignModule } from '../api-design/api-design.module';
 import { ReviewModule } from '../review/review.module';
+import { BillingModule } from '../billing/billing.module';
 import { ExportController } from './export.controller';
 import { ExportService } from './export.service';
 
@@ -17,6 +18,7 @@ import { ExportService } from './export.service';
     DatabaseDesignModule,
     ApiDesignModule,
     ReviewModule,
+    BillingModule,
   ],
   controllers: [ExportController],
   providers: [ExportService],

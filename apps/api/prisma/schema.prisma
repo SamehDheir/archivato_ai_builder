@@ -32,10 +32,33 @@ model User {
   verificationTokens EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
   deviceRegistrations DeviceRegistration[]
+  subscription       Subscription?
   // Pipeline projects owned by this user (ownership enforcement).
   interviewSessions  InterviewSession[]
 
   @@map("users")
+}
+
+// Billing: one subscription row per user (free by default; upgraded to pro via
+// the BillingProvider). The dollar amounts are plan prices; capacity is a
+// PROJECT-COUNT quota enforced at project creation (free = 1 project, pro = 5).
+// Paddle ids are null in mock mode.
+model Subscription {
+  id                   String    @id @default(uuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                 String    @default("free") // 'free' | 'pro'
+  status               String    @default("active") // 'active' | 'canceled' | 'past_due'
+  // Pro billing window; the pro quota counts usage within it. Null for free.
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  paddleCustomerId     String?
+  paddleSubscriptionId String?   @unique
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@map("subscriptions")
 }
 
 // One-account-per-device enforcement (anti-spam). On local registration the

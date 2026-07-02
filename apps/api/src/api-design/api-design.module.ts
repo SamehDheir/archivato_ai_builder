@@ -3,6 +3,7 @@ import { InterviewModule } from '../interview/interview.module';
 import { RequirementsModule } from '../requirements/requirements.module';
 import { SystemDesignModule } from '../system-design/system-design.module';
 import { DatabaseDesignModule } from '../database-design/database-design.module';
+import { BillingModule } from '../billing/billing.module';
 import { ApiDesignerAgent } from '../llm/agents/api-designer.agent';
 import { ApiDesignController } from './api-design.controller';
 import { ApiDesignService } from './api-design.service';
@@ -16,6 +17,7 @@ import { PrismaApiDesignRepository } from './prisma-api-design.repository';
     RequirementsModule,
     SystemDesignModule,
     DatabaseDesignModule,
+    BillingModule,
   ],
   controllers: [ApiDesignController],
   providers: [

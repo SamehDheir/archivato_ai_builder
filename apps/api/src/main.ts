@@ -5,7 +5,9 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // `rawBody: true` captures the unparsed body so the Paddle webhook can verify
+  // its HMAC signature over the exact bytes Paddle signed.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   const config = app.get(ConfigService);
 

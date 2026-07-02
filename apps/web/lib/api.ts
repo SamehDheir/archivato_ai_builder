@@ -3,6 +3,7 @@ import type {
   AuthUser,
   ChangePasswordInput,
   ChatMessage,
+  CheckoutResponse,
   DatabaseDesign,
   ExportBundle,
   InterviewState,
@@ -18,9 +19,11 @@ import type {
   ProjectSummary,
   ProjectVersionDetail,
   ProjectVersionMeta,
+  PlanInfo,
   RefineResult,
   RegisterInput,
   RequirementDocument,
+  SubscriptionView,
   UpdateProfileInput,
   ReviewReport,
   SystemDesign,
@@ -58,6 +61,20 @@ export function getAuthHint(): boolean | null {
 /** Endpoints that must never trigger the auto-refresh-and-retry (avoids loops). */
 const NO_REFRESH = ['/auth/login', '/auth/register', '/auth/refresh'];
 
+/** Error thrown by `request` on a non-2xx response, carrying the HTTP status and
+ *  optional server `code` (e.g. `quota_exceeded`, `upgrade_required`) so callers
+ *  can branch on the specific failure — like opening the upgrade modal on a 402. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit,
@@ -88,15 +105,17 @@ async function request<T>(
 
   if (!res.ok) {
     let detail = res.statusText;
+    let code: string | undefined;
     try {
       const body = await res.json();
       detail = Array.isArray(body?.message)
         ? body.message.join(', ')
         : body?.message ?? detail;
+      if (typeof body?.code === 'string') code = body.code;
     } catch {
       /* keep statusText */
     }
-    throw new Error(detail);
+    throw new ApiError(detail, res.status, code);
   }
 
   return res.json() as Promise<T>;
@@ -125,6 +144,10 @@ export const interviewApi = {
 
   get: (sessionId: string) =>
     request<InterviewState>(`/interview/${sessionId}`),
+
+  /** Permanently delete a project and all its artifacts (frees a quota slot). */
+  delete: (sessionId: string) =>
+    request<{ success: true }>(`/interview/${sessionId}`, { method: 'DELETE' }),
 };
 
 /** The editable fields of an artifact (sessionId/generatedAt are server-set). */
@@ -401,6 +424,21 @@ export const authApi = {
     `${API_URL}/auth/oauth/${provider}/start${
       fingerprint ? `?fingerprint=${encodeURIComponent(fingerprint)}` : ''
     }`,
+};
+
+export const billingApi = {
+  /** Public plan catalogue (pricing page). */
+  plans: () => request<PlanInfo[]>('/billing/plans'),
+
+  /** The signed-in user's subscription + quota usage. */
+  subscription: () => request<SubscriptionView>('/billing'),
+
+  /** Upgrade to Pro (mock activates instantly; Paddle returns checkout params). */
+  checkout: () =>
+    request<CheckoutResponse>('/billing/checkout', { method: 'POST' }),
+
+  /** Cancel Pro. */
+  cancel: () => request<SubscriptionView>('/billing/cancel', { method: 'POST' }),
 };
 
 export const exportApi = {

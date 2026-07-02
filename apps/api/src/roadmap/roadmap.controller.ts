@@ -2,6 +2,7 @@ import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import type { ProjectRoadmap } from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SessionOwnerGuard } from '../interview/session-owner.guard';
+import { ProGuard } from '../billing/pro.guard';
 import { RoadmapService } from './roadmap.service';
 
 @UseGuards(JwtAuthGuard, SessionOwnerGuard)
@@ -9,7 +10,8 @@ import { RoadmapService } from './roadmap.service';
 export class RoadmapController {
   constructor(private readonly roadmap: RoadmapService) {}
 
-  /** Generate (or regenerate) the implementation roadmap for a session. */
+  /** Generate (or regenerate) the implementation roadmap for a session. Pro-gated. */
+  @UseGuards(ProGuard)
   @Post(':sessionId/generate')
   generate(@Param('sessionId') sessionId: string): Promise<ProjectRoadmap> {
     return this.roadmap.generate(sessionId);

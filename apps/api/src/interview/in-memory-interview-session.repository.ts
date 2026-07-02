@@ -32,4 +32,14 @@ export class InMemoryInterviewSessionRepository
       .filter((s) => s.userId === userId)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
+
+  async countByUserId(userId: string): Promise<number> {
+    let n = 0;
+    for (const s of this.sessions.values()) if (s.userId === userId) n++;
+    return n;
+  }
+
+  async delete(id: string): Promise<void> {
+    this.sessions.delete(id);
+  }
 }

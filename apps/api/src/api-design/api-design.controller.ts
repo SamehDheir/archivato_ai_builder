@@ -10,6 +10,7 @@ import {
 import type { ApiDesign } from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SessionOwnerGuard } from '../interview/session-owner.guard';
+import { ProGuard } from '../billing/pro.guard';
 import { ApiDesignService } from './api-design.service';
 import { UpdateApiDesignDto } from './dto/update-api-design.dto';
 
@@ -18,7 +19,8 @@ import { UpdateApiDesignDto } from './dto/update-api-design.dto';
 export class ApiDesignController {
   constructor(private readonly apiDesign: ApiDesignService) {}
 
-  /** Generate (or regenerate) the API design for a session. */
+  /** Generate (or regenerate) the API design for a session. Pro-gated. */
+  @UseGuards(ProGuard)
   @Post(':sessionId/generate')
   generate(@Param('sessionId') sessionId: string): Promise<ApiDesign> {
     return this.apiDesign.generate(sessionId);

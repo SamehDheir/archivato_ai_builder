@@ -51,8 +51,8 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `export`, `chat`,
-  `jobs`, `versions`, `diagrams`, `auth`). Modules export their repository token +
-  service for downstream use.
+  `jobs`, `versions`, `diagrams`, `auth`, `billing`). Modules export their
+  repository token + service for downstream use.
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
   controller and is not in version snapshots. `product-vision` needs only the
@@ -66,6 +66,37 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 - **Repository pattern everywhere.** Every store has an interface + in-memory
   impl (used by unit tests, DB-free) + Prisma impl. Feature modules provide the
   Prisma repo.
+- **Billing / project quota.** Capacity is a **max-projects-owned** count (dollars
+  are plan prices): **Free = 1 project**, **Pro = $19/mo → 5 projects**. Enforced
+  at **project creation** (`InterviewService.start`: `repo.countByUserId` vs
+  `BillingService.getProjectQuota` → **402** when at the limit). To start another
+  at the cap you **delete** a project (`DELETE /interview/:id`, owner-guarded,
+  cascades all artifacts) or upgrade. Deliberately simple: **no per-confirm
+  consumption and no usage table** — the project list *is* the meter, so the UI
+  computes "used" from the project count (billing only returns the quota/limit).
+  `BillingModule` is imported by `InterviewModule` (one-way; billing never reads
+  sessions). Payments sit behind a **`BillingProvider`** (mirrors `LlmProvider`):
+  `BILLING_PROVIDER=mock|paddle` forces it, else Paddle when `PADDLE_API_KEY` is
+  set, else the **offline mock** (instant upgrade, no charge — the default, fully
+  demoable/testable). **Cancel is at-period-end** (mock *and* Paddle): the user
+  keeps Pro until `currentPeriodEnd`, then `effectivePlan` drops them to Free
+  automatically (the mock provider returns `downgradeNow:false`; settings shows
+  "ends {date}" + a "cancels at period end" badge). Paddle is Merchant-of-Record:
+  checkout runs client-side (Paddle.js) and activation/cancellation arrive via
+  **`POST /billing/webhook`** (HMAC-verified over the raw body — `main.ts` sets
+  `rawBody: true`). Subscriptions are created lazily (`getOrCreate`) so existing
+  users get a free plan on first access.
+- **Freemium feature gate.** Beyond the project *count* cap, the pipeline itself
+  is tiered: **Free covers interview → requirements → system design → database
+  design** (plus Product Vision); **Pro is required to generate the API design
+  and everything after it — AI review, roadmap, and export.** Enforced by
+  `BillingService.assertPro(userId)` (throws **402** `code:'upgrade_required'`)
+  and a reusable **`ProGuard`** (exported by `BillingModule`) applied to the
+  Pro-only generate routes (`api-design`/`review`/`roadmap` generate, all of
+  `export`). The async path is gated in `JobsController` (per-stage: `PRO_STAGES
+  = {api-design, review}`). The web wall lives on the **API tab** (`ProjectStages`
+  shows an `UpgradeStage` prompt when `!isPro`); downstream tabs stay disabled
+  because a free user never has an `apiDesign`.
 - **LLM behind `LlmProvider`.** Agents (`llm/agents/*`) depend only on the
   interface and use `completeJson<T>()` (strips fences, throws
   `LlmJsonParseError`). **Every agent has a deterministic fallback**, so bad/no
@@ -118,7 +149,15 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   shows the `AuthForm` when signed out. The app itself lives at `/dashboard`.
 - Design system: Tailwind + shadcn/ui under `components/ui/`. Colors are HSL CSS
   vars in `globals.css` (light on `:root`, dark on `.dark`); theme toggled by
-  `ThemeProvider`. Providers: Theme → Toast → Confirm → AuthGate.
+  `ThemeProvider`. Providers: Theme → Toast → Confirm → **Upgrade** → AuthGate.
+- **Upgrade modal.** `UpgradeProvider` exposes `useUpgrade()` → `openUpgrade({feature?})`
+  (mirrors `useConfirm`): a Promise that resolves `true` once the user is on Pro.
+  It runs the checkout itself (mock activates instantly; Paddle opens the
+  overlay). Trigger it anywhere a free user hits a Pro wall — the API-tab
+  `UpgradeStage` and the dashboard quota banner both use it, then call
+  `onUpgraded`/`refreshProjects` so the gated UI unlocks in place. `request()`
+  throws a typed **`ApiError`** (`status` + server `code`) so callers can branch
+  on `402`/`quota_exceeded` and pop the modal instead of showing a raw error.
 - **Branding:** the logo lives in `components/shared/Logo.tsx` (`Logo` = mark +
   wordmark, `LogoMark` = inline SVG mark); the browser favicon is `app/icon.svg`.
   Raw brand SVGs (favicon/icon/full/mono) sit in `apps/web/public/` — keep

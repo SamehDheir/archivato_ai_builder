@@ -2,6 +2,7 @@ import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import type { ReviewReport } from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SessionOwnerGuard } from '../interview/session-owner.guard';
+import { ProGuard } from '../billing/pro.guard';
 import { ReviewService } from './review.service';
 
 @UseGuards(JwtAuthGuard, SessionOwnerGuard)
@@ -9,7 +10,8 @@ import { ReviewService } from './review.service';
 export class ReviewController {
   constructor(private readonly review: ReviewService) {}
 
-  /** Generate (or regenerate) the review report for a session. */
+  /** Generate (or regenerate) the review report for a session. Pro-gated. */
+  @UseGuards(ProGuard)
   @Post(':sessionId/generate')
   generate(@Param('sessionId') sessionId: string): Promise<ReviewReport> {
     return this.review.generate(sessionId);

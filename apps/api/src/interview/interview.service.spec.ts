@@ -1,16 +1,32 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  HttpException,
+  NotFoundException,
+} from '@nestjs/common';
 import { COMPLETENESS_THRESHOLD, type IntentAnalysis } from '@archivato/shared';
 import { InterviewService } from './interview.service';
 import { InMemoryInterviewSessionRepository } from './in-memory-interview-session.repository';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
 import { InterviewerAgent } from '../llm/agents/interviewer.agent';
 import { MockLlmProvider } from '../llm/mock-llm.provider';
+import type { BillingService } from '../billing/billing.service';
 import { TOTAL_QUESTIONS } from './question-plan';
+
+// These tests drive the state machine with owner-less sessions (userId = null),
+// so the confirm gate never calls billing — a no-op stub satisfies the type.
+const billingStub = {
+  getProjectQuota: async () => 999,
+} as unknown as BillingService;
 
 function makeService(mock = new MockLlmProvider()): InterviewService {
   const repo = new InMemoryInterviewSessionRepository();
   const analyst = new ProductAnalystAgent(mock);
-  return new InterviewService(repo, analyst, new InterviewerAgent(mock));
+  return new InterviewService(
+    repo,
+    analyst,
+    new InterviewerAgent(mock),
+    billingStub,
+  );
 }
 
 const IDEA = { idea: 'A clinic management system with appointments and billing' };
@@ -128,6 +144,35 @@ describe('InterviewService', () => {
     expect(theirs).toHaveLength(1);
 
     expect(await svc.list('nobody')).toEqual([]);
+  });
+
+  it('enforces the project-count quota at start (402 past the limit)', async () => {
+    const mock = new MockLlmProvider();
+    const repo = new InMemoryInterviewSessionRepository();
+    // Stub a plan that allows exactly 1 project.
+    const billing = { getProjectQuota: async () => 1 } as unknown as BillingService;
+    const svc = new InterviewService(
+      repo,
+      new ProductAnalystAgent(mock),
+      new InterviewerAgent(mock),
+      billing,
+    );
+    await svc.start(IDEA, 'user-1');
+    await expect(
+      svc.start({ idea: 'A second project over the limit' }, 'user-1'),
+    ).rejects.toBeInstanceOf(HttpException);
+    // A different user is unaffected.
+    await expect(svc.start(IDEA, 'user-2')).resolves.toBeDefined();
+  });
+
+  it('deletes a project (frees a quota slot)', async () => {
+    const svc = makeService();
+    const { sessionId } = await svc.start(IDEA, 'user-1');
+    await svc.deleteProject(sessionId);
+    await expect(svc.getState(sessionId)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(await svc.list('user-1')).toHaveLength(0);
   });
 
   // ── adaptive interview (real-AI path, scripted via the mock) ──────────────

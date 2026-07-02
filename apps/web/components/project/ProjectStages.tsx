@@ -11,6 +11,7 @@ import {
   Flag,
   History,
   Loader2,
+  Lock,
   MessageSquare,
   Network,
   Shapes,
@@ -56,6 +57,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { SummaryView } from '@/components/interview/SummaryView';
 import { ProductVisionPanel } from '@/components/product/ProductVisionPanel';
 import { useConfirm } from '@/components/shared/confirm-dialog';
+import { useUpgrade } from '@/components/billing/upgrade-dialog';
 
 export type ActiveJob = { stage: PipelineStageName; progress: number };
 
@@ -112,6 +114,7 @@ export function ProjectStages({
   dbDesign,
   apiDesign,
   review,
+  isPro,
   busy,
   job,
   error,
@@ -131,6 +134,7 @@ export function ProjectStages({
   onSavedApiDesign,
   onRefined,
   onRestored,
+  onUpgraded,
 }: {
   sessionId: string;
   summary: RequirementsSummary | null;
@@ -139,6 +143,8 @@ export function ProjectStages({
   dbDesign: DatabaseDesign | null;
   apiDesign: ApiDesign | null;
   review: ReviewReport | null;
+  /** Whether the owner is on Pro (unlocks API design → review → roadmap → export). */
+  isPro: boolean;
   busy: boolean;
   job: ActiveJob | null;
   error: string | null;
@@ -160,6 +166,8 @@ export function ProjectStages({
   onSavedApiDesign: (design: ApiDesign) => void;
   onRefined: (result: RefineResult) => void;
   onRestored: (snapshot: ProjectSnapshot) => void;
+  /** Called after a successful in-place upgrade so the parent can refresh the plan. */
+  onUpgraded?: () => void;
 }) {
   // `tab` is controlled by the parent (so the Project Wizard can navigate to a
   // stage); `setTab` is just an alias to the parent's setter.
@@ -370,17 +378,21 @@ export function ProjectStages({
             )}
           </TabsContent>
 
-          {/* API design */}
+          {/* API design — the Pro wall: free stops after the database design */}
           <TabsContent value="api" className="mt-4 space-y-3">
             {!apiDesign ? (
-              <GenerateStage
-                icon={Webhook}
-                title="Design the API"
-                hint="Generate the REST API — endpoints grouped by module, with request/response schemas and status codes — from the entities and services."
-                busy={busy}
-                label="Generate API Design"
-                onGenerate={onGenerateApi}
-              />
+              isPro ? (
+                <GenerateStage
+                  icon={Webhook}
+                  title="Design the API"
+                  hint="Generate the REST API — endpoints grouped by module, with request/response schemas and status codes — from the entities and services."
+                  busy={busy}
+                  label="Generate API Design"
+                  onGenerate={onGenerateApi}
+                />
+              ) : (
+                <UpgradeStage onUpgraded={onUpgraded} />
+              )
             ) : editing === 'api' ? (
               <ApiDesignEditor
                 design={apiDesign}
@@ -515,6 +527,33 @@ function JobProgress({ job }: { job: ActiveJob }) {
         indicatorClassName="bg-[linear-gradient(90deg,hsl(var(--primary))_0%,hsl(var(--primary)_/_0.6)_50%,hsl(var(--primary))_100%)] bg-[length:200%_100%] animate-shimmer"
       />
     </div>
+  );
+}
+
+/**
+ * The freemium wall shown on the API tab for free users: everything up to the
+ * database design is free; the API design and everything after it (review,
+ * roadmap, export) require Pro. Clicking opens the in-app upgrade modal; on a
+ * successful upgrade the parent refreshes the plan so the tab unlocks in place.
+ */
+function UpgradeStage({ onUpgraded }: { onUpgraded?: () => void }) {
+  const openUpgrade = useUpgrade();
+  return (
+    <EmptyState
+      icon={Lock}
+      title="Unlock the API design with Pro"
+      description="Your Free plan covers the requirements, system design, and database design. Upgrade to Pro to generate the REST API — plus the AI review, roadmap, and export that follow."
+    >
+      <Button
+        onClick={async () => {
+          const upgraded = await openUpgrade({ feature: 'generate the API design' });
+          if (upgraded) onUpgraded?.();
+        }}
+      >
+        <Sparkles className="h-4 w-4" />
+        Upgrade to Pro
+      </Button>
+    </EmptyState>
   );
 }
 

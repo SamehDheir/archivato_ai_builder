@@ -16,6 +16,7 @@ import { ChatModule } from './chat/chat.module';
 import { JobsModule } from './jobs/jobs.module';
 import { VersionsModule } from './versions/versions.module';
 import { DiagramsModule } from './diagrams/diagrams.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -53,6 +54,8 @@ import { DiagramsModule } from './diagrams/diagrams.module';
     VersionsModule,
     // Architecture diagrams (Mermaid, deterministic from the design artifacts).
     DiagramsModule,
+    // Subscriptions + project quota (free = 1 project, pro = 5/mo via Paddle).
+    BillingModule,
   ],
 })
 export class AppModule {}

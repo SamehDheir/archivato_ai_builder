@@ -39,7 +39,16 @@
       "PowerShell($env:DATABASE_URL = \"postgresql://postgres:postgres@localhost:5433/archivato?schema=public\"; node diag-devices.mjs)",
       "PowerShell(npx tsc --noEmit -p \"apps/api/tsconfig.json\" 2>&1)",
       "PowerShell(if \\($LASTEXITCODE -eq 0 -or $null -eq $LASTEXITCODE\\) { \"TYPECHECK OK\" })",
-      "PowerShell(npx tsc --noEmit -p \"apps/web/tsconfig.json\" 2>&1)"
+      "PowerShell(npx tsc --noEmit -p \"apps/web/tsconfig.json\" 2>&1)",
+      "PowerShell(npm run test --workspace @archivato/api -- roadmap.service.spec 2>&1)",
+      "PowerShell(Push-Location \"apps/api\"; $env:DATABASE_URL = \"postgresql://postgres:postgres@localhost:5433/archivato?schema=public\"; node diag-billing.mjs; Pop-Location)",
+      "PowerShell(npx tsc --noEmit -p \"d:/portoflio/Archivato AI Builder/apps/api/tsconfig.json\" 2>&1)",
+      "PowerShell(\"DONE\")",
+      "PowerShell(\"TYPECHECK DONE\")",
+      "PowerShell($env:DATABASE_URL = \"postgresql://postgres:postgres@localhost:5433/archivato?schema=public\"; node \"d:/portoflio/Archivato AI Builder/apps/api/diag-count.mjs\")",
+      "PowerShell(npm run test --workspace @archivato/api -- billing.service.spec 2>&1)",
+      "PowerShell(npm run lint --workspace @archivato/web 2>&1)",
+      "PowerShell(npx --prefix \"d:\\\\portoflio\\\\Archivato AI Builder\\\\apps\\\\web\" tsc -p \"d:\\\\portoflio\\\\Archivato AI Builder\\\\apps\\\\web\\\\tsconfig.json\" --noEmit 2>&1)"
     ]
   }
 }

@@ -4,6 +4,8 @@ import {
   Logger,
   NotFoundException,
   ConflictException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
@@ -25,6 +27,7 @@ import {
   type InterviewSessionRepository,
 } from './interview-session.repository';
 import type { InterviewSession } from './interview-session.entity';
+import { BillingService } from '../billing/billing.service';
 import { QUESTION_PLAN, TOTAL_QUESTIONS } from './question-plan';
 
 /** Adaptive interview caps so a real model can't end too early or run forever. */
@@ -47,6 +50,7 @@ export class InterviewService {
     private readonly repo: InterviewSessionRepository,
     private readonly productAnalyst: ProductAnalystAgent,
     private readonly interviewer: InterviewerAgent,
+    private readonly billing: BillingService,
   ) {}
 
   /**
@@ -59,6 +63,29 @@ export class InterviewService {
     input: ProjectIdeaInput,
     userId: string | null = null,
   ): Promise<InterviewState> {
+    // Enforce the plan's project-count quota (Free = 1, Pro = 5): a user at
+    // their limit must delete a project or upgrade before starting another.
+    // Skipped for owner-less sessions (unit tests drive the state machine).
+    if (userId) {
+      const [count, quota] = await Promise.all([
+        this.repo.countByUserId(userId),
+        this.billing.getProjectQuota(userId),
+      ]);
+      if (count >= quota) {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.PAYMENT_REQUIRED,
+            error: 'Payment Required',
+            code: 'quota_exceeded',
+            message:
+              quota === 1
+                ? 'Your Free plan allows 1 project. Delete it or upgrade to Pro (5 projects) to start another.'
+                : `You've reached your plan limit of ${quota} projects. Delete one or upgrade to start another.`,
+          },
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
+    }
     const now = new Date();
     const session: InterviewSession = {
       id: randomUUID(),
@@ -114,6 +141,12 @@ export class InterviewService {
     session.status = 'confirmed';
     await this.repo.save(session);
     return this.toState(session);
+  }
+
+  /** Delete a project (owner-guarded at the controller); cascades its artifacts. */
+  async deleteProject(sessionId: string): Promise<void> {
+    await this.require(sessionId); // 404 if it doesn't exist
+    await this.repo.delete(sessionId);
   }
 
   async getState(sessionId: string): Promise<InterviewState> {

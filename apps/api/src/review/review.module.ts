@@ -4,6 +4,7 @@ import { RequirementsModule } from '../requirements/requirements.module';
 import { SystemDesignModule } from '../system-design/system-design.module';
 import { DatabaseDesignModule } from '../database-design/database-design.module';
 import { ApiDesignModule } from '../api-design/api-design.module';
+import { BillingModule } from '../billing/billing.module';
 import { ReviewerAgent } from '../llm/agents/reviewer.agent';
 import { ReviewController } from './review.controller';
 import { ReviewService } from './review.service';
@@ -18,6 +19,7 @@ import { PrismaReviewReportRepository } from './prisma-review-report.repository'
     SystemDesignModule,
     DatabaseDesignModule,
     ApiDesignModule,
+    BillingModule,
   ],
   controllers: [ReviewController],
   providers: [

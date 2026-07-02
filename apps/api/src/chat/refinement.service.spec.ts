@@ -55,6 +55,7 @@ function makeHarness(): Harness {
     sessionRepo,
     new ProductAnalystAgent(mock),
     new InterviewerAgent(mock),
+    undefined as never, // no billing enforcement for owner-less test sessions
   );
   const requirements = new RequirementsService(
     sessionRepo,

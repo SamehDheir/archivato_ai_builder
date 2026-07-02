@@ -4,6 +4,7 @@ import { RequirementsModule } from '../requirements/requirements.module';
 import { SystemDesignModule } from '../system-design/system-design.module';
 import { DatabaseDesignModule } from '../database-design/database-design.module';
 import { ApiDesignModule } from '../api-design/api-design.module';
+import { BillingModule } from '../billing/billing.module';
 import { RoadmapPlannerAgent } from '../llm/agents/roadmap-planner.agent';
 import { RoadmapController } from './roadmap.controller';
 import { RoadmapService } from './roadmap.service';
@@ -18,6 +19,7 @@ import { PrismaProjectRoadmapRepository } from './prisma-roadmap.repository';
     SystemDesignModule,
     DatabaseDesignModule,
     ApiDesignModule,
+    BillingModule,
   ],
   controllers: [RoadmapController],
   providers: [

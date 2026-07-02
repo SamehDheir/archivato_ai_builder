@@ -51,6 +51,14 @@ export class PrismaInterviewSessionRepository
     return rows.map(toEntity);
   }
 
+  countByUserId(userId: string): Promise<number> {
+    return this.prisma.interviewSession.count({ where: { userId } });
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.prisma.interviewSession.delete({ where: { id } });
+  }
+
   async save(session: InterviewSession): Promise<InterviewSession> {
     const row = await this.prisma.interviewSession.update({
       where: { id: session.id },

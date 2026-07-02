@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
-import type { AuthUser } from '@archivato/shared';
-import { authApi } from '@/lib/api';
+import { ArrowLeft, Check, Loader2, ShieldCheck, Trash2, Zap } from 'lucide-react';
+import { PLANS, type AuthUser, type SubscriptionView } from '@archivato/shared';
+import { authApi, billingApi, interviewApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -78,6 +78,7 @@ export function SettingsPage() {
 
       <div className="space-y-6">
         <ProfileSection user={user} onUpdated={setUser} />
+        <BillingSection />
         <SecuritySection user={user} onUpdated={setUser} />
         <AppearanceSection />
         <DangerSection
@@ -198,6 +199,178 @@ function ProfileSection({
       </CardContent>
     </Card>
   );
+}
+
+/** Plan & billing: current plan, quota usage, and upgrade/cancel. */
+function BillingSection() {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [sub, setSub] = useState<SubscriptionView | null>(null);
+  const [used, setUsed] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    try {
+      const [subscription, projects] = await Promise.all([
+        billingApi.subscription(),
+        interviewApi.list().catch(() => []),
+      ]);
+      setSub(subscription);
+      setUsed(projects.length);
+    } catch {
+      /* not signed in / unavailable */
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function upgrade() {
+    setBusy(true);
+    try {
+      const res = await billingApi.checkout();
+      if (res.status === 'activated') {
+        toast({ title: 'Upgraded to Pro', variant: 'success' });
+        await load();
+      } else if (res.status === 'checkout' && res.paddle) {
+        // Paddle mode: open the checkout overlay if Paddle.js is loaded.
+        const paddle = (window as unknown as { Paddle?: PaddleJs }).Paddle;
+        if (paddle?.Checkout?.open) {
+          paddle.Checkout.open({
+            items: [{ priceId: res.paddle.priceId, quantity: 1 }],
+            customer: { email: res.paddle.customerEmail },
+          });
+        } else {
+          toast({
+            title: 'Checkout not available',
+            description: 'Paddle is not fully configured on this device yet.',
+            variant: 'error',
+          });
+        }
+      }
+    } catch (e) {
+      toast({
+        title: 'Could not start checkout',
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'error',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancel() {
+    const ok = await confirm({
+      title: 'Cancel Pro?',
+      description:
+        'You will keep Pro until the current period ends, then return to the ' +
+        'Free plan (1 project). No further charges.',
+      confirmLabel: 'Cancel subscription',
+      cancelLabel: 'Keep Pro',
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      setSub(await billingApi.cancel());
+      toast({ title: 'Subscription canceled', variant: 'success' });
+    } catch (e) {
+      toast({
+        title: 'Could not cancel',
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'error',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pro = PLANS.pro;
+  const isPro = sub?.plan === 'pro';
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Plan &amp; billing</CardTitle>
+        <CardDescription>
+          Projects are metered by plan — a project counts once you confirm its
+          interview.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading || !sub ? (
+          <div className="flex h-16 items-center text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 p-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold capitalize">{sub.plan} plan</span>
+                  {isPro && <Badge variant="primary">Pro</Badge>}
+                  {sub.cancelAtPeriodEnd && (
+                    <Badge variant="warning">cancels at period end</Badge>
+                  )}
+                </div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {used ?? '—'} of {sub.projectQuota} project
+                  {sub.projectQuota === 1 ? '' : 's'} used
+                  {isPro && sub.periodEnd
+                    ? ` · ${sub.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(
+                        sub.periodEnd,
+                      ).toLocaleDateString()}`
+                    : ''}
+                </div>
+              </div>
+              {isPro ? (
+                <Button variant="outline" onClick={cancel} disabled={busy}>
+                  {busy ? 'Working…' : 'Cancel Pro'}
+                </Button>
+              ) : (
+                <Button onClick={upgrade} disabled={busy}>
+                  <Zap className="h-4 w-4" />
+                  {busy ? 'Working…' : `Upgrade — $${pro.priceUsd}/mo`}
+                </Button>
+              )}
+            </div>
+
+            {!isPro && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+                <div className="text-sm font-semibold">
+                  Pro — ${pro.priceUsd}/month
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {pro.features.map((f) => (
+                    <li
+                      key={f}
+                      className="flex items-center gap-2 text-sm text-muted-foreground"
+                    >
+                      <Check className="h-3.5 w-3.5 text-primary" /> {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Minimal shape of the Paddle.js global we call in Paddle mode. */
+interface PaddleJs {
+  Checkout?: {
+    open?: (opts: {
+      items: { priceId: string; quantity: number }[];
+      customer?: { email: string };
+    }) => void;
+  };
 }
 
 /** Security: change an existing password, or set a first one on an OAuth account. */

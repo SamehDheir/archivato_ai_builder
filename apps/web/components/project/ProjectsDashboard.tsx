@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Sparkles, Trash2 } from 'lucide-react';
 import type { InterviewStatus, ProjectScale, ProjectSummary } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,7 @@ export function ProjectsDashboard({
   setScale,
   onStart,
   onOpen,
+  onDelete,
 }: {
   projects: ProjectSummary[];
   creating: boolean;
@@ -61,6 +62,7 @@ export function ProjectsDashboard({
   setScale: (value: ProjectScale | '') => void;
   onStart: (e: React.FormEvent) => void;
   onOpen: (sessionId: string) => void;
+  onDelete: (sessionId: string) => void;
 }) {
   const showForm = creating || projects.length === 0;
 
@@ -147,6 +149,7 @@ export function ProjectsDashboard({
               project={p}
               busy={busy}
               onOpen={() => onOpen(p.sessionId)}
+              onDelete={() => onDelete(p.sessionId)}
             />
           ))}
         </div>
@@ -160,41 +163,55 @@ function ProjectCard({
   project,
   busy,
   onOpen,
+  onDelete,
 }: {
   project: ProjectSummary;
   busy: boolean;
   onOpen: () => void;
+  onDelete: () => void;
 }) {
   const status = STATUS_META[project.status];
   const pct = Math.round(project.completeness * 100);
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      disabled={busy}
-      className="group flex flex-col rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
-    >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <Badge variant={status.variant}>{status.label}</Badge>
-        <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-      </div>
-      <p className="line-clamp-2 text-sm font-semibold" title={project.idea}>
-        {project.idea}
-      </p>
-      <div className="mt-auto pt-3">
-        {project.status !== 'confirmed' && (
-          <>
-            <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
-              <span>Completeness</span>
-              <span>{pct}%</span>
-            </div>
-            <Progress value={pct} className="h-1.5" />
-          </>
-        )}
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Updated {new Date(project.updatedAt).toLocaleDateString()}
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={busy}
+        className="flex w-full flex-col rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
+      >
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <Badge variant={status.variant}>{status.label}</Badge>
+          <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+        </div>
+        <p className="line-clamp-2 pr-6 text-sm font-semibold" title={project.idea}>
+          {project.idea}
         </p>
-      </div>
-    </button>
+        <div className="mt-auto pt-3">
+          {project.status !== 'confirmed' && (
+            <>
+              <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
+                <span>Completeness</span>
+                <span>{pct}%</span>
+              </div>
+              <Progress value={pct} className="h-1.5" />
+            </>
+          )}
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Updated {new Date(project.updatedAt).toLocaleDateString()}
+          </p>
+        </div>
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        disabled={busy}
+        aria-label="Delete project"
+        title="Delete project"
+        className="absolute bottom-3 right-3 rounded-md bg-card p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 disabled:pointer-events-none"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
   );
 }

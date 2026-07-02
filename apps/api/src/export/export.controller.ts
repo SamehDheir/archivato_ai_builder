@@ -2,9 +2,11 @@ import { Controller, Get, Header, Param, UseGuards } from '@nestjs/common';
 import type { ExportBundle, ProjectStructure } from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SessionOwnerGuard } from '../interview/session-owner.guard';
+import { ProGuard } from '../billing/pro.guard';
 import { ExportService } from './export.service';
 
-@UseGuards(JwtAuthGuard, SessionOwnerGuard)
+// Export is the Pro deliverable — every format is gated behind an active plan.
+@UseGuards(JwtAuthGuard, SessionOwnerGuard, ProGuard)
 @Controller('export')
 export class ExportController {
   constructor(private readonly exporter: ExportService) {}

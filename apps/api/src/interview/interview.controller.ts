@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import type { AuthUser, InterviewState, ProjectSummary } from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -50,5 +59,14 @@ export class InterviewController {
   @Post(':id/confirm')
   confirm(@Param('id') id: string): Promise<InterviewState> {
     return this.interview.confirm(id);
+  }
+
+  /** Delete a project and all of its artifacts (owner only). Frees a quota slot. */
+  @UseGuards(SessionOwnerGuard)
+  @Delete(':id')
+  @HttpCode(200)
+  async remove(@Param('id') id: string): Promise<{ success: true }> {
+    await this.interview.deleteProject(id);
+    return { success: true };
   }
 }

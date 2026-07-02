@@ -99,6 +99,30 @@ Every agent keeps a deterministic fallback, so malformed model output still
 produces a valid artifact. The API logs which provider it resolved on startup
 (`Agent LLM provider: …` / `Interview LLM provider: …`).
 
+**Subscriptions (optional).** Two dimensions are metered. **(1) Project count** —
+Free = 1 project, **Pro = $19/mo → 5 projects**; you're blocked from starting a
+new project at the limit (delete one to free a slot, or upgrade). **(2) Pipeline
+depth (freemium)** — Free generates the interview, requirements, system design,
+and database design (plus Product Vision); **Pro unlocks the API design and
+everything after it: AI review, roadmap, and export.** Wherever a free user hits
+a wall — the API tab, the quota banner, or starting a project at the cap — an
+**in-app upgrade modal** pops up and unlocks the UI in place on success. Billing
+runs **offline in mock mode by default** — upgrade applies
+instantly and **cancel is at-period-end** (you keep Pro until the period ends,
+then drop to Free), all with no charge, so the whole flow is demoable with zero
+setup. To
+use real **Paddle** (Merchant-of-Record), set `BILLING_PROVIDER=paddle` and:
+```env
+PADDLE_API_KEY=...            # server API key (sandbox or live)
+PADDLE_PRICE_ID=pri_...       # the $19/mo recurring price
+PADDLE_CLIENT_TOKEN=...       # client-side token for Paddle.js checkout
+PADDLE_WEBHOOK_SECRET=...     # verifies POST /api/billing/webhook
+PADDLE_ENV=sandbox            # or production
+```
+Point a Paddle webhook (subscription.* events) at `POST /api/billing/webhook`
+(use a tunnel like ngrok for local testing). The startup log shows the resolved
+`Billing provider: …`.
+
 ### Database + Redis (PostgreSQL via Prisma, Redis for the job queue)
 All pipeline data is persisted; async generation runs on Redis (BullMQ). Start
 both services and apply the schema:
@@ -386,6 +410,7 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/interview/:id`       | Fetch current interview state (owner only)   |
 | POST   | `/api/interview/:id/answer`| Answer the current question and advance      |
 | POST   | `/api/interview/:id/confirm`| Confirm the summarized requirements (gate)  |
+| DELETE | `/api/interview/:id`       | Delete a project + its artifacts (owner only)|
 | POST   | `/api/requirements/:sessionId/generate`| Generate the Requirement Document (confirmed only) |
 | GET    | `/api/requirements/:sessionId`| Fetch a generated Requirement Document    |
 | POST   | `/api/system-design/:sessionId/generate`| Generate the System Design (requirements required) |
@@ -404,6 +429,11 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/versions/:sessionId/:version` | Fetch one version's full snapshot   |
 | POST   | `/api/versions/:sessionId/:version/restore` | Restore the project to a version |
 | GET    | `/api/diagrams/:sessionId` | Architecture diagrams (Mermaid source per kind) |
+| GET    | `/api/billing/plans`       | Public plan catalogue (Free / Pro)           |
+| GET    | `/api/billing`             | Current subscription + project-quota usage   |
+| POST   | `/api/billing/checkout`    | Upgrade to Pro (mock activates; Paddle checkout) |
+| POST   | `/api/billing/cancel`      | Cancel Pro                                   |
+| POST   | `/api/billing/webhook`     | Paddle webhook (HMAC-verified; no auth)      |
 | GET    | `/api/export/:sessionId/json`| Full artifact bundle (JSON)                 |
 | GET    | `/api/export/:sessionId/markdown`| Markdown report                         |
 | GET    | `/api/export/:sessionId/openapi`| OpenAPI 3.0 spec (JSON)                   |

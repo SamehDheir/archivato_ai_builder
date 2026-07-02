@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import type {
   ApiDesign,
   DatabaseDesign,
@@ -13,11 +14,14 @@ import type {
   RefineResult,
   RequirementDocument,
   ReviewReport,
+  SubscriptionView,
   SystemDesign,
 } from '@archivato/shared';
 import {
+  ApiError,
   apiDesignApi,
   authApi,
+  billingApi,
   databaseDesignApi,
   interviewApi,
   jobsApi,
@@ -27,6 +31,7 @@ import {
 } from '@/lib/api';
 import { useToast } from '@/components/shared/toast';
 import { useConfirm } from '@/components/shared/confirm-dialog';
+import { useUpgrade } from '@/components/billing/upgrade-dialog';
 import { Breadcrumbs, type Crumb } from '@/components/project/Breadcrumbs';
 import { ProjectsDashboard } from '@/components/project/ProjectsDashboard';
 import { ProgressPanel } from '@/components/interview/ProgressPanel';
@@ -66,12 +71,14 @@ const LEGACY_SESSION_KEY = 'archivato.sessionId';
 export default function Home() {
   const toast = useToast();
   const confirm = useConfirm();
+  const openUpgrade = useUpgrade();
   const [state, setState] = useState<InterviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [sub, setSub] = useState<SubscriptionView | null>(null);
   // True while the "New project" form is open on the projects dashboard.
   const [creating, setCreating] = useState(false);
 
@@ -126,8 +133,14 @@ export default function Home() {
         const me = await authApi.me();
         if (cancelled || !me) return;
         setUserId(me.id);
-        const list = await interviewApi.list();
-        if (!cancelled) setProjects(list);
+        const [list, subscription] = await Promise.all([
+          interviewApi.list(),
+          billingApi.subscription().catch(() => null),
+        ]);
+        if (!cancelled) {
+          setProjects(list);
+          setSub(subscription);
+        }
       } catch {
         /* not signed in / list failed — show the empty dashboard */
       } finally {
@@ -147,7 +160,12 @@ export default function Home() {
 
   async function refreshProjects() {
     try {
-      setProjects(await interviewApi.list());
+      const [list, subscription] = await Promise.all([
+        interviewApi.list(),
+        billingApi.subscription().catch(() => null),
+      ]);
+      setProjects(list);
+      if (subscription) setSub(subscription);
     } catch {
       /* non-fatal */
     }
@@ -197,6 +215,26 @@ export default function Home() {
     }
   }
 
+  /** Delete a project after confirmation; frees a plan quota slot. */
+  async function handleDeleteProject(sessionId: string) {
+    const ok = await confirm({
+      title: 'Delete this project?',
+      description:
+        'This permanently deletes the project and all of its artifacts ' +
+        '(requirements, designs, review, history). This cannot be undone.',
+      confirmLabel: 'Delete project',
+      cancelLabel: 'Keep project',
+      destructive: true,
+    });
+    if (!ok) return;
+    await run(async () => {
+      await interviewApi.delete(sessionId);
+      if (userId) localStorage.removeItem(sessionKey(userId));
+      await refreshProjects();
+      toast({ title: 'Project deleted', variant: 'success' });
+    });
+  }
+
   async function openProject(sessionId: string) {
     setStageTab('requirements');
     await run(async () => {
@@ -207,17 +245,27 @@ export default function Home() {
 
   async function handleStart(e: React.FormEvent) {
     e.preventDefault();
-    const next = await run(() =>
-      interviewApi.start({
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await interviewApi.start({
         idea,
         industry: industry || undefined,
         scale: scale || undefined,
-      }),
-    );
-    if (next) {
+      });
       setState(next);
       setCreating(false);
       void refreshProjects();
+    } catch (err) {
+      // At the project cap (402) → offer an in-app upgrade instead of a raw error.
+      if (err instanceof ApiError && err.status === 402) {
+        const upgraded = await openUpgrade({ feature: 'start another project' });
+        if (upgraded) await refreshProjects();
+        return;
+      }
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -382,6 +430,37 @@ export default function Home() {
             design.
           </p>
 
+          {sub && (
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+              <span>
+                <span className="font-semibold capitalize">{sub.plan} plan</span>{' '}
+                <span className="text-muted-foreground">
+                  · {projects.length} of {sub.projectQuota} project
+                  {sub.projectQuota === 1 ? '' : 's'} used
+                </span>
+              </span>
+              {sub.plan === 'free' ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const upgraded = await openUpgrade();
+                    if (upgraded) await refreshProjects();
+                  }}
+                  className="font-medium text-primary hover:underline"
+                >
+                  Upgrade to Pro
+                </button>
+              ) : (
+                <Link
+                  href="/settings"
+                  className="font-medium text-primary hover:underline"
+                >
+                  Manage plan
+                </Link>
+              )}
+            </div>
+          )}
+
           <ProjectsDashboard
             projects={projects}
             creating={creating}
@@ -396,6 +475,7 @@ export default function Home() {
             setScale={setScale}
             onStart={handleStart}
             onOpen={openProject}
+            onDelete={handleDeleteProject}
           />
         </>
       )}
@@ -448,6 +528,7 @@ export default function Home() {
               dbDesign={dbDesign}
               apiDesign={apiDesign}
               review={review}
+              isPro={sub?.plan === 'pro'}
               busy={busy}
               job={job}
               error={error}
@@ -477,6 +558,7 @@ export default function Home() {
               onSavedApiDesign={handleSavedApiDesign}
               onRefined={handleRefined}
               onRestored={handleRestored}
+              onUpgraded={refreshProjects}
             />
           )}
         </div>
