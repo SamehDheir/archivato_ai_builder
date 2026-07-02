@@ -27,6 +27,32 @@ import type {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
+/**
+ * A cached "are we signed in?" hint (localStorage). It lets auth-aware UI on
+ * public pages (the landing nav) render the right controls on first paint
+ * instead of flashing while `/auth/me` round-trips. It's only a UI hint — the
+ * httpOnly cookies remain the source of truth — so it's fine that it's readable.
+ */
+const AUTH_HINT_KEY = 'archivato_authed';
+
+function setAuthHint(signedIn: boolean): void {
+  try {
+    localStorage.setItem(AUTH_HINT_KEY, signedIn ? '1' : '0');
+  } catch {
+    /* SSR / storage disabled — the hint is best-effort */
+  }
+}
+
+/** Last-known auth state, or null if we've never checked on this device. */
+export function getAuthHint(): boolean | null {
+  try {
+    const v = localStorage.getItem(AUTH_HINT_KEY);
+    return v === '1' ? true : v === '0' ? false : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Endpoints that must never trigger the auto-refresh-and-retry (avoids loops). */
 const NO_REFRESH = ['/auth/login', '/auth/register', '/auth/refresh'];
 
@@ -272,25 +298,40 @@ async function requestText(path: string): Promise<string> {
 }
 
 export const authApi = {
-  register: (input: RegisterInput) =>
-    request<AuthUser>('/auth/register', {
+  register: async (input: RegisterInput) => {
+    const user = await request<AuthUser>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(input),
-    }),
+    });
+    setAuthHint(true);
+    return user;
+  },
 
-  login: (input: LoginInput) =>
-    request<AuthUser>('/auth/login', {
+  login: async (input: LoginInput) => {
+    const user = await request<AuthUser>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(input),
-    }),
+    });
+    setAuthHint(true);
+    return user;
+  },
 
-  logout: () => request<{ success: true }>('/auth/logout', { method: 'POST' }),
+  logout: async () => {
+    const res = await request<{ success: true }>('/auth/logout', {
+      method: 'POST',
+    });
+    setAuthHint(false);
+    return res;
+  },
 
-  /** Current user, or null if not authenticated (401). */
+  /** Current user, or null if not authenticated (401). Refreshes the auth hint. */
   me: async (): Promise<AuthUser | null> => {
     try {
-      return await request<AuthUser>('/auth/me');
+      const user = await request<AuthUser>('/auth/me');
+      setAuthHint(true);
+      return user;
     } catch {
+      setAuthHint(false);
       return null;
     }
   },
@@ -326,9 +367,15 @@ export const authApi = {
   oauthProviders: () =>
     request<{ google: boolean; github: boolean }>('/auth/oauth/providers'),
 
-  /** Full-page URL that starts an OAuth login (browser navigates here). */
-  oauthStartUrl: (provider: 'google' | 'github') =>
-    `${API_URL}/auth/oauth/${provider}/start`,
+  /**
+   * Full-page URL that starts an OAuth login (browser navigates here). Pass a
+   * device fingerprint so a NEW OAuth account is device-gated like local
+   * registration (one account per device).
+   */
+  oauthStartUrl: (provider: 'google' | 'github', fingerprint?: string) =>
+    `${API_URL}/auth/oauth/${provider}/start${
+      fingerprint ? `?fingerprint=${encodeURIComponent(fingerprint)}` : ''
+    }`,
 };
 
 export const exportApi = {

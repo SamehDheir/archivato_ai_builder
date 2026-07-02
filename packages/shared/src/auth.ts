@@ -27,6 +27,13 @@ export interface RegisterInput {
   email: string;
   password: string;
   displayName: string;
+  /**
+   * Client-computed browser fingerprint used to enforce **one account per
+   * device** (anti-spam). Only a hash is ever stored server-side. Optional at
+   * the type level so the service and OAuth path stay usable without it; the
+   * HTTP DTO requires it, so real browser registrations always carry one.
+   */
+  fingerprint?: string;
 }
 
 /** Payload for POST /auth/login. */

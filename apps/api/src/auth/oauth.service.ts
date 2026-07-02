@@ -1,7 +1,12 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AuthProvider } from '@archivato/shared';
 import { USER_REPOSITORY, type UserRepository } from './user.repository';
+import {
+  DEVICE_REGISTRATION_REPOSITORY,
+  type DeviceRegistrationRepository,
+} from './device-registration.repository';
+import { hashToken } from './token.service';
 import type { User } from './user.entity';
 
 /** The OAuth providers we support (a subset of AuthProvider). */
@@ -38,6 +43,8 @@ export class OAuthService {
   constructor(
     private readonly config: ConfigService,
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
+    @Inject(DEVICE_REGISTRATION_REPOSITORY)
+    private readonly devices: DeviceRegistrationRepository,
   ) {}
 
   /** Which providers are configured (for the client to render buttons). */
@@ -62,8 +69,17 @@ export class OAuthService {
     return `${ep.authorizeUrl}?${params.toString()}`;
   }
 
-  /** Exchange the auth code, fetch the profile, then link or create the user. */
-  async loginWithCode(provider: OAuthProvider, code: string): Promise<User> {
+  /**
+   * Exchange the auth code, fetch the profile, then link or create the user.
+   * `fingerprint` (when present) device-gates NEW account creation — the same
+   * one-account-per-device rule as local registration. Signing back into an
+   * existing account is never gated.
+   */
+  async loginWithCode(
+    provider: OAuthProvider,
+    code: string,
+    fingerprint?: string,
+  ): Promise<User> {
     const accessToken = await this.exchangeCode(provider, code);
     const profile = await this.endpoints(provider).fetchProfile(accessToken);
     // Require a verified email: linking accounts by an unverified email is an
@@ -71,7 +87,7 @@ export class OAuthService {
     if (!profile.email || !profile.emailVerified) {
       throw new Error('OAuth provider did not return a verified email');
     }
-    return this.linkOrCreate(provider, profile);
+    return this.linkOrCreate(provider, profile, fingerprint);
   }
 
   // ── user linking ────────────────────────────────────────────────────────
@@ -79,11 +95,13 @@ export class OAuthService {
   private async linkOrCreate(
     provider: OAuthProvider,
     profile: OAuthProfile,
+    fingerprint?: string,
   ): Promise<User> {
     const email = profile.email.trim();
     const existing = await this.users.findByEmail(email);
     if (existing) {
-      // Attach the provider if it isn't already linked.
+      // Existing account → this is a sign-in / provider link, not a new
+      // account, so the device gate does not apply.
       if (!existing.providers.includes(provider)) {
         return this.users.save({
           ...existing,
@@ -93,13 +111,35 @@ export class OAuthService {
       }
       return existing;
     }
-    return this.users.create({
+
+    // New account → enforce one account per device (anti-spam). We store only a
+    // hash of the fingerprint; a device that already registered is refused.
+    const fingerprintHash = fingerprint ? hashToken(fingerprint) : null;
+    if (fingerprintHash) {
+      const knownDevice =
+        await this.devices.findByFingerprintHash(fingerprintHash);
+      if (knownDevice) {
+        throw new ConflictException(
+          'This device already has an account. Only one account per device is allowed.',
+        );
+      }
+    }
+    const user = await this.users.create({
       email,
       passwordHash: null, // OAuth-only account (no local password)
       displayName: profile.displayName || email.split('@')[0],
       emailVerified: true, // the provider vouches for the email
       providers: [provider as AuthProvider],
     });
+    if (fingerprintHash) {
+      // The unique constraint is the real race guard; swallow its violation.
+      try {
+        await this.devices.create({ fingerprintHash, userId: user.id });
+      } catch {
+        /* device link already exists (concurrent sign-up) */
+      }
+    }
+    return user;
   }
 
   // ── token exchange ──────────────────────────────────────────────────────

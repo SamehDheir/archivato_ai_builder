@@ -12,6 +12,7 @@ import { EmailVerificationService } from './email-verification.service';
 import { InMemoryUserRepository } from './in-memory-user.repository';
 import { InMemoryRefreshTokenRepository } from './in-memory-refresh-token.repository';
 import { InMemoryEmailVerificationTokenRepository } from './in-memory-email-verification-token.repository';
+import { InMemoryDeviceRegistrationRepository } from './in-memory-device-registration.repository';
 
 const REGISTER = {
   email: 'Founder@Example.com',
@@ -22,12 +23,14 @@ const REGISTER = {
 describe('AuthService', () => {
   let users: InMemoryUserRepository;
   let refreshTokens: InMemoryRefreshTokenRepository;
+  let devices: InMemoryDeviceRegistrationRepository;
   let tokens: TokenService;
   let service: AuthService;
 
   beforeEach(() => {
     users = new InMemoryUserRepository();
     refreshTokens = new InMemoryRefreshTokenRepository();
+    devices = new InMemoryDeviceRegistrationRepository();
     const jwt = new JwtService({ secret: 'test-secret' });
     const config = new ConfigService({
       JWT_ACCESS_TTL_SECONDS: 900,
@@ -43,6 +46,7 @@ describe('AuthService', () => {
     );
     service = new AuthService(
       users,
+      devices,
       new PasswordService(),
       tokens,
       emailVerification,
@@ -70,6 +74,35 @@ describe('AuthService', () => {
     await expect(
       service.register({ ...REGISTER, email: 'founder@example.com' }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('blocks a second registration from the same device (one account per device)', async () => {
+    await service.register({ ...REGISTER, fingerprint: 'device-abc' });
+    await expect(
+      service.register({
+        email: 'someone-else@example.com',
+        password: 'another-strong-pw',
+        displayName: 'Someone Else',
+        fingerprint: 'device-abc',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('allows registration from a different device', async () => {
+    await service.register({ ...REGISTER, fingerprint: 'device-abc' });
+    const second = await service.register({
+      email: 'someone-else@example.com',
+      password: 'another-strong-pw',
+      displayName: 'Someone Else',
+      fingerprint: 'device-xyz',
+    });
+    expect(second.user.email).toBe('someone-else@example.com');
+  });
+
+  it('stores only a hash of the fingerprint, not the raw value', async () => {
+    await service.register({ ...REGISTER, fingerprint: 'device-abc' });
+    expect(await devices.findByFingerprintHash('device-abc')).toBeNull();
+    expect(await devices.findByFingerprintHash(hashToken('device-abc'))).not.toBeNull();
   });
 
   it('stores only a hash of the refresh token, not the raw value', async () => {

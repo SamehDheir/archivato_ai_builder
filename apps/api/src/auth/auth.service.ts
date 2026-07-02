@@ -6,9 +6,13 @@ import {
 } from '@nestjs/common';
 import type { AuthUser, LoginInput, RegisterInput } from '@archivato/shared';
 import { USER_REPOSITORY, type UserRepository } from './user.repository';
+import {
+  DEVICE_REGISTRATION_REPOSITORY,
+  type DeviceRegistrationRepository,
+} from './device-registration.repository';
 import type { User } from './user.entity';
 import { PasswordService } from './password.service';
-import { TokenService, type IssuedRefreshToken } from './token.service';
+import { TokenService, hashToken, type IssuedRefreshToken } from './token.service';
 import { EmailVerificationService } from './email-verification.service';
 import { toAuthUser } from './user.mapper';
 
@@ -26,6 +30,8 @@ export interface AuthSession {
 export class AuthService {
   constructor(
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
+    @Inject(DEVICE_REGISTRATION_REPOSITORY)
+    private readonly devices: DeviceRegistrationRepository,
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
     private readonly emailVerification: EmailVerificationService,
@@ -33,6 +39,20 @@ export class AuthService {
 
   /** Create a local account, send a verification email, and start a session. */
   async register(input: RegisterInput): Promise<AuthSession> {
+    // One account per device (anti-spam). We store only a hash of the client
+    // fingerprint; a device that already registered an account is refused.
+    const fingerprintHash = input.fingerprint
+      ? hashToken(input.fingerprint)
+      : null;
+    if (fingerprintHash) {
+      const knownDevice =
+        await this.devices.findByFingerprintHash(fingerprintHash);
+      if (knownDevice) {
+        throw new ConflictException(
+          'This device already has an account. Only one account per device is allowed — please sign in instead.',
+        );
+      }
+    }
     const existing = await this.users.findByEmail(input.email);
     if (existing) {
       throw new ConflictException('Email already registered');
@@ -44,6 +64,16 @@ export class AuthService {
       displayName: input.displayName,
       providers: ['password'],
     });
+    // Link the device so it can't register a second account. The unique
+    // constraint is the real guard against a concurrent double-submit; swallow
+    // its violation so a race surfaces as the same friendly conflict.
+    if (fingerprintHash) {
+      try {
+        await this.devices.create({ fingerprintHash, userId: user.id });
+      } catch {
+        /* unique-constraint race — the device link already exists */
+      }
+    }
     // Fire off the verification email; never block sign-up on mail delivery.
     await this.emailVerification.issueAndSend(user).catch(() => undefined);
     return this.startSession(user);

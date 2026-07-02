@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
+import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,8 @@ const OAUTH_ERRORS: Record<string, string> = {
   oauth_unavailable: 'That sign-in provider is not configured.',
   oauth_state: 'Sign-in expired or was interrupted. Please try again.',
   oauth_failed: 'Sign-in failed. Please try again.',
+  oauth_device:
+    'This device already has an account. Only one account per device is allowed — please sign in instead.',
 };
 
 /**
@@ -69,13 +72,25 @@ export function AuthForm({
     setNotice(null);
   }
 
+  /** Compute the device fingerprint, then hand off to the OAuth start URL. */
+  async function startOauth(provider: 'google' | 'github') {
+    const fingerprint = await getDeviceFingerprint().catch(() => undefined);
+    window.location.href = authApi.oauthStartUrl(provider, fingerprint);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
       const user = isRegister
-        ? await authApi.register({ email, password, displayName })
+        ? await authApi.register({
+            email,
+            password,
+            displayName,
+            // One account per device (anti-spam) — see the notice below the form.
+            fingerprint: await getDeviceFingerprint(),
+          })
         : await authApi.login({ email, password });
       onSuccess(user);
     } catch (err) {
@@ -118,6 +133,14 @@ export function AuthForm({
             <h3 className="font-semibold">
               {isRegister ? 'Create your account' : 'Welcome back'}
             </h3>
+
+            {isRegister && (
+              <p className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                To prevent spam, only <strong>one account per device</strong> is
+                allowed. If you already have an account on this device, please
+                sign in instead.
+              </p>
+            )}
 
             {isRegister && (
               <div className="space-y-1.5">
@@ -203,9 +226,7 @@ export function AuthForm({
                 type="button"
                 variant="secondary"
                 className="flex-1"
-                onClick={() => {
-                  window.location.href = authApi.oauthStartUrl('google');
-                }}
+                onClick={() => startOauth('google')}
               >
                 Google
               </Button>
@@ -215,9 +236,7 @@ export function AuthForm({
                 type="button"
                 variant="secondary"
                 className="flex-1"
-                onClick={() => {
-                  window.location.href = authApi.oauthStartUrl('github');
-                }}
+                onClick={() => startOauth('github')}
               >
                 GitHub
               </Button>

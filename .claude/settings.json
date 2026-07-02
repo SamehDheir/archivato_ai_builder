@@ -31,7 +31,12 @@
       "Bash(ls next.config.*)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
       "Bash(echo \"=== tsc exit $? ===\")",
-      "Bash(docker pull *)"
+      "Bash(docker pull *)",
+      "PowerShell(npm run prisma:generate --workspace @archivato/api)",
+      "PowerShell(npm run test --workspace @archivato/api -- auth.service.spec)",
+      "PowerShell(npm run --silent --workspace @archivato/api exec -- prisma migrate status)",
+      "PowerShell(Push-Location \"apps/api\"; $env:DATABASE_URL = \"postgresql://postgres:postgres@localhost:5433/archivato?schema=public\"; node diag-devices.mjs; Pop-Location)",
+      "PowerShell($env:DATABASE_URL = \"postgresql://postgres:postgres@localhost:5433/archivato?schema=public\"; node diag-devices.mjs)"
     ]
   }
 }

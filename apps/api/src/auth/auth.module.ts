@@ -20,6 +20,8 @@ import { EMAIL_VERIFICATION_TOKEN_REPOSITORY } from './email-verification-token.
 import { PrismaEmailVerificationTokenRepository } from './prisma-email-verification-token.repository';
 import { PASSWORD_RESET_TOKEN_REPOSITORY } from './password-reset-token.repository';
 import { PrismaPasswordResetTokenRepository } from './prisma-password-reset-token.repository';
+import { DEVICE_REGISTRATION_REPOSITORY } from './device-registration.repository';
+import { PrismaDeviceRegistrationRepository } from './prisma-device-registration.repository';
 
 /**
  * Authentication (Slice 9a): local register/login, rotating refresh tokens, and
@@ -61,6 +63,10 @@ import { PrismaPasswordResetTokenRepository } from './prisma-password-reset-toke
     {
       provide: PASSWORD_RESET_TOKEN_REPOSITORY,
       useClass: PrismaPasswordResetTokenRepository,
+    },
+    {
+      provide: DEVICE_REGISTRATION_REPOSITORY,
+      useClass: PrismaDeviceRegistrationRepository,
     },
   ],
   // Export so later modules (ownership enforcement) can reuse the guard/strategy.

@@ -31,10 +31,27 @@ model User {
   refreshTokens      RefreshToken[]
   verificationTokens EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
+  deviceRegistrations DeviceRegistration[]
   // Pipeline projects owned by this user (ownership enforcement).
   interviewSessions  InterviewSession[]
 
   @@map("users")
+}
+
+// One-account-per-device enforcement (anti-spam). On local registration the
+// client computes a browser fingerprint; we store only its SHA-256 hash and
+// refuse a second registration from a device that already has an account. The
+// unique constraint makes the block race-safe. Cascades on user delete so a
+// removed account frees its device for a fresh sign-up.
+model DeviceRegistration {
+  id              String   @id @default(uuid())
+  fingerprintHash String   @unique
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@map("device_registrations")
 }
 
 // One-time password (OTP) codes for forgot-password (Slice 9b). Only the

@@ -34,6 +34,10 @@ npm run build
 npm run test:api
 npm run test --workspace @archivato/api -- <file>   # single test
 
+# Lint
+npm run lint --workspace @archivato/api    # eslint src/**/*.ts
+npm run lint --workspace @archivato/web    # next lint
+
 # Prisma (from apps/api)
 npm run prisma:migrate --workspace @archivato/api    # migrate dev
 npm run prisma:deploy  --workspace @archivato/api    # apply in prod
@@ -79,6 +83,18 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   (`archivato_access` 15m, `archivato_refresh` 7d). Only token *hashes* stored;
   refresh rotated single-use. Email verify + forgot-password (OTP) + OAuth
   (Google/GitHub, manual code flow). Web client auto-refreshes on 401.
+- **One account per device (anti-spam):** local registration is gated on a
+  client-computed browser fingerprint (`apps/web/lib/device-fingerprint.ts`).
+  Only its SHA-256 hash is stored (`device_registrations`, unique — race-safe);
+  a device that already registered gets a 409. `RegisterInput.fingerprint` is
+  optional in the type (so the service/OAuth path stay usable) but **required by
+  `RegisterDto`**, so every browser sign-up carries one. **OAuth is gated too:**
+  the client computes the fingerprint before the redirect, `/oauth/:p/start`
+  stashes it in a short-lived cookie (`archivato_oauth_fp`), and the callback
+  enforces the same one-per-device rule — but **only when creating a NEW
+  account** (signing back into an existing account is never gated; a device
+  conflict redirects to `/login?error=oauth_device`). Best-effort by design (a
+  fresh browser profile/incognito reads as a new device).
 
 ## Frontend Notes
 

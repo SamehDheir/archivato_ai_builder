@@ -20,4 +20,11 @@ export class RegisterDto implements RegisterInput {
   @MinLength(1)
   @MaxLength(80)
   displayName!: string;
+
+  // Required over HTTP so every browser registration is device-gated (anti-spam).
+  // The type keeps it optional for the service/OAuth paths that don't have one.
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  fingerprint!: string;
 }

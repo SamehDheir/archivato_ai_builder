@@ -19,9 +19,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/shared/theme';
 import { Logo } from '@/components/shared/Logo';
 import { IdeaToProductDemo } from '@/components/marketing/IdeaToProductDemo';
+import { LandingNavActions } from '@/components/marketing/LandingNavActions';
 
 type TreeNode = {
   label: string;
@@ -320,17 +320,7 @@ export function LandingPage() {
               How it works
             </a>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <ThemeToggle />
-            <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-              <Link href="/login">Sign in</Link>
-            </Button>
-            <Button asChild size="sm">
-              <Link href="/dashboard">
-                Start building <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
+          <LandingNavActions />
         </nav>
       </header>
 

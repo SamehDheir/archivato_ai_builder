@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import type { AuthUser } from '@archivato/shared';
@@ -92,7 +93,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <>
       <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur">
-        <Logo />
+        {/* Home button: back to the dashboard (the app's home once signed in). */}
+        <Link
+          href="/dashboard"
+          aria-label="Go to dashboard"
+          className="rounded-md transition-opacity hover:opacity-80"
+        >
+          <Logo />
+        </Link>
         <span className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
           {user.displayName}
           {!user.emailVerified && (
