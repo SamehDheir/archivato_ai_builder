@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
+  Patch,
   Post,
   Req,
   Res,
@@ -20,6 +22,8 @@ import { LoginDto } from './dto/login.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import { REFRESH_TOKEN_COOKIE } from './auth.constants';
@@ -128,6 +132,46 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AuthUser): AuthUser {
     return user;
+  }
+
+  /** Update the signed-in user's profile (display name). */
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  updateProfile(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateProfileDto,
+  ): Promise<AuthUser> {
+    return this.auth.updateProfile(user.id, dto);
+  }
+
+  /**
+   * Change (or set) the password. Success rotates the session (other devices
+   * are logged out) so we re-issue the auth cookies for the current device.
+   */
+  @Post('change-password')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthUser> {
+    const session = await this.auth.changePassword(user.id, dto);
+    setAuthCookies(res, this.config, session, this.tokens.accessTtlSeconds);
+    return session.user;
+  }
+
+  /** Permanently delete the signed-in account, then clear the auth cookies. */
+  @Delete('me')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  async deleteAccount(
+    @CurrentUser() user: AuthUser,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ success: true }> {
+    await this.auth.deleteAccount(user.id);
+    clearAuthCookies(res, this.config);
+    return { success: true };
   }
 }
 

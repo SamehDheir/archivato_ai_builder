@@ -50,6 +50,10 @@ export class PrismaUserRepository implements UserRepository {
     });
     return toEntity(row);
   }
+
+  async delete(id: string): Promise<void> {
+    await this.prisma.user.delete({ where: { id } });
+  }
 }
 
 function toEntity(row: {

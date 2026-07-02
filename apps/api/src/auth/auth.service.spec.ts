@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -173,6 +174,81 @@ describe('AuthService', () => {
     const fetched = await service.getUser(session.user.id);
     expect(fetched.id).toBe(session.user.id);
     await expect(service.getUser('missing')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
+
+  it('updates the display name', async () => {
+    const session = await service.register(REGISTER);
+    const updated = await service.updateProfile(session.user.id, {
+      displayName: 'Renamed Founder',
+    });
+    expect(updated.displayName).toBe('Renamed Founder');
+    expect((await service.getUser(session.user.id)).displayName).toBe(
+      'Renamed Founder',
+    );
+  });
+
+  it('changes the password, revokes old sessions, and issues a fresh one', async () => {
+    const session = await service.register(REGISTER);
+
+    const rotated = await service.changePassword(session.user.id, {
+      currentPassword: REGISTER.password,
+      newPassword: 'brand-new-pw-9',
+    });
+    // The pre-change refresh token is revoked; the new one works.
+    await expect(service.refresh(session.refresh.raw)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(rotated.refresh.raw).toEqual(expect.any(String));
+    // The new password logs in; the old one no longer does.
+    const ok = await service.login({
+      email: REGISTER.email,
+      password: 'brand-new-pw-9',
+    });
+    expect(ok.user.id).toBe(session.user.id);
+    await expect(
+      service.login({ email: REGISTER.email, password: REGISTER.password }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects a password change with the wrong current password', async () => {
+    const session = await service.register(REGISTER);
+    await expect(
+      service.changePassword(session.user.id, {
+        currentPassword: 'not-my-password',
+        newPassword: 'brand-new-pw-9',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('sets a first password on an OAuth-only account (no current required)', async () => {
+    const oauthUser = await users.create({
+      email: 'oauth@example.com',
+      passwordHash: null,
+      displayName: 'OAuth User',
+      emailVerified: true,
+      providers: ['google'],
+    });
+    await service.changePassword(oauthUser.id, { newPassword: 'first-pw-123' });
+
+    const refreshed = await service.getUser(oauthUser.id);
+    expect(refreshed.providers).toEqual(['google', 'password']);
+    // Local login now works with the new password.
+    const ok = await service.login({
+      email: 'oauth@example.com',
+      password: 'first-pw-123',
+    });
+    expect(ok.user.id).toBe(oauthUser.id);
+  });
+
+  it('deletes the account and invalidates its sessions', async () => {
+    const session = await service.register(REGISTER);
+    await service.deleteAccount(session.user.id);
+    await expect(service.getUser(session.user.id)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    await expect(service.refresh(session.refresh.raw)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
   });

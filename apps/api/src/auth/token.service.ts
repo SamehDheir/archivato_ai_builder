@@ -87,6 +87,11 @@ export class TokenService {
     const record = await this.refreshTokens.findByHash(hashToken(raw));
     if (record) await this.refreshTokens.revoke(record.id);
   }
+
+  /** Revoke every active session for a user (password change / logout-all). */
+  async revokeAllRefreshTokens(userId: string): Promise<void> {
+    await this.refreshTokens.revokeAllForUser(userId);
+  }
 }
 
 /** SHA-256 of a raw token — what we store, never the raw value. */

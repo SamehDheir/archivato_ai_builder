@@ -95,14 +95,22 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   account** (signing back into an existing account is never gated; a device
   conflict redirects to `/login?error=oauth_device`). Best-effort by design (a
   fresh browser profile/incognito reads as a new device).
+- **Account settings** (`/settings`, guarded route; gear link in the app
+  header): edit display name (`PATCH /auth/profile`), change or **set** a
+  password (`POST /auth/change-password` — OAuth-only accounts set a first one
+  with no current password, which adds the `password` provider; success revokes
+  all other sessions and re-issues cookies for the current device), theme
+  toggle, and a danger-zone **delete account** (`DELETE /auth/me`, cascades all
+  projects). `UserRepository.delete` added across impls.
 
 ## Frontend Notes
 
 - **Structure:** `app/` holds routes only — `layout.tsx`, `page.tsx` (public
   marketing **landing** at `/`), and route dirs `dashboard/`, `login/`,
-  `register/`, `verify/`. Feature components live in `components/<domain>/`
-  (`auth`, `interview`, `design`, `review`, `product`, `roadmap`, `project`,
-  `shared`, `marketing`) alongside `components/ui/`. Import via the `@/*` alias
+  `register/`, `verify/`, `settings/`. Feature components live in
+  `components/<domain>/` (`auth`, `interview`, `design`, `review`, `product`,
+  `roadmap`, `project`, `settings`, `shared`, `marketing`) alongside
+  `components/ui/`. Import via the `@/*` alias
   (→ web root), e.g. `@/components/project/ProjectStages`, `@/lib/api`.
 - **Auth gating:** `AuthGate` (in the layout) wraps everything. `/` and
   `/verify` are public (`PUBLIC_EXACT` / `PUBLIC_PREFIXES`); `/login`+`/register`

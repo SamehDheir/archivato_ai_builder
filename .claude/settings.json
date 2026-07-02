@@ -36,7 +36,10 @@
       "PowerShell(npm run test --workspace @archivato/api -- auth.service.spec)",
       "PowerShell(npm run --silent --workspace @archivato/api exec -- prisma migrate status)",
       "PowerShell(Push-Location \"apps/api\"; $env:DATABASE_URL = \"postgresql://postgres:postgres@localhost:5433/archivato?schema=public\"; node diag-devices.mjs; Pop-Location)",
-      "PowerShell($env:DATABASE_URL = \"postgresql://postgres:postgres@localhost:5433/archivato?schema=public\"; node diag-devices.mjs)"
+      "PowerShell($env:DATABASE_URL = \"postgresql://postgres:postgres@localhost:5433/archivato?schema=public\"; node diag-devices.mjs)",
+      "PowerShell(npx tsc --noEmit -p \"apps/api/tsconfig.json\" 2>&1)",
+      "PowerShell(if \\($LASTEXITCODE -eq 0 -or $null -eq $LASTEXITCODE\\) { \"TYPECHECK OK\" })",
+      "PowerShell(npx tsc --noEmit -p \"apps/web/tsconfig.json\" 2>&1)"
     ]
   }
 }

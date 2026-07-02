@@ -1,10 +1,17 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { AuthUser, LoginInput, RegisterInput } from '@archivato/shared';
+import type {
+  AuthUser,
+  ChangePasswordInput,
+  LoginInput,
+  RegisterInput,
+  UpdateProfileInput,
+} from '@archivato/shared';
 import { USER_REPOSITORY, type UserRepository } from './user.repository';
 import {
   DEVICE_REGISTRATION_REPOSITORY,
@@ -118,6 +125,65 @@ export class AuthService {
     const user = await this.users.findById(userId);
     if (!user) throw new UnauthorizedException();
     return toAuthUser(user);
+  }
+
+  /** Update the signed-in user's editable profile fields (display name). */
+  async updateProfile(
+    userId: string,
+    input: UpdateProfileInput,
+  ): Promise<AuthUser> {
+    const user = await this.users.findById(userId);
+    if (!user) throw new UnauthorizedException();
+    const saved = await this.users.save({
+      ...user,
+      displayName: input.displayName.trim(),
+    });
+    return toAuthUser(saved);
+  }
+
+  /**
+   * Change (or, for OAuth-only accounts, set) the password. When the account
+   * already has a password, the correct current one is required. Success
+   * revokes all existing sessions and issues a fresh one, so other devices are
+   * logged out while the current device stays signed in.
+   */
+  async changePassword(
+    userId: string,
+    input: ChangePasswordInput,
+  ): Promise<AuthSession> {
+    const user = await this.users.findById(userId);
+    if (!user) throw new UnauthorizedException();
+
+    if (user.passwordHash) {
+      const ok =
+        Boolean(input.currentPassword) &&
+        (await this.passwords.compare(
+          input.currentPassword as string,
+          user.passwordHash,
+        ));
+      if (!ok) {
+        throw new BadRequestException('Current password is incorrect');
+      }
+    }
+
+    const passwordHash = await this.passwords.hash(input.newPassword);
+    // Setting a first password (OAuth-only account) also enables local login.
+    const providers = user.providers.includes('password')
+      ? user.providers
+      : [...user.providers, 'password' as const];
+    const saved = await this.users.save({ ...user, passwordHash, providers });
+
+    // Log out everywhere, then start a fresh session for this device.
+    await this.tokens.revokeAllRefreshTokens(user.id);
+    return this.startSession(saved);
+  }
+
+  /** Permanently delete the signed-in user and everything they own (cascade). */
+  async deleteAccount(userId: string): Promise<void> {
+    const user = await this.users.findById(userId);
+    if (!user) throw new UnauthorizedException();
+    await this.tokens.revokeAllRefreshTokens(user.id);
+    await this.users.delete(user.id);
   }
 
   /** Issue a session for an already-authenticated user (e.g. via OAuth). */

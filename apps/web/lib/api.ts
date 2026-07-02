@@ -1,6 +1,7 @@
 import type {
   ApiDesign,
   AuthUser,
+  ChangePasswordInput,
   ChatMessage,
   DatabaseDesign,
   ExportBundle,
@@ -20,6 +21,7 @@ import type {
   RefineResult,
   RegisterInput,
   RequirementDocument,
+  UpdateProfileInput,
   ReviewReport,
   SystemDesign,
 } from '@archivato/shared';
@@ -319,6 +321,29 @@ export const authApi = {
   logout: async () => {
     const res = await request<{ success: true }>('/auth/logout', {
       method: 'POST',
+    });
+    setAuthHint(false);
+    return res;
+  },
+
+  /** Update the signed-in user's profile (display name). */
+  updateProfile: (input: UpdateProfileInput) =>
+    request<AuthUser>('/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  /** Change/set the password. Stays signed in here; other sessions are revoked. */
+  changePassword: (input: ChangePasswordInput) =>
+    request<AuthUser>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  /** Permanently delete the signed-in account (irreversible). */
+  deleteAccount: async () => {
+    const res = await request<{ success: true }>('/auth/me', {
+      method: 'DELETE',
     });
     setAuthHint(false);
     return res;

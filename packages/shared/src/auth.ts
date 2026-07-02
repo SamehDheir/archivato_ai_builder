@@ -42,6 +42,21 @@ export interface LoginInput {
   password: string;
 }
 
+/** Payload for PATCH /auth/profile — edits the signed-in user's profile. */
+export interface UpdateProfileInput {
+  displayName: string;
+}
+
+/**
+ * Payload for POST /auth/change-password. `currentPassword` is required for
+ * accounts that already have a password; OAuth-only accounts omit it to SET a
+ * first password (which also enables local login).
+ */
+export interface ChangePasswordInput {
+  currentPassword?: string;
+  newPassword: string;
+}
+
 /** Payload for POST /auth/forgot-password — emails a one-time reset code. */
 export interface ForgotPasswordInput {
   email: string;

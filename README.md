@@ -378,6 +378,9 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | POST   | `/api/auth/verify-email`   | Confirm an email-verification token (public) |
 | POST   | `/api/auth/resend-verification`| Re-send the verification email (guarded) |
 | GET    | `/api/auth/me`             | Current user (requires a valid access cookie)|
+| PATCH  | `/api/auth/profile`        | Update the signed-in user's display name     |
+| POST   | `/api/auth/change-password`| Change/set password; revokes other sessions  |
+| DELETE | `/api/auth/me`             | Permanently delete the account (cascades)    |
 | GET    | `/api/interview`           | List the signed-in user's projects           |
 | POST   | `/api/interview`           | Start an interview from a raw idea (owned)    |
 | GET    | `/api/interview/:id`       | Fetch current interview state (owner only)   |
