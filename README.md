@@ -162,7 +162,12 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 
 ### ✅ Slice 2 — AI Interview Engine + UI
 - Phased **A–E interview** (Understanding → Business Logic → Features → Scale →
-  Technical) driven by a deterministic question plan.
+  Technical) driven by a deterministic question plan — **kept short (≤ 9
+  questions; fewer is fine)**.
+- **Tap-to-answer**: questions can carry preset `options` (single-select or
+  multi-select checkboxes) so users pick instead of typing; a free-text field is
+  always available for extra detail. The adaptive (real-AI) interviewer can emit
+  options too. The submitted answer is still a plain string (picks + detail).
 - **Completeness scoring** with a **90% gate**: the system summarizes the
   requirements and refuses to proceed until the user explicitly confirms.
 - Intent analysis via the `ProductAnalystAgent` (with a deterministic fallback).

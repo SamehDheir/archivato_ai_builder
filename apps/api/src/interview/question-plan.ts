@@ -13,12 +13,14 @@ export const QUESTION_PLAN: readonly InterviewQuestion[] = [
   {
     id: 'a1',
     phase: InterviewPhase.Understanding,
-    prompt: 'What is the main goal of the system?',
+    prompt: 'In one or two sentences, what is the main goal of the system?',
   },
   {
     id: 'a2',
     phase: InterviewPhase.Understanding,
-    prompt: 'Who are the primary users and roles?',
+    prompt: 'Who will use the system? Pick the roles that apply.',
+    options: ['Admin', 'Manager', 'Staff / Employee', 'Customer', 'Guest'],
+    multiple: true,
   },
   // Phase B — Business Logic
   {
@@ -27,48 +29,51 @@ export const QUESTION_PLAN: readonly InterviewQuestion[] = [
     prompt:
       'Walk me through the core workflow — how does the system work day to day?',
   },
-  {
-    id: 'b2',
-    phase: InterviewPhase.BusinessLogic,
-    prompt: 'Are there any approval steps or status transitions?',
-  },
   // Phase C — Features
   {
     id: 'c1',
     phase: InterviewPhase.Features,
-    prompt: 'Do you need payments or billing? If so, describe them.',
+    prompt: 'Does it handle payments or billing? Pick what applies.',
+    options: [
+      'Online payments',
+      'Subscriptions / recurring billing',
+      'Invoicing',
+      'No payments',
+    ],
+    multiple: true,
   },
   {
     id: 'c2',
     phase: InterviewPhase.Features,
-    prompt: 'What notifications are required (email, SMS, in-app)?',
-  },
-  {
-    id: 'c3',
-    phase: InterviewPhase.Features,
-    prompt: 'What reports or dashboards do users need?',
+    prompt: 'Which notifications does it need?',
+    options: ['Email', 'SMS', 'In-app', 'Push', 'None'],
+    multiple: true,
   },
   // Phase D — Scale
   {
     id: 'd1',
     phase: InterviewPhase.Scale,
-    prompt: 'How many users do you expect now and in 12 months?',
+    prompt: 'How many users do you expect within the first year?',
+    options: ['Under 100', '100 – 10,000', '10,000 – 1M', 'Over 1M'],
   },
   {
     id: 'd2',
     phase: InterviewPhase.Scale,
-    prompt: 'Is this an MVP or an enterprise-grade system?',
+    prompt: 'What stage is this system?',
+    options: ['MVP / prototype', 'Growing startup', 'Enterprise-grade'],
   },
   // Phase E — Technical Preferences
   {
     id: 'e1',
     phase: InterviewPhase.Technical,
-    prompt: 'Do you prefer SQL or NoSQL — or no preference?',
+    prompt: 'Any database preference?',
+    options: ['SQL', 'NoSQL', 'No preference'],
   },
   {
     id: 'e2',
     phase: InterviewPhase.Technical,
-    prompt: 'Monolith or microservices — or no preference?',
+    prompt: 'Any architecture preference?',
+    options: ['Monolith', 'Microservices', 'No preference'],
   },
 ];
 

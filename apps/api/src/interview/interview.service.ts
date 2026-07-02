@@ -30,9 +30,12 @@ import type { InterviewSession } from './interview-session.entity';
 import { BillingService } from '../billing/billing.service';
 import { QUESTION_PLAN, TOTAL_QUESTIONS } from './question-plan';
 
-/** Adaptive interview caps so a real model can't end too early or run forever. */
-const MIN_ADAPTIVE_QUESTIONS = 4;
-const MAX_ADAPTIVE_QUESTIONS = 12;
+/**
+ * Adaptive interview caps so a real model can't end too early or run forever.
+ * Keep the interview short — never more than 9 questions total (fewer is fine).
+ */
+const MIN_ADAPTIVE_QUESTIONS = 3;
+const MAX_ADAPTIVE_QUESTIONS = 9;
 
 /** One turn's decision: the next question (or done) plus a coverage estimate. */
 interface InterviewDecision {
@@ -266,6 +269,12 @@ export class InterviewService {
         };
       }
       if (typeof d.question === 'string' && d.question.trim().length > 0) {
+        const options = Array.isArray(d.options)
+          ? d.options
+              .map((o) => String(o).trim())
+              .filter(Boolean)
+              .slice(0, 6)
+          : [];
         return {
           done: false,
           coverage,
@@ -273,6 +282,8 @@ export class InterviewService {
             id: `q${session.history.length + 1}`,
             phase: this.resolvePhase(d.phase, session),
             prompt: d.question.trim(),
+            ...(options.length ? { options } : {}),
+            ...(typeof d.multiple === 'boolean' ? { multiple: d.multiple } : {}),
           },
         };
       }

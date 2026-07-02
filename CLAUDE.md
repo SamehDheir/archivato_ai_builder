@@ -107,6 +107,13 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   forces it for all agents; else `GROQ_API_KEY` present → groq for everything;
   else mock. `INTERVIEW_LLM_PROVIDER` overrides only the interview. Model via
   `ANTHROPIC_MODEL` (default `claude-sonnet-4-6`; `claude-opus-4-8` available).
+- **Interview shape.** Kept **short: ≤ 9 questions** (`MAX_ADAPTIVE_QUESTIONS`,
+  and `QUESTION_PLAN` is 9 long so the 90% gate closes by Q9). Questions may carry
+  `options` + `multiple` on `InterviewQuestion` — the web renders tap-to-pick
+  chips/checkboxes; the answer stays a **string** the client composes (picks +
+  free-text detail), so the `answer` DTO/state machine are unchanged. The
+  adaptive interviewer may also return `options`/`multiple` (mapped in
+  `tryAdaptive`); plan questions ship curated options for scale/tech/features.
 - **Gating:** each stage refuses to generate until its upstream artifacts exist
   (interview must be `confirmed`); returns 409/404 accordingly.
 - **Ownership:** pipeline routes are `@UseGuards(JwtAuthGuard, SessionOwnerGuard)`.

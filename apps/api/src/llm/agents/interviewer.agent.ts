@@ -27,6 +27,10 @@ export interface InterviewerDecision {
   phase?: string;
   /** The next question to ask; omitted when done. */
   question?: string;
+  /** Optional tap-to-pick answer choices for a closed question. */
+  options?: string[];
+  /** Whether several options can be picked at once (checkboxes vs one choice). */
+  multiple?: boolean;
 }
 
 /**
@@ -49,6 +53,11 @@ export class InterviewerAgent extends BaseAgent {
     'You cover goal, users/roles, core workflow, business rules, key features,',
     'scale, and tech preferences — but skip what is irrelevant to THIS idea and',
     'probe vague or incomplete answers. You never ask two things at once.',
+    'Keep the interview SHORT: at most 9 questions total, fewer is better — stop',
+    'as soon as you can design a strong system. For closed questions (scale, tech',
+    'choice, yes/no, categories) offer a few short tap-to-pick options to make',
+    'answering easy; use multiple=true when several can apply (e.g. roles,',
+    'notifications). Omit options for open-ended questions like goal or workflow.',
   ].join(' ');
 
   constructor(@Inject(INTERVIEW_LLM_PROVIDER) llm: LlmProvider) {
@@ -83,7 +92,8 @@ export class InterviewerAgent extends BaseAgent {
       '',
       'Return JSON: { "done": boolean, "coverage": number between 0 and 1, ' +
         '"phase": one of ["understanding","business_logic","features","scale",' +
-        '"technical"], "question": string (omit when done) }.',
+        '"technical"], "question": string (omit when done), "options"?: array ' +
+        'of up to 5 short answer choices, "multiple"?: boolean }.',
     ]
       .filter(Boolean)
       .join('\n');

@@ -42,6 +42,14 @@ export interface InterviewQuestion {
   id: string;
   phase: InterviewPhase;
   prompt: string;
+  /**
+   * Optional preset choices the user can tap instead of typing. The client still
+   * lets them add free-text detail; the submitted answer is the picks (joined)
+   * plus any extra text.
+   */
+  options?: string[];
+  /** When true the choices are multi-select (checkboxes); else single-select. */
+  multiple?: boolean;
 }
 
 export interface InterviewExchange {
