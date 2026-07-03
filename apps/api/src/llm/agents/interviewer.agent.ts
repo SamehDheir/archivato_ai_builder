@@ -15,6 +15,8 @@ export interface InterviewerContext {
   idea: string;
   intent: IntentAnalysis | null;
   history: InterviewExchange[];
+  /** Language to ask in — `'ar'` makes the question + options Arabic. */
+  language?: 'ar' | 'en';
 }
 
 /** The interviewer's decision for one turn. */
@@ -58,6 +60,8 @@ export class InterviewerAgent extends BaseAgent {
     'choice, yes/no, categories) offer a few short tap-to-pick options to make',
     'answering easy; use multiple=true when several can apply (e.g. roles,',
     'notifications). Omit options for open-ended questions like goal or workflow.',
+    'Always write your question and options in the SAME language the user used',
+    'for their idea and answers (e.g. an Arabic idea gets Arabic questions).',
   ].join(' ');
 
   constructor(@Inject(INTERVIEW_LLM_PROVIDER) llm: LlmProvider) {
@@ -79,7 +83,15 @@ export class InterviewerAgent extends BaseAgent {
             .join('\n')
         : '(no questions answered yet)';
 
+    const arabic =
+      ctx.language === 'ar'
+        ? 'IMPORTANT: The user wrote in Arabic. Write "question" and every ' +
+          'string in "options" ENTIRELY in Arabic (Modern Standard Arabic). ' +
+          'Keep the "phase" value as the given English enum key.'
+        : '';
+
     return [
+      arabic,
       `Concept: ${ctx.idea}`,
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',
       '',

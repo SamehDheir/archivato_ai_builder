@@ -29,6 +29,7 @@ import {
 import type { InterviewSession } from './interview-session.entity';
 import { BillingService } from '../billing/billing.service';
 import { QUESTION_PLAN, TOTAL_QUESTIONS } from './question-plan';
+import { detectLanguage } from './language';
 
 /**
  * Adaptive interview caps so a real model can't end too early or run forever.
@@ -251,10 +252,16 @@ export class InterviewService {
     session: InterviewSession,
   ): Promise<InterviewDecision | null> {
     try {
+      // Ask in whatever language the user is writing in — an Arabic idea (and
+      // Arabic answers) get Arabic questions back.
+      const language = detectLanguage(
+        [session.input.idea, ...session.history.map((h) => h.answer)].join(' '),
+      );
       const d = await this.interviewer.decide({
         idea: session.input.idea,
         intent: session.intent,
         history: session.history,
+        language,
       });
       if (!d || typeof d.done !== 'boolean') return null;
 
