@@ -391,6 +391,24 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - REST API (`GET /versions/:sessionId`, `GET /versions/:sessionId/:version`,
   `POST /versions/:sessionId/:version/restore`), all owner-scoped.
 
+### ✅ Slice — SuperAdmin dashboard + analytics
+- **Role-based admin**: a `role` (`user`/`admin`) on users, bootstrapped from an
+  **`ADMIN_EMAILS`** allowlist (listed emails are auto-promoted on login). An
+  `AdminGuard` protects every `/admin` route; admins can promote/demote or delete
+  users from the dashboard (never themselves). Admin accounts are **stats-only** —
+  they can't create projects (the dashboard points them to `/admin` instead).
+- **Full traffic analytics**: a public `POST /analytics/track` beacon records
+  anonymous landing **pageviews** (cookie-scoped visitor id), while
+  **signup/login/generate** events are logged server-side. All best-effort — a
+  tracking failure never breaks the app.
+- **`/admin` dashboard**: live KPIs (users, projects, Pro subscribers + MRR,
+  pageviews, unique/active visitors, generations), 30-day signup & pageview trend
+  charts, projects-by-status, plan mix, top pages/referrers, and a paginated user
+  management table. Self-guards (non-admins bounce to the app); an admin-only
+  header link opens it.
+- Set `ADMIN_EMAILS=you@example.com` in `apps/api/.env`, then sign in to unlock
+  the dashboard.
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
@@ -443,6 +461,12 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/export/:sessionId/markdown`| Markdown report                         |
 | GET    | `/api/export/:sessionId/openapi`| OpenAPI 3.0 spec (JSON)                   |
 | GET    | `/api/export/:sessionId/structure`| GitHub project structure manifest       |
+| POST   | `/api/analytics/track`     | Anonymous pageview beacon (no auth)          |
+| GET    | `/api/admin/stats`         | Admin: KPIs + 30-day trends (admin only)     |
+| GET    | `/api/admin/traffic`       | Admin: traffic detail (admin only)           |
+| GET    | `/api/admin/users`         | Admin: paginated users (admin only)          |
+| PATCH  | `/api/admin/users/:id/role`| Admin: promote/demote a user                 |
+| DELETE | `/api/admin/users/:id`     | Admin: delete a user                         |
 
 ---
 

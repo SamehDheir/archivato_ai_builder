@@ -9,6 +9,7 @@ import { ApiDesignModule } from '../api-design/api-design.module';
 import { ReviewModule } from '../review/review.module';
 import { VersionsModule } from '../versions/versions.module';
 import { BillingModule } from '../billing/billing.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { JobsController } from './jobs.controller';
 import { JobsService } from './jobs.service';
 import { PipelineProcessor } from './pipeline.processor';
@@ -40,6 +41,7 @@ import { PIPELINE_QUEUE } from './pipeline.constants';
     ReviewModule,
     VersionsModule,
     BillingModule,
+    AnalyticsModule,
   ],
   controllers: [JobsController],
   providers: [JobsService, PipelineProcessor],

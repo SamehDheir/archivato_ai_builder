@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { AuthController } from './auth.controller';
 import { OAuthController } from './oauth.controller';
 import { AuthService } from './auth.service';
@@ -12,6 +13,7 @@ import { MailService } from './mail.service';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordResetService } from './password-reset.service';
 import { JwtStrategy } from './jwt.strategy';
+import { AdminGuard } from './admin.guard';
 import { USER_REPOSITORY } from './user.repository';
 import { PrismaUserRepository } from './prisma-user.repository';
 import { REFRESH_TOKEN_REPOSITORY } from './refresh-token.repository';
@@ -33,6 +35,7 @@ import { PrismaDeviceRegistrationRepository } from './prisma-device-registration
 @Module({
   imports: [
     PassportModule,
+    AnalyticsModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -54,6 +57,7 @@ import { PrismaDeviceRegistrationRepository } from './prisma-device-registration
     EmailVerificationService,
     PasswordResetService,
     JwtStrategy,
+    AdminGuard,
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
     { provide: REFRESH_TOKEN_REPOSITORY, useClass: PrismaRefreshTokenRepository },
     {
@@ -70,6 +74,6 @@ import { PrismaDeviceRegistrationRepository } from './prisma-device-registration
     },
   ],
   // Export so later modules (ownership enforcement) can reuse the guard/strategy.
-  exports: [USER_REPOSITORY, AuthService],
+  exports: [USER_REPOSITORY, AuthService, AdminGuard],
 })
 export class AuthModule {}

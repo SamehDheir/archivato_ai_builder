@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AuthProvider } from '@archivato/shared';
+import type { AccountRole, AuthProvider } from '@archivato/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { User } from './user.entity';
 import type {
@@ -45,6 +45,7 @@ export class PrismaUserRepository implements UserRepository {
         passwordHash: user.passwordHash,
         displayName: user.displayName,
         emailVerified: user.emailVerified,
+        role: user.role,
         providers: user.providers,
       },
     });
@@ -62,6 +63,7 @@ function toEntity(row: {
   passwordHash: string | null;
   displayName: string;
   emailVerified: boolean;
+  role: string;
   providers: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -72,6 +74,7 @@ function toEntity(row: {
     passwordHash: row.passwordHash,
     displayName: row.displayName,
     emailVerified: row.emailVerified,
+    role: row.role as AccountRole,
     providers: row.providers as AuthProvider[],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

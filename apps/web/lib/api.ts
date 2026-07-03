@@ -1,4 +1,8 @@
 import type {
+  AccountRole,
+  AdminStats,
+  AdminTraffic,
+  AdminUsersPage,
   ApiDesign,
   AuthUser,
   ChangePasswordInput,
@@ -118,7 +122,10 @@ async function request<T>(
     throw new ApiError(detail, res.status, code);
   }
 
-  return res.json() as Promise<T>;
+  // Tolerate empty bodies (204 No Content, or a 200 with no JSON).
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export const interviewApi = {
@@ -439,6 +446,46 @@ export const billingApi = {
 
   /** Cancel Pro. */
   cancel: () => request<SubscriptionView>('/billing/cancel', { method: 'POST' }),
+};
+
+export const adminApi = {
+  /** Headline KPIs + 30-day trend series. */
+  stats: () => request<AdminStats>('/admin/stats'),
+  /** Traffic detail (daily series + top pages/referrers). */
+  traffic: () => request<AdminTraffic>('/admin/traffic'),
+  /** Paginated users with plan + project count. */
+  users: (page = 1, pageSize = 20) =>
+    request<AdminUsersPage>(`/admin/users?page=${page}&pageSize=${pageSize}`),
+  /** Promote/demote a user. */
+  setRole: (id: string, role: AccountRole) =>
+    request<void>(`/admin/users/${id}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+  /** Delete a user (cascades their projects). */
+  deleteUser: (id: string) =>
+    request<void>(`/admin/users/${id}`, { method: 'DELETE' }),
+};
+
+/**
+ * Anonymous pageview beacon. Fire-and-forget (never throws) — used on the public
+ * landing so admin traffic charts include non-signed-in visitors. `keepalive`
+ * lets it complete even if the page is navigating away.
+ */
+export const analyticsApi = {
+  track: (path: string, referrer?: string) => {
+    try {
+      void fetch(`${API_URL}/analytics/track`, {
+        method: 'POST',
+        credentials: 'include',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, referrer: referrer || undefined }),
+      }).catch(() => undefined);
+    } catch {
+      /* never let analytics break the page */
+    }
+  },
 };
 
 export const exportApi = {

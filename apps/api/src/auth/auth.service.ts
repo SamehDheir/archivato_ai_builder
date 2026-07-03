@@ -5,6 +5,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type {
   AuthUser,
   ChangePasswordInput,
@@ -21,6 +22,7 @@ import type { User } from './user.entity';
 import { PasswordService } from './password.service';
 import { TokenService, hashToken, type IssuedRefreshToken } from './token.service';
 import { EmailVerificationService } from './email-verification.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { toAuthUser } from './user.mapper';
 
 /**
@@ -42,6 +44,8 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
     private readonly emailVerification: EmailVerificationService,
+    private readonly config: ConfigService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   /** Create a local account, send a verification email, and start a session. */
@@ -83,6 +87,7 @@ export class AuthService {
     }
     // Fire off the verification email; never block sign-up on mail delivery.
     await this.emailVerification.issueAndSend(user).catch(() => undefined);
+    void this.analytics.recordSafe({ type: 'signup', userId: user.id });
     return this.startSession(user);
   }
 
@@ -98,6 +103,7 @@ export class AuthService {
     if (!ok) {
       throw new UnauthorizedException('Invalid email or password');
     }
+    void this.analytics.recordSafe({ type: 'login', userId: user.id });
     return this.startSession(user);
   }
 
@@ -120,11 +126,11 @@ export class AuthService {
     if (rawRefresh) await this.tokens.revokeRefreshToken(rawRefresh);
   }
 
-  /** Look up the current user for GET /auth/me. */
+  /** Look up the current user for GET /auth/me (bootstrapping the admin role). */
   async getUser(userId: string): Promise<AuthUser> {
     const user = await this.users.findById(userId);
     if (!user) throw new UnauthorizedException();
-    return toAuthUser(user);
+    return toAuthUser(await this.syncRole(user));
   }
 
   /** Update the signed-in user's editable profile fields (display name). */
@@ -192,11 +198,31 @@ export class AuthService {
   }
 
   private async startSession(user: User): Promise<AuthSession> {
-    const refresh = await this.tokens.issueRefreshToken(user.id);
+    const synced = await this.syncRole(user);
+    const refresh = await this.tokens.issueRefreshToken(synced.id);
     return {
-      user: toAuthUser(user),
-      accessToken: this.tokens.signAccessToken(user),
+      user: toAuthUser(synced),
+      accessToken: this.tokens.signAccessToken(synced),
       refresh,
     };
+  }
+
+  /**
+   * Bootstrap the admin role from the `ADMIN_EMAILS` allowlist: an email on the
+   * list is promoted to `admin` on login/session issue. We only ever PROMOTE
+   * here (demotion is a deliberate action), and persist only on a real change.
+   */
+  private async syncRole(user: User): Promise<User> {
+    const allowlist = (this.config.get<string>('ADMIN_EMAILS') ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (
+      user.role !== 'admin' &&
+      allowlist.includes(user.email.toLowerCase())
+    ) {
+      return this.users.save({ ...user, role: 'admin' });
+    }
+    return user;
   }
 }

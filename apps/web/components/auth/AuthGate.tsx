@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Loader2, Settings as SettingsIcon } from 'lucide-react';
+import { Loader2, Settings as SettingsIcon, ShieldCheck } from 'lucide-react';
 import type { AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -110,6 +110,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           )}
         </span>
         <ThemeToggle />
+        {user.role === 'admin' && (
+          <Button asChild variant="ghost" size="sm" aria-label="Admin dashboard">
+            <Link href="/admin">
+              <ShieldCheck className="h-4 w-4" />
+            </Link>
+          </Button>
+        )}
         <Button asChild variant="ghost" size="sm" aria-label="Settings">
           <Link href="/settings">
             <SettingsIcon className="h-4 w-4" />

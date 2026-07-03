@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -28,12 +29,20 @@ export class InterviewController {
     return this.interview.list(user.id);
   }
 
-  /** Begin a new interview from a raw idea, owned by the current user. */
+  /**
+   * Begin a new interview from a raw idea, owned by the current user. Admin
+   * accounts are dashboard-only (stats/management) and cannot create projects.
+   */
   @Post()
   start(
     @CurrentUser() user: AuthUser,
     @Body() dto: StartInterviewDto,
   ): Promise<InterviewState> {
+    if (user.role === 'admin') {
+      throw new ForbiddenException(
+        'Admin accounts are for platform management only and cannot create projects.',
+      );
+    }
     return this.interview.start(dto, user.id);
   }
 

@@ -14,6 +14,8 @@ import { InMemoryUserRepository } from './in-memory-user.repository';
 import { InMemoryRefreshTokenRepository } from './in-memory-refresh-token.repository';
 import { InMemoryEmailVerificationTokenRepository } from './in-memory-email-verification-token.repository';
 import { InMemoryDeviceRegistrationRepository } from './in-memory-device-registration.repository';
+import { AnalyticsService } from '../analytics/analytics.service';
+import { InMemoryAnalyticsEventRepository } from '../analytics/in-memory-analytics-event.repository';
 
 const REGISTER = {
   email: 'Founder@Example.com',
@@ -51,6 +53,8 @@ describe('AuthService', () => {
       new PasswordService(),
       tokens,
       emailVerification,
+      config,
+      new AnalyticsService(new InMemoryAnalyticsEventRepository()),
     );
   });
 

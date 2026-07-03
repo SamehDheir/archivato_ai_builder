@@ -3,7 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FolderOpen, LayoutGrid, Plus, Search, Settings } from 'lucide-react';
+import {
+  FolderOpen,
+  LayoutGrid,
+  Plus,
+  Search,
+  Settings,
+  ShieldCheck,
+} from 'lucide-react';
 import type {
   ApiDesign,
   DatabaseDesign,
@@ -90,6 +97,8 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  // Admins are a management/stats account — they can't create or run projects.
+  const [isAdmin, setIsAdmin] = useState(false);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [sub, setSub] = useState<SubscriptionView | null>(null);
   // True while the "New project" form is open on the projects dashboard.
@@ -146,6 +155,7 @@ export default function Home() {
         const me = await authApi.me();
         if (cancelled || !me) return;
         setUserId(me.id);
+        setIsAdmin(me.role === 'admin');
         const [list, subscription] = await Promise.all([
           interviewApi.list(),
           billingApi.subscription().catch(() => null),
@@ -482,15 +492,24 @@ export default function Home() {
     {
       heading: 'Actions',
       items: [
-        {
-          id: 'new-project',
-          label: 'New project',
-          icon: Plus,
-          run: async () => {
-            await backToProjects();
-            setCreating(true);
-          },
-        },
+        // Admins manage the platform (no project creation); everyone else can
+        // start a new project.
+        isAdmin
+          ? {
+              id: 'admin',
+              label: 'Admin dashboard',
+              icon: ShieldCheck,
+              run: () => router.push('/admin'),
+            }
+          : {
+              id: 'new-project',
+              label: 'New project',
+              icon: Plus,
+              run: async () => {
+                await backToProjects();
+                setCreating(true);
+              },
+            },
         {
           id: 'all-projects',
           label: 'Back to projects',
@@ -560,53 +579,74 @@ export default function Home() {
             design.
           </p>
 
-          {sub && (
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-              <span>
-                <span className="font-semibold capitalize">{sub.plan} plan</span>{' '}
-                <span className="text-muted-foreground">
-                  · {projects.length} of {sub.projectQuota} project
-                  {sub.projectQuota === 1 ? '' : 's'} used
-                </span>
-              </span>
-              {sub.plan === 'free' ? (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const upgraded = await openUpgrade();
-                    if (upgraded) await refreshProjects();
-                  }}
-                  className="font-medium text-primary hover:underline"
-                >
-                  Upgrade to Pro
-                </button>
-              ) : (
-                <Link
-                  href="/settings"
-                  className="font-medium text-primary hover:underline"
-                >
-                  Manage plan
-                </Link>
-              )}
+          {isAdmin ? (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-6 text-center">
+              <ShieldCheck className="mx-auto h-8 w-8 text-primary" />
+              <h2 className="mt-2 text-lg font-semibold">Admin account</h2>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                Admin accounts manage the platform and don&apos;t create projects.
+                Head to the admin dashboard for users, revenue, and traffic stats.
+              </p>
+              <Link
+                href="/admin"
+                className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <ShieldCheck className="h-4 w-4" /> Open admin dashboard
+              </Link>
             </div>
-          )}
+          ) : (
+            <>
+              {sub && (
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+                  <span>
+                    <span className="font-semibold capitalize">
+                      {sub.plan} plan
+                    </span>{' '}
+                    <span className="text-muted-foreground">
+                      · {projects.length} of {sub.projectQuota} project
+                      {sub.projectQuota === 1 ? '' : 's'} used
+                    </span>
+                  </span>
+                  {sub.plan === 'free' ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const upgraded = await openUpgrade();
+                        if (upgraded) await refreshProjects();
+                      }}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Upgrade to Pro
+                    </button>
+                  ) : (
+                    <Link
+                      href="/settings"
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Manage plan
+                    </Link>
+                  )}
+                </div>
+              )}
 
-          <ProjectsDashboard
-            projects={projects}
-            creating={creating}
-            setCreating={setCreating}
-            busy={busy}
-            error={error}
-            idea={idea}
-            setIdea={setIdea}
-            industry={industry}
-            setIndustry={setIndustry}
-            scale={scale}
-            setScale={setScale}
-            onStart={handleStart}
-            onOpen={openProject}
-            onDelete={handleDeleteProject}
-          />
+              <ProjectsDashboard
+                projects={projects}
+                creating={creating}
+                setCreating={setCreating}
+                busy={busy}
+                error={error}
+                idea={idea}
+                setIdea={setIdea}
+                industry={industry}
+                setIndustry={setIndustry}
+                scale={scale}
+                setScale={setScale}
+                onStart={handleStart}
+                onOpen={openProject}
+                onDelete={handleDeleteProject}
+              />
+            </>
+          )}
         </>
       )}
 

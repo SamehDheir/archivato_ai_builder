@@ -5,6 +5,7 @@ import { ToastProvider } from '@/components/shared/toast';
 import { ThemeProvider } from '@/components/shared/theme';
 import { ConfirmProvider } from '@/components/shared/confirm-dialog';
 import { UpgradeProvider } from '@/components/billing/upgrade-dialog';
+import { PageviewTracker } from '@/components/shared/pageview-tracker';
 
 export const metadata: Metadata = {
   title: 'Archivato AI Builder',
@@ -26,6 +27,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-screen antialiased">
+        <PageviewTracker />
         <ThemeProvider>
           <ToastProvider>
             <ConfirmProvider>

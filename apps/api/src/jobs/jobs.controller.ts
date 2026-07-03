@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionOwnerGuard } from '../interview/session-owner.guard';
 import { BillingService } from '../billing/billing.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { JobsService } from './jobs.service';
 
 /**
@@ -24,6 +25,7 @@ export class JobsController {
   constructor(
     private readonly jobs: JobsService,
     private readonly billing: BillingService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   /** Enqueue generation of one stage; returns the initial job status. */
@@ -34,6 +36,11 @@ export class JobsController {
     @CurrentUser() user: AuthUser,
   ): Promise<JobStatus> {
     if (PRO_STAGES.has(stage)) await this.billing.assertPro(user.id);
+    void this.analytics.recordSafe({
+      type: 'generate',
+      userId: user.id,
+      meta: { stage },
+    });
     return this.jobs.enqueue(sessionId, stage);
   }
 

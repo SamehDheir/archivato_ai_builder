@@ -1,4 +1,4 @@
-import type { AuthProvider } from '@archivato/shared';
+import type { AccountRole, AuthProvider } from '@archivato/shared';
 
 /**
  * A persisted user account. `passwordHash` is null for accounts created purely
@@ -10,6 +10,8 @@ export interface User {
   passwordHash: string | null;
   displayName: string;
   emailVerified: boolean;
+  /** Access role — `admin` unlocks the superAdmin dashboard. */
+  role: AccountRole;
   providers: AuthProvider[];
   createdAt: Date;
   updatedAt: Date;

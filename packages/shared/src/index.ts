@@ -22,6 +22,7 @@ export * from './roadmap';
 export * from './export';
 export * from './auth';
 export * from './billing';
+export * from './admin';
 export * from './chat';
 export * from './jobs';
 export * from './versions';

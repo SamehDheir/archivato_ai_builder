@@ -51,8 +51,8 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `export`, `chat`,
-  `jobs`, `versions`, `diagrams`, `auth`, `billing`). Modules export their
-  repository token + service for downstream use.
+  `jobs`, `versions`, `diagrams`, `auth`, `billing`, `analytics`, `admin`).
+  Modules export their repository token + service for downstream use.
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
   controller and is not in version snapshots. `product-vision` needs only the
@@ -142,6 +142,28 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   all other sessions and re-issues cookies for the current device), theme
   toggle, and a danger-zone **delete account** (`DELETE /auth/me`, cascades all
   projects). `UserRepository.delete` added across impls.
+- **SuperAdmin + analytics.** `User.role` (`'user'|'admin'`, shared
+  `AccountRole` — distinct from the requirement-doc `UserRole`) is bootstrapped
+  from the **`ADMIN_EMAILS`** env allowlist: `AuthService.syncRole` promotes a
+  listed email to `admin` on login/session issue + `/auth/me` (promote-only;
+  never auto-demote). `AdminGuard` (exported by AuthModule) 403s non-admins.
+  **Analytics** (`analytics` module) records events (`AnalyticsEvent`: pageview
+  / signup / login / generate): a **public `POST /analytics/track`** beacon logs
+  anonymous landing pageviews (sets an httpOnly `archivato_vid` visitor cookie),
+  and signup/login (AuthService) + generate (JobsController) are recorded
+  server-side via `AnalyticsService.recordSafe` (best-effort, never breaks the
+  flow). The **`admin` module** is a read-only report model: `AdminService`
+  aggregates users/projects/subscriptions **directly via Prisma** (a deliberate
+  reporting exception to the repo pattern) plus `AnalyticsService` events, behind
+  `@UseGuards(JwtAuthGuard, AdminGuard)` — `GET /admin/{stats,traffic,users}`,
+  `PATCH /admin/users/:id/role`, `DELETE /admin/users/:id` (can't target self).
+  Web: `/admin` dashboard (KPIs, 30-day trend SVG charts, top pages/referrers,
+  user table with role/delete) — self-guards (bounces non-admins); a `ShieldCheck`
+  header link shows only for admins; `PageviewTracker` in the layout fires the
+  beacon on every route (excludes `/admin`). **Admins are stats-only**: `POST
+  /interview` 403s for them (`InterviewController.start`) and the dashboard shows
+  an admin notice (link to `/admin`) instead of the project creator — so an admin
+  account never owns or generates projects.
 
 ## Frontend Notes
 

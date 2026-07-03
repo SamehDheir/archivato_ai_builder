@@ -1,11 +1,7 @@
-/**
- * Authentication domain types (Slice 9) — shared between the NestJS API
- * (apps/api) and the Next.js client (apps/web).
- *
- * Tokens are delivered as httpOnly cookies, so the client never handles raw
- * JWTs; these types describe only the public-safe user shape and the request
- * payloads. Keep this file runtime-free.
- */
+
+
+/** Account access role. `admin` unlocks the superAdmin dashboard. */
+export type AccountRole = 'user' | 'admin';
 
 /** A user account as exposed to the client (never includes the password hash). */
 export interface AuthUser {
@@ -14,6 +10,8 @@ export interface AuthUser {
   displayName: string;
   /** Whether the email has been verified (Slice 9b). */
   emailVerified: boolean;
+  /** Access role — `admin` sees the superAdmin dashboard. */
+  role: AccountRole;
   /** Linked OAuth providers, if any (Slice 9c). */
   providers: AuthProvider[];
   createdAt: string;

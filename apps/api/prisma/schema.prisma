@@ -23,6 +23,9 @@ model User {
   passwordHash  String?
   displayName   String
   emailVerified Boolean  @default(false)
+  // Access role. 'admin' unlocks the superAdmin dashboard; bootstrapped from the
+  // ADMIN_EMAILS env allowlist on login. Everyone else is a normal 'user'.
+  role          String   @default("user") // 'user' | 'admin'
   // Linked OAuth providers, e.g. ["google"] (Slice 9c). Empty for local-only.
   providers     String[] @default([])
   createdAt     DateTime @default(now())
@@ -262,4 +265,26 @@ model ProjectRoadmap {
   updatedAt DateTime         @updatedAt
 
   @@map("project_roadmaps")
+}
+
+// --- Analytics (superAdmin) ---------------------------------------------------
+
+// A single analytics event powering the admin dashboard: anonymous landing
+// pageviews (type='pageview') plus product events (signup/login/generate…).
+// `visitorId` is a hashed, cookie-scoped anonymous id for unique-visitor counts;
+// `userId` is set (loosely, no FK) when the actor is signed in. `meta` holds
+// small type-specific extras (e.g. the generated stage).
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  type      String // 'pageview' | 'signup' | 'login' | 'generate'
+  path      String?
+  referrer  String?
+  visitorId String?
+  userId    String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([createdAt])
+  @@map("analytics_events")
 }

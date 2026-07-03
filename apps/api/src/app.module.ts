@@ -17,6 +17,8 @@ import { JobsModule } from './jobs/jobs.module';
 import { VersionsModule } from './versions/versions.module';
 import { DiagramsModule } from './diagrams/diagrams.module';
 import { BillingModule } from './billing/billing.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -56,6 +58,10 @@ import { BillingModule } from './billing/billing.module';
     DiagramsModule,
     // Subscriptions + project quota (free = 1 project, pro = 5/mo via Paddle).
     BillingModule,
+    // Analytics: anonymous landing pageviews (beacon) + product events.
+    AnalyticsModule,
+    // SuperAdmin dashboard: users/projects/subscriptions/traffic reporting.
+    AdminModule,
   ],
 })
 export class AppModule {}

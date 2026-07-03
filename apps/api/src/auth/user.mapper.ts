@@ -8,6 +8,7 @@ export function toAuthUser(user: User): AuthUser {
     email: user.email,
     displayName: user.displayName,
     emailVerified: user.emailVerified,
+    role: user.role,
     providers: user.providers,
     createdAt: user.createdAt.toISOString(),
   };
