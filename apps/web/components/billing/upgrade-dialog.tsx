@@ -8,7 +8,22 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Check, Loader2, Sparkles, X, Zap } from 'lucide-react';
+import {
+  Check,
+  ClipboardCheck,
+  Code2,
+  Download,
+  FolderKanban,
+  Loader2,
+  Map,
+  MessageSquare,
+  Package,
+  Sparkles,
+  Webhook,
+  X,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react';
 import { PLANS } from '@archivato/shared';
 import { billingApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -74,6 +89,28 @@ export function UpgradeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Split a "Lead — detail" feature bullet into its two display tiers. */
+function splitFeature(text: string): [string, string | null] {
+  const idx = text.indexOf('—');
+  if (idx === -1) return [text.trim(), null];
+  return [text.slice(0, idx).trim(), text.slice(idx + 1).trim()];
+}
+
+/** Pick an icon for a Pro feature by keyword (robust to reordering). */
+function featureIcon(text: string): LucideIcon {
+  const t = text.toLowerCase();
+  if (t.includes('project')) return FolderKanban;
+  if (t.includes('api design') || t.includes('rest api')) return Webhook;
+  if (t.includes('review')) return ClipboardCheck;
+  if (t.includes('roadmap')) return Map;
+  if (t.includes('openapi') || t.includes('swagger')) return Code2;
+  if (t.includes('refine') || t.includes('chat')) return MessageSquare;
+  if (t.includes('export')) return Download;
+  if (t.includes('scaffold') || t.includes('repo') || t.includes('pdf'))
+    return Package;
+  return Check;
+}
+
 function UpgradeModal({
   feature,
   onSettle,
@@ -82,7 +119,6 @@ function UpgradeModal({
   onSettle: (upgraded: boolean) => void;
 }) {
   const toast = useToast();
-  const free = PLANS.free;
   const pro = PLANS.pro;
   const [busy, setBusy] = useState(false);
 
@@ -143,10 +179,10 @@ function UpgradeModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="upgrade-title"
-        className="relative w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-xl animate-in fade-in zoom-in-95"
+        className="relative flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl animate-in fade-in zoom-in-95"
       >
-        {/* Gradient header */}
-        <div className="relative bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-5">
+        {/* Gradient header — price + context, always visible */}
+        <div className="relative shrink-0 border-b border-border bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-5">
           <button
             type="button"
             onClick={() => !busy && onSettle(false)}
@@ -162,56 +198,49 @@ function UpgradeModal({
               Pro plan
             </span>
           </div>
-          <h2 id="upgrade-title" className="mt-2 text-lg font-semibold">
-            {feature ? `Upgrade to ${feature}` : 'Upgrade to Pro'}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Your Free plan covers the interview, requirements, system design, and
-            database design. Pro unlocks the rest of the pipeline.
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <h2 id="upgrade-title" className="text-lg font-semibold leading-tight">
+              {feature ? `Upgrade to ${feature}` : 'Unlock the full pipeline'}
+            </h2>
+            <div className="shrink-0 text-right leading-none">
+              <span className="text-2xl font-bold">${pro.priceUsd}</span>
+              <span className="text-sm text-muted-foreground">/mo</span>
+            </div>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Everything in Free — interview, requirements, system &amp; database
+            design — <span className="font-medium text-foreground">plus:</span>
           </p>
         </div>
 
-        <div className="space-y-4 p-5">
-          {/* Free (current) vs Pro comparison */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-border p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-medium">Free</span>
-                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Current
+        {/* Scrollable feature list — icon tile + two-tier text */}
+        <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
+          {pro.features.map((f) => {
+            const [lead, detail] = splitFeature(f);
+            const Icon = featureIcon(f);
+            return (
+              <li
+                key={f}
+                className="flex items-start gap-3 rounded-lg border border-transparent p-2 transition-colors hover:border-border hover:bg-muted/40"
+              >
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Icon className="h-4 w-4" />
                 </span>
-              </div>
-              <ul className="space-y-1.5">
-                {free.features.map((f) => (
-                  <li
-                    key={f}
-                    className="flex items-start gap-1.5 text-xs text-muted-foreground"
-                  >
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium leading-snug">{lead}</div>
+                  {detail && (
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      {detail}
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
 
-            <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
-              <div className="mb-2 flex items-baseline justify-between">
-                <span className="text-sm font-semibold">Pro</span>
-                <span className="text-xs font-medium text-primary">
-                  ${pro.priceUsd}/mo
-                </span>
-              </div>
-              <ul className="space-y-1.5">
-                {pro.features.map((f) => (
-                  <li key={f} className="flex items-start gap-1.5 text-xs">
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
+        {/* Pinned footer — actions always reachable */}
+        <div className="shrink-0 space-y-3 border-t border-border bg-card p-4">
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               variant="secondary"
@@ -220,7 +249,11 @@ function UpgradeModal({
             >
               Maybe later
             </Button>
-            <Button onClick={upgrade} disabled={busy}>
+            <Button
+              onClick={upgrade}
+              disabled={busy}
+              className="sm:min-w-[190px]"
+            >
               {busy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -229,7 +262,6 @@ function UpgradeModal({
               {busy ? 'Working…' : `Upgrade — $${pro.priceUsd}/mo`}
             </Button>
           </div>
-
           <p className="text-center text-[11px] text-muted-foreground">
             Cancel anytime — you keep Pro until the period ends.
           </p>

@@ -67,14 +67,18 @@ function EntityNode({ id, data }: NodeProps<EntityData>) {
       className={`min-w-[180px] rounded-lg border-2 ${cat.border} bg-card shadow-sm`}
     >
       <Handle type="target" position={Position.Left} className="!bg-primary" />
-      <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-1.5">
+      <div
+        className={`flex items-center justify-between gap-2 rounded-t-[calc(0.75rem-2px)] border-b ${cat.border} ${cat.headerBg} px-2 py-1.5`}
+      >
         <input
           className="nodrag w-full bg-transparent font-mono text-sm font-semibold outline-none"
           value={data.name}
           placeholder="table_name"
           onChange={(e) => rename(e.target.value)}
         />
-        <span className={`shrink-0 text-[10px] font-semibold ${cat.text}`}>
+        <span
+          className={`shrink-0 text-[10px] font-bold uppercase tracking-wide ${cat.text}`}
+        >
           {cat.label}
         </span>
       </div>

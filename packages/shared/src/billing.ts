@@ -68,7 +68,8 @@ export const PLANS: Record<SubscriptionPlan, PlanInfo> = {
     interval: 'once',
     features: [
       '1 project',
-      'Interview → requirements → system & database design',
+      'Adaptive AI interview → requirements',
+      'System & database design (with diagrams & canvas)',
       'Product Vision',
     ],
   },
@@ -79,9 +80,14 @@ export const PLANS: Record<SubscriptionPlan, PlanInfo> = {
     projectQuota: 5,
     interval: 'month',
     features: [
-      'Up to 5 projects',
-      'API design, AI review & roadmap',
-      'Export to JSON / Markdown / OpenAPI',
+      'Up to 5 projects (Free includes 1)',
+      'REST API design — endpoints, request/response schemas & status codes',
+      'AI Architect Review — scored on security, scalability, performance & cost, with critical-issue callouts',
+      'Implementation roadmap — phases → milestones → tasks with effort estimates',
+      'Interactive OpenAPI / Swagger API explorer',
+      'Refine the whole design by chat — every change versioned',
+      'Export to JSON, Markdown & OpenAPI (import straight into Postman)',
+      'Scaffold a ready-to-build project repo + Print / Save as PDF',
     ],
   },
 };

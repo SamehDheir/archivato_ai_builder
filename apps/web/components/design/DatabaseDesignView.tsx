@@ -4,7 +4,11 @@ import { Share2, Table2, Workflow } from 'lucide-react';
 import { buildErd, type DatabaseDesign, type EntityColumn } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { DownloadButton } from '@/components/shared/DownloadButton';
+import { ArtifactDownload } from '@/components/shared/ArtifactDownload';
+import {
+  databaseDesignToPrisma,
+  databaseDesignToSql,
+} from '@/lib/database-export';
 import { MermaidView } from '@/components/design/MermaidView';
 import { Empty, Section } from '@/components/design/RequirementDocumentView';
 
@@ -16,10 +20,28 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
           {design.databaseType} · generated{' '}
           {new Date(design.generatedAt).toLocaleString()}
         </p>
-        <DownloadButton
-          filename={`database-design-${design.sessionId}.json`}
-          data={design}
-          label="Download schema"
+        <ArtifactDownload
+          basename={`database-design-${design.sessionId}`}
+          formats={[
+            {
+              label: 'Prisma',
+              ext: 'prisma',
+              mime: 'text/plain',
+              build: () => databaseDesignToPrisma(design),
+            },
+            {
+              label: 'JSON',
+              ext: 'json',
+              mime: 'application/json',
+              build: () => JSON.stringify(design, null, 2),
+            },
+            {
+              label: 'SQL',
+              ext: 'sql',
+              mime: 'application/sql',
+              build: () => databaseDesignToSql(design),
+            },
+          ]}
         />
       </div>
 

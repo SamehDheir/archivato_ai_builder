@@ -357,9 +357,10 @@ function BillingSection() {
                   {pro.features.map((f) => (
                     <li
                       key={f}
-                      className="flex items-center gap-2 text-sm text-muted-foreground"
+                      className="flex items-start gap-2 text-sm text-muted-foreground"
                     >
-                      <Check className="h-3.5 w-3.5 text-primary" /> {f}
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />{' '}
+                      {f}
                     </li>
                   ))}
                 </ul>

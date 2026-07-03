@@ -1,18 +1,20 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
-import type { Diagram, ProjectDiagrams } from '@archivato/shared';
-import { diagramsApi } from '@/lib/api';
-import { Button } from '@/components/ui/button';
+import { useCallback, useEffect, useState } from "react";
+// 1. استيراد أيقونة القفل (تأكد من مطابقة اسم المكتبة في مشروعك)
+import { Lock } from "lucide-react"; 
+import type { Diagram, ProjectDiagrams } from "@archivato/shared";
+import { diagramsApi } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import { MermaidView } from '@/components/design/MermaidView';
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { MermaidView } from "@/components/design/MermaidView";
 
 /**
  * Architecture diagrams: fetches the project's Mermaid source set and renders
@@ -37,7 +39,10 @@ export function DiagramsView({
       setData(res);
       setKind(
         (prev) =>
-          prev ?? res.diagrams.find((d) => d.mermaid)?.kind ?? res.diagrams[0]?.kind ?? null,
+          prev ??
+          res.diagrams.find((d) => d.mermaid)?.kind ??
+          res.diagrams[0]?.kind ??
+          null,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -70,8 +75,15 @@ export function DiagramsView({
           <SelectContent>
             {data.diagrams.map((d) => (
               <SelectItem key={d.kind} value={d.kind}>
-                {d.title}
-                {!d.mermaid ? ' (locked)' : ''}
+                <span className="flex items-center gap-1.5 w-full">
+                  <span>{d.title}</span>
+                  {!d.mermaid && (
+                    <Lock
+                      className="h-3 w-3 text-muted-foreground shrink-0"
+                      aria-label="Pro"
+                    />
+                  )}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
@@ -83,7 +95,7 @@ export function DiagramsView({
               size="sm"
               onClick={() => setShowSource((s) => !s)}
             >
-              {showSource ? 'Show diagram' : 'View source'}
+              {showSource ? "Show diagram" : "View source"}
             </Button>
             <Button
               variant="secondary"

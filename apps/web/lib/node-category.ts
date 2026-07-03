@@ -15,6 +15,8 @@ export type NodeCategory =
 export interface CategoryStyle {
   /** Tailwind border class for the node box. */
   border: string;
+  /** Tailwind background tint for the node header (vibrant, theme-safe). */
+  headerBg: string;
   /** Tailwind text class for the category chip. */
   text: string;
   /** Hex colour for the React Flow MiniMap dot. */
@@ -40,37 +42,43 @@ export function categorize(name: string): NodeCategory {
 
 export const CATEGORY_STYLE: Record<NodeCategory, CategoryStyle> = {
   auth: {
-    border: 'border-amber-400/60',
-    text: 'text-amber-500',
+    border: 'border-amber-500/70',
+    headerBg: 'bg-amber-500/15',
+    text: 'text-amber-600 dark:text-amber-400',
     hex: '#f59e0b',
     label: 'Auth',
   },
   billing: {
-    border: 'border-emerald-400/60',
-    text: 'text-emerald-500',
+    border: 'border-emerald-500/70',
+    headerBg: 'bg-emerald-500/15',
+    text: 'text-emerald-600 dark:text-emerald-400',
     hex: '#10b981',
     label: 'Billing',
   },
   notify: {
-    border: 'border-sky-400/60',
-    text: 'text-sky-500',
+    border: 'border-sky-500/70',
+    headerBg: 'bg-sky-500/15',
+    text: 'text-sky-600 dark:text-sky-400',
     hex: '#0ea5e9',
     label: 'Notify',
   },
   users: {
-    border: 'border-violet-400/60',
-    text: 'text-violet-500',
+    border: 'border-violet-500/70',
+    headerBg: 'bg-violet-500/15',
+    text: 'text-violet-600 dark:text-violet-400',
     hex: '#8b5cf6',
     label: 'Users',
   },
   reporting: {
-    border: 'border-cyan-400/60',
-    text: 'text-cyan-500',
+    border: 'border-cyan-500/70',
+    headerBg: 'bg-cyan-500/15',
+    text: 'text-cyan-600 dark:text-cyan-400',
     hex: '#06b6d4',
     label: 'Reporting',
   },
   default: {
-    border: 'border-primary/50',
+    border: 'border-primary/60',
+    headerBg: 'bg-primary/10',
     text: 'text-primary',
     hex: '#6d8bff',
     label: 'Other',

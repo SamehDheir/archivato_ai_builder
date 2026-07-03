@@ -10,7 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { DownloadButton } from '@/components/shared/DownloadButton';
+import { ArtifactDownload } from '@/components/shared/ArtifactDownload';
+import { systemDesignToMarkdown } from '@/lib/artifact-markdown';
 import { Section } from '@/components/design/RequirementDocumentView';
 
 const ARCH_LABEL: Record<string, string> = {
@@ -26,14 +27,26 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
         <p className="text-sm text-muted-foreground">
           Generated {new Date(design.generatedAt).toLocaleString()}
         </p>
-        <DownloadButton
-          filename={`system-design-${design.sessionId}.json`}
-          data={design}
-          label="Download system design"
+        <ArtifactDownload
+          basename={`system-design-${design.sessionId}`}
+          formats={[
+            {
+              label: 'Markdown',
+              ext: 'md',
+              mime: 'text/markdown',
+              build: () => systemDesignToMarkdown(design),
+            },
+            {
+              label: 'JSON',
+              ext: 'json',
+              mime: 'application/json',
+              build: () => JSON.stringify(design, null, 2),
+            },
+          ]}
         />
       </div>
 
-      <Section title="Architecture" icon={Network}>
+      <Section title="Architecture" icon={Network} tone="blue">
         <Badge variant="primary">
           {ARCH_LABEL[design.architecture] ?? design.architecture}
         </Badge>
@@ -42,7 +55,7 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
         </p>
       </Section>
 
-      <Section title="Tech stack" icon={Layers}>
+      <Section title="Tech stack" icon={Layers} tone="violet">
         <Table>
           <TableHeader>
             <TableRow>
@@ -65,10 +78,10 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
         </Table>
       </Section>
 
-      <Section title="Services" icon={Boxes}>
+      <Section title="Services" icon={Boxes} tone="emerald">
         <div className="grid gap-3 sm:grid-cols-2">
           {design.services.map((s) => (
-            <Card key={s.name}>
+            <Card key={s.name} className="border-l-2 border-l-emerald-500/60">
               <CardContent className="p-4">
                 <div className="font-semibold">{s.name}</div>
                 <p className="mt-1 text-sm text-muted-foreground">
