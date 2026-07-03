@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { ToastProvider } from '@/components/shared/toast';
@@ -7,9 +7,58 @@ import { ConfirmProvider } from '@/components/shared/confirm-dialog';
 import { UpgradeProvider } from '@/components/billing/upgrade-dialog';
 import { PageviewTracker } from '@/components/shared/pageview-tracker';
 
+// Public origin used to resolve absolute URLs for OpenGraph/Twitter cards.
+// Override in prod via NEXT_PUBLIC_SITE_URL; falls back to local dev.
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+
+const title = 'Archivato AI Builder';
+const description =
+  'Turn a business idea into a complete software system design — interview, ' +
+  'requirements, architecture, database, API, a scored AI review, and a build ' +
+  'roadmap. Not a chatbot; an AI software architecture generator.';
+
 export const metadata: Metadata = {
-  title: 'Archivato AI Builder',
-  description: 'Turn a business idea into a complete software system design.',
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: title,
+    template: '%s · Archivato AI Builder',
+  },
+  description,
+  applicationName: title,
+  keywords: [
+    'AI architecture generator',
+    'system design',
+    'software architecture',
+    'requirements generator',
+    'database design',
+    'API design',
+    'AI SaaS',
+  ],
+  authors: [{ name: 'Archivato' }],
+  openGraph: {
+    type: 'website',
+    url: siteUrl,
+    siteName: title,
+    title,
+    description,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title,
+    description,
+  },
+  // The browser favicon comes from the app/icon.svg file convention; only the
+  // Apple touch icon (no file convention here) needs declaring.
+  icons: { apple: '/logo-icon.svg' },
+  robots: { index: true, follow: true },
+};
+
+export const viewport: Viewport = {
+  // Match the app background so the mobile browser chrome blends with the page.
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f8f9fb' },
+    { media: '(prefers-color-scheme: dark)', color: '#0d0f16' },
+  ],
 };
 
 // Set the theme class before first paint to avoid a flash (reads localStorage,
