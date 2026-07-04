@@ -16,6 +16,8 @@ export interface InterviewSession {
   /** Owner (authenticated user id). Null only for legacy pre-ownership rows. */
   userId: string | null;
   input: ProjectIdeaInput;
+  /** Optional user-set display name; falls back to the idea when null. */
+  title: string | null;
   status: InterviewStatus;
   intent: IntentAnalysis | null;
   /** Answered questions, in the order they were asked. */

@@ -87,6 +87,8 @@ export interface RequirementsSummary {
 export interface ProjectSummary {
   sessionId: string;
   idea: string;
+  /** Optional user-set display name; falls back to `idea` when absent. */
+  title?: string;
   status: InterviewStatus;
   /** 0..1 requirement completeness (drives a small progress indicator). */
   completeness: number;

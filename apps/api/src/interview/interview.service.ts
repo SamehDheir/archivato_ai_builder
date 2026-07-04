@@ -95,6 +95,7 @@ export class InterviewService {
       id: randomUUID(),
       userId,
       input,
+      title: null,
       status: 'collecting',
       intent: await this.analyzeIntent(input),
       history: [],
@@ -153,6 +154,19 @@ export class InterviewService {
     await this.repo.delete(sessionId);
   }
 
+  /**
+   * Set (or clear) a project's display name (owner-guarded at the controller).
+   * An empty/blank title clears it, so the UI falls back to the idea. Doesn't
+   * touch the idea — that stays the AI's source of truth.
+   */
+  async rename(sessionId: string, title: string): Promise<ProjectSummary> {
+    const session = await this.require(sessionId);
+    const trimmed = title.trim();
+    session.title = trimmed.length ? trimmed : null;
+    await this.repo.save(session);
+    return this.toSummary(session);
+  }
+
   async getState(sessionId: string): Promise<InterviewState> {
     return this.toState(await this.require(sessionId));
   }
@@ -160,16 +174,22 @@ export class InterviewService {
   /** List the projects owned by a user, most recently updated first. */
   async list(userId: string): Promise<ProjectSummary[]> {
     const sessions = await this.repo.findByUserId(userId);
-    return sessions.map((s) => ({
-      sessionId: s.id,
-      idea: s.input.idea,
-      status: s.status,
-      completeness: round2(s.coverage),
-      updatedAt: s.updatedAt.toISOString(),
-    }));
+    return sessions.map((s) => this.toSummary(s));
   }
 
   // ── internals ─────────────────────────────────────────────────────────
+
+  /** Map a session to its lightweight "my projects" row. */
+  private toSummary(s: InterviewSession): ProjectSummary {
+    return {
+      sessionId: s.id,
+      idea: s.input.idea,
+      title: s.title ?? undefined,
+      status: s.status,
+      completeness: round2(s.coverage),
+      updatedAt: s.updatedAt.toISOString(),
+    };
+  }
 
   private async require(sessionId: string): Promise<InterviewSession> {
     const session = await this.repo.findById(sessionId);

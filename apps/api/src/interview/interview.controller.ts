@@ -6,6 +6,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -16,6 +17,7 @@ import { InterviewService } from './interview.service';
 import { SessionOwnerGuard } from './session-owner.guard';
 import { StartInterviewDto } from './dto/start-interview.dto';
 import { SubmitAnswerDto } from './dto/submit-answer.dto';
+import { RenameProjectDto } from './dto/rename-project.dto';
 
 // Every interview route requires a signed-in user (pipeline is now per-user).
 @UseGuards(JwtAuthGuard)
@@ -68,6 +70,16 @@ export class InterviewController {
   @Post(':id/confirm')
   confirm(@Param('id') id: string): Promise<InterviewState> {
     return this.interview.confirm(id);
+  }
+
+  /** Rename a project — set or clear its display name (owner only). */
+  @UseGuards(SessionOwnerGuard)
+  @Patch(':id')
+  rename(
+    @Param('id') id: string,
+    @Body() dto: RenameProjectDto,
+  ): Promise<ProjectSummary> {
+    return this.interview.rename(id, dto.title);
   }
 
   /** Delete a project and all of its artifacts (owner only). Frees a quota slot. */

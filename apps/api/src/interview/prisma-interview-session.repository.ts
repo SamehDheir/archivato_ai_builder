@@ -24,6 +24,7 @@ export class PrismaInterviewSessionRepository
         id: session.id,
         userId: session.userId,
         idea: session.input.idea,
+        title: session.title ?? null,
         industry: session.input.industry ?? null,
         scale: session.input.scale ?? null,
         preferredStack: session.input.preferredStack ?? null,
@@ -63,6 +64,7 @@ export class PrismaInterviewSessionRepository
     const row = await this.prisma.interviewSession.update({
       where: { id: session.id },
       data: {
+        title: session.title ?? null,
         status: session.status,
         intent: toJson(session.intent),
         history: toJsonArray(session.history),
@@ -91,6 +93,7 @@ function toEntity(row: {
   id: string;
   userId: string | null;
   idea: string;
+  title: string | null;
   industry: string | null;
   scale: string | null;
   preferredStack: string | null;
@@ -106,6 +109,7 @@ function toEntity(row: {
   return {
     id: row.id,
     userId: row.userId ?? null,
+    title: row.title ?? null,
     input: {
       idea: row.idea,
       industry: row.industry ?? undefined,

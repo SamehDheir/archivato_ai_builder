@@ -33,6 +33,7 @@ import {
   authApi,
   billingApi,
   databaseDesignApi,
+  exportApi,
   interviewApi,
   jobsApi,
   requirementsApi,
@@ -43,7 +44,10 @@ import { useToast } from '@/components/shared/toast';
 import { useConfirm } from '@/components/shared/confirm-dialog';
 import { useUpgrade } from '@/components/billing/upgrade-dialog';
 import { Breadcrumbs, type Crumb } from '@/components/project/Breadcrumbs';
-import { ProjectsDashboard } from '@/components/project/ProjectsDashboard';
+import {
+  ProjectsDashboard,
+  type ExportFormat,
+} from '@/components/project/ProjectsDashboard';
 import { ProgressPanel } from '@/components/interview/ProgressPanel';
 import { ProjectWizard } from '@/components/project/ProjectWizard';
 import { InterviewPanel } from '@/components/interview/InterviewPanel';
@@ -54,6 +58,22 @@ import { CommandPalette, type CommandGroup } from '@/components/shared/command-p
 /** localStorage key for the active session id, scoped PER USER. */
 const sessionKey = (userId: string) => `archivato.sessionId:${userId}`;
 const LEGACY_SESSION_KEY = 'archivato.sessionId';
+
+/** localStorage key remembering the last stage tab viewed per project (Smart Resume). */
+const lastTabKey = (userId: string, sessionId: string) =>
+  `archivato.lastTab:${userId}:${sessionId}`;
+
+/** Trigger a client-side file download for a string payload. */
+function saveFile(content: string, filename: string, mime: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 export default function Home() {
   const toast = useToast();
@@ -229,8 +249,72 @@ export default function Home() {
     });
   }
 
+  /** Rename a project (set/clear its display name) from a card. */
+  async function handleRenameProject(sessionId: string, title: string) {
+    try {
+      await interviewApi.rename(sessionId, title);
+      await refreshProjects();
+      toast({ title: t('toast.renamed'), variant: 'success' });
+    } catch (e) {
+      toast({
+        title: t('toast.renameFailed'),
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'error',
+      });
+    }
+  }
+
+  /** Direct-export a project from its card (reuses the Pro export endpoints). */
+  async function handleExportProject(sessionId: string, format: ExportFormat) {
+    const base = `archivato-${sessionId}`;
+    try {
+      if (format === 'markdown') {
+        saveFile(await exportApi.markdown(sessionId), `${base}.md`, 'text/markdown');
+      } else if (format === 'openapi') {
+        const spec = await exportApi.openapi(sessionId);
+        saveFile(
+          JSON.stringify(spec, null, 2),
+          `${base}-openapi.json`,
+          'application/json',
+        );
+      } else {
+        const bundle = await exportApi.json(sessionId);
+        saveFile(
+          JSON.stringify(bundle, null, 2),
+          `${base}.json`,
+          'application/json',
+        );
+      }
+    } catch (e) {
+      // Pro wall → upgrade modal; incomplete pipeline → hint; else a plain error.
+      if (e instanceof ApiError && e.status === 402) {
+        const upgraded = await openUpgrade({ feature: t('toast.exportFeature') });
+        if (upgraded) await refreshProjects();
+      } else if (e instanceof ApiError && e.status === 409) {
+        toast({ title: t('toast.exportIncomplete'), variant: 'error' });
+      } else {
+        toast({
+          title: t('toast.exportFailed'),
+          description: e instanceof Error ? e.message : String(e),
+          variant: 'error',
+        });
+      }
+    }
+  }
+
   async function openProject(sessionId: string) {
-    setStageTab('requirements');
+    // Smart Resume: reopen on the tab the user last viewed for this project
+    // (falls back to requirements; ProjectStages re-guards availability).
+    let resumeTab: TabKey = 'requirements';
+    if (userId) {
+      try {
+        const saved = localStorage.getItem(lastTabKey(userId, sessionId));
+        if (saved) resumeTab = saved as TabKey;
+      } catch {
+        /* storage blocked */
+      }
+    }
+    setStageTab(resumeTab);
     await run(async () => {
       await loadSession(sessionId);
       if (userId) localStorage.setItem(sessionKey(userId), sessionId);
@@ -361,6 +445,15 @@ export default function Home() {
     if (!(await confirmLeave())) return;
     setDirty(false);
     setStageTab(next);
+    // Remember where the user is, per project, for Smart Resume next time.
+    const sid = state?.sessionId;
+    if (userId && sid) {
+      try {
+        localStorage.setItem(lastTabKey(userId, sid), next);
+      } catch {
+        /* storage blocked */
+      }
+    }
   }
 
   /**
@@ -620,6 +713,8 @@ export default function Home() {
                 onStart={handleStart}
                 onOpen={openProject}
                 onDelete={handleDeleteProject}
+                onRename={handleRenameProject}
+                onExport={handleExportProject}
               />
             </>
           )}

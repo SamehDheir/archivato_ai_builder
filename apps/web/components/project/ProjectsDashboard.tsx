@@ -1,8 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, LayoutGrid, List, Sparkles, Trash2 } from 'lucide-react';
+import {
+  ArrowRight,
+  Download,
+  LayoutGrid,
+  List,
+  MoreVertical,
+  Pencil,
+  PlayCircle,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import type { InterviewStatus, ProjectScale, ProjectSummary } from '@archivato/shared';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +31,9 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
+
+/** The direct-export formats offered from a project card. */
+export type ExportFormat = 'json' | 'markdown' | 'openapi';
 
 type ProjectsView = 'grid' | 'list';
 /** Remembers the grid/list choice across visits. */
@@ -45,6 +58,18 @@ const STATUS_VARIANT: Record<
   confirmed: 'primary',
 };
 
+/** A project's display label: the user-set title, else the raw idea. */
+const displayName = (p: ProjectSummary): string => p.title?.trim() || p.idea;
+
+/** Shared props for the per-project actions. */
+interface CardActions {
+  busy: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+  onRename: (title: string) => void;
+  onExport: (format: ExportFormat) => void;
+}
+
 /**
  * The post-login hub: a list of the user's projects (open any to resume) plus a
  * "new project" form. The form is shown when explicitly creating or when the
@@ -65,6 +90,8 @@ export function ProjectsDashboard({
   onStart,
   onOpen,
   onDelete,
+  onRename,
+  onExport,
 }: {
   projects: ProjectSummary[];
   creating: boolean;
@@ -80,6 +107,8 @@ export function ProjectsDashboard({
   onStart: (e: React.FormEvent) => void;
   onOpen: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
+  onRename: (sessionId: string, title: string) => void;
+  onExport: (sessionId: string, format: ExportFormat) => void;
 }) {
   const { t } = useTranslation('dashboard');
   const showForm = creating || projects.length === 0;
@@ -93,6 +122,17 @@ export function ProjectsDashboard({
       /* storage blocked */
     }
   };
+
+  const actionsFor = (p: ProjectSummary): CardActions => ({
+    busy,
+    onOpen: () => onOpen(p.sessionId),
+    onDelete: () => onDelete(p.sessionId),
+    onRename: (title) => onRename(p.sessionId, title),
+    onExport: (format) => onExport(p.sessionId, format),
+  });
+
+  // Most recently updated project (the list is server-sorted desc by updatedAt).
+  const latest = projects[0];
 
   return (
     <div className="space-y-4">
@@ -176,32 +216,67 @@ export function ProjectsDashboard({
             </form>
           </CardContent>
         </Card>
-      ) : view === 'grid' ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {projects.map((p) => (
-            <ProjectCard
-              key={p.sessionId}
-              project={p}
-              busy={busy}
-              onOpen={() => onOpen(p.sessionId)}
-              onDelete={() => onDelete(p.sessionId)}
-            />
-          ))}
-        </div>
       ) : (
-        <div className="space-y-2">
-          {projects.map((p) => (
-            <ProjectRow
-              key={p.sessionId}
-              project={p}
+        <>
+          {latest && (
+            <ContinueBanner
+              project={latest}
               busy={busy}
-              onOpen={() => onOpen(p.sessionId)}
-              onDelete={() => onDelete(p.sessionId)}
+              onOpen={() => onOpen(latest.sessionId)}
             />
-          ))}
-        </div>
+          )}
+
+          {view === 'grid' ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {projects.map((p) => (
+                <ProjectCard key={p.sessionId} project={p} {...actionsFor(p)} />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {projects.map((p) => (
+                <ProjectRow key={p.sessionId} project={p} {...actionsFor(p)} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
+  );
+}
+
+/** "Continue where you left off" — resumes the most recent project on its last tab. */
+function ContinueBanner({
+  project,
+  busy,
+  onOpen,
+}: {
+  project: ProjectSummary;
+  busy: boolean;
+  onOpen: () => void;
+}) {
+  const { t } = useTranslation('dashboard');
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={busy}
+      className="flex w-full items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 text-start transition-colors hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
+    >
+      <PlayCircle className="h-6 w-6 shrink-0 text-primary" />
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+          {t('continue.title')}
+        </div>
+        <div className="truncate text-sm font-medium" dir="auto" title={displayName(project)}>
+          {displayName(project)}
+        </div>
+      </div>
+      <span className="hidden shrink-0 items-center gap-1 text-sm font-medium text-primary sm:flex">
+        {t('continue.action')}
+        <ArrowRight className="h-4 w-4 rtl:-scale-x-100" />
+      </span>
+    </button>
   );
 }
 
@@ -242,18 +317,191 @@ function ViewToggle({
   );
 }
 
+/**
+ * A per-project kebab menu: Rename (inline), Export (JSON/Markdown/OpenAPI, for
+ * confirmed projects), and Delete. Rendered as a sibling of the card's open
+ * button (never nested) so clicks don't open the project. Self-manages open
+ * state + close-on-outside/Escape.
+ */
+function ProjectMenu({
+  project,
+  busy,
+  onDelete,
+  onRename,
+  onExport,
+}: { project: ProjectSummary } & Omit<CardActions, 'onOpen'>) {
+  const { t } = useTranslation('dashboard');
+  const [open, setOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [value, setValue] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('mousedown', onDocDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  function close() {
+    setOpen(false);
+    setRenaming(false);
+  }
+
+  function startRename() {
+    setValue(project.title ?? project.idea);
+    setRenaming(true);
+  }
+
+  function submitRename() {
+    const next = value.trim();
+    close();
+    if (next !== (project.title ?? '')) onRename(next);
+  }
+
+  const confirmed = project.status === 'confirmed';
+
+  return (
+    <div ref={rootRef} className="absolute end-2 top-2">
+      <button
+        type="button"
+        disabled={busy}
+        aria-label={t('actions.menu')}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
+      >
+        <MoreVertical className="h-4 w-4" />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute end-0 top-full z-30 mt-1 w-52 rounded-md border border-border bg-card p-1 shadow-md"
+        >
+          {renaming ? (
+            <div className="p-1">
+              <Input
+                autoFocus
+                dir="auto"
+                value={value}
+                maxLength={120}
+                aria-label={t('actions.rename')}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitRename();
+                  if (e.key === 'Escape') setRenaming(false);
+                }}
+                className="h-8 text-sm"
+              />
+              <div className="mt-1.5 flex justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => setRenaming(false)}
+                >
+                  {t('actions.cancel')}
+                </Button>
+                <Button size="sm" className="h-7 px-2" onClick={submitRename}>
+                  {t('actions.save')}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <MenuItem icon={Pencil} label={t('actions.rename')} onClick={startRename} />
+              {confirmed && (
+                <>
+                  <div className="my-1 h-px bg-border" />
+                  <MenuItem
+                    icon={Download}
+                    label={t('actions.exportJson')}
+                    onClick={() => {
+                      close();
+                      onExport('json');
+                    }}
+                  />
+                  <MenuItem
+                    label={t('actions.exportMarkdown')}
+                    onClick={() => {
+                      close();
+                      onExport('markdown');
+                    }}
+                  />
+                  <MenuItem
+                    label={t('actions.exportOpenapi')}
+                    onClick={() => {
+                      close();
+                      onExport('openapi');
+                    }}
+                  />
+                </>
+              )}
+              <div className="my-1 h-px bg-border" />
+              <MenuItem
+                icon={Trash2}
+                label={t('projects.delete')}
+                destructive
+                onClick={() => {
+                  close();
+                  onDelete();
+                }}
+              />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MenuItem({
+  icon: Icon,
+  label,
+  onClick,
+  destructive,
+}: {
+  icon?: typeof Pencil;
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={cn(
+        'flex w-full items-center gap-2 rounded px-2 py-1.5 text-start text-sm transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none',
+        destructive && 'text-destructive hover:bg-destructive/10',
+      )}
+    >
+      {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : <span className="w-3.5" />}
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
 /** A single project tile on the dashboard grid. */
 function ProjectCard({
   project,
   busy,
   onOpen,
   onDelete,
-}: {
-  project: ProjectSummary;
-  busy: boolean;
-  onOpen: () => void;
-  onDelete: () => void;
-}) {
+  onRename,
+  onExport,
+}: { project: ProjectSummary } & CardActions) {
   const { t } = useTranslation('dashboard');
   const pct = Math.round(project.completeness * 100);
   return (
@@ -264,18 +512,17 @@ function ProjectCard({
         disabled={busy}
         className="flex w-full flex-col rounded-lg border border-border bg-card p-4 text-start shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
       >
-        <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="mb-2 flex items-center gap-2">
           <Badge variant={STATUS_VARIANT[project.status]}>
             {t(`status.${project.status}`)}
           </Badge>
-          <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground rtl:-scale-x-100" />
         </div>
         <p
           dir="auto"
-          className="line-clamp-2 pe-6 text-sm font-semibold"
-          title={project.idea}
+          className="line-clamp-2 pe-8 text-sm font-semibold"
+          title={displayName(project)}
         >
-          {project.idea}
+          {displayName(project)}
         </p>
         <div className="mt-auto pt-3">
           {project.status !== 'confirmed' && (
@@ -294,16 +541,13 @@ function ProjectCard({
           </p>
         </div>
       </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        disabled={busy}
-        aria-label={t('projects.delete')}
-        title={t('projects.delete')}
-        className="absolute bottom-3 end-3 rounded-md bg-card p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 disabled:pointer-events-none"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      <ProjectMenu
+        project={project}
+        busy={busy}
+        onDelete={onDelete}
+        onRename={onRename}
+        onExport={onExport}
+      />
     </div>
   );
 }
@@ -314,12 +558,9 @@ function ProjectRow({
   busy,
   onOpen,
   onDelete,
-}: {
-  project: ProjectSummary;
-  busy: boolean;
-  onOpen: () => void;
-  onDelete: () => void;
-}) {
+  onRename,
+  onExport,
+}: { project: ProjectSummary } & CardActions) {
   const { t } = useTranslation('dashboard');
   const pct = Math.round(project.completeness * 100);
   return (
@@ -328,7 +569,7 @@ function ProjectRow({
         type="button"
         onClick={onOpen}
         disabled={busy}
-        className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-start shadow-sm transition-all duration-150 hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
+        className="flex w-full items-center gap-3 rounded-lg border border-border bg-card py-3 pe-12 ps-4 text-start shadow-sm transition-all duration-150 hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
       >
         <Badge variant={STATUS_VARIANT[project.status]} className="shrink-0">
           {t(`status.${project.status}`)}
@@ -336,9 +577,9 @@ function ProjectRow({
         <span
           dir="auto"
           className="min-w-0 flex-1 truncate text-sm font-medium"
-          title={project.idea}
+          title={displayName(project)}
         >
-          {project.idea}
+          {displayName(project)}
         </span>
         {project.status !== 'confirmed' && (
           <span className="hidden shrink-0 items-center gap-2 sm:flex">
@@ -353,18 +594,14 @@ function ProjectRow({
             date: new Date(project.updatedAt).toLocaleDateString(),
           })}
         </span>
-        <ArrowRight className="me-8 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground rtl:-scale-x-100" />
       </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        disabled={busy}
-        aria-label={t('projects.delete')}
-        title={t('projects.delete')}
-        className="absolute end-3 top-1/2 -translate-y-1/2 rounded-md bg-card p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 disabled:pointer-events-none"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      <ProjectMenu
+        project={project}
+        busy={busy}
+        onDelete={onDelete}
+        onRename={onRename}
+        onExport={onExport}
+      />
     </div>
   );
 }

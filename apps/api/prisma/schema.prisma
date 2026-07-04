@@ -137,6 +137,8 @@ model InterviewSession {
   userId         String?
   user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   idea           String
+  /// Optional user-set display name; the UI falls back to `idea` when null.
+  title          String?
   industry       String?
   scale          String?
   preferredStack String?

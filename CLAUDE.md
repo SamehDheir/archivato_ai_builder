@@ -238,6 +238,18 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   (client-only, respects `prefers-reduced-motion`), a horizontal pipeline flow
   rail, and an artistic staggered "how it works". Purely presentational — safe to
   restyle without touching the app.
+- **Projects hub** (`ProjectsDashboard`): the post-login project list, presentational
+  (all state/handlers come from `app/dashboard/page.tsx`). **Grid/list toggle**
+  (persisted `archivato.projectsView`). Each project has an optional **`title`**
+  (session column; `PATCH /interview/:id`, owner-guarded — the idea stays the AI's
+  untouched source; cards show `title || idea`). A per-card **kebab menu**
+  (`ProjectMenu`, rendered as a *sibling* of the open-button, never nested):
+  **Rename** (inline input), **Direct Export** (JSON/Markdown/OpenAPI for confirmed
+  projects — reuses the Pro `exportApi`; a 402 opens the upgrade modal, 409 hints to
+  finish the pipeline), **Delete**. **Smart Resume**: the last stage tab viewed per
+  project is saved (`archivato.lastTab:<uid>:<sid>` in `goToStage`) and restored in
+  `openProject` (ProjectStages re-guards availability); a **Continue banner** resumes
+  the most-recent project on that tab.
 - Confirmed project view = `ProjectStages` (tabbed, one stage per tab, downstream
   tabs disabled until prereqs exist). `app/dashboard/page.tsx` is the slim
   orchestrator. Above it, `ProjectWizard` is the single stage stepper (Interview →

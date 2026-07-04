@@ -146,6 +146,22 @@ describe('InterviewService', () => {
     expect(await svc.list('nobody')).toEqual([]);
   });
 
+  it('renames a project (title falls back to idea, blank clears it)', async () => {
+    const svc = makeService();
+    const { sessionId } = await svc.start(IDEA, 'user-1');
+
+    // No title initially → summary omits it (UI falls back to the idea).
+    expect((await svc.list('user-1'))[0].title).toBeUndefined();
+
+    const renamed = await svc.rename(sessionId, '  Clinic Platform  ');
+    expect(renamed.title).toBe('Clinic Platform'); // trimmed
+    expect((await svc.list('user-1'))[0].title).toBe('Clinic Platform');
+
+    // Blank title clears it.
+    const cleared = await svc.rename(sessionId, '   ');
+    expect(cleared.title).toBeUndefined();
+  });
+
   it('enforces the project-count quota at start (402 past the limit)', async () => {
     const mock = new MockLlmProvider();
     const repo = new InMemoryInterviewSessionRepository();

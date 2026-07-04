@@ -153,6 +153,13 @@ export const interviewApi = {
   get: (sessionId: string) =>
     request<InterviewState>(`/interview/${sessionId}`),
 
+  /** Set or clear a project's display name (empty string clears it). */
+  rename: (sessionId: string, title: string) =>
+    request<ProjectSummary>(`/interview/${sessionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    }),
+
   /** Permanently delete a project and all its artifacts (frees a quota slot). */
   delete: (sessionId: string) =>
     request<{ success: true }>(`/interview/${sessionId}`, { method: 'DELETE' }),

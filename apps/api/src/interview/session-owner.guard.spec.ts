@@ -23,6 +23,7 @@ function seed(
     id,
     userId,
     input: { idea: 'idea' },
+    title: null,
     status: 'collecting',
     intent: null,
     history: [],

@@ -2,6 +2,19 @@
   "appTitle": "Archivato AI Builder",
   "appSubtitle": "AI Software Architecture Generator — turn an idea into a full system design.",
   "search": "Search",
+  "continue": {
+    "title": "Continue where you left off",
+    "action": "Continue"
+  },
+  "actions": {
+    "menu": "Project actions",
+    "rename": "Rename",
+    "cancel": "Cancel",
+    "save": "Save",
+    "exportJson": "Export JSON",
+    "exportMarkdown": "Export Markdown",
+    "exportOpenapi": "Export OpenAPI"
+  },
   "admin": {
     "title": "Admin account",
     "body": "Admin accounts manage the platform and don't create projects. Head to the admin dashboard for users, revenue, and traffic stats.",
@@ -98,7 +111,12 @@
     "refined": "Design refined",
     "restored": "Project restored to selected version",
     "generated": "{{stage}} generated",
-    "generateFailed": "Could not generate {{stage}}"
+    "generateFailed": "Could not generate {{stage}}",
+    "renamed": "Project renamed",
+    "renameFailed": "Could not rename the project",
+    "exportFailed": "Could not export the project",
+    "exportIncomplete": "Finish generating the design before exporting.",
+    "exportFeature": "Export"
   },
   "upgradeFeature": { "anotherProject": "start another project" }
 }
