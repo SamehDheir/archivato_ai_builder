@@ -29,7 +29,9 @@
     "starting": "جارٍ البدء…",
     "completeness": "نسبة الاكتمال",
     "updated": "آخر تحديث {{date}}",
-    "delete": "حذف المشروع"
+    "delete": "حذف المشروع",
+    "gridView": "عرض شبكي",
+    "listView": "عرض قائمة"
   },
   "status": {
     "collecting": "قيد المقابلة",

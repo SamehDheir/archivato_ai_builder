@@ -29,7 +29,9 @@
     "starting": "Starting…",
     "completeness": "Completeness",
     "updated": "Updated {{date}}",
-    "delete": "Delete project"
+    "delete": "Delete project",
+    "gridView": "Grid view",
+    "listView": "List view"
   },
   "status": {
     "collecting": "Interviewing",
