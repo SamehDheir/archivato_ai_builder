@@ -1,4 +1,14 @@
-import { Controller, Get, Header, Param, UseGuards } from '@nestjs/common';
+import {
+  All,
+  Controller,
+  Get,
+  Header,
+  Param,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request, Response } from 'express';
 import type { ExportBundle, ProjectStructure } from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SessionOwnerGuard } from '../interview/session-owner.guard';
@@ -38,5 +48,28 @@ export class ExportController {
     @Param('sessionId') sessionId: string,
   ): Promise<ProjectStructure> {
     return this.exporter.structure(sessionId);
+  }
+
+  /**
+   * Mock server powering "Try it out" in the API Docs. Catches any method/path
+   * under `/export/:sessionId/mock/*`, matches it against the designed endpoints,
+   * and returns a schema-derived example response with the right status code.
+   */
+  @All(':sessionId/mock/*')
+  async mock(
+    @Param('sessionId') sessionId: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Record<string, unknown> | null> {
+    // The `*` splat captures everything after '/mock/' (Express param '0').
+    const rest = (req.params as Record<string, string>)['0'] ?? '';
+    const path = '/' + rest.replace(/^\/+/, '').split('?')[0];
+    const { status, body } = await this.exporter.mock(
+      sessionId,
+      req.method,
+      path,
+    );
+    res.status(status);
+    return body;
   }
 }

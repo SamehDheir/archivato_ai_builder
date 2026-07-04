@@ -7,6 +7,9 @@ import { exportApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
+/** API origin (with the /api prefix) the mock server lives on. */
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
+
 /** Loading fallback for the code-split Swagger bundle. */
 function SwaggerLoading() {
   const { t } = useTranslation('stages');
@@ -40,7 +43,16 @@ export function OpenApiView({
   const load = useCallback(async () => {
     setError(null);
     try {
-      setSpec(await exportApi.openapi(sessionId));
+      const doc = await exportApi.openapi(sessionId);
+      // Point "Try it out" at the backend mock server, which returns
+      // schema-derived example responses for the designed endpoints.
+      doc.servers = [
+        {
+          url: `${API_BASE}/export/${sessionId}/mock`,
+          description: 'Mock server — example responses',
+        },
+      ];
+      setSpec(doc);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -62,7 +74,12 @@ export function OpenApiView({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">{t('apidocs.intro')}</p>
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">{t('apidocs.intro')}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground/80">
+            {t('apidocs.tryNote')}
+          </p>
+        </div>
         <Button variant="secondary" size="sm" onClick={() => void load()}>
           {t('apidocs.refresh')}
         </Button>

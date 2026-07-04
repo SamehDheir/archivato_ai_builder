@@ -15,5 +15,16 @@ export default function SwaggerUiClient({
 }: {
   spec: Record<string, unknown>;
 }) {
-  return <SwaggerUI spec={spec} />;
+  return (
+    <SwaggerUI
+      spec={spec}
+      // "Try it out" hits the API's mock server (a different origin behind the
+      // httpOnly auth cookie), so requests must be credentialed.
+      requestInterceptor={(req: { credentials?: string }) => {
+        req.credentials = 'include';
+        return req;
+      }}
+      tryItOutEnabled
+    />
+  );
 }

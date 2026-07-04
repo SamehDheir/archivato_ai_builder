@@ -72,6 +72,7 @@
   "apidocs": {
     "loading": "Loading API explorer…",
     "intro": "Interactive OpenAPI 3.0 docs generated from the API design.",
+    "tryNote": "Use “Try it out” on any endpoint to get an example response from the built-in mock server.",
     "refresh": "Refresh"
   },
   "cost": {

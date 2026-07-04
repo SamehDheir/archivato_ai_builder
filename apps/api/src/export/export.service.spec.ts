@@ -167,6 +167,31 @@ describe('ExportService', () => {
     expect(paths['/api/users']).toBeDefined();
   });
 
+  it('serves a schema-derived mock response for a designed endpoint', async () => {
+    const h = makeHarness();
+    const sessionId = await fullPipeline(h);
+    const bundle = await h.service.bundle(sessionId);
+    const ep = bundle.apiDesign.modules[0].endpoints[0];
+    // Substitute a concrete value for any path parameter (":id" / "{id}").
+    const path = ep.path.replace(/:[A-Za-z0-9_]+|\{[A-Za-z0-9_]+\}/g, '123');
+
+    const res = await h.service.mock(sessionId, ep.method, path);
+    expect(res.status).toBeGreaterThanOrEqual(200);
+    expect(res.status).toBeLessThan(300);
+    expect(res.body === null || typeof res.body === 'object').toBe(true);
+  });
+
+  it('404s an unmatched mock path or a session without an API design', async () => {
+    const h = makeHarness();
+    const sessionId = await fullPipeline(h);
+    await expect(
+      h.service.mock(sessionId, 'GET', '/api/definitely-not-a-route'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      h.service.mock('nope', 'GET', '/api/users'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('generates a GitHub project structure with module folders', async () => {
     const h = makeHarness();
     const sessionId = await fullPipeline(h);

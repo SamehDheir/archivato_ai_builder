@@ -16,6 +16,7 @@ export * from './requirements';
 export * from './system-design';
 export * from './database-design';
 export * from './api-design';
+export * from './mock-response';
 export * from './review';
 export * from './product-vision';
 export * from './roadmap';

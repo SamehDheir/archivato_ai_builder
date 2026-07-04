@@ -1,8 +1,9 @@
-import type {
-  ApiDesign,
-  ApiEndpoint,
-  DatabaseDesign,
-  SchemaField,
+import {
+  exampleValue,
+  type ApiDesign,
+  type ApiEndpoint,
+  type DatabaseDesign,
+  type SchemaField,
 } from '@archivato/shared';
 
 /**
@@ -50,7 +51,7 @@ function pathParams(path: string) {
     name,
     in: 'path',
     required: true,
-    schema: { type: 'string' },
+    schema: { type: 'string', example: exampleValue('string', name) },
   }));
 }
 
@@ -69,7 +70,7 @@ function operation(tag: string, ep: ApiEndpoint): Record<string, unknown> {
         name: f.name,
         in: 'query',
         required: f.required,
-        schema: { type: jsonType(f.type) },
+        schema: { type: jsonType(f.type), example: exampleValue(f.type, f.name) },
       } as never);
     }
   }
@@ -112,7 +113,12 @@ function objectSchema(fields: SchemaField[]): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
   for (const f of fields) {
-    properties[f.name] = { type: jsonType(f.type) };
+    // The `example` drives Swagger UI's "Example Value" + prefills the request
+    // body on "Try it out".
+    properties[f.name] = {
+      type: jsonType(f.type),
+      example: exampleValue(f.type, f.name),
+    };
     if (f.required) required.push(f.name);
   }
   return {

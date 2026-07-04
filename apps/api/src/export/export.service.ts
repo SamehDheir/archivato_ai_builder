@@ -4,7 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { ExportBundle, ProjectStructure } from '@archivato/shared';
+import {
+  matchApiEndpoint,
+  mockResponse,
+  type ExportBundle,
+  type MockResponse,
+  type ProjectStructure,
+} from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -97,5 +103,29 @@ export class ExportService {
   async structure(sessionId: string): Promise<ProjectStructure> {
     const b = await this.bundle(sessionId);
     return buildProjectStructure(sessionId, b.idea.idea, b.systemDesign);
+  }
+
+  /**
+   * Serve a **mock** response for a designed endpoint — powers "Try it out" in
+   * the API Docs. Matches the request method + path against the API design and
+   * synthesizes an example success response from the endpoint's schema (no real
+   * implementation exists). Only the API design is required.
+   */
+  async mock(
+    sessionId: string,
+    method: string,
+    path: string,
+  ): Promise<MockResponse> {
+    const apiDesign = await this.apiDesigns.findBySessionId(sessionId);
+    if (!apiDesign) {
+      throw new NotFoundException('No API design for this session.');
+    }
+    const endpoint = matchApiEndpoint(apiDesign, method, path);
+    if (!endpoint) {
+      throw new NotFoundException(
+        `No mocked endpoint matches ${method.toUpperCase()} ${path}.`,
+      );
+    }
+    return mockResponse(endpoint);
   }
 }
