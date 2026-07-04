@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslation } from 'react-i18next';
 import { Check, Lock } from 'lucide-react';
 import type {
   ApiDesign,
@@ -39,15 +40,22 @@ export function ProjectWizard({
   /** When false, the Pro stages (API onward) show a lock + a cutline note. */
   isPro?: boolean;
 }) {
-  const steps: { label: string; done: boolean; tab?: string; pro?: boolean }[] = [
-    { label: 'Interview', done: state.status === 'confirmed' },
-    { label: 'Requirements', done: !!doc, tab: 'requirements' },
-    { label: 'Architecture', done: !!design, tab: 'system' },
-    { label: 'Database', done: !!dbDesign, tab: 'database' },
-    { label: 'API', done: !!apiDesign, tab: 'api', pro: true },
-    { label: 'Review', done: !!review, tab: 'review', pro: true },
+  const { t } = useTranslation('project');
+  const steps: {
+    key: string;
+    label: string;
+    done: boolean;
+    tab?: string;
+    pro?: boolean;
+  }[] = [
+    { key: 'interview', label: t('wizard.steps.interview'), done: state.status === 'confirmed' },
+    { key: 'requirements', label: t('wizard.steps.requirements'), done: !!doc, tab: 'requirements' },
+    { key: 'architecture', label: t('wizard.steps.architecture'), done: !!design, tab: 'system' },
+    { key: 'database', label: t('wizard.steps.database'), done: !!dbDesign, tab: 'database' },
+    { key: 'api', label: t('wizard.steps.api'), done: !!apiDesign, tab: 'api', pro: true },
+    { key: 'review', label: t('wizard.steps.review'), done: !!review, tab: 'review', pro: true },
     // Export is "ready" once the API design exists (review is optional for it).
-    { label: 'Export', done: !!apiDesign, tab: 'export', pro: true },
+    { key: 'export', label: t('wizard.steps.export'), done: !!apiDesign, tab: 'export', pro: true },
   ];
   const doneCount = steps.filter((s) => s.done).length;
   // The current step is the first not-done one (-1 once everything is complete).
@@ -57,9 +65,9 @@ export function ProjectWizard({
     <Card>
       <CardContent className="p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Project Wizard</h2>
+          <h2 className="text-sm font-semibold">{t('wizard.title')}</h2>
           <span className="text-xs text-muted-foreground">
-            {doneCount}/{steps.length} complete
+            {t('wizard.complete', { done: doneCount, total: steps.length })}
           </span>
         </div>
 
@@ -70,12 +78,12 @@ export function ProjectWizard({
             const navigable =
               !!onNavigate && !!step.tab && (step.done || isCurrent);
             return (
-              <li key={step.label} className="flex flex-1 items-start">
+              <li key={step.key} className="flex flex-1 items-start">
                 <button
                   type="button"
                   disabled={!navigable}
                   onClick={() => navigable && onNavigate?.(step.tab as string)}
-                  title={navigable ? `Go to ${step.label}` : undefined}
+                  title={navigable ? t('wizard.goTo', { label: step.label }) : undefined}
                   className={cn(
                     'flex min-w-0 flex-col items-center gap-1.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                     navigable ? 'cursor-pointer' : 'cursor-default',
@@ -131,8 +139,7 @@ export function ProjectWizard({
 
         {!isPro && (
           <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Lock className="h-3 w-3" /> API design and everything after it need
-            Pro.
+            <Lock className="h-3 w-3" /> {t('wizard.cutline')}
           </p>
         )}
       </CardContent>

@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslation } from 'react-i18next';
 import { Boxes, Layers, Network } from 'lucide-react';
 import type { SystemDesign } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
@@ -14,18 +17,15 @@ import { ArtifactDownload } from '@/components/shared/ArtifactDownload';
 import { systemDesignToMarkdown } from '@/lib/artifact-markdown';
 import { Section } from '@/components/design/RequirementDocumentView';
 
-const ARCH_LABEL: Record<string, string> = {
-  monolith: 'Monolith',
-  modular_monolith: 'Modular Monolith',
-  microservices: 'Microservices',
-};
-
 export function SystemDesignView({ design }: { design: SystemDesign }) {
+  const { t } = useTranslation('stages');
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Generated {new Date(design.generatedAt).toLocaleString()}
+          {t('system.generated', {
+            date: new Date(design.generatedAt).toLocaleString(),
+          })}
         </p>
         <ArtifactDownload
           basename={`system-design-${design.sessionId}`}
@@ -46,22 +46,24 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
         />
       </div>
 
-      <Section title="Architecture" icon={Network} tone="blue">
+      <Section title={t('system.architecture')} icon={Network} tone="blue">
         <Badge variant="primary">
-          {ARCH_LABEL[design.architecture] ?? design.architecture}
+          {t(`system.arch.${design.architecture}`, {
+            defaultValue: design.architecture,
+          })}
         </Badge>
-        <p className="mt-1.5 text-sm text-muted-foreground">
+        <p className="mt-1.5 text-sm text-muted-foreground" dir="auto">
           {design.architectureRationale}
         </p>
       </Section>
 
-      <Section title="Tech stack" icon={Layers} tone="violet">
+      <Section title={t('system.techStack')} icon={Layers} tone="violet">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-32">Layer</TableHead>
-              <TableHead>Technology</TableHead>
-              <TableHead>Why</TableHead>
+              <TableHead className="w-32">{t('system.col.layer')}</TableHead>
+              <TableHead>{t('system.col.technology')}</TableHead>
+              <TableHead>{t('system.col.why')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -78,18 +80,18 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
         </Table>
       </Section>
 
-      <Section title="Services" icon={Boxes} tone="emerald">
+      <Section title={t('system.services')} icon={Boxes} tone="emerald">
         <div className="grid gap-3 sm:grid-cols-2">
           {design.services.map((s) => (
             <Card key={s.name} className="border-l-2 border-l-emerald-500/60">
               <CardContent className="p-4">
-                <div className="font-semibold">{s.name}</div>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <div className="font-semibold" dir="auto">{s.name}</div>
+                <p className="mt-1 text-sm text-muted-foreground" dir="auto">
                   {s.responsibility}
                 </p>
                 {s.dependencies.length > 0 && (
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                    depends on:
+                    {t('system.dependsOn')}
                     {s.dependencies.map((d) => (
                       <Badge variant="secondary" key={d}>
                         {d}

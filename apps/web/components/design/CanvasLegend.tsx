@@ -1,10 +1,12 @@
 'use client';
 
+import { useTranslation } from 'react-i18next';
 import { CATEGORY_LEGEND } from '@/lib/node-category';
 import { cn } from '@/lib/utils';
 
 /** A compact colour legend for the canvas node categories. */
 export function CanvasLegend({ className }: { className?: string }) {
+  const { t } = useTranslation('stages');
   return (
     <div
       className={cn(
@@ -12,7 +14,7 @@ export function CanvasLegend({ className }: { className?: string }) {
         className,
       )}
     >
-      <span className="font-medium">Legend:</span>
+      <span className="font-medium">{t('canvas.legend')}</span>
       {CATEGORY_LEGEND.map((c) => (
         <span key={c.label} className="flex items-center gap-1">
           <span

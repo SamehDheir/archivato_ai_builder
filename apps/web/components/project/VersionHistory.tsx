@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type {
   ProjectSnapshot,
   ProjectVersionMeta,
 } from '@archivato/shared';
 import { versionsApi } from '@/lib/api';
+import { useFormat } from '@/lib/i18n/format';
 import { useConfirm } from '@/components/shared/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,6 +41,8 @@ export function VersionHistory({
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const confirm = useConfirm();
+  const { t } = useTranslation('stages');
+  const fmt = useFormat();
 
   const load = useCallback(async () => {
     try {
@@ -77,11 +81,10 @@ export function VersionHistory({
 
   async function restore(version: number) {
     const ok = await confirm({
-      title: `Restore to version ${version}?`,
-      description:
-        'Your current artifacts will be replaced with this version. This is saved as a new version, so nothing is lost.',
-      confirmLabel: 'Restore',
-      cancelLabel: 'Cancel',
+      title: t('versions.restoreTitle', { version }),
+      description: t('versions.restoreDescription'),
+      confirmLabel: t('versions.restoreConfirm'),
+      cancelLabel: t('versions.cancel'),
       destructive: true,
     });
     if (!ok) return;
@@ -103,7 +106,7 @@ export function VersionHistory({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Version history</CardTitle>
+          <CardTitle>{t('versions.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {[0, 1, 2].map((i) => (
@@ -118,13 +121,10 @@ export function VersionHistory({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Version history</CardTitle>
+          <CardTitle>{t('versions.title')}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            No versions yet — each time you generate or refine an artifact, a new
-            version is captured here.
-          </p>
+          <p className="text-sm text-muted-foreground">{t('versions.empty')}</p>
         </CardContent>
       </Card>
     );
@@ -144,13 +144,13 @@ export function VersionHistory({
             >
               <span className="flex min-w-0 items-center gap-2">
                 <Badge variant="secondary">v{v.version}</Badge>
-                <span className="truncate text-sm" title={v.label}>
+                <span className="truncate text-sm" title={v.label} dir="auto">
                   {v.label}
                 </span>
               </span>
               <span className="flex items-center gap-3 whitespace-nowrap">
                 <span className="text-xs text-muted-foreground">
-                  {new Date(v.createdAt).toLocaleString()}
+                  {fmt.dateTime(v.createdAt)}
                 </span>
                 <Button
                   variant="secondary"
@@ -158,7 +158,7 @@ export function VersionHistory({
                   onClick={() => restore(v.version)}
                   disabled={busy}
                 >
-                  Restore
+                  {t('versions.restore')}
                 </Button>
               </span>
             </li>
@@ -168,20 +168,20 @@ export function VersionHistory({
         {versions.length > 1 && (
           <div className="flex flex-wrap items-end gap-2">
             <VersionPicker
-              label="Compare"
+              label={t('versions.compare')}
               value={fromV}
               versions={versions}
               onChange={setFromV}
             />
-            <span className="pb-2 text-muted-foreground">→</span>
+            <span className="pb-2 text-muted-foreground rtl:-scale-x-100">→</span>
             <VersionPicker
-              label="with"
+              label={t('versions.with')}
               value={toV}
               versions={versions}
               onChange={setToV}
             />
             <Button onClick={compare} disabled={busy || fromV === toV}>
-              {busy ? 'Comparing…' : 'Compare'}
+              {busy ? t('versions.comparing') : t('versions.compareBtn')}
             </Button>
           </div>
         )}
@@ -232,6 +232,7 @@ function VersionPicker({
   versions: ProjectVersionMeta[];
   onChange: (version: number) => void;
 }) {
+  const { t } = useTranslation('stages');
   return (
     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
       {label}
@@ -240,12 +241,14 @@ function VersionPicker({
         onValueChange={(v) => onChange(Number(v))}
       >
         <SelectTrigger className="w-44">
-          <SelectValue placeholder="version" />
+          <SelectValue placeholder={t('versions.version')} />
         </SelectTrigger>
         <SelectContent>
           {versions.map((v) => (
             <SelectItem key={v.id} value={String(v.version)}>
-              v{v.version} · {v.label}
+              <span dir="auto">
+                v{v.version} · {v.label}
+              </span>
             </SelectItem>
           ))}
         </SelectContent>

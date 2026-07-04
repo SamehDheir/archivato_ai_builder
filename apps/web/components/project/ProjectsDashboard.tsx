@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslation } from 'react-i18next';
 import { ArrowRight, Sparkles, Trash2 } from 'lucide-react';
 import type { InterviewStatus, ProjectScale, ProjectSummary } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
@@ -19,13 +20,14 @@ import { Textarea } from '@/components/ui/textarea';
 
 const SCALES: ProjectScale[] = ['mvp', 'startup', 'enterprise'];
 
-const STATUS_META: Record<
+/** Badge colour per status; the label is translated (`dashboard.status.*`). */
+const STATUS_VARIANT: Record<
   InterviewStatus,
-  { label: string; variant: 'secondary' | 'warning' | 'primary' }
+  'secondary' | 'warning' | 'primary'
 > = {
-  collecting: { label: 'Interviewing', variant: 'secondary' },
-  awaiting_confirmation: { label: 'Review & confirm', variant: 'warning' },
-  confirmed: { label: 'Confirmed', variant: 'primary' },
+  collecting: 'secondary',
+  awaiting_confirmation: 'warning',
+  confirmed: 'primary',
 };
 
 /**
@@ -64,19 +66,20 @@ export function ProjectsDashboard({
   onOpen: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
 }) {
+  const { t } = useTranslation('dashboard');
   const showForm = creating || projects.length === 0;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Projects</h2>
+        <h2 className="text-lg font-semibold">{t('projects.heading')}</h2>
         {projects.length > 0 &&
           (creating ? (
             <Button variant="secondary" onClick={() => setCreating(false)}>
-              ← Back to projects
+              {t('projects.back')}
             </Button>
           ) : (
-            <Button onClick={() => setCreating(true)}>+ New project</Button>
+            <Button onClick={() => setCreating(true)}>{t('projects.new')}</Button>
           ))}
       </div>
 
@@ -85,21 +88,22 @@ export function ProjectsDashboard({
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              {projects.length === 0 ? 'Start your first project' : 'New project'}
+              {projects.length === 0
+                ? t('projects.startFirst')
+                : t('projects.newTitle')}
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Describe your idea — the AI interviews you to clarify it, then
-              generates the full system design: requirements, architecture,
-              database, API, review, and export.
+              {t('projects.formHelp')}
             </p>
           </CardHeader>
           <CardContent>
             <form className="space-y-3" onSubmit={onStart}>
               <div className="space-y-1.5">
-                <Label htmlFor="idea">Project idea</Label>
+                <Label htmlFor="idea">{t('projects.ideaLabel')}</Label>
                 <Textarea
                   id="idea"
-                  placeholder="e.g. A clinic management system with appointments, billing, doctors, and patient records."
+                  dir="auto"
+                  placeholder={t('projects.ideaPlaceholder')}
                   value={idea}
                   onChange={(e) => setIdea(e.target.value)}
                   required
@@ -107,16 +111,17 @@ export function ProjectsDashboard({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="industry">Industry (optional)</Label>
+                  <Label htmlFor="industry">{t('projects.industryLabel')}</Label>
                   <Input
                     id="industry"
-                    placeholder="healthcare"
+                    dir="auto"
+                    placeholder={t('projects.industryPlaceholder')}
                     value={industry}
                     onChange={(e) => setIndustry(e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="scale">Scale (optional)</Label>
+                  <Label htmlFor="scale">{t('projects.scaleLabel')}</Label>
                   <Select
                     value={scale}
                     onValueChange={(v) => setScale(v as ProjectScale)}
@@ -127,7 +132,7 @@ export function ProjectsDashboard({
                     <SelectContent>
                       {SCALES.map((s) => (
                         <SelectItem key={s} value={s}>
-                          {s}
+                          {t(`scale.${s}`)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -135,7 +140,7 @@ export function ProjectsDashboard({
                 </div>
               </div>
               <Button type="submit" disabled={busy || idea.trim().length < 10}>
-                {busy ? 'Starting…' : 'Start interview'}
+                {busy ? t('projects.starting') : t('projects.start')}
               </Button>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </form>
@@ -170,7 +175,7 @@ function ProjectCard({
   onOpen: () => void;
   onDelete: () => void;
 }) {
-  const status = STATUS_META[project.status];
+  const { t } = useTranslation('dashboard');
   const pct = Math.round(project.completeness * 100);
   return (
     <div className="group relative">
@@ -178,27 +183,35 @@ function ProjectCard({
         type="button"
         onClick={onOpen}
         disabled={busy}
-        className="flex w-full flex-col rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
+        className="flex w-full flex-col rounded-lg border border-border bg-card p-4 text-start shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
       >
         <div className="mb-2 flex items-center justify-between gap-2">
-          <Badge variant={status.variant}>{status.label}</Badge>
-          <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+          <Badge variant={STATUS_VARIANT[project.status]}>
+            {t(`status.${project.status}`)}
+          </Badge>
+          <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground rtl:-scale-x-100" />
         </div>
-        <p className="line-clamp-2 pr-6 text-sm font-semibold" title={project.idea}>
+        <p
+          dir="auto"
+          className="line-clamp-2 pe-6 text-sm font-semibold"
+          title={project.idea}
+        >
           {project.idea}
         </p>
         <div className="mt-auto pt-3">
           {project.status !== 'confirmed' && (
             <>
               <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
-                <span>Completeness</span>
+                <span>{t('projects.completeness')}</span>
                 <span>{pct}%</span>
               </div>
               <Progress value={pct} className="h-1.5" />
             </>
           )}
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Updated {new Date(project.updatedAt).toLocaleDateString()}
+            {t('projects.updated', {
+              date: new Date(project.updatedAt).toLocaleDateString(),
+            })}
           </p>
         </div>
       </button>
@@ -206,9 +219,9 @@ function ProjectCard({
         type="button"
         onClick={onDelete}
         disabled={busy}
-        aria-label="Delete project"
-        title="Delete project"
-        className="absolute bottom-3 right-3 rounded-md bg-card p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 disabled:pointer-events-none"
+        aria-label={t('projects.delete')}
+        title={t('projects.delete')}
+        className="absolute bottom-3 end-3 rounded-md bg-card p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 disabled:pointer-events-none"
       >
         <Trash2 className="h-4 w-4" />
       </button>

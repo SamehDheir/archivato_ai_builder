@@ -26,6 +26,7 @@ import ReactFlow, {
   type NodeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { useTranslation } from 'react-i18next';
 import type { DatabaseDesign, Entity, RelationType } from '@archivato/shared';
 import { Button } from '@/components/ui/button';
 import { databaseDesignApi } from '@/lib/api';
@@ -54,6 +55,7 @@ const DirtyContext = createContext<() => void>(() => {});
 /** A draggable entity box: editable name + a read-only column preview. */
 function EntityNode({ id, data }: NodeProps<EntityData>) {
   const { setNodes } = useReactFlow();
+  const { t } = useTranslation('stages');
   const markDirty = useContext(DirtyContext);
   const rename = (value: string) => {
     markDirty();
@@ -73,7 +75,8 @@ function EntityNode({ id, data }: NodeProps<EntityData>) {
         <input
           className="nodrag w-full bg-transparent font-mono text-sm font-semibold outline-none"
           value={data.name}
-          placeholder="table_name"
+          placeholder={t('canvas.tableName')}
+          dir="ltr"
           onChange={(e) => rename(e.target.value)}
         />
         <span
@@ -95,7 +98,9 @@ function EntityNode({ id, data }: NodeProps<EntityData>) {
             </li>
           ))
         ) : (
-          <li className="italic">no columns (edit in the form)</li>
+          <li className="italic" dir="auto">
+            {t('canvas.noColumns')}
+          </li>
         )}
       </ul>
       <Handle type="source" position={Position.Right} className="!bg-primary" />
@@ -150,6 +155,7 @@ export function DatabaseCanvas({
   onDirty: (dirty: boolean) => void;
   onSaved: (design: DatabaseDesign) => void;
 }) {
+  const { t } = useTranslation('stages');
   const initial = useMemo(
     () => buildGraph(design, loadPositions(sessionId, 'database')),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -280,15 +286,14 @@ export function DatabaseCanvas({
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <Button size="sm" variant="secondary" onClick={addEntity}>
-          + Add entity
+          + {t('canvas.addEntity')}
         </Button>
-        <span className="text-xs text-muted-foreground">
-          Drag to arrange · connect dots to add a relation · click a relation to
-          change its type · select + Delete to remove
+        <span className="text-xs text-muted-foreground" dir="auto">
+          {t('canvas.hintDb')}
         </span>
-        <span className="ml-auto" />
+        <span className="ms-auto" />
         <Button size="sm" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save database'}
+          {saving ? t('canvas.saving') : t('canvas.saveDatabase')}
         </Button>
       </div>
       {error && <p className="mb-2 text-sm text-destructive">{error}</p>}

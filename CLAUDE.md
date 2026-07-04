@@ -167,6 +167,29 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 
 ## Frontend Notes
 
+- **i18n (English + Arabic, toggle-based, RTL).** `react-i18next` with statically
+  **bundled** JSON resources (`locales/{en,ar}/<namespace>.json`, registered in
+  `lib/i18n/resources.ts` — namespaces: common, auth, marketing, dashboard,
+  billing, interview, project, stages, settings, admin). No locale routing: the
+  `LanguageToggle` flips locale, persisted to `localStorage` + `archivato_locale`
+  cookie; `LocaleProvider` (under ThemeProvider) applies it and sets
+  `<html lang/dir>` (a pre-paint script in `layout.tsx` sets `dir` first to avoid
+  an RTL flash). SSR renders the default (`en`); the client swaps on mount (minor
+  EN→AR flash for Arabic users is a known trade-off of toggle-only). **RTL:** use
+  logical Tailwind props (`ms/me/ps/pe`, `text-start/end`, `justify-start/end`)
+  not physical ones; flip directional icons/arrows with `rtl:-scale-x-100`; put
+  `dir="auto"` on any element rendering **AI-generated / user artifact text** (so
+  English or Arabic content aligns itself) and `dir="ltr"` on email/password/code/
+  path/table-name fields. **Locale-aware formatting:** `useFormat()`
+  (`lib/i18n/format.ts`) returns `Intl` date/number formatters bound to the active
+  locale (Arabic forced to Latin numerals via `ar-EG-u-nu-latn` for legibility in
+  a dev tool) — use it instead of `toLocaleString()`. **Plurals:** i18next resolves
+  the CLDR category per language and does **not** fall back `_few`→`_other`; a key
+  called with `count` in Arabic needs the full set (`_zero/_one/_two/_few/_many/
+  _other`) or it silently leaks the English `_other` via `fallbackLng`. AI **output**
+  (agent prompts/artifacts) stays server-side/English for now — this slice is UI
+  chrome only, except the interview, whose questions already adapt to the idea's
+  language (`apps/api/src/interview/language.ts`).
 - **Structure:** `app/` holds routes only — `layout.tsx`, `page.tsx` (public
   marketing **landing** at `/`), and route dirs `dashboard/`, `login/`,
   `register/`, `verify/`, `settings/`. Feature components live in

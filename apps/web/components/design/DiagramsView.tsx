@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-// 1. استيراد أيقونة القفل (تأكد من مطابقة اسم المكتبة في مشروعك)
-import { Lock } from "lucide-react"; 
+import { useTranslation } from "react-i18next";
+import { Lock } from "lucide-react";
 import type { Diagram, ProjectDiagrams } from "@archivato/shared";
 import { diagramsApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ export function DiagramsView({
   sessionId: string;
   reloadKey: number;
 }) {
+  const { t } = useTranslation("stages");
   const [data, setData] = useState<ProjectDiagrams | null>(null);
   const [kind, setKind] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,17 +71,17 @@ export function DiagramsView({
       <div className="flex flex-wrap items-center gap-2">
         <Select value={active?.kind} onValueChange={(v) => setKind(v)}>
           <SelectTrigger className="w-64">
-            <SelectValue placeholder="Choose a diagram" />
+            <SelectValue placeholder={t("diagrams.choose")} />
           </SelectTrigger>
           <SelectContent>
             {data.diagrams.map((d) => (
               <SelectItem key={d.kind} value={d.kind}>
                 <span className="flex items-center gap-1.5 w-full">
-                  <span>{d.title}</span>
+                  <span dir="auto">{d.title}</span>
                   {!d.mermaid && (
                     <Lock
                       className="h-3 w-3 text-muted-foreground shrink-0"
-                      aria-label="Pro"
+                      aria-label={t("diagrams.pro")}
                     />
                   )}
                 </span>
@@ -95,21 +96,23 @@ export function DiagramsView({
               size="sm"
               onClick={() => setShowSource((s) => !s)}
             >
-              {showSource ? "Show diagram" : "View source"}
+              {showSource ? t("diagrams.showDiagram") : t("diagrams.viewSource")}
             </Button>
             <Button
               variant="secondary"
               size="sm"
               onClick={() => navigator.clipboard?.writeText(active.mermaid)}
             >
-              Copy Mermaid
+              {t("diagrams.copyMermaid")}
             </Button>
           </>
         )}
       </div>
 
       {active && !active.mermaid && (
-        <p className="text-sm text-muted-foreground">{active.note}</p>
+        <p className="text-sm text-muted-foreground" dir="auto">
+          {active.note}
+        </p>
       )}
 
       {active?.mermaid &&

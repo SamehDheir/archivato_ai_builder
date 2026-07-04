@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Download, Printer } from 'lucide-react';
 import { exportApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ function printAsPdf(markdown: string) {
 }
 
 export function ExportView({ sessionId }: { sessionId: string }) {
+  const { t } = useTranslation('stages');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,13 +56,11 @@ export function ExportView({ sessionId }: { sessionId: string }) {
   }
 
   const label = (kind: string, text: string) =>
-    busy === kind ? 'Preparing…' : text;
+    busy === kind ? t('export.preparing') : text;
 
   return (
     <div>
-      <p className="text-sm text-muted-foreground">
-        Download the complete system design in your preferred format.
-      </p>
+      <p className="text-sm text-muted-foreground">{t('export.intro')}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
           variant="secondary"
@@ -76,7 +76,7 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          <Download /> {label('json', 'JSON bundle')}
+          <Download /> {label('json', t('export.jsonBundle'))}
         </Button>
 
         <Button
@@ -89,7 +89,7 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          <Download /> {label('md', 'Markdown')}
+          <Download /> {label('md', t('export.markdown'))}
         </Button>
 
         <Button
@@ -106,7 +106,7 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          <Download /> {label('openapi', 'OpenAPI')}
+          <Download /> {label('openapi', t('export.openapi'))}
         </Button>
 
         <Button
@@ -123,7 +123,7 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          <Download /> {label('structure', 'Project structure')}
+          <Download /> {label('structure', t('export.structure'))}
         </Button>
 
         <Button
@@ -135,7 +135,7 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          <Printer /> {label('pdf', 'Print / Save as PDF')}
+          <Printer /> {label('pdf', t('export.pdf'))}
         </Button>
       </div>
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}

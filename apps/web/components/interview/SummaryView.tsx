@@ -1,32 +1,42 @@
+'use client';
+
+import { useTranslation } from 'react-i18next';
 import type { RequirementsSummary } from '@archivato/shared';
 
 /** Renders the lightweight requirements preview produced at the interview gate. */
 export function SummaryView({ summary }: { summary: RequirementsSummary }) {
+  const { t } = useTranslation('interview');
   const sections: [string, string[] | string][] = [
-    ['Goal', summary.goal],
-    ['Users', summary.users],
-    ['Features', summary.features],
-    ['Business rules', summary.businessRules],
-    ['Constraints', summary.constraints],
-    ['Assumptions', summary.assumptions],
+    ['goal', summary.goal],
+    ['users', summary.users],
+    ['features', summary.features],
+    ['businessRules', summary.businessRules],
+    ['constraints', summary.constraints],
+    ['assumptions', summary.assumptions],
   ];
   return (
     <div className="space-y-3">
-      {sections.map(([heading, value]) => (
-        <div key={heading}>
-          <h4 className="mb-1 text-sm font-semibold">{heading}</h4>
+      {sections.map(([key, value]) => (
+        <div key={key}>
+          <h4 className="mb-1 text-sm font-semibold">{t(`summary.${key}`)}</h4>
           {Array.isArray(value) ? (
             value.length ? (
-              <ul className="list-disc space-y-1 pl-5 text-sm">
+              <ul className="list-disc space-y-1 ps-5 text-sm">
                 {value.map((v, i) => (
-                  <li key={i}>{v}</li>
+                  <li key={i} dir="auto">
+                    {v}
+                  </li>
                 ))}
               </ul>
             ) : (
-              <span className="text-sm text-muted-foreground">—</span>
+              <span className="text-sm text-muted-foreground">
+                {t('summary.empty')}
+              </span>
             )
           ) : (
-            <div className="text-sm">{value}</div>
+            <div className="text-sm" dir="auto">
+              {value}
+            </div>
           )}
         </div>
       ))}

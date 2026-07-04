@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
 import { ArrowRight, LayoutDashboard } from 'lucide-react';
 import { authApi, getAuthHint } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/shared/theme';
+import { LanguageToggle } from '@/components/shared/i18n';
 
 /**
  * The landing nav's right-side actions — the one auth-aware island on the
@@ -19,6 +21,7 @@ import { ThemeToggle } from '@/components/shared/theme';
  * auth round-trip"; it never blocks the page render for signed-out visitors.
  */
 export function LandingNavActions() {
+  const { t } = useTranslation('marketing');
   const [authed, setAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -36,12 +39,13 @@ export function LandingNavActions() {
   }, []);
 
   return (
-    <div className="ml-auto flex items-center gap-2">
+    <div className="ms-auto flex items-center gap-2">
+      <LanguageToggle />
       <ThemeToggle />
       {authed === true && (
         <Button asChild size="sm">
           <Link href="/dashboard">
-            <LayoutDashboard className="h-4 w-4" /> Dashboard
+            <LayoutDashboard className="h-4 w-4" /> {t('nav.dashboard')}
           </Link>
         </Button>
       )}
@@ -53,11 +57,12 @@ export function LandingNavActions() {
             size="sm"
             className="hidden sm:inline-flex"
           >
-            <Link href="/login">Sign in</Link>
+            <Link href="/login">{t('nav.signIn')}</Link>
           </Button>
           <Button asChild size="sm">
             <Link href="/dashboard">
-              Start building <ArrowRight className="h-4 w-4" />
+              {t('nav.startBuilding')}{' '}
+              <ArrowRight className="h-4 w-4 rtl:-scale-x-100" />
             </Link>
           </Button>
         </>

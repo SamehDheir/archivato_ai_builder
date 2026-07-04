@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { ApiDesign, HttpMethod, SchemaField } from '@archivato/shared';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,15 +29,15 @@ type Draft = Omit<ApiDesign, 'sessionId' | 'generatedAt'>;
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
-function validate(d: Draft): string[] {
+function validate(d: Draft, t: TFunction): string[] {
   const errs: string[] = [];
   d.modules.forEach((m, mi) => {
-    const label = m.name.trim() || `Module ${mi + 1}`;
-    if (!m.name.trim()) errs.push(`Module ${mi + 1} needs a name.`);
-    if (!m.basePath.trim()) errs.push(`${label} needs a base path.`);
+    const label = m.name.trim() || t('editor.validate.moduleLabel', { n: mi + 1 });
+    if (!m.name.trim()) errs.push(t('editor.validate.moduleName', { n: mi + 1 }));
+    if (!m.basePath.trim()) errs.push(t('editor.validate.modulePath', { label }));
     m.endpoints.forEach((ep, ei) => {
       if (!ep.path.trim())
-        errs.push(`${label}: endpoint ${ei + 1} needs a path.`);
+        errs.push(t('editor.validate.endpointPath', { label, n: ei + 1 }));
     });
   });
   return errs;
@@ -65,6 +67,7 @@ export function ApiDesignEditor({
   /** Called after a debounced autosave — persists without closing the editor. */
   onAutosaved?: (design: ApiDesign) => void;
 }) {
+  const { t } = useTranslation('stages');
   const [draft, setDraft] = useState<Draft>(() => ({ modules: design.modules }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +75,7 @@ export function ApiDesignEditor({
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [attempted, setAttempted] = useState(false);
 
-  const errors = validate(draft);
+  const errors = validate(draft, t);
   const show = attempted;
 
   useEscapeKey(() => {
@@ -121,22 +124,24 @@ export function ApiDesignEditor({
             <Input
               className="w-32 font-mono text-xs"
               value={f.name}
-              placeholder="field"
+              placeholder={t('editor.field.field')}
+              dir="ltr"
               onChange={(e) => patch((d) => (pick(d)[fi].name = e.target.value))}
             />
             <Input
               className="w-28 text-xs"
               value={f.type}
-              placeholder="type"
+              placeholder={t('editor.field.type')}
+              dir="ltr"
               onChange={(e) => patch((d) => (pick(d)[fi].type = e.target.value))}
             />
             <Check
-              label="required"
+              label={t('editor.field.required')}
               checked={f.required}
               onChange={(v) => patch((d) => (pick(d)[fi].required = v))}
             />
             <RemoveButton
-              label="Remove field"
+              label={t('editor.removeLabel.field')}
               onClick={() => patch((d) => pick(d).splice(fi, 1))}
             />
           </div>
@@ -146,7 +151,7 @@ export function ApiDesignEditor({
             patch((d) => pick(d).push({ name: '', type: 'string', required: false }))
           }
         >
-          Add field
+          {t('editor.add.field')}
         </AddButton>
       </div>
     </div>
@@ -154,7 +159,7 @@ export function ApiDesignEditor({
 
   return (
     <div>
-      <Section title="Modules">
+      <Section title={t('editor.sections.modules')}>
         <div className="space-y-3">
           {draft.modules.map((module, mi) => (
             <div key={mi} className="rounded-lg border border-border p-3">
@@ -162,25 +167,27 @@ export function ApiDesignEditor({
                 <Input
                   className={`w-48 ${invalidIf(show && !module.name.trim())}`}
                   value={module.name}
-                  placeholder="Module name"
+                  placeholder={t('editor.field.moduleName')}
+                  dir="auto"
                   onChange={(e) => patch((d) => (d.modules[mi].name = e.target.value))}
                 />
                 <Input
                   className={`font-mono text-xs ${invalidIf(show && !module.basePath.trim())}`}
                   value={module.basePath}
                   placeholder="/api/users"
+                  dir="ltr"
                   onChange={(e) =>
                     patch((d) => (d.modules[mi].basePath = e.target.value))
                   }
                 />
                 <RemoveButton
-                  label="Remove module"
+                  label={t('editor.removeLabel.module')}
                   onClick={() => patch((d) => d.modules.splice(mi, 1))}
                 />
               </div>
 
               <Label className="mt-3 block text-xs text-muted-foreground">
-                Endpoints
+                {t('editor.field.endpoints')}
               </Label>
               <div className="mt-1 space-y-2">
                 {module.endpoints.map((ep, ei) => (
@@ -213,12 +220,13 @@ export function ApiDesignEditor({
                         className={`w-56 font-mono text-xs ${invalidIf(show && !ep.path.trim())}`}
                         value={ep.path}
                         placeholder="/api/users/:id"
+                        dir="ltr"
                         onChange={(e) =>
                           patch((d) => (d.modules[mi].endpoints[ei].path = e.target.value))
                         }
                       />
                       <RemoveButton
-                        label="Remove endpoint"
+                        label={t('editor.removeLabel.endpoint')}
                         onClick={() =>
                           patch((d) => d.modules[mi].endpoints.splice(ei, 1))
                         }
@@ -227,25 +235,26 @@ export function ApiDesignEditor({
                     <Input
                       className="mt-2"
                       value={ep.summary}
-                      placeholder="Summary"
+                      placeholder={t('editor.field.summary')}
+                      dir="auto"
                       onChange={(e) =>
                         patch((d) => (d.modules[mi].endpoints[ei].summary = e.target.value))
                       }
                     />
                     <div className="mt-2 grid gap-3 sm:grid-cols-2">
                       {schemaEditor(
-                        'Request',
+                        t('api.request'),
                         ep.requestSchema,
                         (d) => d.modules[mi].endpoints[ei].requestSchema,
                       )}
                       {schemaEditor(
-                        'Response',
+                        t('api.response'),
                         ep.responseSchema,
                         (d) => d.modules[mi].endpoints[ei].responseSchema,
                       )}
                     </div>
                     <Label className="mt-2 block text-xs text-muted-foreground">
-                      Status codes (comma-separated)
+                      {t('editor.field.statusCodes')}
                     </Label>
                     <Input
                       className="mt-1 w-56 font-mono text-xs"
@@ -276,7 +285,7 @@ export function ApiDesignEditor({
                     )
                   }
                 >
-                  Add endpoint
+                  {t('editor.add.endpoint')}
                 </AddButton>
               </div>
             </div>
@@ -288,7 +297,7 @@ export function ApiDesignEditor({
               )
             }
           >
-            Add module
+            {t('editor.add.module')}
           </AddButton>
         </div>
       </Section>

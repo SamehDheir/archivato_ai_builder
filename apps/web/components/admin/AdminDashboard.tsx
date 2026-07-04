@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
 import {
   Activity,
   ArrowLeft,
@@ -21,12 +22,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AdminUsersTable } from '@/components/admin/AdminUsersTable';
 
-const STATUS_LABEL: Record<string, string> = {
-  collecting: 'Interviewing',
-  awaiting_confirmation: 'Review & confirm',
-  confirmed: 'Confirmed',
-};
-
 /**
  * SuperAdmin dashboard: real product KPIs (users, projects, subscriptions),
  * 30-day signup/traffic trends, top pages/referrers, and a user management
@@ -34,6 +29,7 @@ const STATUS_LABEL: Record<string, string> = {
  */
 export function AdminDashboard() {
   const router = useRouter();
+  const { t } = useTranslation('admin');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [traffic, setTraffic] = useState<AdminTraffic | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,72 +82,74 @@ export function AdminDashboard() {
         href="/dashboard"
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" /> Back to app
+        <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" /> {t('back')}
       </Link>
       <div className="flex items-center gap-2">
         <ShieldCheck className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">Admin dashboard</h1>
+        <h1 className="text-2xl font-bold">{t('title')}</h1>
       </div>
-      <p className="mb-6 mt-1 text-sm text-muted-foreground">
-        Live overview of users, projects, revenue, and traffic.
-      </p>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
           icon={Users}
-          label="Users"
+          label={t('kpi.users')}
           value={o.users.total}
-          sub={`+${o.users.new30d} this month`}
+          sub={t('kpi.usersNew', { count: o.users.new30d })}
         />
         <StatTile
           icon={FolderKanban}
-          label="Projects"
+          label={t('kpi.projects')}
           value={o.projects.total}
-          sub={`${o.projects.byStatus.confirmed} confirmed`}
+          sub={t('kpi.projectsConfirmed', { count: o.projects.byStatus.confirmed })}
         />
         <StatTile
           icon={CreditCard}
-          label="Pro subscribers"
+          label={t('kpi.proSubscribers')}
           value={o.subscriptions.pro}
-          sub={`$${o.subscriptions.mrrUsd}/mo MRR`}
+          sub={t('kpi.mrr', { amount: o.subscriptions.mrrUsd })}
           accent
         />
         <StatTile
           icon={Sparkles}
-          label="Generations"
+          label={t('kpi.generations')}
           value={o.generations.total}
-          sub={`${o.generations.last7d} in 7d`}
+          sub={t('kpi.generations7d', { count: o.generations.last7d })}
         />
         <StatTile
           icon={Eye}
-          label="Pageviews (7d)"
+          label={t('kpi.pageviews7d')}
           value={o.traffic.pageviews7d}
         />
         <StatTile
           icon={UserCheck}
-          label="Unique visitors (7d)"
+          label={t('kpi.uniqueVisitors7d')}
           value={o.traffic.uniqueVisitors7d}
         />
         <StatTile
           icon={Activity}
-          label="Active users (7d)"
+          label={t('kpi.activeUsers7d')}
           value={o.traffic.activeUsers7d}
         />
         <StatTile
           icon={Users}
-          label="Verified"
+          label={t('kpi.verified')}
           value={o.users.verified}
-          sub={`${o.users.admins} admin${o.users.admins === 1 ? '' : 's'}`}
+          sub={t('kpi.admins', { count: o.users.admins })}
         />
       </div>
 
       {/* Trend charts */}
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <TrendChart title="New signups" subtitle="Last 30 days" data={stats.signups} />
         <TrendChart
-          title="Pageviews"
-          subtitle="Last 30 days"
+          title={t('charts.signups')}
+          subtitle={t('charts.last30')}
+          data={stats.signups}
+        />
+        <TrendChart
+          title={t('charts.pageviews')}
+          subtitle={t('charts.last30')}
           data={stats.pageviews}
         />
       </div>
@@ -160,33 +158,34 @@ export function AdminDashboard() {
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <Card>
           <CardContent className="p-4">
-            <h3 className="mb-3 text-sm font-semibold">Projects by status</h3>
+            <h3 className="mb-3 text-sm font-semibold">{t('projectsByStatus')}</h3>
             <BarList
               items={(
                 Object.keys(o.projects.byStatus) as (keyof typeof o.projects.byStatus)[]
               ).map((k) => ({
-                label: STATUS_LABEL[k] ?? k,
+                label: t(`status.${k}`, { defaultValue: k }),
                 count: o.projects.byStatus[k],
               }))}
+              empty={t('noData')}
             />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <h3 className="mb-3 text-sm font-semibold">Plan mix</h3>
+            <h3 className="mb-3 text-sm font-semibold">{t('planMix')}</h3>
             <BarList
               items={[
-                { label: 'Free', count: o.subscriptions.free },
-                { label: 'Pro', count: o.subscriptions.pro },
+                { label: t('free'), count: o.subscriptions.free },
+                { label: t('pro'), count: o.subscriptions.pro },
               ]}
+              empty={t('noData')}
             />
             <p className="mt-3 text-xs text-muted-foreground">
-              Estimated MRR{' '}
+              {t('estimatedMrr')}{' '}
               <span className="font-semibold text-foreground">
-                ${o.subscriptions.mrrUsd}/mo
+                {t('kpi.mrr', { amount: o.subscriptions.mrrUsd })}
               </span>{' '}
-              from {o.subscriptions.pro} Pro subscriber
-              {o.subscriptions.pro === 1 ? '' : 's'}.
+              {t('mrrFrom', { count: o.subscriptions.pro })}
             </p>
           </CardContent>
         </Card>
@@ -197,26 +196,26 @@ export function AdminDashboard() {
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <Card>
             <CardContent className="p-4">
-              <h3 className="mb-3 text-sm font-semibold">Top pages (30d)</h3>
+              <h3 className="mb-3 text-sm font-semibold">{t('topPages')}</h3>
               <BarList
                 items={traffic.topPages.map((p) => ({
                   label: p.path,
                   count: p.count,
                 }))}
-                empty="No pageviews yet."
+                empty={t('noPageviews')}
                 mono
               />
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <h3 className="mb-3 text-sm font-semibold">Top referrers (30d)</h3>
+              <h3 className="mb-3 text-sm font-semibold">{t('topReferrers')}</h3>
               <BarList
                 items={traffic.topReferrers.map((r) => ({
                   label: r.referrer,
                   count: r.count,
                 }))}
-                empty="No referrers yet."
+                empty={t('noReferrers')}
               />
             </CardContent>
           </Card>

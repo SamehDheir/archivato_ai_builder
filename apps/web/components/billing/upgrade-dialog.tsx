@@ -8,8 +8,8 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-  Check,
   ClipboardCheck,
   Code2,
   Download,
@@ -89,27 +89,21 @@ export function UpgradeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Split a "Lead — detail" feature bullet into its two display tiers. */
-function splitFeature(text: string): [string, string | null] {
-  const idx = text.indexOf('—');
-  if (idx === -1) return [text.trim(), null];
-  return [text.slice(0, idx).trim(), text.slice(idx + 1).trim()];
-}
-
-/** Pick an icon for a Pro feature by keyword (robust to reordering). */
-function featureIcon(text: string): LucideIcon {
-  const t = text.toLowerCase();
-  if (t.includes('project')) return FolderKanban;
-  if (t.includes('api design') || t.includes('rest api')) return Webhook;
-  if (t.includes('review')) return ClipboardCheck;
-  if (t.includes('roadmap')) return Map;
-  if (t.includes('openapi') || t.includes('swagger')) return Code2;
-  if (t.includes('refine') || t.includes('chat')) return MessageSquare;
-  if (t.includes('export')) return Download;
-  if (t.includes('scaffold') || t.includes('repo') || t.includes('pdf'))
-    return Package;
-  return Check;
-}
+/**
+ * The Pro features shown in the modal. Text is resolved from `billing.features.
+ * <key>.{lead,detail}`; the icon stays in code so it's independent of the
+ * translated copy (and of ordering).
+ */
+const PRO_FEATURES: { key: string; icon: LucideIcon }[] = [
+  { key: 'projects', icon: FolderKanban },
+  { key: 'api', icon: Webhook },
+  { key: 'review', icon: ClipboardCheck },
+  { key: 'roadmap', icon: Map },
+  { key: 'openapi', icon: Code2 },
+  { key: 'refine', icon: MessageSquare },
+  { key: 'export', icon: Download },
+  { key: 'scaffold', icon: Package },
+];
 
 function UpgradeModal({
   feature,
@@ -119,6 +113,7 @@ function UpgradeModal({
   onSettle: (upgraded: boolean) => void;
 }) {
   const toast = useToast();
+  const { t } = useTranslation('billing');
   const pro = PLANS.pro;
   const [busy, setBusy] = useState(false);
 
@@ -135,7 +130,7 @@ function UpgradeModal({
     try {
       const res = await billingApi.checkout();
       if (res.status === 'activated') {
-        toast({ title: 'Upgraded to Pro 🎉', variant: 'success' });
+        toast({ title: t('upgradedToast'), variant: 'success' });
         onSettle(true);
         return;
       }
@@ -152,14 +147,14 @@ function UpgradeModal({
           return;
         }
         toast({
-          title: 'Checkout not available',
-          description: 'Paddle is not fully configured on this device yet.',
+          title: t('checkoutUnavailableTitle'),
+          description: t('checkoutUnavailableBody'),
           variant: 'error',
         });
       }
     } catch (e) {
       toast({
-        title: 'Could not start checkout',
+        title: t('checkoutErrorTitle'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -186,8 +181,8 @@ function UpgradeModal({
           <button
             type="button"
             onClick={() => !busy && onSettle(false)}
-            aria-label="Close"
-            className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
+            aria-label={t('close')}
+            className="absolute end-3 top-3 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
             disabled={busy}
           >
             <X className="h-4 w-4" />
@@ -195,39 +190,42 @@ function UpgradeModal({
           <div className="flex items-center gap-2 text-primary">
             <Sparkles className="h-5 w-5" />
             <span className="text-xs font-semibold uppercase tracking-wide">
-              Pro plan
+              {t('pro')}
             </span>
           </div>
           <div className="mt-2 flex items-end justify-between gap-3">
             <h2 id="upgrade-title" className="text-lg font-semibold leading-tight">
-              {feature ? `Upgrade to ${feature}` : 'Unlock the full pipeline'}
+              {feature ? t('upgradeTo', { feature }) : t('unlock')}
             </h2>
-            <div className="shrink-0 text-right leading-none">
+            <div className="shrink-0 text-end leading-none">
               <span className="text-2xl font-bold">${pro.priceUsd}</span>
-              <span className="text-sm text-muted-foreground">/mo</span>
+              <span className="text-sm text-muted-foreground">
+                {t('perMonth')}
+              </span>
             </div>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            Everything in Free — interview, requirements, system &amp; database
-            design — <span className="font-medium text-foreground">plus:</span>
+            {t('everythingFreePre')}
+            <span className="font-medium text-foreground">{t('plus')}</span>
           </p>
         </div>
 
         {/* Scrollable feature list — icon tile + two-tier text */}
         <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
-          {pro.features.map((f) => {
-            const [lead, detail] = splitFeature(f);
-            const Icon = featureIcon(f);
+          {PRO_FEATURES.map(({ key, icon: Icon }) => {
+            const detail = t(`features.${key}.detail`);
             return (
               <li
-                key={f}
+                key={key}
                 className="flex items-start gap-3 rounded-lg border border-transparent p-2 transition-colors hover:border-border hover:bg-muted/40"
               >
                 <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                   <Icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <div className="text-sm font-medium leading-snug">{lead}</div>
+                  <div className="text-sm font-medium leading-snug">
+                    {t(`features.${key}.lead`)}
+                  </div>
                   {detail && (
                     <div className="mt-0.5 text-xs text-muted-foreground">
                       {detail}
@@ -247,7 +245,7 @@ function UpgradeModal({
               onClick={() => onSettle(false)}
               disabled={busy}
             >
-              Maybe later
+              {t('maybeLater')}
             </Button>
             <Button
               onClick={upgrade}
@@ -259,11 +257,11 @@ function UpgradeModal({
               ) : (
                 <Zap className="h-4 w-4" />
               )}
-              {busy ? 'Working…' : `Upgrade — $${pro.priceUsd}/mo`}
+              {busy ? t('working') : t('upgradeCta', { price: pro.priceUsd })}
             </Button>
           </div>
           <p className="text-center text-[11px] text-muted-foreground">
-            Cancel anytime — you keep Pro until the period ends.
+            {t('cancelNote')}
           </p>
         </div>
       </div>

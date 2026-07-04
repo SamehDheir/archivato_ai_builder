@@ -1,0 +1,45 @@
+{
+  "conversation": "المحادثة",
+  "interviewer": "المُحاوِر",
+  "you": "أنت",
+  "questionN": "السؤال {{n}}",
+  "qShort": "س{{n}}",
+  "pickMulti": "اختر ما ينطبق — وأضِف تفاصيل أدناه إن رغبت.",
+  "pickOne": "اختر واحدًا — أو أضِف تفاصيل أدناه.",
+  "extraPlaceholder": "أضِف أي تفاصيل إضافية (اختياري)…",
+  "answerPlaceholder": "اكتب إجابتك…",
+  "answer": "إجابة",
+  "sending": "جارٍ الإرسال…",
+  "sendPre": "اضغط ",
+  "sendPost": " للإرسال",
+  "summaryTitle": "ملخّص المتطلبات",
+  "summaryHelp": "بلغت نسبة الاكتمال الحد المطلوب. راجِع وأكّد لتثبيت المتطلبات قبل بدء التصميم.",
+  "confirm": "تأكيد المتطلبات",
+  "confirming": "جارٍ التأكيد…",
+  "progress": {
+    "completeness": "اكتمال المتطلبات",
+    "status": "الحالة: {{status}}",
+    "phase": "المرحلة: {{phase}}"
+  },
+  "status": {
+    "collecting": "قيد الجمع",
+    "awaiting_confirmation": "بانتظار التأكيد",
+    "confirmed": "مؤكَّد"
+  },
+  "phase": {
+    "understanding": "الفهم",
+    "business_logic": "منطق العمل",
+    "features": "المزايا",
+    "scale": "الحجم",
+    "technical": "التقنية"
+  },
+  "summary": {
+    "goal": "الهدف",
+    "users": "المستخدمون",
+    "features": "المزايا",
+    "businessRules": "قواعد العمل",
+    "constraints": "القيود",
+    "assumptions": "الافتراضات",
+    "empty": "—"
+  }
+}

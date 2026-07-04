@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { ArchitectureType, SystemDesign } from '@archivato/shared';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,23 +28,23 @@ import {
 
 type Draft = Omit<SystemDesign, 'sessionId' | 'generatedAt'>;
 
-const ARCHITECTURES: { value: ArchitectureType; label: string }[] = [
-  { value: 'monolith', label: 'Monolith' },
-  { value: 'modular_monolith', label: 'Modular Monolith' },
-  { value: 'microservices', label: 'Microservices' },
+const ARCHITECTURES: ArchitectureType[] = [
+  'monolith',
+  'modular_monolith',
+  'microservices',
 ];
 
-function validate(d: Draft): string[] {
+function validate(d: Draft, t: TFunction): string[] {
   const errs: string[] = [];
   if (!d.architectureRationale.trim())
-    errs.push('Architecture rationale is required.');
-  d.techStack.forEach((t, i) => {
-    if (!t.layer.trim()) errs.push(`Tech choice ${i + 1} needs a layer.`);
-    if (!t.technology.trim())
-      errs.push(`Tech choice ${t.layer.trim() || i + 1} needs a technology.`);
+    errs.push(t('editor.validate.archRationale'));
+  d.techStack.forEach((tech, i) => {
+    if (!tech.layer.trim()) errs.push(t('editor.validate.techLayer', { n: i + 1 }));
+    if (!tech.technology.trim())
+      errs.push(t('editor.validate.techName', { ref: tech.layer.trim() || i + 1 }));
   });
   d.services.forEach((s, i) => {
-    if (!s.name.trim()) errs.push(`Service ${i + 1} needs a name.`);
+    if (!s.name.trim()) errs.push(t('editor.validate.serviceName', { n: i + 1 }));
   });
   return errs;
 }
@@ -63,6 +65,7 @@ export function SystemDesignEditor({
   /** Called after a debounced autosave — persists without closing the editor. */
   onAutosaved?: (design: SystemDesign) => void;
 }) {
+  const { t } = useTranslation('stages');
   const [draft, setDraft] = useState<Draft>(() => ({
     architecture: design.architecture,
     architectureRationale: design.architectureRationale,
@@ -75,7 +78,7 @@ export function SystemDesignEditor({
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [attempted, setAttempted] = useState(false);
 
-  const errors = validate(draft);
+  const errors = validate(draft, t);
   const show = attempted;
 
   useEscapeKey(() => {
@@ -112,7 +115,7 @@ export function SystemDesignEditor({
 
   return (
     <div>
-      <Section title="Architecture">
+      <Section title={t('editor.sections.architecture')}>
         <Select
           value={draft.architecture}
           onValueChange={(v) => patch((d) => (d.architecture = v as ArchitectureType))}
@@ -122,41 +125,47 @@ export function SystemDesignEditor({
           </SelectTrigger>
           <SelectContent>
             {ARCHITECTURES.map((a) => (
-              <SelectItem key={a.value} value={a.value}>
-                {a.label}
+              <SelectItem key={a} value={a}>
+                {t(`editor.arch.${a}`)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Label className="mt-2 block text-xs text-muted-foreground">Rationale</Label>
+        <Label className="mt-2 block text-xs text-muted-foreground">
+          {t('editor.field.rationale')}
+        </Label>
         <Textarea
           className={`mt-1 ${invalidIf(show && !draft.architectureRationale.trim())}`}
           value={draft.architectureRationale}
+          dir="auto"
           onChange={(e) => patch((d) => (d.architectureRationale = e.target.value))}
         />
       </Section>
 
-      <Section title="Tech stack">
+      <Section title={t('editor.sections.techStack')}>
         <div className="space-y-2">
-          {draft.techStack.map((t, i) => (
+          {draft.techStack.map((tech, i) => (
             <div key={i} className="flex items-start gap-2">
               <Input
-                className={`w-32 ${invalidIf(show && !t.layer.trim())}`}
-                value={t.layer}
-                placeholder="layer"
+                className={`w-32 ${invalidIf(show && !tech.layer.trim())}`}
+                value={tech.layer}
+                placeholder={t('editor.field.layer')}
+                dir="auto"
                 onChange={(e) => patch((d) => (d.techStack[i].layer = e.target.value))}
               />
               <Input
-                className={`w-40 ${invalidIf(show && !t.technology.trim())}`}
-                value={t.technology}
-                placeholder="technology"
+                className={`w-40 ${invalidIf(show && !tech.technology.trim())}`}
+                value={tech.technology}
+                placeholder={t('editor.field.technology')}
+                dir="auto"
                 onChange={(e) =>
                   patch((d) => (d.techStack[i].technology = e.target.value))
                 }
               />
               <Input
-                value={t.rationale}
-                placeholder="why"
+                value={tech.rationale}
+                placeholder={t('editor.field.why')}
+                dir="auto"
                 onChange={(e) =>
                   patch((d) => (d.techStack[i].rationale = e.target.value))
                 }
@@ -171,12 +180,12 @@ export function SystemDesignEditor({
               )
             }
           >
-            Add tech choice
+            {t('editor.add.tech')}
           </AddButton>
         </div>
       </Section>
 
-      <Section title="Services">
+      <Section title={t('editor.sections.services')}>
         <div className="space-y-2">
           {draft.services.map((s, i) => (
             <div key={i} className="rounded-lg border border-border p-3">
@@ -184,7 +193,8 @@ export function SystemDesignEditor({
                 <Input
                   className={invalidIf(show && !s.name.trim())}
                   value={s.name}
-                  placeholder="Service name"
+                  placeholder={t('editor.field.serviceName')}
+                  dir="auto"
                   onChange={(e) => patch((d) => (d.services[i].name = e.target.value))}
                 />
                 <RemoveButton onClick={() => patch((d) => d.services.splice(i, 1))} />
@@ -192,13 +202,14 @@ export function SystemDesignEditor({
               <Input
                 className="mt-2"
                 value={s.responsibility}
-                placeholder="Responsibility"
+                placeholder={t('editor.field.responsibility')}
+                dir="auto"
                 onChange={(e) =>
                   patch((d) => (d.services[i].responsibility = e.target.value))
                 }
               />
               <Label className="mt-2 block text-xs text-muted-foreground">
-                Depends on (comma-separated service names)
+                {t('editor.field.dependsOn')}
               </Label>
               <Input
                 className="mt-1"
@@ -217,7 +228,7 @@ export function SystemDesignEditor({
               )
             }
           >
-            Add service
+            {t('editor.add.service')}
           </AddButton>
         </div>
       </Section>

@@ -1,0 +1,101 @@
+{
+  "appTitle": "Archivato AI Builder",
+  "appSubtitle": "AI Software Architecture Generator — turn an idea into a full system design.",
+  "search": "Search",
+  "admin": {
+    "title": "Admin account",
+    "body": "Admin accounts manage the platform and don't create projects. Head to the admin dashboard for users, revenue, and traffic stats.",
+    "open": "Open admin dashboard"
+  },
+  "quota": {
+    "plan": "{{plan}} plan",
+    "used": "{{count}} of {{quota}} projects used",
+    "upgrade": "Upgrade to Pro",
+    "manage": "Manage plan"
+  },
+  "projects": {
+    "heading": "Projects",
+    "back": "Back to projects",
+    "new": "New project",
+    "startFirst": "Start your first project",
+    "newTitle": "New project",
+    "formHelp": "Describe your idea — the AI interviews you to clarify it, then generates the full system design: requirements, architecture, database, API, review, and export.",
+    "ideaLabel": "Project idea",
+    "ideaPlaceholder": "e.g. A clinic management system with appointments, billing, doctors, and patient records.",
+    "industryLabel": "Industry (optional)",
+    "industryPlaceholder": "healthcare",
+    "scaleLabel": "Scale (optional)",
+    "start": "Start interview",
+    "starting": "Starting…",
+    "completeness": "Completeness",
+    "updated": "Updated {{date}}",
+    "delete": "Delete project"
+  },
+  "status": {
+    "collecting": "Interviewing",
+    "awaiting_confirmation": "Review & confirm",
+    "confirmed": "Confirmed"
+  },
+  "scale": { "mvp": "MVP", "startup": "Startup", "enterprise": "Enterprise" },
+  "stage": {
+    "requirements": "Requirement document",
+    "system-design": "System design",
+    "database-design": "Database design",
+    "api-design": "API design",
+    "review": "AI review"
+  },
+  "tab": {
+    "vision": "Vision",
+    "requirements": "Requirements",
+    "system": "Architecture",
+    "database": "Database",
+    "api": "API",
+    "diagrams": "Diagrams",
+    "canvas": "Canvas",
+    "review": "Review",
+    "roadmap": "Roadmap",
+    "export": "Export",
+    "apidocs": "API Docs",
+    "refine": "Refine",
+    "history": "History",
+    "interview": "Interview"
+  },
+  "breadcrumb": { "projects": "Projects", "project": "Project" },
+  "palette": {
+    "actions": "Actions",
+    "projects": "Projects",
+    "stages": "Stages",
+    "newProject": "New project",
+    "backToProjects": "Back to projects",
+    "settings": "Account settings",
+    "admin": "Admin dashboard",
+    "stage": "Stage",
+    "placeholder": "Search projects, stages, actions…",
+    "noMatches": "No matches.",
+    "navigate": "navigate",
+    "open": "open",
+    "close": "close"
+  },
+  "confirm": {
+    "deleteTitle": "Delete this project?",
+    "deleteBody": "This permanently deletes the project and all of its artifacts (requirements, designs, review, history). This cannot be undone.",
+    "deleteConfirm": "Delete project",
+    "deleteCancel": "Keep project",
+    "leaveTitle": "Discard unsaved changes?",
+    "leaveBody": "You have unsaved edits on this stage. Leaving now will discard them.",
+    "leaveConfirm": "Discard changes",
+    "leaveCancel": "Keep editing"
+  },
+  "toast": {
+    "deleted": "Project deleted",
+    "requirementsSaved": "Requirements saved",
+    "architectureSaved": "Architecture saved",
+    "databaseSaved": "Database saved",
+    "apiSaved": "API design saved",
+    "refined": "Design refined",
+    "restored": "Project restored to selected version",
+    "generated": "{{stage}} generated",
+    "generateFailed": "Could not generate {{stage}}"
+  },
+  "upgradeFeature": { "anotherProject": "start another project" }
+}

@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
+  ArrowRight,
   BookOpen,
   CheckCircle2,
   ClipboardCheck,
@@ -61,29 +63,21 @@ import { useUpgrade } from '@/components/billing/upgrade-dialog';
 
 export type ActiveJob = { stage: PipelineStageName; progress: number };
 
-const STAGE_LABEL: Record<PipelineStageName, string> = {
-  requirements: 'requirement document',
-  'system-design': 'system design',
-  'database-design': 'database design',
-  'api-design': 'API design',
-  review: 'AI review',
-};
-
-/** Tab order + labels + icons (drives the tab bar). */
-const TABS: { value: TabKey; label: string; icon: LucideIcon }[] = [
-  { value: 'vision', label: 'Vision', icon: Sparkles },
-  { value: 'requirements', label: 'Requirements', icon: FileText },
-  { value: 'system', label: 'System', icon: Network },
-  { value: 'database', label: 'Database', icon: DatabaseIcon },
-  { value: 'api', label: 'API', icon: Webhook },
-  { value: 'diagrams', label: 'Diagrams', icon: Workflow },
-  { value: 'canvas', label: 'Canvas', icon: Shapes },
-  { value: 'review', label: 'Review', icon: ClipboardCheck },
-  { value: 'roadmap', label: 'Roadmap', icon: Flag },
-  { value: 'export', label: 'Export', icon: Download },
-  { value: 'apidocs', label: 'API Docs', icon: BookOpen },
-  { value: 'refine', label: 'Refine', icon: MessageSquare },
-  { value: 'history', label: 'History', icon: History },
+/** Tab order + icons (drives the tab bar). Labels come from `project.tab.*`. */
+const TABS: { value: TabKey; icon: LucideIcon }[] = [
+  { value: 'vision', icon: Sparkles },
+  { value: 'requirements', icon: FileText },
+  { value: 'system', icon: Network },
+  { value: 'database', icon: DatabaseIcon },
+  { value: 'api', icon: Webhook },
+  { value: 'diagrams', icon: Workflow },
+  { value: 'canvas', icon: Shapes },
+  { value: 'review', icon: ClipboardCheck },
+  { value: 'roadmap', icon: Flag },
+  { value: 'export', icon: Download },
+  { value: 'apidocs', icon: BookOpen },
+  { value: 'refine', icon: MessageSquare },
+  { value: 'history', icon: History },
 ];
 
 export type TabKey =
@@ -188,6 +182,7 @@ export function ProjectStages({
   // `tab` is controlled by the parent (so the Project Wizard can navigate to a
   // stage); `setTab` is just an alias to the parent's setter.
   const setTab = onTabChange;
+  const { t } = useTranslation('project');
   const openUpgrade = useUpgrade();
   // Which stage tab is currently in edit mode (null = viewing).
   const [editing, setEditing] = useState<TabKey | null>(null);
@@ -202,7 +197,7 @@ export function ProjectStages({
    */
   const goTo = (key: TabKey) => {
     if (!isPro && PRO_TABS.has(key) && !available[key]) {
-      void openUpgrade({ feature: 'unlock the full pipeline' }).then(
+      void openUpgrade({ feature: t('upgrade.unlockFeature') }).then(
         (ok) => ok && onUpgraded?.(),
       );
       return;
@@ -255,14 +250,14 @@ export function ProjectStages({
     <Card>
       <CardContent className="space-y-4 p-5">
         <Badge className="gap-1">
-          <CheckCircle2 className="h-3.5 w-3.5" /> Requirements confirmed
+          <CheckCircle2 className="h-3.5 w-3.5" /> {t('confirmed')}
         </Badge>
 
         {job && <JobProgress job={job} />}
 
         <Tabs value={tab} onValueChange={(v) => goTo(v as TabKey)}>
           <TabsList className="sticky top-16 z-30 flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto shadow-sm md:flex-wrap md:overflow-visible">
-            {TABS.map(({ value, label, icon: Icon }) => {
+            {TABS.map(({ value, icon: Icon }) => {
               const locked = !isPro && PRO_TABS.has(value);
               // Locked-but-unreachable tabs stay clickable so the click can open
               // the upgrade modal (Radix disables un-clickable triggers).
@@ -275,9 +270,12 @@ export function ProjectStages({
                   className={`shrink-0 gap-1.5${locked ? ' opacity-80' : ''}`}
                 >
                   <Icon className="h-3.5 w-3.5" />
-                  {label}
+                  {t(`tab.${value}`)}
                   {locked && (
-                    <Lock className="h-3 w-3 text-muted-foreground" aria-label="Pro" />
+                    <Lock
+                      className="h-3 w-3 text-muted-foreground"
+                      aria-label={t('pro')}
+                    />
                   )}
                 </TabsTrigger>
               );
@@ -298,17 +296,19 @@ export function ProjectStages({
               <>
                 <EmptyState
                   icon={FileText}
-                  title="Generate the requirement document"
-                  description="Turn this interview into a formal document: functional & non-functional requirements, user roles, business rules, constraints, and assumptions."
+                  title={t('generate.requirementsTitle')}
+                  description={t('generate.requirementsHint')}
                 >
                   <Button onClick={onGenerateRequirements} disabled={busy}>
-                    {busy ? 'Generating…' : 'Generate Requirement Document'}
+                    {busy
+                      ? t('generate.generating')
+                      : t('generate.requirementsBtn')}
                   </Button>
                 </EmptyState>
                 {summary && (
                   <div className="mt-2">
                     <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Interview preview
+                      {t('generate.interviewPreview')}
                     </p>
                     <SummaryView summary={summary} />
                   </div>
@@ -344,7 +344,7 @@ export function ProjectStages({
                     onDirty(false);
                     setEditing('requirements');
                   }}
-                  next={{ label: 'System Design', go: () => setTab('system') }}
+                  next={{ label: t('next.system'), go: () => setTab('system') }}
                 />
               </>
             )}
@@ -355,10 +355,10 @@ export function ProjectStages({
             {!design ? (
               <GenerateStage
                 icon={Network}
-                title="Design the architecture"
-                hint="Turn the requirements into an architecture: the pattern (monolith / microservices), a tech stack, and the service modules."
+                title={t('generate.systemTitle')}
+                hint={t('generate.systemHint')}
                 busy={busy}
-                label="Generate System Design"
+                label={t('generate.systemBtn')}
                 onGenerate={onGenerateSystem}
               />
             ) : editing === 'system' ? (
@@ -391,7 +391,7 @@ export function ProjectStages({
                     onDirty(false);
                     setEditing('system');
                   }}
-                  next={{ label: 'Database', go: () => setTab('database') }}
+                  next={{ label: t('next.database'), go: () => setTab('database') }}
                 />
               </>
             )}
@@ -402,10 +402,10 @@ export function ProjectStages({
             {!dbDesign ? (
               <GenerateStage
                 icon={DatabaseIcon}
-                title="Design the database"
-                hint="Derive the schema — entities, columns, primary/foreign keys, and relationships — from the services and roles."
+                title={t('generate.databaseTitle')}
+                hint={t('generate.databaseHint')}
                 busy={busy}
-                label="Generate Database Design"
+                label={t('generate.databaseBtn')}
                 onGenerate={onGenerateDatabase}
               />
             ) : editing === 'database' ? (
@@ -438,7 +438,7 @@ export function ProjectStages({
                     onDirty(false);
                     setEditing('database');
                   }}
-                  next={{ label: 'API', go: () => setTab('api') }}
+                  next={{ label: t('next.api'), go: () => setTab('api') }}
                 />
               </>
             )}
@@ -450,10 +450,10 @@ export function ProjectStages({
               isPro ? (
                 <GenerateStage
                   icon={Webhook}
-                  title="Design the API"
-                  hint="Generate the REST API — endpoints grouped by module, with request/response schemas and status codes — from the entities and services."
+                  title={t('generate.apiTitle')}
+                  hint={t('generate.apiHint')}
                   busy={busy}
-                  label="Generate API Design"
+                  label={t('generate.apiBtn')}
                   onGenerate={onGenerateApi}
                 />
               ) : (
@@ -489,7 +489,7 @@ export function ProjectStages({
                     onDirty(false);
                     setEditing('api');
                   }}
-                  next={{ label: 'Review', go: () => setTab('review') }}
+                  next={{ label: t('next.review'), go: () => setTab('review') }}
                 />
               </>
             )}
@@ -518,10 +518,10 @@ export function ProjectStages({
             {!review ? (
               <GenerateStage
                 icon={ClipboardCheck}
-                title="Review the whole system"
-                hint="Run the AI architecture review: a scalability score, security & performance findings, missing features, and recommendations."
+                title={t('generate.reviewTitle')}
+                hint={t('generate.reviewHint')}
                 busy={busy}
-                label="Run AI Review"
+                label={t('generate.reviewBtn')}
                 onGenerate={onGenerateReview}
               />
             ) : (
@@ -530,8 +530,8 @@ export function ProjectStages({
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateReview}
-                  regenerateLabel="Regenerate review"
-                  next={{ label: 'Export', go: () => setTab('export') }}
+                  regenerateLabel={t('actions.regenerateReview')}
+                  next={{ label: t('next.export'), go: () => setTab('export') }}
                 />
               </>
             )}
@@ -575,6 +575,7 @@ export function ProjectStages({
 
 /** Live progress for the running async generation job (stage + step + sheen). */
 function JobProgress({ job }: { job: ActiveJob }) {
+  const { t } = useTranslation('project');
   const step = PIPELINE_STAGES.indexOf(job.stage) + 1;
   const total = PIPELINE_STAGES.length;
   return (
@@ -586,10 +587,10 @@ function JobProgress({ job }: { job: ActiveJob }) {
       <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
         <span className="flex items-center gap-2 font-medium">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-          Generating {STAGE_LABEL[job.stage]}…
+          {t('generating', { stage: t(`stage.${job.stage}`) })}
         </span>
         <span className="text-muted-foreground">
-          {step > 0 ? `Step ${step} of ${total} · ` : ''}
+          {step > 0 ? t('step', { step, total }) : ''}
           {job.progress}%
         </span>
       </div>
@@ -608,21 +609,22 @@ function JobProgress({ job }: { job: ActiveJob }) {
  * successful upgrade the parent refreshes the plan so the tab unlocks in place.
  */
 function UpgradeStage({ onUpgraded }: { onUpgraded?: () => void }) {
+  const { t } = useTranslation('project');
   const openUpgrade = useUpgrade();
   return (
     <EmptyState
       icon={Lock}
-      title="Unlock the API design with Pro"
-      description="Your Free plan covers the requirements, system design, and database design. Upgrade to Pro to generate the REST API — plus the AI review, roadmap, and export that follow."
+      title={t('upgrade.title')}
+      description={t('upgrade.desc')}
     >
       <Button
         onClick={async () => {
-          const upgraded = await openUpgrade({ feature: 'generate the API design' });
+          const upgraded = await openUpgrade({ feature: t('upgrade.feature') });
           if (upgraded) onUpgraded?.();
         }}
       >
         <Sparkles className="h-4 w-4" />
-        Upgrade to Pro
+        {t('upgrade.cta')}
       </Button>
     </EmptyState>
   );
@@ -643,10 +645,11 @@ function GenerateStage({
   busy: boolean;
   onGenerate: () => void;
 }) {
+  const { t } = useTranslation('project');
   return (
     <EmptyState icon={icon} title={title} description={hint}>
       <Button onClick={onGenerate} disabled={busy}>
-        {busy ? 'Working…' : label}
+        {busy ? t('working') : label}
       </Button>
     </EmptyState>
   );
@@ -656,7 +659,7 @@ function StageActions({
   busy,
   onRegenerate,
   onEdit,
-  regenerateLabel = 'Regenerate',
+  regenerateLabel,
   next,
 }: {
   busy: boolean;
@@ -665,16 +668,16 @@ function StageActions({
   regenerateLabel?: string;
   next?: { label: string; go: () => void };
 }) {
+  const { t } = useTranslation('project');
   const confirm = useConfirm();
 
   // Regenerate replaces the current (possibly hand-edited) artifact, so confirm.
   async function confirmRegenerate() {
     const ok = await confirm({
-      title: 'Regenerate this stage?',
-      description:
-        'This replaces the current content — including any manual edits — with a freshly generated version.',
-      confirmLabel: 'Regenerate',
-      cancelLabel: 'Cancel',
+      title: t('actions.confirmTitle'),
+      description: t('actions.confirmBody'),
+      confirmLabel: t('actions.confirmYes'),
+      cancelLabel: t('actions.confirmNo'),
       destructive: true,
     });
     if (ok) onRegenerate();
@@ -684,15 +687,16 @@ function StageActions({
     <div className="flex flex-wrap gap-2">
       {onEdit && (
         <Button variant="secondary" onClick={onEdit} disabled={busy}>
-          Edit
+          {t('actions.edit')}
         </Button>
       )}
       <Button variant="secondary" onClick={confirmRegenerate} disabled={busy}>
-        {regenerateLabel}
+        {regenerateLabel ?? t('actions.regenerate')}
       </Button>
       {next && (
         <Button onClick={next.go} disabled={busy}>
-          Next: {next.label} →
+          {t('actions.next', { label: next.label })}
+          <ArrowRight className="h-4 w-4 rtl:-scale-x-100" />
         </Button>
       )}
     </div>

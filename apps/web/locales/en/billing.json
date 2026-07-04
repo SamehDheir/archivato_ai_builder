@@ -1,0 +1,27 @@
+{
+  "close": "Close",
+  "pro": "Pro plan",
+  "unlock": "Unlock the full pipeline",
+  "upgradeTo": "Upgrade to {{feature}}",
+  "everythingFreePre": "Everything in Free — interview, requirements, system & database design — ",
+  "plus": "plus:",
+  "perMonth": "/mo",
+  "maybeLater": "Maybe later",
+  "upgradeCta": "Upgrade — ${{price}}/mo",
+  "working": "Working…",
+  "cancelNote": "Cancel anytime — you keep Pro until the period ends.",
+  "upgradedToast": "Upgraded to Pro 🎉",
+  "checkoutUnavailableTitle": "Checkout not available",
+  "checkoutUnavailableBody": "Paddle is not fully configured on this device yet.",
+  "checkoutErrorTitle": "Could not start checkout",
+  "features": {
+    "projects": { "lead": "Up to 5 projects", "detail": "Free includes 1" },
+    "api": { "lead": "REST API design", "detail": "endpoints, request/response schemas & status codes" },
+    "review": { "lead": "AI Architect Review", "detail": "scored on security, scalability, performance & cost, with critical-issue callouts" },
+    "roadmap": { "lead": "Implementation roadmap", "detail": "phases → milestones → tasks with effort estimates" },
+    "openapi": { "lead": "Interactive OpenAPI / Swagger explorer", "detail": "" },
+    "refine": { "lead": "Refine the whole design by chat", "detail": "every change versioned" },
+    "export": { "lead": "Export to JSON, Markdown & OpenAPI", "detail": "import straight into Postman" },
+    "scaffold": { "lead": "Scaffold a ready-to-build project repo", "detail": "plus Print / Save as PDF" }
+  }
+}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslation } from 'react-i18next';
 import { Share2, Table2, Workflow } from 'lucide-react';
 import { buildErd, type DatabaseDesign, type EntityColumn } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
@@ -13,12 +14,15 @@ import { MermaidView } from '@/components/design/MermaidView';
 import { Empty, Section } from '@/components/design/RequirementDocumentView';
 
 export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
+  const { t } = useTranslation('stages');
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          {design.databaseType} · generated{' '}
-          {new Date(design.generatedAt).toLocaleString()}
+          {t('database.meta', {
+            type: design.databaseType,
+            date: new Date(design.generatedAt).toLocaleString(),
+          })}
         </p>
         <ArtifactDownload
           basename={`database-design-${design.sessionId}`}
@@ -45,7 +49,7 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
         />
       </div>
 
-      <Section title="ER Diagram" icon={Workflow}>
+      <Section title={t('database.erd')} icon={Workflow}>
         {design.entities.length ? (
           <MermaidView code={buildErd(design)} />
         ) : (
@@ -53,7 +57,7 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
         )}
       </Section>
 
-      <Section title="Entities" icon={Table2}>
+      <Section title={t('database.entities')} icon={Table2}>
         <div className="grid gap-3 sm:grid-cols-2">
           {design.entities.map((entity) => (
             <Card key={entity.name}>
@@ -61,7 +65,7 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
                 <div className="font-mono text-sm font-semibold">
                   {entity.name}
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground" dir="auto">
                   {entity.description}
                 </p>
                 <ul className="mt-2 space-y-1">
@@ -86,7 +90,7 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
         </div>
       </Section>
 
-      <Section title="Relations" icon={Share2}>
+      <Section title={t('database.relations')} icon={Share2}>
         {design.relations.length ? (
           <ul className="space-y-1.5 text-sm">
             {design.relations.map((r, i) => (
@@ -109,14 +113,20 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
 }
 
 function ColumnBadges({ col }: { col: EntityColumn }) {
+  const { t } = useTranslation('stages');
   const badges: { label: string; variant: 'warning' | 'primary' | 'secondary' }[] =
     [];
-  if (col.primaryKey) badges.push({ label: 'PK', variant: 'warning' });
+  if (col.primaryKey)
+    badges.push({ label: t('database.badge.pk'), variant: 'warning' });
   if (col.references)
-    badges.push({ label: `FK → ${col.references.entity}`, variant: 'primary' });
-  if (col.unique) badges.push({ label: 'unique', variant: 'secondary' });
+    badges.push({
+      label: t('database.badge.fk', { entity: col.references.entity }),
+      variant: 'primary',
+    });
+  if (col.unique)
+    badges.push({ label: t('database.badge.unique'), variant: 'secondary' });
   if (!col.nullable && !col.primaryKey)
-    badges.push({ label: 'not null', variant: 'secondary' });
+    badges.push({ label: t('database.badge.notNull'), variant: 'secondary' });
   return (
     <>
       {badges.map((b) => (

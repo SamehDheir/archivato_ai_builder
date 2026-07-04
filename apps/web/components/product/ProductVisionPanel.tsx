@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Sparkles } from 'lucide-react';
 import type { ProductVision } from '@archivato/shared';
 import { productVisionApi } from '@/lib/api';
@@ -24,6 +25,7 @@ export function ProductVisionPanel({
   reloadKey: number;
 }) {
   const toast = useToast();
+  const { t } = useTranslation('stages');
   const [vision, setVision] = useState<ProductVision | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -46,10 +48,10 @@ export function ProductVisionPanel({
     setBusy(true);
     try {
       setVision(await productVisionApi.generate(sessionId));
-      toast({ title: 'Product vision generated', variant: 'success' });
+      toast({ title: t('vision.generatedToast'), variant: 'success' });
     } catch (e) {
       toast({
-        title: 'Could not generate the product vision',
+        title: t('vision.failed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -71,11 +73,11 @@ export function ProductVisionPanel({
     return (
       <EmptyState
         icon={Sparkles}
-        title="Frame the product"
-        description="Turn the interview into a product strategy: a north-star vision, strategic goals, a lean MVP vs. a future roadmap, success metrics, and user personas."
+        title={t('vision.emptyTitle')}
+        description={t('vision.emptyDescription')}
       >
         <Button onClick={generate} disabled={busy}>
-          {busy ? 'Working…' : 'Generate Product Vision'}
+          {busy ? t('vision.working') : t('vision.generate')}
         </Button>
       </EmptyState>
     );
@@ -85,7 +87,7 @@ export function ProductVisionPanel({
     <div className="space-y-3">
       <ProductVisionView vision={vision} />
       <Button variant="secondary" onClick={generate} disabled={busy}>
-        {busy ? 'Working…' : 'Regenerate'}
+        {busy ? t('vision.working') : t('vision.regenerate')}
       </Button>
     </div>
   );

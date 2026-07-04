@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslation } from 'react-i18next';
 import { Package } from 'lucide-react';
 import type { ApiDesign, ApiEndpoint, SchemaField } from '@archivato/shared';
 import { cn } from '@/lib/utils';
@@ -14,6 +17,7 @@ const METHOD_CLASS: Record<string, string> = {
 };
 
 export function ApiDesignView({ design }: { design: ApiDesign }) {
+  const { t } = useTranslation('stages');
   const endpointCount = design.modules.reduce(
     (n, m) => n + m.endpoints.length,
     0,
@@ -22,13 +26,16 @@ export function ApiDesignView({ design }: { design: ApiDesign }) {
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          {design.modules.length} modules · {endpointCount} endpoints · generated{' '}
-          {new Date(design.generatedAt).toLocaleString()}
+          {t('api.meta', {
+            modules: design.modules.length,
+            endpoints: endpointCount,
+            date: new Date(design.generatedAt).toLocaleString(),
+          })}
         </p>
         <DownloadButton
           filename={`api-design-${design.sessionId}.json`}
           data={design}
-          label="Download API design"
+          label={t('api.download')}
         />
       </div>
 
@@ -53,6 +60,7 @@ export function ApiDesignView({ design }: { design: ApiDesign }) {
 }
 
 function EndpointRow({ endpoint }: { endpoint: ApiEndpoint }) {
+  const { t } = useTranslation('stages');
   return (
     <div className="rounded-lg border border-border bg-card p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -65,7 +73,7 @@ function EndpointRow({ endpoint }: { endpoint: ApiEndpoint }) {
           {endpoint.method}
         </span>
         <span className="font-mono text-sm">{endpoint.path}</span>
-        <span className="ml-auto flex flex-wrap gap-1">
+        <span className="ms-auto flex flex-wrap gap-1">
           {endpoint.statusCodes.map((c) => (
             <Badge variant="secondary" key={c}>
               {c}
@@ -73,10 +81,12 @@ function EndpointRow({ endpoint }: { endpoint: ApiEndpoint }) {
           ))}
         </span>
       </div>
-      <div className="mt-1 text-sm text-muted-foreground">{endpoint.summary}</div>
+      <div className="mt-1 text-sm text-muted-foreground" dir="auto">
+        {endpoint.summary}
+      </div>
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
-        <SchemaList label="Request" fields={endpoint.requestSchema} />
-        <SchemaList label="Response" fields={endpoint.responseSchema} />
+        <SchemaList label={t('api.request')} fields={endpoint.requestSchema} />
+        <SchemaList label={t('api.response')} fields={endpoint.responseSchema} />
       </div>
     </div>
   );

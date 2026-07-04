@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   COMMON_COLUMN_TYPES,
   type DatabaseDesign,
@@ -38,23 +40,27 @@ const RELATION_TYPES: RelationType[] = [
   'many-to-many',
 ];
 
-function validate(d: Draft): string[] {
+function validate(d: Draft, t: TFunction): string[] {
   const errs: string[] = [];
-  if (!d.databaseType.trim()) errs.push('Database type is required.');
+  if (!d.databaseType.trim()) errs.push(t('editor.validate.dbType'));
   d.entities.forEach((entity, ei) => {
-    const label = entity.name.trim() || `Entity ${ei + 1}`;
-    if (!entity.name.trim()) errs.push(`Entity ${ei + 1} needs a name.`);
+    const label =
+      entity.name.trim() || t('editor.validate.entityLabel', { n: ei + 1 });
+    if (!entity.name.trim()) errs.push(t('editor.validate.entityName', { n: ei + 1 }));
     if (entity.columns.length === 0)
-      errs.push(`${label} needs at least one column.`);
+      errs.push(t('editor.validate.entityColumns', { label }));
     entity.columns.forEach((col, ci) => {
-      if (!col.name.trim()) errs.push(`${label}: column ${ci + 1} needs a name.`);
+      if (!col.name.trim())
+        errs.push(t('editor.validate.colName', { label, n: ci + 1 }));
       if (!col.type.trim())
-        errs.push(`${label}: column ${col.name.trim() || ci + 1} needs a type.`);
+        errs.push(
+          t('editor.validate.colType', { label, ref: col.name.trim() || ci + 1 }),
+        );
     });
   });
   d.relations.forEach((rel, i) => {
     if (!rel.from.trim() || !rel.to.trim())
-      errs.push(`Relation ${i + 1} needs both a "from" and a "to".`);
+      errs.push(t('editor.validate.relationEnds', { n: i + 1 }));
   });
   return errs;
 }
@@ -75,6 +81,7 @@ export function DatabaseDesignEditor({
   /** Called after a debounced autosave — persists without closing the editor. */
   onAutosaved?: (design: DatabaseDesign) => void;
 }) {
+  const { t } = useTranslation('stages');
   const [draft, setDraft] = useState<Draft>(() => ({
     databaseType: design.databaseType,
     entities: design.entities,
@@ -86,7 +93,7 @@ export function DatabaseDesignEditor({
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [attempted, setAttempted] = useState(false);
 
-  const errors = validate(draft);
+  const errors = validate(draft, t);
   const show = attempted;
 
   useEscapeKey(() => {
@@ -129,16 +136,17 @@ export function DatabaseDesignEditor({
         ))}
       </datalist>
 
-      <Section title="Database">
+      <Section title={t('editor.sections.database')}>
         <Input
           className={`w-56 ${invalidIf(show && !draft.databaseType.trim())}`}
           value={draft.databaseType}
           placeholder="PostgreSQL"
+          dir="ltr"
           onChange={(e) => patch((d) => (d.databaseType = e.target.value))}
         />
       </Section>
 
-      <Section title="Entities">
+      <Section title={t('editor.sections.entities')}>
         <div className="space-y-3">
           {draft.entities.map((entity, ei) => (
             <div key={ei} className="rounded-lg border border-border p-3">
@@ -146,26 +154,28 @@ export function DatabaseDesignEditor({
                 <Input
                   className={`w-48 font-mono text-sm ${invalidIf(show && !entity.name.trim())}`}
                   value={entity.name}
-                  placeholder="table_name"
+                  placeholder={t('editor.field.tableName')}
+                  dir="ltr"
                   onChange={(e) =>
                     patch((d) => (d.entities[ei].name = e.target.value))
                   }
                 />
                 <Input
                   value={entity.description}
-                  placeholder="Description"
+                  placeholder={t('editor.field.description')}
+                  dir="auto"
                   onChange={(e) =>
                     patch((d) => (d.entities[ei].description = e.target.value))
                   }
                 />
                 <RemoveButton
-                  label="Remove entity"
+                  label={t('editor.removeLabel.entity')}
                   onClick={() => patch((d) => d.entities.splice(ei, 1))}
                 />
               </div>
 
               <Label className="mt-3 block text-xs text-muted-foreground">
-                Columns
+                {t('editor.field.columns')}
               </Label>
               <div className="mt-1 space-y-2">
                 {entity.columns.map((col, ci) => (
@@ -176,7 +186,8 @@ export function DatabaseDesignEditor({
                     <Input
                       className={`w-36 font-mono text-xs ${invalidIf(show && !col.name.trim())}`}
                       value={col.name}
-                      placeholder="column"
+                      placeholder={t('editor.field.column')}
+                      dir="ltr"
                       onChange={(e) =>
                         patch((d) => (d.entities[ei].columns[ci].name = e.target.value))
                       }
@@ -185,7 +196,8 @@ export function DatabaseDesignEditor({
                       list={COLUMN_TYPE_LIST}
                       className={`w-36 font-mono text-xs ${invalidIf(show && !col.type.trim())}`}
                       value={col.type}
-                      placeholder="type"
+                      placeholder={t('editor.field.type')}
+                      dir="ltr"
                       onChange={(e) =>
                         patch(
                           (d) => (d.entities[ei].columns[ci].type = e.target.value),
@@ -193,21 +205,21 @@ export function DatabaseDesignEditor({
                       }
                     />
                     <Check
-                      label="nullable"
+                      label={t('editor.field.nullable')}
                       checked={col.nullable}
                       onChange={(v) =>
                         patch((d) => (d.entities[ei].columns[ci].nullable = v))
                       }
                     />
                     <Check
-                      label="PK"
+                      label={t('editor.field.pk')}
                       checked={!!col.primaryKey}
                       onChange={(v) =>
                         patch((d) => (d.entities[ei].columns[ci].primaryKey = v))
                       }
                     />
                     <Check
-                      label="unique"
+                      label={t('editor.field.unique')}
                       checked={!!col.unique}
                       onChange={(v) =>
                         patch((d) => (d.entities[ei].columns[ci].unique = v))
@@ -216,7 +228,8 @@ export function DatabaseDesignEditor({
                     <Input
                       className="w-28 text-xs"
                       defaultValue={col.references?.entity ?? ''}
-                      placeholder="FK → entity"
+                      placeholder={t('editor.field.fkEntity')}
+                      dir="ltr"
                       onChange={(e) =>
                         patch((d) => {
                           const c = d.entities[ei].columns[ci];
@@ -233,7 +246,8 @@ export function DatabaseDesignEditor({
                     <Input
                       className="w-24 text-xs"
                       defaultValue={col.references?.column ?? ''}
-                      placeholder="FK column"
+                      placeholder={t('editor.field.fkColumn')}
+                      dir="ltr"
                       onChange={(e) =>
                         patch((d) => {
                           const c = d.entities[ei].columns[ci];
@@ -242,7 +256,7 @@ export function DatabaseDesignEditor({
                       }
                     />
                     <RemoveButton
-                      label="Remove column"
+                      label={t('editor.removeLabel.column')}
                       onClick={() =>
                         patch((d) => d.entities[ei].columns.splice(ci, 1))
                       }
@@ -260,7 +274,7 @@ export function DatabaseDesignEditor({
                     )
                   }
                 >
-                  Add column
+                  {t('editor.add.column')}
                 </AddButton>
               </div>
             </div>
@@ -272,19 +286,20 @@ export function DatabaseDesignEditor({
               )
             }
           >
-            Add entity
+            {t('editor.add.entity')}
           </AddButton>
         </div>
       </Section>
 
-      <Section title="Relations">
+      <Section title={t('editor.sections.relations')}>
         <div className="space-y-2">
           {draft.relations.map((rel, i) => (
             <div key={i} className="flex flex-wrap items-center gap-2">
               <Input
                 className={`w-36 font-mono text-xs ${invalidIf(show && !rel.from.trim())}`}
                 value={rel.from}
-                placeholder="from"
+                placeholder={t('editor.field.from')}
+                dir="ltr"
                 onChange={(e) => patch((d) => (d.relations[i].from = e.target.value))}
               />
               <Select
@@ -307,12 +322,14 @@ export function DatabaseDesignEditor({
               <Input
                 className={`w-36 font-mono text-xs ${invalidIf(show && !rel.to.trim())}`}
                 value={rel.to}
-                placeholder="to"
+                placeholder={t('editor.field.to')}
+                dir="ltr"
                 onChange={(e) => patch((d) => (d.relations[i].to = e.target.value))}
               />
               <Input
                 value={rel.description ?? ''}
-                placeholder="description (optional)"
+                placeholder={t('editor.field.descriptionOptional')}
+                dir="auto"
                 onChange={(e) =>
                   patch((d) => (d.relations[i].description = e.target.value))
                 }
@@ -327,7 +344,7 @@ export function DatabaseDesignEditor({
               )
             }
           >
-            Add relation
+            {t('editor.add.relation')}
           </AddButton>
         </div>
       </Section>

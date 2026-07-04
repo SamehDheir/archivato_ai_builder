@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Database as DatabaseIcon, Network } from 'lucide-react';
 import type { DatabaseDesign, SystemDesign } from '@archivato/shared';
 import { Button } from '@/components/ui/button';
@@ -19,9 +20,10 @@ const DatabaseCanvas = dynamic(
 );
 
 function CanvasLoading() {
+  const { t } = useTranslation('stages');
   return (
     <div className="flex h-[560px] items-center justify-center rounded-md border border-border text-sm text-muted-foreground">
-      Loading canvas…
+      {t('canvas.loading')}
     </div>
   );
 }
@@ -52,6 +54,7 @@ export function DesignCanvas({
 }) {
   const [mode, setMode] = useState<Mode>('architecture');
   const confirm = useConfirm();
+  const { t } = useTranslation('stages');
 
   /** Switching the sub-view unmounts the other canvas — guard unsaved edits. */
   async function switchMode(next: Mode) {
@@ -59,11 +62,10 @@ export function DesignCanvas({
     if (
       dirty &&
       !(await confirm({
-        title: 'Discard unsaved canvas changes?',
-        description:
-          'Switching views will discard the edits you haven’t saved on this canvas.',
-        confirmLabel: 'Discard changes',
-        cancelLabel: 'Keep editing',
+        title: t('canvas.discardTitle'),
+        description: t('canvas.discardDescription'),
+        confirmLabel: t('canvas.discardConfirm'),
+        cancelLabel: t('canvas.discardCancel'),
         destructive: true,
       }))
     ) {
@@ -81,14 +83,14 @@ export function DesignCanvas({
           variant={mode === 'architecture' ? 'default' : 'secondary'}
           onClick={() => switchMode('architecture')}
         >
-          Architecture
+          {t('canvas.architecture')}
         </Button>
         <Button
           size="sm"
           variant={mode === 'database' ? 'default' : 'secondary'}
           onClick={() => switchMode('database')}
         >
-          Database
+          {t('canvas.database')}
         </Button>
       </div>
 
@@ -103,8 +105,8 @@ export function DesignCanvas({
         ) : (
           <EmptyState
             icon={Network}
-            title="No architecture yet"
-            description="Generate the system design first (System tab), then drag its services around and wire up dependencies here."
+            title={t('canvas.noArchTitle')}
+            description={t('canvas.noArchDescription')}
           />
         )
       ) : dbDesign ? (
@@ -117,8 +119,8 @@ export function DesignCanvas({
       ) : (
         <EmptyState
           icon={DatabaseIcon}
-          title="No database yet"
-          description="Generate the database design first (Database tab), then arrange its entities and draw relations here."
+          title={t('canvas.noDbTitle')}
+          description={t('canvas.noDbDescription')}
         />
       )}
     </div>

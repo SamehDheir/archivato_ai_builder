@@ -5,6 +5,7 @@ import { ToastProvider } from '@/components/shared/toast';
 import { ThemeProvider } from '@/components/shared/theme';
 import { ConfirmProvider } from '@/components/shared/confirm-dialog';
 import { UpgradeProvider } from '@/components/billing/upgrade-dialog';
+import { LocaleProvider } from '@/components/shared/i18n';
 import { PageviewTracker } from '@/components/shared/pageview-tracker';
 
 // Public origin used to resolve absolute URLs for OpenGraph/Twitter cards.
@@ -65,6 +66,11 @@ export const viewport: Viewport = {
 // defaults to dark). Mirrors the default in ThemeProvider.
 const themeScript = `(function(){try{var t=localStorage.getItem('archivato.theme')||'dark';document.documentElement.classList.toggle('dark',t==='dark');}catch(e){document.documentElement.classList.add('dark');}})();`;
 
+// Set <html lang/dir> before first paint from the saved locale (localStorage,
+// then cookie) so an Arabic (RTL) user never sees an LTR flash. Mirrors the
+// LocaleProvider default.
+const localeScript = `(function(){try{var l=localStorage.getItem('archivato.locale');if(!l){var m=document.cookie.match(/archivato_locale=([^;]+)/);l=m&&m[1];}l=(l==='ar')?'ar':'en';var e=document.documentElement;e.lang=l;e.dir=(l==='ar')?'rtl':'ltr';}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: {
@@ -74,17 +80,20 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: localeScript }} />
       </head>
       <body className="min-h-screen antialiased">
         <PageviewTracker />
         <ThemeProvider>
-          <ToastProvider>
-            <ConfirmProvider>
-              <UpgradeProvider>
-                <AuthGate>{children}</AuthGate>
-              </UpgradeProvider>
-            </ConfirmProvider>
-          </ToastProvider>
+          <LocaleProvider>
+            <ToastProvider>
+              <ConfirmProvider>
+                <UpgradeProvider>
+                  <AuthGate>{children}</AuthGate>
+                </UpgradeProvider>
+              </ConfirmProvider>
+            </ToastProvider>
+          </LocaleProvider>
         </ThemeProvider>
       </body>
     </html>

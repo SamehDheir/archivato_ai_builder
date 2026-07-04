@@ -1,0 +1,87 @@
+{
+  "confirmed": "Requirements confirmed",
+  "generating": "Generating {{stage}}…",
+  "step": "Step {{step}} of {{total}} · ",
+  "stage": {
+    "requirements": "requirement document",
+    "system-design": "system design",
+    "database-design": "database design",
+    "api-design": "API design",
+    "review": "AI review"
+  },
+  "tab": {
+    "vision": "Vision",
+    "requirements": "Requirements",
+    "system": "System",
+    "database": "Database",
+    "api": "API",
+    "diagrams": "Diagrams",
+    "canvas": "Canvas",
+    "review": "Review",
+    "roadmap": "Roadmap",
+    "export": "Export",
+    "apidocs": "API Docs",
+    "refine": "Refine",
+    "history": "History"
+  },
+  "pro": "Pro",
+  "working": "Working…",
+  "generate": {
+    "requirementsTitle": "Generate the requirement document",
+    "requirementsHint": "Turn this interview into a formal document: functional & non-functional requirements, user roles, business rules, constraints, and assumptions.",
+    "requirementsBtn": "Generate Requirement Document",
+    "generating": "Generating…",
+    "interviewPreview": "Interview preview",
+    "systemTitle": "Design the architecture",
+    "systemHint": "Turn the requirements into an architecture: the pattern (monolith / microservices), a tech stack, and the service modules.",
+    "systemBtn": "Generate System Design",
+    "databaseTitle": "Design the database",
+    "databaseHint": "Derive the schema — entities, columns, primary/foreign keys, and relationships — from the services and roles.",
+    "databaseBtn": "Generate Database Design",
+    "apiTitle": "Design the API",
+    "apiHint": "Generate the REST API — endpoints grouped by module, with request/response schemas and status codes — from the entities and services.",
+    "apiBtn": "Generate API Design",
+    "reviewTitle": "Review the whole system",
+    "reviewHint": "Run the AI architecture review: a scalability score, security & performance findings, missing features, and recommendations.",
+    "reviewBtn": "Run AI Review"
+  },
+  "upgrade": {
+    "title": "Unlock the API design with Pro",
+    "desc": "Your Free plan covers the requirements, system design, and database design. Upgrade to Pro to generate the REST API — plus the AI review, roadmap, and export that follow.",
+    "cta": "Upgrade to Pro",
+    "feature": "generate the API design",
+    "unlockFeature": "unlock the full pipeline"
+  },
+  "actions": {
+    "edit": "Edit",
+    "regenerate": "Regenerate",
+    "regenerateReview": "Regenerate review",
+    "next": "Next: {{label}}",
+    "confirmTitle": "Regenerate this stage?",
+    "confirmBody": "This replaces the current content — including any manual edits — with a freshly generated version.",
+    "confirmYes": "Regenerate",
+    "confirmNo": "Cancel"
+  },
+  "next": {
+    "system": "System Design",
+    "database": "Database",
+    "api": "API",
+    "review": "Review",
+    "export": "Export"
+  },
+  "wizard": {
+    "title": "Project Wizard",
+    "complete": "{{done}}/{{total}} complete",
+    "goTo": "Go to {{label}}",
+    "cutline": "API design and everything after it need Pro.",
+    "steps": {
+      "interview": "Interview",
+      "requirements": "Requirements",
+      "architecture": "Architecture",
+      "database": "Database",
+      "api": "API",
+      "review": "Review",
+      "export": "Export"
+    }
+  }
+}

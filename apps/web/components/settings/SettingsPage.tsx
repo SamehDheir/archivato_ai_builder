@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Check, ShieldCheck, Trash2, Zap } from 'lucide-react';
 import { PLANS, type AuthUser, type SubscriptionView } from '@archivato/shared';
 import { authApi, billingApi, interviewApi } from '@/lib/api';
+import { useFormat } from '@/lib/i18n/format';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -22,12 +24,6 @@ import { ThemeToggle } from '@/components/shared/theme';
 import { useToast } from '@/components/shared/toast';
 import { useConfirm } from '@/components/shared/confirm-dialog';
 
-const PROVIDER_LABEL: Record<string, string> = {
-  password: 'Email & password',
-  google: 'Google',
-  github: 'GitHub',
-};
-
 /**
  * Account settings (`/settings`): profile, security (change/set password),
  * appearance, and a danger zone to delete the account. Loads the current user
@@ -35,8 +31,7 @@ const PROVIDER_LABEL: Record<string, string> = {
  */
 export function SettingsPage() {
   const router = useRouter();
-  const toast = useToast();
-  const confirm = useConfirm();
+  const { t } = useTranslation('settings');
 
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,7 +61,7 @@ export function SettingsPage() {
   if (!user) {
     return (
       <div className="mx-auto max-w-2xl px-5 py-12 text-center text-muted-foreground">
-        You need to be signed in to view settings.
+        {t('signedOut')}
       </div>
     );
   }
@@ -77,12 +72,10 @@ export function SettingsPage() {
         href="/dashboard"
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" /> Back to dashboard
+        <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" /> {t('back')}
       </Link>
-      <h1 className="text-2xl font-bold">Settings</h1>
-      <p className="mb-6 mt-1 text-sm text-muted-foreground">
-        Manage your profile, security, and preferences.
-      </p>
+      <h1 className="text-2xl font-bold">{t('title')}</h1>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
 
       <div className="space-y-6">
         <ProfileSection user={user} onUpdated={setUser} />
@@ -108,6 +101,8 @@ function ProfileSection({
   onUpdated: (u: AuthUser) => void;
 }) {
   const toast = useToast();
+  const { t } = useTranslation('settings');
+  const fmt = useFormat();
   const [displayName, setDisplayName] = useState(user.displayName);
   const [saving, setSaving] = useState(false);
   const [resending, setResending] = useState(false);
@@ -119,10 +114,10 @@ function ProfileSection({
     try {
       const updated = await authApi.updateProfile({ displayName: displayName.trim() });
       onUpdated(updated);
-      toast({ title: 'Profile updated', variant: 'success' });
+      toast({ title: t('profile.updated'), variant: 'success' });
     } catch (e) {
       toast({
-        title: 'Could not update profile',
+        title: t('profile.updateFailed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -135,9 +130,9 @@ function ProfileSection({
     setResending(true);
     try {
       await authApi.resendVerification();
-      toast({ title: 'Verification email sent', variant: 'success' });
+      toast({ title: t('profile.verificationSent'), variant: 'success' });
     } catch {
-      toast({ title: 'Could not send verification email', variant: 'error' });
+      toast({ title: t('profile.verificationFailed'), variant: 'error' });
     } finally {
       setResending(false);
     }
@@ -146,34 +141,37 @@ function ProfileSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Profile</CardTitle>
-        <CardDescription>Your account details.</CardDescription>
+        <CardTitle>{t('profile.title')}</CardTitle>
+        <CardDescription>{t('profile.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="displayName">Display name</Label>
+          <Label htmlFor="displayName">{t('profile.displayName')}</Label>
           <div className="flex gap-2">
             <Input
               id="displayName"
               value={displayName}
               maxLength={80}
+              dir="auto"
               onChange={(e) => setDisplayName(e.target.value)}
             />
             <Button onClick={save} disabled={!dirty || saving}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('profile.saving') : t('profile.save')}
             </Button>
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <Label>Email</Label>
+          <Label>{t('profile.email')}</Label>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm">{user.email}</span>
+            <span className="text-sm" dir="ltr">
+              {user.email}
+            </span>
             {user.emailVerified ? (
-              <Badge variant="default">verified</Badge>
+              <Badge variant="default">{t('profile.verified')}</Badge>
             ) : (
               <>
-                <Badge variant="warning">unverified</Badge>
+                <Badge variant="warning">{t('profile.unverified')}</Badge>
                 <Button
                   variant="link"
                   size="sm"
@@ -181,7 +179,7 @@ function ProfileSection({
                   onClick={resend}
                   disabled={resending}
                 >
-                  {resending ? 'Sending…' : 'Resend verification'}
+                  {resending ? t('profile.sending') : t('profile.resend')}
                 </Button>
               </>
             )}
@@ -190,15 +188,15 @@ function ProfileSection({
 
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <div className="text-muted-foreground">Member since</div>
-            <div>{new Date(user.createdAt).toLocaleDateString()}</div>
+            <div className="text-muted-foreground">{t('profile.memberSince')}</div>
+            <div>{fmt.date(user.createdAt)}</div>
           </div>
           <div>
-            <div className="text-muted-foreground">Sign-in methods</div>
+            <div className="text-muted-foreground">{t('profile.signInMethods')}</div>
             <div className="mt-0.5 flex flex-wrap gap-1.5">
               {user.providers.map((p) => (
                 <Badge key={p} variant="secondary">
-                  {PROVIDER_LABEL[p] ?? p}
+                  {t(`provider.${p}`, { defaultValue: p })}
                 </Badge>
               ))}
             </div>
@@ -213,6 +211,8 @@ function ProfileSection({
 function BillingSection() {
   const toast = useToast();
   const confirm = useConfirm();
+  const { t } = useTranslation('settings');
+  const fmt = useFormat();
   const [sub, setSub] = useState<SubscriptionView | null>(null);
   const [used, setUsed] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -242,7 +242,7 @@ function BillingSection() {
     try {
       const res = await billingApi.checkout();
       if (res.status === 'activated') {
-        toast({ title: 'Upgraded to Pro', variant: 'success' });
+        toast({ title: t('billing.upgraded'), variant: 'success' });
         await load();
       } else if (res.status === 'checkout' && res.paddle) {
         // Paddle mode: open the checkout overlay if Paddle.js is loaded.
@@ -254,15 +254,15 @@ function BillingSection() {
           });
         } else {
           toast({
-            title: 'Checkout not available',
-            description: 'Paddle is not fully configured on this device yet.',
+            title: t('billing.checkoutUnavailable'),
+            description: t('billing.checkoutUnavailableDetail'),
             variant: 'error',
           });
         }
       }
     } catch (e) {
       toast({
-        title: 'Could not start checkout',
+        title: t('billing.checkoutFailed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -273,22 +273,20 @@ function BillingSection() {
 
   async function cancel() {
     const ok = await confirm({
-      title: 'Cancel Pro?',
-      description:
-        'You will keep Pro until the current period ends, then return to the ' +
-        'Free plan (1 project). No further charges.',
-      confirmLabel: 'Cancel subscription',
-      cancelLabel: 'Keep Pro',
+      title: t('billing.cancelTitle'),
+      description: t('billing.cancelDescription'),
+      confirmLabel: t('billing.cancelConfirm'),
+      cancelLabel: t('billing.cancelKeep'),
       destructive: true,
     });
     if (!ok) return;
     setBusy(true);
     try {
       setSub(await billingApi.cancel());
-      toast({ title: 'Subscription canceled', variant: 'success' });
+      toast({ title: t('billing.canceled'), variant: 'success' });
     } catch (e) {
       toast({
-        title: 'Could not cancel',
+        title: t('billing.cancelFailed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -300,14 +298,14 @@ function BillingSection() {
   const pro = PLANS.pro;
   const isPro = sub?.plan === 'pro';
 
+  const planName = isPro ? t('billing.planPro') : t('billing.planFree');
+  const usageKey = sub?.projectQuota === 1 ? 'billing.usage_one' : 'billing.usage_other';
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Plan &amp; billing</CardTitle>
-        <CardDescription>
-          Projects are metered by plan — a project counts once you confirm its
-          interview.
-        </CardDescription>
+        <CardTitle>{t('billing.title')}</CardTitle>
+        <CardDescription>{t('billing.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {loading || !sub ? (
@@ -320,56 +318,77 @@ function BillingSection() {
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 p-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold capitalize">{sub.plan} plan</span>
-                  {isPro && <Badge variant="primary">Pro</Badge>}
+                  <span className="font-semibold">
+                    {t('billing.planLabel', { plan: planName })}
+                  </span>
+                  {isPro && <Badge variant="primary">{t('billing.proBadge')}</Badge>}
                   {sub.cancelAtPeriodEnd && (
-                    <Badge variant="warning">cancels at period end</Badge>
+                    <Badge variant="warning">{t('billing.cancelsBadge')}</Badge>
                   )}
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
-                  {used ?? '—'} of {sub.projectQuota} project
-                  {sub.projectQuota === 1 ? '' : 's'} used
+                  {t(usageKey, { used: used ?? '—', quota: sub.projectQuota })}
                   {isPro && sub.periodEnd
-                    ? ` · ${sub.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(
-                        sub.periodEnd,
-                      ).toLocaleDateString()}`
+                    ? ` · ${
+                        sub.cancelAtPeriodEnd
+                          ? t('billing.ends', { date: fmt.date(sub.periodEnd) })
+                          : t('billing.renews', { date: fmt.date(sub.periodEnd) })
+                      }`
                     : ''}
                 </div>
               </div>
               {isPro ? (
                 <Button variant="outline" onClick={cancel} disabled={busy}>
-                  {busy ? 'Working…' : 'Cancel Pro'}
+                  {busy ? t('billing.working') : t('billing.cancel')}
                 </Button>
               ) : (
                 <Button onClick={upgrade} disabled={busy}>
                   <Zap className="h-4 w-4" />
-                  {busy ? 'Working…' : `Upgrade — $${pro.priceUsd}/mo`}
+                  {busy
+                    ? t('billing.working')
+                    : t('billing.upgrade', { price: pro.priceUsd })}
                 </Button>
               )}
             </div>
 
-            {!isPro && (
-              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
-                <div className="text-sm font-semibold">
-                  Pro — ${pro.priceUsd}/month
-                </div>
-                <ul className="mt-2 space-y-1">
-                  {pro.features.map((f) => (
-                    <li
-                      key={f}
-                      className="flex items-start gap-2 text-sm text-muted-foreground"
-                    >
-                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />{' '}
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {!isPro && <ProFeatureCard price={pro.priceUsd} />}
           </>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** The Pro upsell bullet list, reusing the localized billing feature copy. */
+const PRO_FEATURE_KEYS = [
+  'projects',
+  'api',
+  'review',
+  'roadmap',
+  'refine',
+  'export',
+] as const;
+
+function ProFeatureCard({ price }: { price: number }) {
+  const { t } = useTranslation('settings');
+  const { t: bt } = useTranslation('billing');
+  return (
+    <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+      <div className="text-sm font-semibold">
+        {t('billing.proHeading', { price })}
+      </div>
+      <ul className="mt-2 space-y-1">
+        {PRO_FEATURE_KEYS.map((k) => (
+          <li
+            key={k}
+            className="flex items-start gap-2 text-sm text-muted-foreground"
+          >
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />{' '}
+            {bt(`features.${k}.lead`)}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -392,6 +411,7 @@ function SecuritySection({
   onUpdated: (u: AuthUser) => void;
 }) {
   const toast = useToast();
+  const { t } = useTranslation('settings');
   const hasPassword = user.providers.includes('password');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -417,13 +437,13 @@ function SecuritySection({
       setNewPassword('');
       setConfirmPassword('');
       toast({
-        title: hasPassword ? 'Password changed' : 'Password set',
-        description: 'Other devices have been signed out.',
+        title: hasPassword ? t('security.changed') : t('security.set'),
+        description: t('security.otherSignedOut'),
         variant: 'success',
       });
     } catch (e) {
       toast({
-        title: 'Could not update password',
+        title: t('security.failed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -435,51 +455,63 @@ function SecuritySection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{hasPassword ? 'Change password' : 'Set a password'}</CardTitle>
+        <CardTitle>
+          {hasPassword ? t('security.changeTitle') : t('security.setTitle')}
+        </CardTitle>
         <CardDescription>
           {hasPassword
-            ? 'Changing your password signs out your other devices.'
-            : 'Add a password so you can also sign in with your email, not only ' +
-              `${user.providers.map((p) => PROVIDER_LABEL[p] ?? p).join(' / ')}.`}
+            ? t('security.changeDescription')
+            : t('security.setDescription', {
+                providers: user.providers
+                  .map((p) => t(`provider.${p}`, { defaultValue: p }))
+                  .join(' / '),
+              })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {hasPassword && (
           <div className="space-y-1.5">
-            <Label htmlFor="currentPassword">Current password</Label>
+            <Label htmlFor="currentPassword">{t('security.current')}</Label>
             <Input
               id="currentPassword"
               type="password"
               value={currentPassword}
+              dir="ltr"
               onChange={(e) => setCurrentPassword(e.target.value)}
             />
           </div>
         )}
         <div className="space-y-1.5">
-          <Label htmlFor="newPassword">New password</Label>
+          <Label htmlFor="newPassword">{t('security.new')}</Label>
           <Input
             id="newPassword"
             type="password"
             value={newPassword}
             minLength={8}
-            placeholder="At least 8 characters"
+            dir="ltr"
+            placeholder={t('security.newPlaceholder')}
             onChange={(e) => setNewPassword(e.target.value)}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="confirmPassword">Confirm new password</Label>
+          <Label htmlFor="confirmPassword">{t('security.confirm')}</Label>
           <Input
             id="confirmPassword"
             type="password"
             value={confirmPassword}
+            dir="ltr"
             onChange={(e) => setConfirmPassword(e.target.value)}
           />
           {mismatch && (
-            <p className="text-sm text-destructive">Passwords don&apos;t match.</p>
+            <p className="text-sm text-destructive">{t('security.mismatch')}</p>
           )}
         </div>
         <Button onClick={submit} disabled={!canSubmit}>
-          {saving ? 'Saving…' : hasPassword ? 'Change password' : 'Set password'}
+          {saving
+            ? t('security.saving')
+            : hasPassword
+              ? t('security.changeBtn')
+              : t('security.setBtn')}
         </Button>
       </CardContent>
     </Card>
@@ -488,14 +520,15 @@ function SecuritySection({
 
 /** Appearance: surface the existing light/dark theme toggle. */
 function AppearanceSection() {
+  const { t } = useTranslation('settings');
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Appearance</CardTitle>
-        <CardDescription>Choose how Archivato looks on this device.</CardDescription>
+        <CardTitle>{t('appearance.title')}</CardTitle>
+        <CardDescription>{t('appearance.description')}</CardDescription>
       </CardHeader>
       <CardContent className="flex items-center justify-between">
-        <span className="text-sm">Theme</span>
+        <span className="text-sm">{t('appearance.theme')}</span>
         <ThemeToggle />
       </CardContent>
     </Card>
@@ -506,27 +539,26 @@ function AppearanceSection() {
 function DangerSection({ onDeleted }: { onDeleted: () => void }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const { t } = useTranslation('settings');
   const [deleting, setDeleting] = useState(false);
 
   async function remove() {
     const ok = await confirm({
-      title: 'Delete your account?',
-      description:
-        'This permanently deletes your account and every project, design, and ' +
-        'artifact you own. This cannot be undone.',
-      confirmLabel: 'Delete account',
-      cancelLabel: 'Keep account',
+      title: t('danger.confirmTitle'),
+      description: t('danger.confirmDescription'),
+      confirmLabel: t('danger.confirmDelete'),
+      cancelLabel: t('danger.confirmKeep'),
       destructive: true,
     });
     if (!ok) return;
     setDeleting(true);
     try {
       await authApi.deleteAccount();
-      toast({ title: 'Account deleted', variant: 'success' });
+      toast({ title: t('danger.deleted'), variant: 'success' });
       onDeleted();
     } catch (e) {
       toast({
-        title: 'Could not delete account',
+        title: t('danger.failed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -538,16 +570,14 @@ function DangerSection({ onDeleted }: { onDeleted: () => void }) {
     <Card className="border-destructive/40">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-destructive">
-          <ShieldCheck className="h-4 w-4" /> Danger zone
+          <ShieldCheck className="h-4 w-4" /> {t('danger.title')}
         </CardTitle>
-        <CardDescription>
-          Permanently delete your account and all of your projects.
-        </CardDescription>
+        <CardDescription>{t('danger.description')}</CardDescription>
       </CardHeader>
       <CardContent>
         <Button variant="destructive" onClick={remove} disabled={deleting}>
           <Trash2 className="h-4 w-4" />
-          {deleting ? 'Deleting…' : 'Delete account'}
+          {deleting ? t('danger.deleting') : t('danger.delete')}
         </Button>
       </CardContent>
     </Card>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Flag } from 'lucide-react';
 import type { ProjectRoadmap } from '@archivato/shared';
 import { roadmapApi } from '@/lib/api';
@@ -24,6 +25,7 @@ export function RoadmapPanel({
   reloadKey: number;
 }) {
   const toast = useToast();
+  const { t } = useTranslation('stages');
   const [roadmap, setRoadmap] = useState<ProjectRoadmap | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -46,10 +48,10 @@ export function RoadmapPanel({
     setBusy(true);
     try {
       setRoadmap(await roadmapApi.generate(sessionId));
-      toast({ title: 'Roadmap generated', variant: 'success' });
+      toast({ title: t('roadmap.generated'), variant: 'success' });
     } catch (e) {
       toast({
-        title: 'Could not generate the roadmap',
+        title: t('roadmap.failed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -71,11 +73,11 @@ export function RoadmapPanel({
     return (
       <EmptyState
         icon={Flag}
-        title="Plan the build"
-        description="Sequence the generated design into an implementation roadmap: ordered phases with milestones, tasks, effort estimates, and dependencies."
+        title={t('roadmap.emptyTitle')}
+        description={t('roadmap.emptyDescription')}
       >
         <Button onClick={generate} disabled={busy}>
-          {busy ? 'Working…' : 'Generate Roadmap'}
+          {busy ? t('roadmap.working') : t('roadmap.generate')}
         </Button>
       </EmptyState>
     );
@@ -85,7 +87,7 @@ export function RoadmapPanel({
     <div className="space-y-3">
       <RoadmapView roadmap={roadmap} />
       <Button variant="secondary" onClick={generate} disabled={busy}>
-        {busy ? 'Working…' : 'Regenerate'}
+        {busy ? t('roadmap.working') : t('roadmap.regenerate')}
       </Button>
     </div>
   );

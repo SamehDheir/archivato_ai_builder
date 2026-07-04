@@ -1,18 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import type { ChatMessage, RefineResult } from '@archivato/shared';
 import { chatApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-
-const EXAMPLES = [
-  'Add notifications',
-  'Make it scalable to 5 million users',
-  'Add reporting dashboards',
-];
 
 /**
  * Post-generation refinement chat (Slice 10). Sends a natural-language
@@ -26,6 +21,12 @@ export function ChatPanel({
   sessionId: string;
   onRefined: (result: RefineResult) => void;
 }) {
+  const { t } = useTranslation('stages');
+  const examples = [
+    t('refine.exampleNotifications'),
+    t('refine.exampleScale'),
+    t('refine.exampleReporting'),
+  ];
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [instruction, setInstruction] = useState('');
   const [busy, setBusy] = useState(false);
@@ -67,10 +68,7 @@ export function ChatPanel({
 
   return (
     <div>
-      <p className="text-sm text-muted-foreground">
-        Ask for a change and the requirements, architecture, database, and APIs
-        update together.
-      </p>
+      <p className="text-sm text-muted-foreground">{t('refine.intro')}</p>
 
       {messages.length > 0 && (
         <div className="mt-3 space-y-2">
@@ -82,7 +80,7 @@ export function ChatPanel({
           {busy && (
             <Bubble role="assistant">
               <span className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Redesigning…
+                <Loader2 className="h-4 w-4 animate-spin" /> {t('refine.redesigning')}
               </span>
             </Bubble>
           )}
@@ -90,7 +88,7 @@ export function ChatPanel({
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {EXAMPLES.map((ex) => (
+        {examples.map((ex) => (
           <Button
             key={ex}
             type="button"
@@ -112,13 +110,14 @@ export function ChatPanel({
         }}
       >
         <Textarea
-          placeholder="e.g. Add notifications, or make it scalable to 5M users…"
+          placeholder={t('refine.placeholder')}
           value={instruction}
           onChange={(e) => setInstruction(e.target.value)}
           disabled={busy}
+          dir="auto"
         />
         <Button type="submit" disabled={busy || instruction.trim().length < 3}>
-          {busy ? 'Applying…' : 'Send'}
+          {busy ? t('refine.applying') : t('refine.send')}
         </Button>
       </form>
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
@@ -133,20 +132,23 @@ function Bubble({
   role: 'user' | 'assistant';
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation('stages');
   const isUser = role === 'user';
   return (
     <div
       className={cn(
         'max-w-[85%] rounded-lg border px-3 py-2 text-sm',
         isUser
-          ? 'ml-auto border-primary/40 bg-primary/10'
-          : 'mr-auto border-border bg-card',
+          ? 'ms-auto border-primary/40 bg-primary/10'
+          : 'me-auto border-border bg-card',
       )}
     >
       {!isUser && (
-        <span className="mb-1 block text-xs font-semibold text-primary">AI</span>
+        <span className="mb-1 block text-xs font-semibold text-primary">
+          {t('refine.ai')}
+        </span>
       )}
-      <div>{children}</div>
+      <div dir="auto">{children}</div>
     </div>
   );
 }

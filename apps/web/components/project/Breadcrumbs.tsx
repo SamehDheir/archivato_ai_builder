@@ -44,7 +44,7 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
                 </span>
               )}
               {!last && (
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60 rtl:-scale-x-100" />
               )}
             </li>
           );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check as CheckIcon, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -57,18 +58,19 @@ export function EditorBar({
   /** When provided, valid edits autosave on a debounce. */
   onAutosave?: () => void;
 }) {
+  const { t } = useTranslation('stages');
   // Debounced autosave: fire once edits settle and the draft is valid. Each edit
   // re-runs this effect (new `onAutosave` identity), resetting the timer.
   useEffect(() => {
     if (!onAutosave || !dirty || !canSave || saving) return;
-    const t = setTimeout(() => onAutosave(), 1200);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => onAutosave(), 1200);
+    return () => clearTimeout(timer);
   }, [onAutosave, dirty, canSave, saving]);
 
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
       <Button onClick={() => onSave()} disabled={saving || !dirty}>
-        {saving ? 'Saving…' : 'Save changes'}
+        {saving ? t('editor.saving') : t('editor.save')}
       </Button>
       <Button
         variant="secondary"
@@ -79,7 +81,7 @@ export function EditorBar({
         }
         disabled={saving}
       >
-        {onAutosave ? 'Done' : 'Cancel'}
+        {onAutosave ? t('editor.done') : t('editor.cancel')}
       </Button>
       <SaveStatus saving={saving} dirty={dirty} canSave={canSave} savedAt={savedAt} />
       {error && <span className="text-sm text-destructive">{error}</span>}
@@ -99,31 +101,33 @@ function SaveStatus({
   canSave: boolean;
   savedAt: number | null;
 }) {
+  const { t } = useTranslation('stages');
   if (saving) {
     return (
       <span className="flex items-center gap-1 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" /> Saving…
+        <Loader2 className="h-3 w-3 animate-spin" /> {t('editor.saving')}
       </span>
     );
   }
   if (dirty && !canSave) {
     return (
       <span className="text-xs font-medium text-amber-600 dark:text-amber-500">
-        Fix errors to save
+        {t('editor.fixErrors')}
       </span>
     );
   }
   if (dirty) {
     return (
       <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-500">
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Unsaved changes
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />{' '}
+        {t('editor.unsaved')}
       </span>
     );
   }
   if (savedAt) {
     return (
       <span className="flex items-center gap-1 text-xs text-muted-foreground">
-        <CheckIcon className="h-3 w-3 text-primary" /> Saved
+        <CheckIcon className="h-3 w-3 text-primary" /> {t('editor.saved')}
       </span>
     );
   }
@@ -145,6 +149,7 @@ export function invalidIf(cond: boolean): string {
  * bouncing off the API's 400.
  */
 export function ValidationSummary({ errors }: { errors: string[] }) {
+  const { t } = useTranslation('stages');
   if (errors.length === 0) return null;
   return (
     <div
@@ -152,13 +157,15 @@ export function ValidationSummary({ errors }: { errors: string[] }) {
       className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
     >
       <p className="font-medium">
-        Fix {errors.length} issue{errors.length > 1 ? 's' : ''} before saving:
+        {t('editor.fixToSave', { count: errors.length })}
       </p>
-      <ul className="mt-1 list-disc space-y-0.5 pl-5">
+      <ul className="mt-1 list-disc space-y-0.5 ps-5">
         {errors.slice(0, 8).map((e, i) => (
-          <li key={i}>{e}</li>
+          <li key={i} dir="auto">
+            {e}
+          </li>
         ))}
-        {errors.length > 8 && <li>…and {errors.length - 8} more</li>}
+        {errors.length > 8 && <li>{t('editor.andMore', { count: errors.length - 8 })}</li>}
       </ul>
     </div>
   );
@@ -167,18 +174,19 @@ export function ValidationSummary({ errors }: { errors: string[] }) {
 /** A small "× remove" icon button for list rows. */
 export function RemoveButton({
   onClick,
-  label = 'Remove',
+  label,
 }: {
   onClick: () => void;
   label?: string;
 }) {
+  const { t } = useTranslation('stages');
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon"
       onClick={onClick}
-      aria-label={label}
+      aria-label={label ?? t('editor.remove')}
       className="shrink-0 text-muted-foreground hover:text-destructive"
     >
       <Trash2 className="h-4 w-4" />

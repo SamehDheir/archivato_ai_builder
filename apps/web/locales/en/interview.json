@@ -1,0 +1,45 @@
+{
+  "conversation": "Conversation",
+  "interviewer": "Interviewer",
+  "you": "You",
+  "questionN": "Question {{n}}",
+  "qShort": "Q{{n}}",
+  "pickMulti": "Pick any that apply — add detail below if you like.",
+  "pickOne": "Pick one — or add detail below.",
+  "extraPlaceholder": "Add any extra detail (optional)…",
+  "answerPlaceholder": "Type your answer…",
+  "answer": "Answer",
+  "sending": "Sending…",
+  "sendPre": "Press ",
+  "sendPost": " to send",
+  "summaryTitle": "Requirements summary",
+  "summaryHelp": "Completeness reached the threshold. Review and confirm to lock the requirements before design begins.",
+  "confirm": "Confirm requirements",
+  "confirming": "Confirming…",
+  "progress": {
+    "completeness": "Requirement completeness",
+    "status": "Status: {{status}}",
+    "phase": "Phase: {{phase}}"
+  },
+  "status": {
+    "collecting": "collecting",
+    "awaiting_confirmation": "awaiting confirmation",
+    "confirmed": "confirmed"
+  },
+  "phase": {
+    "understanding": "understanding",
+    "business_logic": "business logic",
+    "features": "features",
+    "scale": "scale",
+    "technical": "technical"
+  },
+  "summary": {
+    "goal": "Goal",
+    "users": "Users",
+    "features": "Features",
+    "businessRules": "Business rules",
+    "constraints": "Constraints",
+    "assumptions": "Assumptions",
+    "empty": "—"
+  }
+}

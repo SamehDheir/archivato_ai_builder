@@ -1,0 +1,42 @@
+{
+  "language": {
+    "toggle": "Change language",
+    "switchTo": "Switch to {{lang}}"
+  },
+  "header": {
+    "dashboard": "Go to dashboard",
+    "settings": "Settings",
+    "admin": "Admin dashboard",
+    "signOut": "Sign out",
+    "unverified": "unverified",
+    "emailNotVerified": "Email not verified"
+  },
+  "loading": {
+    "workspace": "Loading your workspace…",
+    "redirecting": "Redirecting…",
+    "generic": "Loading…"
+  },
+  "notFound": {
+    "badge": "404 — not found",
+    "title": "This page doesn’t exist",
+    "body": "The page you’re looking for may have moved, or the link is out of date. Let’s get you back on track.",
+    "toDashboard": "Go to dashboard",
+    "toHome": "Back to home"
+  },
+  "error": {
+    "badge": "Something went wrong",
+    "title": "An unexpected error occurred",
+    "body": "Try again — if it keeps happening, head back to your dashboard and reopen the project.",
+    "reference": "Reference: {{digest}}",
+    "retry": "Try again",
+    "toDashboard": "Go to dashboard"
+  },
+  "verify": {
+    "pre": "Please verify your email (",
+    "post": ") — check your inbox for the confirmation link.",
+    "sent": "Verification email sent.",
+    "resend": "Resend email",
+    "sending": "Sending…",
+    "error": "Could not send — try again."
+  }
+}

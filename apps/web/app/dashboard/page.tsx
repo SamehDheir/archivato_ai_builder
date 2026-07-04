@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -50,38 +51,6 @@ import { ProjectStages, type ActiveJob, type TabKey } from '@/components/project
 import { Skeleton } from '@/components/ui/skeleton';
 import { CommandPalette, type CommandGroup } from '@/components/shared/command-palette';
 
-const STAGE_LABEL: Record<PipelineStageName, string> = {
-  requirements: 'Requirement document',
-  'system-design': 'System design',
-  'database-design': 'Database design',
-  'api-design': 'API design',
-  review: 'AI review',
-};
-
-/** Human label for each stage tab (used by the breadcrumb trail). */
-const TAB_LABEL: Record<TabKey, string> = {
-  vision: 'Vision',
-  requirements: 'Requirements',
-  system: 'Architecture',
-  database: 'Database',
-  api: 'API',
-  diagrams: 'Diagrams',
-  canvas: 'Canvas',
-  review: 'Review',
-  roadmap: 'Roadmap',
-  export: 'Export',
-  apidocs: 'API Docs',
-  refine: 'Refine',
-  history: 'History',
-};
-
-/** Short status label shown next to a project in the command palette. */
-const STATUS_HINT: Record<string, string> = {
-  collecting: 'Interviewing',
-  awaiting_confirmation: 'Review & confirm',
-  confirmed: 'Confirmed',
-};
-
 /** localStorage key for the active session id, scoped PER USER. */
 const sessionKey = (userId: string) => `archivato.sessionId:${userId}`;
 const LEGACY_SESSION_KEY = 'archivato.sessionId';
@@ -91,6 +60,7 @@ export default function Home() {
   const confirm = useConfirm();
   const openUpgrade = useUpgrade();
   const router = useRouter();
+  const { t } = useTranslation('dashboard');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [state, setState] = useState<InterviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -223,12 +193,15 @@ export default function Home() {
       setter(result);
       setVersionsReload((k) => k + 1);
       void refreshProjects();
-      toast({ title: `${STAGE_LABEL[stage]} generated`, variant: 'success' });
+      toast({
+        title: t('toast.generated', { stage: t(`stage.${stage}`) }),
+        variant: 'success',
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
       toast({
-        title: `Could not generate the ${STAGE_LABEL[stage].toLowerCase()}`,
+        title: t('toast.generateFailed', { stage: t(`stage.${stage}`) }),
         description: msg,
         variant: 'error',
       });
@@ -241,12 +214,10 @@ export default function Home() {
   /** Delete a project after confirmation; frees a plan quota slot. */
   async function handleDeleteProject(sessionId: string) {
     const ok = await confirm({
-      title: 'Delete this project?',
-      description:
-        'This permanently deletes the project and all of its artifacts ' +
-        '(requirements, designs, review, history). This cannot be undone.',
-      confirmLabel: 'Delete project',
-      cancelLabel: 'Keep project',
+      title: t('confirm.deleteTitle'),
+      description: t('confirm.deleteBody'),
+      confirmLabel: t('confirm.deleteConfirm'),
+      cancelLabel: t('confirm.deleteCancel'),
       destructive: true,
     });
     if (!ok) return;
@@ -254,7 +225,7 @@ export default function Home() {
       await interviewApi.delete(sessionId);
       if (userId) localStorage.removeItem(sessionKey(userId));
       await refreshProjects();
-      toast({ title: 'Project deleted', variant: 'success' });
+      toast({ title: t('toast.deleted'), variant: 'success' });
     });
   }
 
@@ -282,7 +253,9 @@ export default function Home() {
     } catch (err) {
       // At the project cap (402) → offer an in-app upgrade instead of a raw error.
       if (err instanceof ApiError && err.status === 402) {
-        const upgraded = await openUpgrade({ feature: 'start another project' });
+        const upgraded = await openUpgrade({
+          feature: t('upgradeFeature.anotherProject'),
+        });
         if (upgraded) await refreshProjects();
         return;
       }
@@ -312,25 +285,25 @@ export default function Home() {
     if (opts?.auto) return;
     setVersionsReload((k) => k + 1);
     void refreshProjects();
-    toast({ title: 'Requirements saved', variant: 'success' });
+    toast({ title: t('toast.requirementsSaved'), variant: 'success' });
   }
   function handleSavedDesign(value: SystemDesign, opts?: { auto?: boolean }) {
     setDesign(value);
     if (opts?.auto) return;
     setVersionsReload((k) => k + 1);
-    toast({ title: 'Architecture saved', variant: 'success' });
+    toast({ title: t('toast.architectureSaved'), variant: 'success' });
   }
   function handleSavedDbDesign(value: DatabaseDesign, opts?: { auto?: boolean }) {
     setDbDesign(value);
     if (opts?.auto) return;
     setVersionsReload((k) => k + 1);
-    toast({ title: 'Database saved', variant: 'success' });
+    toast({ title: t('toast.databaseSaved'), variant: 'success' });
   }
   function handleSavedApiDesign(value: ApiDesign, opts?: { auto?: boolean }) {
     setApiDesign(value);
     if (opts?.auto) return;
     setVersionsReload((k) => k + 1);
-    toast({ title: 'API design saved', variant: 'success' });
+    toast({ title: t('toast.apiSaved'), variant: 'success' });
   }
 
   function handleRefined(result: RefineResult) {
@@ -340,7 +313,7 @@ export default function Home() {
     setApiDesign(result.apiDesign);
     if (result.reviewReport) setReview(result.reviewReport);
     setVersionsReload((k) => k + 1);
-    toast({ title: 'Design refined', variant: 'success' });
+    toast({ title: t('toast.refined'), variant: 'success' });
   }
 
   /** Apply a restored version: replace every artifact with the snapshot's. */
@@ -352,7 +325,7 @@ export default function Home() {
     setReview(snapshot.review);
     setVersionsReload((k) => k + 1);
     void refreshProjects();
-    toast({ title: 'Project restored to selected version', variant: 'success' });
+    toast({ title: t('toast.restored'), variant: 'success' });
   }
 
   function reset() {
@@ -375,11 +348,10 @@ export default function Home() {
   async function confirmLeave() {
     if (!dirty) return true;
     return confirm({
-      title: 'Discard unsaved changes?',
-      description:
-        'You have unsaved edits on this stage. Leaving now will discard them.',
-      confirmLabel: 'Discard changes',
-      cancelLabel: 'Keep editing',
+      title: t('confirm.leaveTitle'),
+      description: t('confirm.leaveBody'),
+      confirmLabel: t('confirm.leaveConfirm'),
+      cancelLabel: t('confirm.leaveCancel'),
       destructive: true,
     });
   }
@@ -455,7 +427,7 @@ export default function Home() {
     const projectName =
       ideaText.length > 36 ? `${ideaText.slice(0, 36).trimEnd()}…` : ideaText;
     crumbs = [
-      { label: 'Projects', onClick: backToProjects },
+      { label: t('breadcrumb.projects'), onClick: backToProjects },
       {
         label: projectName,
         title: ideaText,
@@ -466,7 +438,9 @@ export default function Home() {
       },
       {
         label:
-          state.status === 'confirmed' ? TAB_LABEL[stageTab] : 'Interview',
+          state.status === 'confirmed'
+            ? t(`tab.${stageTab}`)
+            : t('tab.interview'),
       },
     ];
   }
@@ -490,20 +464,20 @@ export default function Home() {
   };
   const paletteGroups: CommandGroup[] = [
     {
-      heading: 'Actions',
+      heading: t('palette.actions'),
       items: [
         // Admins manage the platform (no project creation); everyone else can
         // start a new project.
         isAdmin
           ? {
               id: 'admin',
-              label: 'Admin dashboard',
+              label: t('palette.admin'),
               icon: ShieldCheck,
               run: () => router.push('/admin'),
             }
           : {
               id: 'new-project',
-              label: 'New project',
+              label: t('palette.newProject'),
               icon: Plus,
               run: async () => {
                 await backToProjects();
@@ -512,24 +486,24 @@ export default function Home() {
             },
         {
           id: 'all-projects',
-          label: 'Back to projects',
+          label: t('palette.backToProjects'),
           icon: LayoutGrid,
           run: () => void backToProjects(),
         },
         {
           id: 'settings',
-          label: 'Account settings',
+          label: t('palette.settings'),
           icon: Settings,
           run: () => router.push('/settings'),
         },
       ],
     },
     {
-      heading: 'Projects',
+      heading: t('palette.projects'),
       items: projects.map((p) => ({
         id: `project-${p.sessionId}`,
         label: p.idea,
-        hint: STATUS_HINT[p.status],
+        hint: t(`status.${p.status}`),
         icon: FolderOpen,
         run: () => void openProject(p.sessionId),
       })),
@@ -537,14 +511,14 @@ export default function Home() {
     ...(state?.status === 'confirmed'
       ? [
           {
-            heading: 'Stages',
-            items: (Object.keys(TAB_LABEL) as TabKey[])
-              .filter((t) => stageAvailable[t])
-              .map((t) => ({
-                id: `stage-${t}`,
-                label: TAB_LABEL[t],
-                hint: 'Stage',
-                run: () => void goToStage(t),
+            heading: t('palette.stages'),
+            items: (Object.keys(stageAvailable) as TabKey[])
+              .filter((tab) => stageAvailable[tab])
+              .map((tab) => ({
+                id: `stage-${tab}`,
+                label: t(`tab.${tab}`),
+                hint: t('palette.stage'),
+                run: () => void goToStage(tab),
               })),
           },
         ]
@@ -561,37 +535,35 @@ export default function Home() {
       {!state && (
         <>
           <div className="flex items-start justify-between gap-3">
-            <h1 className="text-2xl font-bold">Archivato AI Builder</h1>
+            <h1 className="text-2xl font-bold">{t('appTitle')}</h1>
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
               className="hidden items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground sm:flex"
             >
               <Search className="h-3.5 w-3.5" />
-              Search
+              {t('search')}
               <kbd className="rounded border border-border px-1 text-[10px]">
                 ⌘K
               </kbd>
             </button>
           </div>
           <p className="mb-6 mt-1 text-sm text-muted-foreground">
-            AI Software Architecture Generator — turn an idea into a full system
-            design.
+            {t('appSubtitle')}
           </p>
 
           {isAdmin ? (
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-6 text-center">
               <ShieldCheck className="mx-auto h-8 w-8 text-primary" />
-              <h2 className="mt-2 text-lg font-semibold">Admin account</h2>
+              <h2 className="mt-2 text-lg font-semibold">{t('admin.title')}</h2>
               <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                Admin accounts manage the platform and don&apos;t create projects.
-                Head to the admin dashboard for users, revenue, and traffic stats.
+                {t('admin.body')}
               </p>
               <Link
                 href="/admin"
                 className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               >
-                <ShieldCheck className="h-4 w-4" /> Open admin dashboard
+                <ShieldCheck className="h-4 w-4" /> {t('admin.open')}
               </Link>
             </div>
           ) : (
@@ -600,11 +572,14 @@ export default function Home() {
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
                   <span>
                     <span className="font-semibold capitalize">
-                      {sub.plan} plan
+                      {t('quota.plan', { plan: sub.plan })}
                     </span>{' '}
                     <span className="text-muted-foreground">
-                      · {projects.length} of {sub.projectQuota} project
-                      {sub.projectQuota === 1 ? '' : 's'} used
+                      ·{' '}
+                      {t('quota.used', {
+                        count: projects.length,
+                        quota: sub.projectQuota,
+                      })}
                     </span>
                   </span>
                   {sub.plan === 'free' ? (
@@ -616,14 +591,14 @@ export default function Home() {
                       }}
                       className="font-medium text-primary hover:underline"
                     >
-                      Upgrade to Pro
+                      {t('quota.upgrade')}
                     </button>
                   ) : (
                     <Link
                       href="/settings"
                       className="font-medium text-primary hover:underline"
                     >
-                      Manage plan
+                      {t('quota.manage')}
                     </Link>
                   )}
                 </div>
@@ -655,6 +630,7 @@ export default function Home() {
           <Breadcrumbs items={crumbs} />
           {state.intent?.summary && (
             <p
+              dir="auto"
               className="-mt-2 truncate text-sm text-muted-foreground"
               title={state.intent.summary}
             >

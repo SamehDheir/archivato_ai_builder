@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff } from 'lucide-react';
 import type { AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
@@ -13,13 +14,13 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 import { LogoMark } from '@/components/shared/Logo';
 
-const OAUTH_ERRORS: Record<string, string> = {
-  oauth_unavailable: 'That sign-in provider is not configured.',
-  oauth_state: 'Sign-in expired or was interrupted. Please try again.',
-  oauth_failed: 'Sign-in failed. Please try again.',
-  oauth_device:
-    'This device already has an account. Only one account per device is allowed — please sign in instead.',
-};
+/** Known OAuth error codes we surface (translated via `auth.oauthError.*`). */
+const OAUTH_ERROR_CODES = new Set([
+  'oauth_unavailable',
+  'oauth_state',
+  'oauth_failed',
+  'oauth_device',
+]);
 
 /**
  * The login/register form. Reused by the inline gate (`AuthGate`) and by the
@@ -32,11 +33,13 @@ export function AuthForm({
   initialMode?: 'login' | 'register';
   onSuccess: (user: AuthUser) => void;
 }) {
+  const { t } = useTranslation('auth');
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [oauthErrorCode, setOauthErrorCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [forgot, setForgot] = useState(false);
@@ -51,7 +54,7 @@ export function AuthForm({
   useEffect(() => {
     authApi.oauthProviders().then(setOauth).catch(() => undefined);
     const err = new URLSearchParams(window.location.search).get('error');
-    if (err && OAUTH_ERRORS[err]) setError(OAUTH_ERRORS[err]);
+    if (err && OAUTH_ERROR_CODES.has(err)) setOauthErrorCode(err);
   }, []);
 
   if (forgot) {
@@ -106,11 +109,9 @@ export function AuthForm({
     <div className="mx-auto max-w-md px-5 py-12">
       <div className="flex items-center gap-2.5">
         <LogoMark className="h-9 w-9" />
-        <h1 className="text-2xl font-bold">Archivato AI Builder</h1>
+        <h1 className="text-2xl font-bold">{t('title')}</h1>
       </div>
-      <p className="mb-6 mt-2 text-sm text-muted-foreground">
-        AI Software Architecture Generator — sign in to start designing systems.
-      </p>
+      <p className="mb-6 mt-2 text-sm text-muted-foreground">{t('subtitle')}</p>
 
       <Tabs
         value={mode}
@@ -118,8 +119,8 @@ export function AuthForm({
         className="mb-4"
       >
         <TabsList>
-          <TabsTrigger value="login">Login</TabsTrigger>
-          <TabsTrigger value="register">Register</TabsTrigger>
+          <TabsTrigger value="login">{t('tab.login')}</TabsTrigger>
+          <TabsTrigger value="register">{t('tab.register')}</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -129,65 +130,79 @@ export function AuthForm({
         </div>
       )}
 
+      {oauthErrorCode && (
+        <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {t(`oauthError.${oauthErrorCode}`)}
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-5">
           <form className="space-y-3" onSubmit={handleSubmit}>
             <h3 className="font-semibold">
-              {isRegister ? 'Create your account' : 'Welcome back'}
+              {isRegister ? t('heading.register') : t('heading.login')}
             </h3>
 
             {isRegister && (
               <p className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                To prevent spam, only <strong>one account per device</strong> is
-                allowed. If you already have an account on this device, please
-                sign in instead.
+                {t('device.pre')}
+                <strong>{t('device.strong')}</strong>
+                {t('device.post')}
               </p>
             )}
 
             {isRegister && (
               <div className="space-y-1.5">
-                <Label htmlFor="displayName">Name</Label>
+                <Label htmlFor="displayName">{t('field.name')}</Label>
                 <Input
                   id="displayName"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Ada Lovelace"
+                  placeholder={t('field.namePlaceholder')}
                   required
                 />
               </div>
             )}
 
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('field.email')}</Label>
               <Input
                 id="email"
                 type="email"
+                dir="ltr"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder={t('field.emailPlaceholder')}
                 required
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('field.password')}</Label>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
+                  dir="ltr"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={isRegister ? 'At least 8 characters' : '••••••••'}
+                  placeholder={
+                    isRegister
+                      ? t('field.passwordRegisterPlaceholder')
+                      : '••••••••'
+                  }
                   minLength={isRegister ? 8 : undefined}
-                  className="pr-10"
+                  className="pe-10"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={
+                    showPassword ? t('hidePassword') : t('showPassword')
+                  }
                   aria-pressed={showPassword}
-                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground"
+                  className="absolute inset-y-0 end-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -199,7 +214,7 @@ export function AuthForm({
             </div>
 
             {!isRegister && (
-              <div className="text-right">
+              <div className="text-end">
                 <Button
                   type="button"
                   variant="link"
@@ -210,7 +225,7 @@ export function AuthForm({
                     setForgot(true);
                   }}
                 >
-                  Forgot password?
+                  {t('forgot')}
                 </Button>
               </div>
             )}
@@ -222,11 +237,11 @@ export function AuthForm({
             >
               {busy
                 ? isRegister
-                  ? 'Creating…'
-                  : 'Signing in…'
+                  ? t('submit.registering')
+                  : t('submit.loggingIn')
                 : isRegister
-                  ? 'Create account'
-                  : 'Sign in'}
+                  ? t('submit.register')
+                  : t('submit.login')}
             </Button>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </form>
@@ -236,7 +251,7 @@ export function AuthForm({
       {(oauth.google || oauth.github) && (
         <div className="mt-4">
           <div className="my-3 flex items-center gap-3 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
-            <span>or {isRegister ? 'sign up' : 'continue'} with</span>
+            <span>{isRegister ? t('divider.register') : t('divider.login')}</span>
           </div>
           <div className="flex gap-2">
             {oauth.google && (
@@ -264,7 +279,7 @@ export function AuthForm({
       )}
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
+        {isRegister ? t('switch.haveAccount') : t('switch.noAccount')}{' '}
         <Button
           type="button"
           variant="link"
@@ -272,7 +287,7 @@ export function AuthForm({
           className="h-auto p-0"
           onClick={() => switchMode(isRegister ? 'login' : 'register')}
         >
-          {isRegister ? 'Login' : 'Register'}
+          {isRegister ? t('switch.toLogin') : t('switch.toRegister')}
         </Button>
       </p>
     </div>

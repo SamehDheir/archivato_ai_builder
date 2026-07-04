@@ -1,0 +1,113 @@
+{
+  "nav": {
+    "pipeline": "Pipeline",
+    "features": "Features",
+    "how": "How it works",
+    "signIn": "Sign in",
+    "startBuilding": "Start building",
+    "dashboard": "Dashboard"
+  },
+  "hero": {
+    "badge": "AI Software Architecture Generator",
+    "titleLead": "Describe your idea.",
+    "titleAccent": "Get a complete system design.",
+    "body": "Archivato interviews you about your app, then generates the whole blueprint — requirements, architecture, database, API, a scored review, and a build roadmap. You edit, refine, and export. Not a chatbot; an architecture engine.",
+    "start": "Start building",
+    "see": "See how it works",
+    "demoCaption": "A looping demo — watch an idea become a complete system design."
+  },
+  "pipeline": {
+    "kicker": "The pipeline",
+    "title": "One idea flows through eight gated stages.",
+    "body": "The core stages run as a gated trunk — nothing generates until the stage before it exists and you've confirmed the interview. Two standalone views branch off: Product Vision from the interview, and the Roadmap from the finished design.",
+    "legendGated": "gated stage",
+    "legendStandalone": "standalone branch",
+    "standalone": "standalone",
+    "nodes": {
+      "idea": { "label": "Idea", "desc": "A sentence about the software you want to build." },
+      "interview": { "label": "Interview", "desc": "Adaptive Q&A until requirements are complete — then you confirm." },
+      "requirements": { "label": "Requirements", "desc": "Functional & non-functional requirements, roles, rules, constraints." },
+      "system": { "label": "System Design", "desc": "Architecture pattern, tech stack, and the service breakdown." },
+      "database": { "label": "Database", "desc": "Entities, primary/foreign keys, and relationships." },
+      "api": { "label": "API", "desc": "REST endpoints by module with request/response schemas." },
+      "review": { "label": "Review", "desc": "A scored critique across security, scalability, performance, and cost." },
+      "export": { "label": "Export", "desc": "JSON, Markdown, OpenAPI, or a scaffolded project repo." }
+    },
+    "branches": {
+      "productVision": { "label": "Product Vision", "desc": "A PM view of the confirmed interview: vision, goals, MVP, metrics, personas." },
+      "roadmap": { "label": "Roadmap", "desc": "The finished design sequenced into phases → milestones → tasks." }
+    }
+  },
+  "features": {
+    "kicker": "Everything in the box",
+    "title": "A full design studio, not a single answer.",
+    "body": "Every stage produces a real, editable artifact — and the standalone views (vision, roadmap, review) frame it for the people who need them.",
+    "groups": {
+      "capture": {
+        "kicker": "01 · Capture",
+        "label": "Turn an idea into a spec",
+        "items": {
+          "interview": { "title": "Adaptive AI interview", "body": "A phased interview clarifies your idea — goals, users, rules, scale, and tech — until requirements are complete. Then it waits for your confirmation." },
+          "requirements": { "title": "Formal requirements", "body": "Functional & non-functional requirements, user roles with permissions, business rules, constraints, and assumptions — as a structured document." },
+          "vision": { "title": "Product Vision", "body": "A PM view of the confirmed interview: north-star vision, goals, a lean MVP vs. a future roadmap, success metrics, and user personas." }
+        }
+      },
+      "design": {
+        "kicker": "02 · Design",
+        "label": "Generate the system",
+        "items": {
+          "systemDb": { "title": "System & database design", "body": "An architecture (pattern, tech stack, services) and a schema — entities, keys, and relationships — derived from the requirements." },
+          "api": { "title": "REST API design", "body": "Endpoints grouped by module with request/response schemas and status codes, plus a live OpenAPI/Swagger view." },
+          "diagrams": { "title": "Diagrams & interactive canvas", "body": "Auto-generated Mermaid diagrams plus a React-Flow canvas you can rearrange — edits save back to the same design." },
+          "roadmap": { "title": "Implementation roadmap", "body": "The whole design sequenced into ordered phases → milestones → tasks, with rough effort estimates and dependencies." }
+        }
+      },
+      "ship": {
+        "kicker": "03 · Ship",
+        "label": "Review, refine & export",
+        "items": {
+          "review": { "title": "AI Architect Review", "body": "A scored critique across security, scalability, performance, and cost — with an overall score, per-dimension sub-scores, and critical-issue callouts." },
+          "refine": { "title": "Refine by chat", "body": "Change the design in plain language after generation. Every change is versioned, so you can compare and restore any point." },
+          "editors": { "title": "Structured editors", "body": "Every artifact is directly editable through structured forms — not a wall of text — with unsaved-change guards." },
+          "export": { "title": "Export anywhere", "body": "Download the whole system as JSON, Markdown, OpenAPI, or a ready-to-scaffold project structure." },
+          "secure": { "title": "Secure by default", "body": "JWT + rotating refresh in httpOnly cookies, email verification, OAuth, and per-project ownership on every route." }
+        }
+      }
+    }
+  },
+  "how": {
+    "kicker": "How it works",
+    "title": "From a sentence to a shippable design.",
+    "stepLabel": "Step {{n}}",
+    "steps": {
+      "1": { "title": "Describe the idea", "body": "Type a sentence about the software you want. Add an industry or scale if you like." },
+      "2": { "title": "Answer the interview", "body": "The AI asks only what it needs, then summarizes. You confirm before any design begins." },
+      "3": { "title": "Generate the system", "body": "Requirements, architecture, database, API, and a scored review — each stage builds on the last." },
+      "4": { "title": "Refine, review & export", "body": "Tweak by chat or canvas, read the roadmap, then export to JSON, Markdown, OpenAPI, or a repo." }
+    }
+  },
+  "manifesto": {
+    "kicker": "// not a chatbot",
+    "titleLead": "Most AI tools hand you a wall of text.",
+    "titleAccent": "Archivato hands you a system to build from.",
+    "body": "Structured, versioned, reviewable artifacts — the exact things an engineering team would actually build from.",
+    "design": "Design your system",
+    "create": "Create an account"
+  },
+  "footer": {
+    "tagline": "Turn a business idea into a complete software system design — not a chatbot, an architecture engine.",
+    "start": "Start building",
+    "explore": "Explore",
+    "account": "Account",
+    "links": {
+      "pipeline": "Pipeline",
+      "features": "Features",
+      "how": "How it works",
+      "signIn": "Sign in",
+      "createAccount": "Create account",
+      "dashboard": "Dashboard"
+    },
+    "rights": "© {{year}} Archivato AI Builder",
+    "tagshort": "AI Software Architecture Generator"
+  }
+}

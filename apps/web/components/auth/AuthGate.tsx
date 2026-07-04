@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { Loader2, Settings as SettingsIcon, ShieldCheck } from 'lucide-react';
 import type { AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { ThemeToggle } from '@/components/shared/theme';
+import { LanguageToggle } from '@/components/shared/i18n';
 import { Logo } from '@/components/shared/Logo';
 
 /** Always-public routes, matched by prefix (rendered regardless of auth state). */
@@ -38,6 +40,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useTranslation('common');
 
   const isPublic =
     PUBLIC_EXACT.includes(pathname ?? '') ||
@@ -73,18 +76,21 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (checking) {
-    return <LoadingScreen label="Loading your workspace…" />;
+    return <LoadingScreen label={t('loading.workspace')} />;
   }
 
   if (isGuestOnly) {
-    if (user) return <LoadingScreen label="Redirecting…" />;
+    if (user) return <LoadingScreen label={t('loading.redirecting')} />;
     return <>{children}</>;
   }
 
   if (!user) {
     return (
       <>
-        <ThemeToggle className="fixed right-4 top-4 z-50" />
+        <div className="fixed end-4 top-4 z-50 flex items-center gap-1">
+          <LanguageToggle />
+          <ThemeToggle />
+        </div>
         <AuthForm onSuccess={setUser} />
       </>
     );
@@ -96,34 +102,35 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         {/* Home button: back to the dashboard (the app's home once signed in). */}
         <Link
           href="/dashboard"
-          aria-label="Go to dashboard"
+          aria-label={t('header.dashboard')}
           className="rounded-md transition-opacity hover:opacity-80"
         >
           <Logo />
         </Link>
-        <span className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="ms-auto flex items-center gap-2 text-sm text-muted-foreground">
           {user.displayName}
           {!user.emailVerified && (
-            <Badge variant="warning" title="Email not verified">
-              unverified
+            <Badge variant="warning" title={t('header.emailNotVerified')}>
+              {t('header.unverified')}
             </Badge>
           )}
         </span>
+        <LanguageToggle />
         <ThemeToggle />
         {user.role === 'admin' && (
-          <Button asChild variant="ghost" size="sm" aria-label="Admin dashboard">
+          <Button asChild variant="ghost" size="sm" aria-label={t('header.admin')}>
             <Link href="/admin">
               <ShieldCheck className="h-4 w-4" />
             </Link>
           </Button>
         )}
-        <Button asChild variant="ghost" size="sm" aria-label="Settings">
+        <Button asChild variant="ghost" size="sm" aria-label={t('header.settings')}>
           <Link href="/settings">
             <SettingsIcon className="h-4 w-4" />
           </Link>
         </Button>
         <Button variant="secondary" size="sm" onClick={handleLogout}>
-          Sign out
+          {t('header.signOut')}
         </Button>
       </header>
 
@@ -136,6 +143,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
 /** Prompt + resend control shown to signed-in users who haven't verified. */
 function VerifyBanner({ email }: { email: string }) {
+  const { t } = useTranslation('common');
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>(
     'idle',
   );
@@ -152,11 +160,15 @@ function VerifyBanner({ email }: { email: string }) {
 
   return (
     <div className="mx-auto max-w-3xl px-5 pt-5">
-      <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
-        Please verify your email (<strong>{email}</strong>) — check your inbox
-        for the confirmation link.{' '}
+      <div
+        dir="auto"
+        className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 text-sm"
+      >
+        {t('verify.pre')}
+        <strong>{email}</strong>
+        {t('verify.post')}{' '}
         {state === 'sent' ? (
-          <strong>Verification email sent.</strong>
+          <strong>{t('verify.sent')}</strong>
         ) : (
           <Button
             variant="link"
@@ -165,11 +177,11 @@ function VerifyBanner({ email }: { email: string }) {
             onClick={resend}
             disabled={state === 'sending'}
           >
-            {state === 'sending' ? 'Sending…' : 'Resend email'}
+            {state === 'sending' ? t('verify.sending') : t('verify.resend')}
           </Button>
         )}
         {state === 'error' && (
-          <span className="ml-2 text-destructive">Could not send — try again.</span>
+          <span className="ms-2 text-destructive">{t('verify.error')}</span>
         )}
       </div>
     </div>

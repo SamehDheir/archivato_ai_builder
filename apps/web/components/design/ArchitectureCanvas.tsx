@@ -26,6 +26,7 @@ import ReactFlow, {
   type NodeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { useTranslation } from 'react-i18next';
 import type { SystemDesign } from '@archivato/shared';
 import { Button } from '@/components/ui/button';
 import { systemDesignApi } from '@/lib/api';
@@ -46,6 +47,7 @@ const DirtyContext = createContext<() => void>(() => {});
 /** A draggable service box with an editable name + responsibility. */
 function ServiceNode({ id, data }: NodeProps<SvcData>) {
   const { setNodes } = useReactFlow();
+  const { t } = useTranslation('stages');
   const markDirty = useContext(DirtyContext);
   const update = (field: keyof SvcData, value: string) => {
     markDirty();
@@ -65,7 +67,8 @@ function ServiceNode({ id, data }: NodeProps<SvcData>) {
         <input
           className="nodrag w-full bg-transparent text-sm font-semibold outline-none"
           value={data.name}
-          placeholder="Service name"
+          placeholder={t('canvas.serviceName')}
+          dir="auto"
           onChange={(e) => update('name', e.target.value)}
         />
         <span className={`shrink-0 text-[10px] font-semibold ${cat.text}`}>
@@ -75,7 +78,8 @@ function ServiceNode({ id, data }: NodeProps<SvcData>) {
       <input
         className="nodrag w-full bg-transparent px-2 py-1.5 text-xs text-muted-foreground outline-none"
         value={data.responsibility}
-        placeholder="Responsibility"
+        placeholder={t('canvas.responsibility')}
+        dir="auto"
         onChange={(e) => update('responsibility', e.target.value)}
       />
       <Handle type="source" position={Position.Right} className="!bg-primary" />
@@ -129,6 +133,7 @@ export function ArchitectureCanvas({
   onDirty: (dirty: boolean) => void;
   onSaved: (design: SystemDesign) => void;
 }) {
+  const { t } = useTranslation('stages');
   const initial = useMemo(
     () => buildGraph(design, loadPositions(sessionId, 'architecture')),
     // Rebuild only when the artifact identity changes.
@@ -225,15 +230,14 @@ export function ArchitectureCanvas({
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <Button size="sm" variant="secondary" onClick={addService}>
-          + Add service
+          + {t('canvas.addService')}
         </Button>
-        <span className="text-xs text-muted-foreground">
-          Drag to arrange · drag a node’s right dot to another to add a dependency
-          · select + Delete to remove
+        <span className="text-xs text-muted-foreground" dir="auto">
+          {t('canvas.hintArch')}
         </span>
-        <span className="ml-auto" />
+        <span className="ms-auto" />
         <Button size="sm" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save architecture'}
+          {saving ? t('canvas.saving') : t('canvas.saveArchitecture')}
         </Button>
       </div>
       {error && <p className="mb-2 text-sm text-destructive">{error}</p>}

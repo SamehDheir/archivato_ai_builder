@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,6 +19,7 @@ export function ForgotPasswordForm({
   initialEmail?: string;
   onBackToLogin: (message?: string) => void;
 }) {
+  const { t } = useTranslation('auth');
   const [step, setStep] = useState<'request' | 'reset'>('request');
   const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState('');
@@ -45,7 +47,7 @@ export function ForgotPasswordForm({
     setError(null);
     try {
       await authApi.resetPassword(email, code, newPassword);
-      onBackToLogin('Password updated — sign in with your new password.');
+      onBackToLogin(t('forgotForm.successNotice'));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -55,45 +57,48 @@ export function ForgotPasswordForm({
 
   return (
     <div className="mx-auto max-w-md px-5 py-12">
-      <h1 className="mb-6 text-2xl font-bold">Reset your password</h1>
+      <h1 className="mb-6 text-2xl font-bold">{t('forgotForm.title')}</h1>
 
       <Card>
         <CardContent className="p-5">
           {step === 'request' ? (
             <form className="space-y-3" onSubmit={requestCode}>
-              <h3 className="font-semibold">Forgot password</h3>
+              <h3 className="font-semibold">{t('forgotForm.requestHeading')}</h3>
               <p className="text-sm text-muted-foreground">
-                Enter your email and we&apos;ll send a 6-digit reset code.
+                {t('forgotForm.requestHelp')}
               </p>
               <div className="space-y-1.5">
-                <Label htmlFor="fp-email">Email</Label>
+                <Label htmlFor="fp-email">{t('field.email')}</Label>
                 <Input
                   id="fp-email"
                   type="email"
+                  dir="ltr"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder={t('field.emailPlaceholder')}
                   required
                 />
               </div>
               <Button type="submit" className="w-full" disabled={busy || !email}>
-                {busy ? 'Sending…' : 'Send reset code'}
+                {busy ? t('forgotForm.sending') : t('forgotForm.send')}
               </Button>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </form>
           ) : (
             <form className="space-y-3" onSubmit={submitReset}>
-              <h3 className="font-semibold">Enter your code</h3>
-              <p className="text-sm text-muted-foreground">
-                If <strong>{email}</strong> has an account, a 6-digit code is on
-                its way. It expires in 10 minutes.
+              <h3 className="font-semibold">{t('forgotForm.codeHeading')}</h3>
+              <p className="text-sm text-muted-foreground" dir="auto">
+                {t('forgotForm.codeHelpPre')}
+                <strong>{email}</strong>
+                {t('forgotForm.codeHelpPost')}
               </p>
               <div className="space-y-1.5">
-                <Label htmlFor="fp-code">Reset code</Label>
+                <Label htmlFor="fp-code">{t('forgotForm.code')}</Label>
                 <Input
                   id="fp-code"
                   inputMode="numeric"
                   pattern="\d{6}"
+                  dir="ltr"
                   maxLength={6}
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
@@ -102,13 +107,14 @@ export function ForgotPasswordForm({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="fp-password">New password</Label>
+                <Label htmlFor="fp-password">{t('forgotForm.newPassword')}</Label>
                 <Input
                   id="fp-password"
                   type="password"
+                  dir="ltr"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="At least 8 characters"
+                  placeholder={t('field.passwordRegisterPlaceholder')}
                   minLength={8}
                   required
                 />
@@ -118,7 +124,7 @@ export function ForgotPasswordForm({
                 className="w-full"
                 disabled={busy || code.length !== 6 || newPassword.length < 8}
               >
-                {busy ? 'Updating…' : 'Set new password'}
+                {busy ? t('forgotForm.updating') : t('forgotForm.setPassword')}
               </Button>
               {error && <p className="text-sm text-destructive">{error}</p>}
               <p className="text-center">
@@ -129,7 +135,7 @@ export function ForgotPasswordForm({
                   className="h-auto p-0"
                   onClick={() => setStep('request')}
                 >
-                  Use a different email
+                  {t('forgotForm.differentEmail')}
                 </Button>
               </p>
             </form>
@@ -145,7 +151,7 @@ export function ForgotPasswordForm({
           className="h-auto p-0"
           onClick={() => onBackToLogin()}
         >
-          Back to login
+          {t('forgotForm.backToLogin')}
         </Button>
       </p>
     </div>

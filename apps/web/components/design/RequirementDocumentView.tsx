@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslation } from 'react-i18next';
 import {
   Ban,
   Gauge,
@@ -97,18 +100,22 @@ function TonePill({ tone, children }: { tone: Tone; children: React.ReactNode })
 }
 
 export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
+  const { t } = useTranslation('stages');
   return (
     <div>
       {/* Document header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold tracking-tight">
-            Requirement Document
+            {t('requirements.title')}
           </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {doc.functional.length} functional · {doc.nonFunctional.length}{' '}
-            non-functional · {doc.roles.length} roles · generated{' '}
-            {new Date(doc.generatedAt).toLocaleString()}
+            {t('requirements.meta', {
+              functional: doc.functional.length,
+              nonFunctional: doc.nonFunctional.length,
+              roles: doc.roles.length,
+              date: new Date(doc.generatedAt).toLocaleString(),
+            })}
           </p>
         </div>
         <ArtifactDownload
@@ -133,7 +140,7 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
       <Separator className="mt-3" />
 
       <Section
-        title="Functional requirements"
+        title={t('requirements.functional')}
         count={doc.functional.length}
         icon={ListChecks}
         tone="blue"
@@ -142,9 +149,11 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-16">ID</TableHead>
-                <TableHead>Requirement</TableHead>
-                <TableHead className="w-24">Priority</TableHead>
+                <TableHead className="w-16">{t('requirements.col.id')}</TableHead>
+                <TableHead>{t('requirements.col.requirement')}</TableHead>
+                <TableHead className="w-24">
+                  {t('requirements.col.priority')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -163,7 +172,9 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
                   </TableCell>
                   <TableCell className="align-top">
                     <Badge variant={PRIORITY_VARIANT[fr.priority] ?? 'secondary'}>
-                      {fr.priority}
+                      {t(`requirements.priority.${fr.priority}`, {
+                        defaultValue: fr.priority,
+                      })}
                     </Badge>
                   </TableCell>
                 </TableRow>
@@ -176,7 +187,7 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
       </Section>
 
       <Section
-        title="Non-functional requirements"
+        title={t('requirements.nonFunctional')}
         count={doc.nonFunctional.length}
         icon={Gauge}
         tone="violet"
@@ -185,9 +196,11 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-16">ID</TableHead>
-                <TableHead className="w-36">Category</TableHead>
-                <TableHead>Requirement</TableHead>
+                <TableHead className="w-16">{t('requirements.col.id')}</TableHead>
+                <TableHead className="w-36">
+                  {t('requirements.col.category')}
+                </TableHead>
+                <TableHead>{t('requirements.col.requirement')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -212,7 +225,7 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
       </Section>
 
       <Section
-        title="User roles"
+        title={t('requirements.roles')}
         count={doc.roles.length}
         icon={Users}
         tone="emerald"
@@ -248,7 +261,7 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
       </Section>
 
       <Section
-        title="Business rules"
+        title={t('requirements.businessRules')}
         count={doc.businessRules.length}
         icon={Scale}
         tone="amber"
@@ -257,8 +270,8 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-16">ID</TableHead>
-                <TableHead>Rule</TableHead>
+                <TableHead className="w-16">{t('requirements.col.id')}</TableHead>
+                <TableHead>{t('requirements.col.rule')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -278,14 +291,14 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
       </Section>
 
       <ListSection
-        title="Constraints"
+        title={t('requirements.constraints')}
         count={doc.constraints.length}
         icon={Ban}
         tone="rose"
         items={doc.constraints}
       />
       <ListSection
-        title="Assumptions"
+        title={t('requirements.assumptions')}
         count={doc.assumptions.length}
         icon={Lightbulb}
         tone="cyan"

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, type LucideIcon } from 'lucide-react';
 
 export interface Command {
@@ -29,13 +30,14 @@ export function CommandPalette({
   open,
   onClose,
   groups,
-  placeholder = 'Search projects, stages, actions…',
+  placeholder,
 }: {
   open: boolean;
   onClose: () => void;
   groups: CommandGroup[];
   placeholder?: string;
 }) {
+  const { t } = useTranslation('dashboard');
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -123,7 +125,7 @@ export function CommandPalette({
               setQuery(e.target.value);
               setActive(0);
             }}
-            placeholder={placeholder}
+            placeholder={placeholder ?? t('palette.placeholder')}
             className="w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
           />
           <kbd className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">
@@ -134,7 +136,7 @@ export function CommandPalette({
         <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-1.5">
           {flat.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-              No matches.
+              {t('palette.noMatches')}
             </p>
           ) : (
             filtered.map((g) => (
@@ -164,7 +166,7 @@ export function CommandPalette({
                       )}
                       <span className="truncate">{c.label}</span>
                       {c.hint && (
-                        <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        <span className="ms-auto shrink-0 text-xs text-muted-foreground">
                           {c.hint}
                         </span>
                       )}
@@ -177,9 +179,9 @@ export function CommandPalette({
         </div>
 
         <div className="flex items-center gap-3 border-t border-border px-3 py-1.5 text-[10px] text-muted-foreground">
-          <span>↑↓ navigate</span>
-          <span>↵ open</span>
-          <span>esc close</span>
+          <span>↑↓ {t('palette.navigate')}</span>
+          <span>↵ {t('palette.open')}</span>
+          <span>esc {t('palette.close')}</span>
         </div>
       </div>
     </div>
