@@ -2,7 +2,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { Share2, Table2, Workflow } from 'lucide-react';
-import { buildErd, type DatabaseDesign, type EntityColumn } from '@archivato/shared';
+import { type DatabaseDesign, type EntityColumn } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArtifactDownload } from '@/components/shared/ArtifactDownload';
@@ -10,7 +10,7 @@ import {
   databaseDesignToPrisma,
   databaseDesignToSql,
 } from '@/lib/database-export';
-import { MermaidView } from '@/components/design/MermaidView';
+import { ErDiagram } from '@/components/design/ErDiagram';
 import { Empty, Section } from '@/components/design/RequirementDocumentView';
 
 export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
@@ -51,7 +51,7 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
 
       <Section title={t('database.erd')} icon={Workflow}>
         {design.entities.length ? (
-          <MermaidView code={buildErd(design)} />
+          <ErDiagram design={design} basename={`erd-${design.sessionId}`} />
         ) : (
           <Empty />
         )}

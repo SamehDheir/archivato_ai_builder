@@ -42,6 +42,18 @@
       "fk": "FK → {{entity}}"
     }
   },
+  "erd": {
+    "export": "Export:",
+    "drawio": "Draw.io",
+    "drawioTitle": "Download an editable draw.io / diagrams.net file",
+    "png": "PNG",
+    "svg": "SVG",
+    "pdf": "PDF",
+    "mermaid": "Mermaid",
+    "notReady": "The diagram isn’t rendered yet — try again in a moment.",
+    "exportFailed": "Could not export the diagram",
+    "popupBlocked": "Allow pop-ups to export as PDF."
+  },
   "api": {
     "meta": "{{modules}} modules · {{endpoints}} endpoints · generated {{date}}",
     "download": "Download API design",

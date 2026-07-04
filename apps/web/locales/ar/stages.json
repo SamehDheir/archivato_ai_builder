@@ -42,6 +42,18 @@
       "fk": "مفتاح أجنبي ← {{entity}}"
     }
   },
+  "erd": {
+    "export": "تصدير:",
+    "drawio": "Draw.io",
+    "drawioTitle": "تنزيل ملف draw.io / diagrams.net قابل للتحرير",
+    "png": "PNG",
+    "svg": "SVG",
+    "pdf": "PDF",
+    "mermaid": "Mermaid",
+    "notReady": "لم يُرسم المخطط بعد — أعد المحاولة بعد لحظة.",
+    "exportFailed": "تعذّر تصدير المخطط",
+    "popupBlocked": "اسمح بالنوافذ المنبثقة للتصدير كـPDF."
+  },
   "api": {
     "meta": "{{modules}} وحدات · {{endpoints}} نقاط نهاية · تم التوليد {{date}}",
     "download": "تنزيل تصميم API",

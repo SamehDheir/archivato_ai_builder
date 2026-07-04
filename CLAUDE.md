@@ -275,6 +275,15 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 - **Mermaid:** validate with `mermaid.parse(code, { suppressErrors:true })`
   BEFORE `render` (a parse error injects a persistent "bomb" SVG into `body`).
   Sanitize column *types* (spaces/parens break the ERD grammar).
+- **ER diagram export.** The ER diagram (`ErDiagram`) exports five formats, all
+  client-side/offline: **Mermaid** (`.mmd`), **Draw.io** (`.drawio` editable
+  mxGraph tables via `buildErdDrawio` in `@archivato/shared` — pure/testable),
+  and **SVG / PNG / PDF** derived from the *rendered* Mermaid `<svg>` via
+  `lib/diagram-export.ts` (`serializeSvg` adds an opaque backing rect from the
+  theme-aware container bg; PNG rasterizes SVG→canvas at 2×; PDF opens a
+  print-window with the inline vector SVG). No backend — everything derives from
+  the already-loaded design + the DOM SVG. Draw.io/Mermaid are string builds;
+  SVG/PNG/PDF read `container.querySelector('svg')` at click time.
 
 ## Rules
 
