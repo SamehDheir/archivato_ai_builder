@@ -20,6 +20,7 @@ import type {
   ProjectStructure,
   ProductVision,
   ProjectRoadmap,
+  CostEstimate,
   ProjectSummary,
   ProjectVersionDetail,
   ProjectVersionMeta,
@@ -249,6 +250,16 @@ export const roadmapApi = {
     }),
 
   get: (sessionId: string) => request<ProjectRoadmap>(`/roadmap/${sessionId}`),
+};
+
+export const costEstimateApi = {
+  generate: (sessionId: string) =>
+    request<CostEstimate>(`/cost-estimate/${sessionId}/generate`, {
+      method: 'POST',
+    }),
+
+  get: (sessionId: string) =>
+    request<CostEstimate>(`/cost-estimate/${sessionId}`),
 };
 
 export const chatApi = {

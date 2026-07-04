@@ -74,6 +74,36 @@
     "intro": "Interactive OpenAPI 3.0 docs generated from the API design.",
     "refresh": "Refresh"
   },
+  "cost": {
+    "title": "Cost Estimator",
+    "generated": "Generated {{date}}",
+    "download": "Download estimate",
+    "bestValue": "Best value",
+    "breakdown": "Monthly cost breakdown",
+    "cheapest": "cheapest",
+    "perMonth": "/mo",
+    "usersLabel": "{{n}} users",
+    "col": { "provider": "Provider" },
+    "workload": {
+      "services": "Services",
+      "entities": "Entities",
+      "endpoints": "Endpoints",
+      "database": "Database",
+      "architecture": "Architecture"
+    },
+    "model": {
+      "iaas": "IaaS",
+      "paas": "PaaS",
+      "serverless": "Serverless"
+    },
+    "generate": "Estimate Costs",
+    "regenerate": "Regenerate",
+    "working": "Calculating…",
+    "emptyTitle": "Estimate the monthly bill",
+    "emptyDescription": "Project a ballpark monthly hosting cost for this design across AWS, DigitalOcean, Railway, Render, Vercel, Cloudflare and more — at 100, 1,000 and 10,000 users.",
+    "generatedToast": "Cost estimate generated",
+    "failed": "Could not estimate costs"
+  },
   "export": {
     "intro": "Download the complete system design in your preferred format.",
     "jsonBundle": "JSON bundle",

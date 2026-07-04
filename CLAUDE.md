@@ -8,10 +8,12 @@ NOT a chatbot — it's an **AI Software Architecture Generator**.
 Pipeline: `Idea → Interview → Requirements → System Design → DB Design →
 API Design → Review → Export`. Review is a multi-dimension **AI Architect
 Review** (overall + per-dimension scores for security/scalability/performance/
-cost, findings per category, critical-issues callout). Two standalone artifacts
-hang off the confirmed session: **Product Vision** (PM view of the interview)
-and **Roadmap** (phased implementation plan from the full design). Plus
-post-generation **chat refine**, **version history**, **diagrams/canvas**, **auth**.
+cost, findings per category, critical-issues callout). Three standalone
+artifacts hang off the confirmed session: **Product Vision** (PM view of the
+interview), **Roadmap** (phased implementation plan from the full design), and
+**Cost Estimator** (deterministic per-provider monthly hosting bill at 100/1k/10k
+users). Plus post-generation **chat refine**, **version history**,
+**diagrams/canvas**, **auth**.
 
 ## Tech Stack
 
@@ -50,14 +52,26 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
-  `api-design`, `review`, `product-vision`, `roadmap`, `export`, `chat`,
-  `jobs`, `versions`, `diagrams`, `auth`, `billing`, `analytics`, `admin`).
+  `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
+  `export`, `chat`, `jobs`, `versions`, `diagrams`, `auth`, `billing`,
+  `analytics`, `admin`).
   Modules export their repository token + service for downstream use.
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
   controller and is not in version snapshots. `product-vision` needs only the
-  confirmed interview; `roadmap` needs the full pipeline (imports all upstream
-  stores like `review`, 409s until the API design exists).
+  confirmed interview; `roadmap` and `cost-estimate` need the full pipeline
+  (import the upstream design stores, 409 until the API design exists).
+- **Cost Estimator (`cost-estimate`).** A standalone, Pro-only stage that
+  projects a **ballpark monthly hosting bill** across 8 providers (AWS,
+  DigitalOcean, Railway, Render, Vercel, Cloudflare, Fly.io, Heroku) at 100 /
+  1,000 / 10,000 users. The dollar figures are **fully deterministic** — no LLM:
+  `estimateCosts()` in `@archivato/shared` (`cost-estimate.ts`, runtime-free)
+  derives a workload from the design (services→compute units, entities→managed-DB
+  tier + storage, user scale→requests/egress) and maps it onto per-provider list
+  prices, returning a per-scale breakdown, the cheapest provider per scale, and a
+  best-value recommendation. Stable across runs (unit-testable, offline). The
+  service only reads system/database/API designs; the estimate is a labeled
+  planning figure, not a quote.
 - **Agents backfill via `normalize()`.** Where an artifact has many optional
   parts (e.g. the reviewer's per-dimension scores/findings), the agent trusts a
   valid LLM response but fills any omitted field deterministically, so the shape
@@ -89,14 +103,15 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 - **Freemium feature gate.** Beyond the project *count* cap, the pipeline itself
   is tiered: **Free covers interview → requirements → system design → database
   design** (plus Product Vision); **Pro is required to generate the API design
-  and everything after it — AI review, roadmap, and export.** Enforced by
-  `BillingService.assertPro(userId)` (throws **402** `code:'upgrade_required'`)
-  and a reusable **`ProGuard`** (exported by `BillingModule`) applied to the
-  Pro-only generate routes (`api-design`/`review`/`roadmap` generate, all of
-  `export`). The async path is gated in `JobsController` (per-stage: `PRO_STAGES
+  and everything after it — AI review, roadmap, cost estimate, and export.**
+  Enforced by `BillingService.assertPro(userId)` (throws **402**
+  `code:'upgrade_required'`) and a reusable **`ProGuard`** (exported by
+  `BillingModule`) applied to the Pro-only generate routes
+  (`api-design`/`review`/`roadmap`/`cost-estimate` generate, all of `export`).
+  The async path is gated in `JobsController` (per-stage: `PRO_STAGES
   = {api-design, review}`). The web wall lives on the **API tab** (`ProjectStages`
   shows an `UpgradeStage` prompt when `!isPro`); the Pro tabs (`PRO_TABS`: api,
-  review, roadmap, export, apidocs, refine) carry a **lock badge** for free
+  review, roadmap, cost, export, apidocs, refine) carry a **lock badge** for free
   users, and clicking a still-unreachable one opens the upgrade modal
   (`useUpgrade`) instead of a blank tab.
 - **LLM behind `LlmProvider`.** Agents (`llm/agents/*`) depend only on the

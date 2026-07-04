@@ -7,6 +7,7 @@ import {
   BookOpen,
   CheckCircle2,
   ClipboardCheck,
+  Coins,
   Database as DatabaseIcon,
   Download,
   FileText,
@@ -49,6 +50,7 @@ import { ApiDesignView } from '@/components/design/ApiDesignView';
 import { ApiDesignEditor } from '@/components/design/ApiDesignEditor';
 import { ReviewView } from '@/components/review/ReviewView';
 import { RoadmapPanel } from '@/components/roadmap/RoadmapPanel';
+import { CostEstimatePanel } from '@/components/cost/CostEstimatePanel';
 import { ExportView } from '@/components/project/ExportView';
 import { OpenApiView } from '@/components/design/OpenApiView';
 import { ChatPanel } from '@/components/project/ChatPanel';
@@ -74,6 +76,7 @@ const TABS: { value: TabKey; icon: LucideIcon }[] = [
   { value: 'canvas', icon: Shapes },
   { value: 'review', icon: ClipboardCheck },
   { value: 'roadmap', icon: Flag },
+  { value: 'cost', icon: Coins },
   { value: 'export', icon: Download },
   { value: 'apidocs', icon: BookOpen },
   { value: 'refine', icon: MessageSquare },
@@ -90,6 +93,7 @@ export type TabKey =
   | 'canvas'
   | 'review'
   | 'roadmap'
+  | 'cost'
   | 'export'
   | 'apidocs'
   | 'refine'
@@ -106,6 +110,7 @@ const PRO_TABS = new Set<TabKey>([
   'api',
   'review',
   'roadmap',
+  'cost',
   'export',
   'apidocs',
   'refine',
@@ -216,6 +221,7 @@ export function ProjectStages({
     canvas: !!design,
     review: !!apiDesign,
     roadmap: !!apiDesign,
+    cost: !!apiDesign,
     export: !!apiDesign,
     apidocs: !!apiDesign,
     refine: !!apiDesign,
@@ -540,6 +546,11 @@ export function ProjectStages({
           {/* Roadmap (standalone, gated on the full pipeline) */}
           <TabsContent value="roadmap" className="mt-4">
             <RoadmapPanel sessionId={sessionId} reloadKey={versionsReload} />
+          </TabsContent>
+
+          {/* Cost Estimator (standalone, gated on the full pipeline) */}
+          <TabsContent value="cost" className="mt-4">
+            <CostEstimatePanel sessionId={sessionId} reloadKey={versionsReload} />
           </TabsContent>
 
           {/* Export */}

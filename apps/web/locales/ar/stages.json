@@ -74,6 +74,36 @@
     "intro": "توثيق OpenAPI 3.0 تفاعلي مُولَّد من تصميم API.",
     "refresh": "تحديث"
   },
+  "cost": {
+    "title": "مقدّر التكلفة",
+    "generated": "تم التوليد {{date}}",
+    "download": "تنزيل التقدير",
+    "bestValue": "أفضل قيمة",
+    "breakdown": "تفصيل التكلفة الشهرية",
+    "cheapest": "الأرخص",
+    "perMonth": "/شهر",
+    "usersLabel": "{{n}} مستخدم",
+    "col": { "provider": "المزوّد" },
+    "workload": {
+      "services": "الخدمات",
+      "entities": "الكيانات",
+      "endpoints": "نقاط النهاية",
+      "database": "قاعدة البيانات",
+      "architecture": "البنية"
+    },
+    "model": {
+      "iaas": "بنية تحتية (IaaS)",
+      "paas": "منصّة (PaaS)",
+      "serverless": "بلا خادم"
+    },
+    "generate": "تقدير التكاليف",
+    "regenerate": "إعادة التقدير",
+    "working": "جارٍ الحساب…",
+    "emptyTitle": "قدّر الفاتورة الشهرية",
+    "emptyDescription": "احسب تكلفة استضافة شهرية تقريبية لهذا التصميم عبر AWS وDigitalOcean وRailway وRender وVercel وCloudflare وغيرها — عند 100 و1,000 و10,000 مستخدم.",
+    "generatedToast": "تم توليد تقدير التكلفة",
+    "failed": "تعذّر تقدير التكاليف"
+  },
   "export": {
     "intro": "نزّل تصميم النظام الكامل بالصيغة التي تفضّلها.",
     "jsonBundle": "حزمة JSON",

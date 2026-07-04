@@ -104,7 +104,8 @@ Free = 1 project, **Pro = $19/mo → 5 projects**; you're blocked from starting 
 new project at the limit (delete one to free a slot, or upgrade). **(2) Pipeline
 depth (freemium)** — Free generates the interview, requirements, system design,
 and database design (plus Product Vision); **Pro unlocks the API design and
-everything after it: AI review, roadmap, and export.** Wherever a free user hits
+everything after it: AI review, roadmap, cloud cost estimator, and export.**
+Wherever a free user hits
 a wall — the API tab, the quota banner, or starting a project at the cap — an
 **in-app upgrade modal** pops up and unlocks the UI in place on success. Billing
 runs **offline in mock mode by default** — upgrade applies

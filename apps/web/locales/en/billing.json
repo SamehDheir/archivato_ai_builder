@@ -19,6 +19,7 @@
     "api": { "lead": "REST API design", "detail": "endpoints, request/response schemas & status codes" },
     "review": { "lead": "AI Architect Review", "detail": "scored on security, scalability, performance & cost, with critical-issue callouts" },
     "roadmap": { "lead": "Implementation roadmap", "detail": "phases → milestones → tasks with effort estimates" },
+    "cost": { "lead": "Cloud cost estimator", "detail": "monthly bill across AWS, Vercel, Cloudflare & more at 100 / 1k / 10k users" },
     "openapi": { "lead": "Interactive OpenAPI / Swagger explorer", "detail": "" },
     "refine": { "lead": "Refine the whole design by chat", "detail": "every change versioned" },
     "export": { "lead": "Export to JSON, Markdown & OpenAPI", "detail": "import straight into Postman" },

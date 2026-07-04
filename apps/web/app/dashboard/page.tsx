@@ -457,6 +457,7 @@ export default function Home() {
     canvas: !!design,
     review: !!apiDesign,
     roadmap: !!apiDesign,
+    cost: !!apiDesign,
     export: !!apiDesign,
     apidocs: !!apiDesign,
     refine: !!apiDesign,

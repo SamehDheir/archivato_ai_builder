@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ClipboardCheck,
   Code2,
+  Coins,
   Download,
   FolderKanban,
   Loader2,
@@ -99,6 +100,7 @@ const PRO_FEATURES: { key: string; icon: LucideIcon }[] = [
   { key: 'api', icon: Webhook },
   { key: 'review', icon: ClipboardCheck },
   { key: 'roadmap', icon: Map },
+  { key: 'cost', icon: Coins },
   { key: 'openapi', icon: Code2 },
   { key: 'refine', icon: MessageSquare },
   { key: 'export', icon: Download },
