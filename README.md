@@ -410,6 +410,37 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - Set `ADMIN_EMAILS=you@example.com` in `apps/api/.env`, then sign in to unlock
   the dashboard.
 
+### ✅ Slice — Customer Support Center + AI Support Assistant
+- A professional **ticketing system** (Zendesk/Linear-style) reachable from the
+  **Support** header link (`/support`): dashboard with per-status counts, a
+  searchable/filterable **My Tickets** list, **Create Ticket** (subject,
+  category, priority, optional related project), and a chat-like **ticket
+  conversation** (Markdown + code blocks + attachments) with a full **timeline**
+  of every action (created / replied / status & priority changes / assigned /
+  closed / reopened / AI suggestion). Statuses: open · in progress · waiting for
+  customer · waiting for admin · resolved · closed. Customers can reply, close,
+  and reopen; internal notes stay admin-only.
+- **Three-layer AI Support Assistant** (free for everyone, offline in mock mode,
+  every response has a deterministic fallback): **(1) pre-ticket deflection** —
+  describe the problem and the AI searches the Knowledge Base + your own past
+  tickets and proposes a solution before a ticket is opened; **(2) in-ticket
+  assistant** — one click gives an issue summary, root-cause, suggested fix, and
+  a ready-to-send reply draft; **(3) admin copilot** — the same plus urgency,
+  priority, assignment, and similar tickets across the system.
+- **Attachments** (images / PDF / ZIP / TXT / JSON / logs) are stored as
+  metadata; for text-based files the extracted text is persisted inline so the
+  AI can analyze uploaded logs. **Knowledge Base** is a placeholder listing whose
+  seed articles also power the deflection layer. **Admin Support Panel**
+  (`/support/admin`, admin-guarded) adds a metrics dashboard (open / waiting /
+  critical / unassigned counts, avg first-response & resolution time, and
+  AI-flagged tickets that need attention), an all-tickets table with filters, and
+  per-ticket management (status / priority / category / assignment / notes /
+  copilot). **Notification hooks** are stubbed (in-app + email + AI smart
+  alerts), ready to wire to a real channel.
+- REST API under `/support` (customer) and `/support/admin` (admin). All routes
+  are owner-scoped (a customer only ever sees their own tickets; a non-owner gets
+  a 404, no existence leak); the AI never reads another user's ticket data.
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
@@ -468,6 +499,23 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/admin/users`         | Admin: paginated users (admin only)          |
 | PATCH  | `/api/admin/users/:id/role`| Admin: promote/demote a user                 |
 | DELETE | `/api/admin/users/:id`     | Admin: delete a user                         |
+| GET    | `/api/support/stats`       | Customer's ticket counts by status           |
+| GET    | `/api/support/kb`          | Knowledge Base articles (also used by the AI)|
+| GET    | `/api/support/tickets`     | List my tickets (filter/search/paginate)     |
+| POST   | `/api/support/tickets`     | Open a new support ticket                    |
+| GET    | `/api/support/tickets/:id` | Ticket detail (conversation + timeline)      |
+| POST   | `/api/support/tickets/:id/reply`   | Reply to a ticket                    |
+| POST   | `/api/support/tickets/:id/close`   | Close my ticket                      |
+| POST   | `/api/support/tickets/:id/reopen`  | Reopen a resolved/closed ticket      |
+| POST   | `/api/support/tickets/:id/attachments` | Attach a file (metadata + text)  |
+| POST   | `/api/support/ai/deflect`  | Pre-ticket AI deflection (KB + past tickets) |
+| POST   | `/api/support/tickets/:id/ai/analyze` | In-ticket AI assistant            |
+| GET    | `/api/support/admin/stats` | Admin support dashboard metrics (admin only) |
+| GET    | `/api/support/admin/agents`| Assignable admins (admin only)               |
+| GET    | `/api/support/admin/tickets`| All tickets, filtered (admin only)          |
+| PATCH  | `/api/support/admin/tickets/:id`| Change status/priority/category/assignee|
+| POST   | `/api/support/admin/tickets/:id/notes`  | Add an internal note (admin)    |
+| POST   | `/api/support/admin/tickets/:id/ai/copilot` | AI Copilot (admin only)     |
 
 ---
 

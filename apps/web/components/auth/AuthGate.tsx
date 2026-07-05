@@ -4,7 +4,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Settings as SettingsIcon, ShieldCheck } from 'lucide-react';
+import {
+  Loader2,
+  LifeBuoy,
+  Settings as SettingsIcon,
+  ShieldCheck,
+} from 'lucide-react';
 import type { AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -117,6 +122,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         </span>
         <LanguageToggle />
         <ThemeToggle />
+        <Button asChild variant="ghost" size="sm" aria-label={t('header.support')}>
+          <Link href="/support">
+            <LifeBuoy className="h-4 w-4" />
+          </Link>
+        </Button>
         {user.role === 'admin' && (
           <Button asChild variant="ghost" size="sm" aria-label={t('header.admin')}>
             <Link href="/admin">

@@ -32,6 +32,17 @@ import type {
   UpdateProfileInput,
   ReviewReport,
   SystemDesign,
+  CreateSupportTicketInput,
+  KbArticleRef,
+  SupportAdminStats,
+  SupportAgentRef,
+  SupportAiAnalysis,
+  SupportAskAiInput,
+  SupportCustomerStats,
+  SupportDeflectionResult,
+  SupportTicketDetail,
+  SupportTicketFilter,
+  SupportTicketList,
 } from '@archivato/shared';
 
 const API_URL =
@@ -504,6 +515,103 @@ export const analyticsApi = {
       /* never let analytics break the page */
     }
   },
+};
+
+/** Build a query string from a support ticket filter (skips empty values). */
+function supportQuery(filter: SupportTicketFilter = {}): string {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filter)) {
+    if (v !== undefined && v !== null && `${v}` !== '') params.set(k, `${v}`);
+  }
+  const s = params.toString();
+  return s ? `?${s}` : '';
+}
+
+/** Customer Support Center — tickets, conversation, attachments, and AI. */
+export const supportApi = {
+  // Dashboard + Knowledge Base
+  stats: () => request<SupportCustomerStats>('/support/stats'),
+  kb: () => request<{ articles: KbArticleRef[] }>('/support/kb'),
+
+  // Tickets (customer scope)
+  list: (filter?: SupportTicketFilter) =>
+    request<SupportTicketList>(`/support/tickets${supportQuery(filter)}`),
+  create: (input: CreateSupportTicketInput) =>
+    request<SupportTicketDetail>('/support/tickets', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  get: (id: string) => request<SupportTicketDetail>(`/support/tickets/${id}`),
+  reply: (id: string, body: string) =>
+    request<SupportTicketDetail>(`/support/tickets/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+  close: (id: string) =>
+    request<SupportTicketDetail>(`/support/tickets/${id}/close`, {
+      method: 'POST',
+    }),
+  reopen: (id: string) =>
+    request<SupportTicketDetail>(`/support/tickets/${id}/reopen`, {
+      method: 'POST',
+    }),
+  addAttachment: (
+    id: string,
+    input: {
+      filename: string;
+      mimeType: string;
+      sizeBytes: number;
+      textContent?: string;
+      messageId?: string;
+    },
+  ) =>
+    request<SupportTicketDetail>(`/support/tickets/${id}/attachments`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  // AI assistant
+  deflect: (input: SupportAskAiInput) =>
+    request<SupportDeflectionResult>('/support/ai/deflect', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  analyze: (id: string) =>
+    request<SupportAiAnalysis>(`/support/tickets/${id}/ai/analyze`, {
+      method: 'POST',
+    }),
+};
+
+/** Admin Support Panel — every ticket, assignment, notes, and AI copilot. */
+export const supportAdminApi = {
+  stats: () => request<SupportAdminStats>('/support/admin/stats'),
+  agents: () => request<SupportAgentRef[]>('/support/admin/agents'),
+  list: (filter?: SupportTicketFilter) =>
+    request<SupportTicketList>(`/support/admin/tickets${supportQuery(filter)}`),
+  get: (id: string) =>
+    request<SupportTicketDetail>(`/support/admin/tickets/${id}`),
+  update: (
+    id: string,
+    patch: {
+      status?: string;
+      priority?: string;
+      category?: string;
+      assigneeId?: string | null;
+    },
+  ) =>
+    request<SupportTicketDetail>(`/support/admin/tickets/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  addNote: (id: string, body: string) =>
+    request<SupportTicketDetail>(`/support/admin/tickets/${id}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+  copilot: (id: string) =>
+    request<SupportAiAnalysis>(`/support/admin/tickets/${id}/ai/copilot`, {
+      method: 'POST',
+    }),
 };
 
 export const exportApi = {

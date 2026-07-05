@@ -54,7 +54,7 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
   `export`, `chat`, `jobs`, `versions`, `diagrams`, `auth`, `billing`,
-  `analytics`, `admin`).
+  `analytics`, `admin`, `support`).
   Modules export their repository token + service for downstream use.
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
@@ -179,13 +179,60 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   /interview` 403s for them (`InterviewController.start`) and the dashboard shows
   an admin notice (link to `/admin`) instead of the project creator — so an admin
   account never owns or generates projects.
+- **Customer Support Center (`support`).** A Zendesk-style ticketing system with
+  an embedded **three-layer AI Support Assistant**, **free for all users** (no
+  Pro gate). One `SupportRepository` (interface + in-memory + Prisma) owns the
+  whole aggregate — `support_tickets` (+ auto-increment `number`), `_messages`,
+  `_attachments`, `_internal_notes`, `_ticket_events`, `_ai_suggestions`,
+  `_ai_interactions`. Enum-like fields (status/priority/category/authorType) are
+  **string columns validated by shared unions** (project convention, not Prisma
+  enums). `SupportService` holds the domain logic + **owner-or-admin
+  authorization** (non-owner → **404**, no leak, mirroring `SessionOwnerGuard`);
+  a **reply flips the waiting side** (customer→`waiting_admin`, admin→
+  `waiting_customer`, stamps `firstResponseAt`) — `in_progress`/`resolved` are
+  explicit admin actions, never reply side effects. Every action writes a
+  **timeline event**. Customer routes = `JwtAuthGuard` (`SupportController`,
+  `/support`); admin routes = `JwtAuthGuard + AdminGuard` (`SupportAdminController`,
+  `/support/admin`). `SupportService` injects `PrismaService` **only** for
+  `listAgents()` (assignee dropdown) — the AdminService reporting exception.
+- **Support AI (`SupportAssistantAgent` + `SupportAiService`).** One agent, three
+  methods, each LLM-driven with a **deterministic fallback** (offline mock + tests):
+  `deflect()` (pre-ticket — answer + KB matches + the customer's OWN similar
+  tickets + quick fixes + solved flag), `analyze()` (in-ticket — summary /
+  rootCause / suggestedFix / suggestedReply / category+priority), `copilot()`
+  (admin — `analyze` plus suggestedAssignment + system-wide similar tickets).
+  **Security:** deflection/analyze "similar tickets" are scoped to the caller's
+  own tickets; only the admin copilot (behind `AdminGuard`) searches all tickets —
+  the AI never leaks another user's data. The Knowledge Base is a **seed set in
+  `support-knowledge-base.ts`** (placeholder UI, no CRUD) that `searchKnowledgeBase()`
+  queries for deflection. In-ticket/copilot runs persist a `SupportAiSuggestion`
+  + an `ai_suggestion` event; deflection logs a best-effort `SupportAiInteraction`.
+- **Attachments = metadata + inline text.** No object store: the client extracts
+  text from text-based files (log/txt/json) and sends it as `textContent` (stored
+  inline for AI log analysis); binary files (image/pdf/zip) are metadata-only (no
+  bytes served). Mime allowlist + 5 MB cap enforced by DTO. The mapper exposes
+  only an `isText` flag to the client, never `textContent`.
+- **Support notifications = placeholder.** `SupportNotificationsService`
+  centralizes every in-app/email/AI-smart-alert point and just logs today
+  (best-effort — never breaks a ticket action); wire a real channel later without
+  touching callers. **Web:** `/support/*` routes (`SupportNav` sub-nav:
+  Dashboard · New · Knowledge Base · Admin), a `LifeBuoy` header link, the create
+  form with the deflection panel on top, `TicketDetail` (conversation + timeline +
+  AI sidebar + admin controls, driven by an `admin` prop), and the admin panel
+  (`AdminSupportDashboard`: KPIs + SLA + AI-flagged + all-tickets table).
+  Message bodies render Markdown fenced code via a lightweight `MessageBody`
+  (React-escaped, no `dangerouslySetInnerHTML`). Support UI is fully **i18n'd**
+  (EN + AR `support` namespace); labels/badges/relative-time come from a
+  `useSupportMeta()` hook, and RTL-safe logical classes + `dir="auto"` throughout.
+  Relative-time/duration keys use `{{n}}`/`{{value}}` (not `count`) so no CLDR
+  plural set is needed.
 
 ## Frontend Notes
 
 - **i18n (English + Arabic, toggle-based, RTL).** `react-i18next` with statically
   **bundled** JSON resources (`locales/{en,ar}/<namespace>.json`, registered in
   `lib/i18n/resources.ts` — namespaces: common, auth, marketing, dashboard,
-  billing, interview, project, stages, settings, admin). No locale routing: the
+  billing, interview, project, stages, settings, admin, support). No locale routing: the
   `LanguageToggle` flips locale, persisted to `localStorage` + `archivato_locale`
   cookie; `LocaleProvider` (under ThemeProvider) applies it and sets
   `<html lang/dir>` (a pre-paint script in `layout.tsx` sets `dir` first to avoid

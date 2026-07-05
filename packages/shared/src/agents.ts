@@ -17,6 +17,8 @@ export enum AgentRole {
   RoadmapPlanner = 'roadmap_planner',
   /** Applies post-generation chat instructions by amending the requirements. */
   Refiner = 'refiner',
+  /** Customer Support Assistant: deflection, in-ticket analysis, admin copilot. */
+  SupportAssistant = 'support_assistant',
 }
 
 /** A single turn in an LLM conversation. */

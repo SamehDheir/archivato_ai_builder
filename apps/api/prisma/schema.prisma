@@ -31,13 +31,16 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  refreshTokens      RefreshToken[]
-  verificationTokens EmailVerificationToken[]
+  refreshTokens       RefreshToken[]
+  verificationTokens  EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
   deviceRegistrations DeviceRegistration[]
-  subscription       Subscription?
+  subscription        Subscription?
   // Pipeline projects owned by this user (ownership enforcement).
-  interviewSessions  InterviewSession[]
+  interviewSessions   InterviewSession[]
+  // Support Center: tickets the user opened + tickets assigned to them (admins).
+  supportTickets      SupportTicket[]          @relation("SupportTicketOwner")
+  assignedTickets     SupportTicket[]          @relation("SupportTicketAssignee")
 
   @@map("users")
 }
@@ -131,25 +134,25 @@ model RefreshToken {
 // --- Pipeline -----------------------------------------------------------------
 
 model InterviewSession {
-  id             String   @id @default(uuid())
+  id              String   @id @default(uuid())
   // Owner of this project. Nullable so pre-ownership rows survive the migration;
   // every session created from now on is stamped with the authenticated user.
-  userId         String?
-  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  idea           String
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idea            String
   /// Optional user-set display name; the UI falls back to `idea` when null.
-  title          String?
-  industry       String?
-  scale          String?
-  preferredStack String?
-  status         String   @default("collecting")
-  intent         Json?
-  history        Json // InterviewExchange[]
+  title           String?
+  industry        String?
+  scale           String?
+  preferredStack  String?
+  status          String   @default("collecting")
+  intent          Json?
+  history         Json // InterviewExchange[]
   pendingQuestion Json? // the question awaiting an answer (adaptive interview)
-  coverage       Float    @default(0)
-  summary        Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  coverage        Float    @default(0)
+  summary         Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   requirementDocument RequirementDocument?
   systemDesign        SystemDesign?
@@ -161,6 +164,8 @@ model InterviewSession {
   costEstimate        CostEstimate?
   chatMessages        ChatMessage[]
   versions            ProjectVersion[]
+  // Support tickets a customer optionally linked to this project.
+  supportTickets      SupportTicket[]
 
   @@index([userId])
   @@map("interview_sessions")
@@ -303,4 +308,146 @@ model AnalyticsEvent {
   @@index([type, createdAt])
   @@index([createdAt])
   @@map("analytics_events")
+}
+
+// --- Customer Support Center --------------------------------------------------
+//
+// A professional ticketing system with an embedded AI Support Assistant.
+// Enum-like fields (status/priority/category/authorType) are stored as plain
+// strings validated by the shared union types, matching the project convention
+// (subscription plan, account role, interview status) rather than Prisma enums.
+
+model SupportTicket {
+  id         String            @id @default(uuid())
+  // Human-friendly sequential ticket number (#1, #2, …) for display/search.
+  number     Int               @unique @default(autoincrement())
+  // Owner (the customer who opened it). Cascades on account delete.
+  userId     String
+  user       User              @relation("SupportTicketOwner", fields: [userId], references: [id], onDelete: Cascade)
+  // Optional related project; SetNull so deleting a project keeps the ticket.
+  sessionId  String?
+  session    InterviewSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  // Assigned admin (SetNull so removing an admin unassigns rather than deletes).
+  assigneeId String?
+  assignee   User?             @relation("SupportTicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  subject  String
+  category String // SupportCategory
+  priority String @default("medium") // SupportPriority
+  status   String @default("open") // SupportTicketStatus
+
+  // Denormalized activity markers driving SLA metrics + list ordering.
+  firstResponseAt DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  lastMessageAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages      SupportMessage[]
+  attachments   SupportAttachment[]
+  internalNotes SupportInternalNote[]
+  events        SupportTicketEvent[]
+  aiSuggestions SupportAiSuggestion[]
+
+  @@index([userId])
+  @@index([assigneeId])
+  @@index([sessionId])
+  @@index([status])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id         String        @id @default(uuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  // 'customer' | 'admin' | 'ai' | 'system'
+  authorType String
+  // Null for AI/system messages (loosely referenced user id otherwise, no FK).
+  authorId   String?
+  body       String
+  // When authorType='ai': which layer produced it ('in_ticket' | …).
+  aiLayer    String?
+  createdAt  DateTime      @default(now())
+
+  attachments SupportAttachment[]
+
+  @@index([ticketId])
+  @@map("support_messages")
+}
+
+// Attachment metadata. For text-based files (logs/txt/json) the extracted text
+// is stored inline (`textContent`) so the AI can analyze it; binary files
+// (images/pdf/zip) are metadata-only — no binary is persisted or served.
+model SupportAttachment {
+  id          String          @id @default(uuid())
+  ticketId    String
+  ticket      SupportTicket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  messageId   String?
+  message     SupportMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  filename    String
+  mimeType    String
+  sizeBytes   Int
+  textContent String? // extracted text (text-based files only); null for binary
+  createdAt   DateTime        @default(now())
+
+  @@index([ticketId])
+  @@map("support_attachments")
+}
+
+// Admin-only private note on a ticket — never returned to the customer.
+model SupportInternalNote {
+  id        String        @id @default(uuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String
+  body      String
+  createdAt DateTime      @default(now())
+
+  @@index([ticketId])
+  @@map("support_internal_notes")
+}
+
+// Immutable timeline entry (created / replied / status change / assigned / …).
+model SupportTicketEvent {
+  id        String        @id @default(uuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  type      String // SupportEventType
+  actorType String // 'customer' | 'admin' | 'ai' | 'system'
+  actorId   String?
+  data      Json? // small payload, e.g. { from, to }
+  createdAt DateTime      @default(now())
+
+  @@index([ticketId])
+  @@map("support_ticket_events")
+}
+
+// A persisted AI analysis run against a ticket (in-ticket assistant / copilot).
+model SupportAiSuggestion {
+  id        String        @id @default(uuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  layer     String // SupportAiLayer ('in_ticket' | 'admin_copilot')
+  data      Json // SupportAiAnalysis
+  createdAt DateTime      @default(now())
+
+  @@index([ticketId])
+  @@map("support_ai_suggestions")
+}
+
+// Pre-ticket AI deflection log (and other ad-hoc "Ask AI" runs). Loosely tied to
+// a user id (no FK). `deflected` marks a run that avoided creating a ticket.
+model SupportAiInteraction {
+  id        String   @id @default(uuid())
+  userId    String?
+  kind      String // 'deflection' | 'ask'
+  query     String
+  response  Json // SupportDeflectionResult
+  deflected Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("support_ai_interactions")
 }

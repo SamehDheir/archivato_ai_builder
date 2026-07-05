@@ -26,6 +26,7 @@ export * from './auth';
 export * from './billing';
 export * from './admin';
 export * from './chat';
+export * from './support';
 export * from './jobs';
 export * from './versions';
 export * from './diagrams';

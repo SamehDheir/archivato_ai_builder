@@ -1,0 +1,226 @@
+{
+  "nav": {
+    "title": "Support Center",
+    "subtitle": "Get help, track your tickets, and chat with the AI Support Assistant.",
+    "dashboard": "Dashboard",
+    "new": "New Ticket",
+    "kb": "Knowledge Base",
+    "admin": "Admin"
+  },
+  "status": {
+    "open": "Open",
+    "in_progress": "In Progress",
+    "waiting_customer": "Waiting for Customer",
+    "waiting_admin": "Waiting for Admin",
+    "resolved": "Resolved",
+    "closed": "Closed"
+  },
+  "priority": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "critical": "Critical"
+  },
+  "category": {
+    "technical": "Technical Issue",
+    "billing": "Billing",
+    "ai_generation": "AI Generation",
+    "api": "API",
+    "bug": "Bug Report",
+    "feature_request": "Feature Request",
+    "account": "Account",
+    "security": "Security",
+    "general": "General"
+  },
+  "time": {
+    "justNow": "just now",
+    "minute": "{{n}}m ago",
+    "hour": "{{n}}h ago",
+    "day": "{{n}}d ago"
+  },
+  "duration": {
+    "none": "—",
+    "minutes": "{{n}}m",
+    "hours": "{{value}}h",
+    "days": "{{value}}d"
+  },
+  "dashboard": {
+    "tileTotal": "Total",
+    "tileOpen": "Open",
+    "tileWaiting": "Waiting",
+    "tileResolved": "Resolved",
+    "searchPlaceholder": "Search my tickets…",
+    "allStatuses": "All statuses",
+    "newTicket": "New Ticket",
+    "emptyTitle": "No tickets yet",
+    "emptyBody": "When you open a support ticket it will appear here. Try the AI assistant first — it may solve your issue instantly.",
+    "emptyCta": "Create a ticket",
+    "messages": "{{n}} msg"
+  },
+  "create": {
+    "aiTitle": "Ask the AI Support Assistant first",
+    "aiSubtitle": "Describe your issue below and the assistant will try to solve it instantly — often faster than waiting for a reply.",
+    "aiPlaceholder": "e.g. I can't generate the API design — clicking generate shows a 402 error.",
+    "askAi": "Ask AI",
+    "confidence": "Confidence {{percent}}%",
+    "describeFirst": "Describe the problem first",
+    "aiUnavailable": "The assistant is unavailable",
+    "suggestedSolution": "Suggested solution",
+    "quickFixes": "Quick fixes",
+    "articles": "Relevant articles",
+    "similar": "Similar past tickets",
+    "solvedHint": "Did this solve it? If not, complete the form below to open a ticket.",
+    "unsolvedHint": "Still stuck? Open a ticket below and our team will help.",
+    "formTitle": "Open a support ticket",
+    "subject": "Subject",
+    "subjectPlaceholder": "Short summary of the issue",
+    "category": "Category",
+    "priority": "Priority",
+    "relatedProject": "Related project (optional)",
+    "none": "None",
+    "description": "Description",
+    "descriptionPlaceholder": "Describe the issue, steps to reproduce, and what you expected.",
+    "descriptionTip": "Tip: paste error messages or logs — the AI can analyze them.",
+    "submit": "Create ticket",
+    "cancel": "Cancel",
+    "created": "Ticket #{{number}} created",
+    "createFailed": "Could not create the ticket"
+  },
+  "detail": {
+    "backAdmin": "Admin tickets",
+    "backMine": "My tickets",
+    "opened": "opened",
+    "reopen": "Reopen",
+    "close": "Close ticket",
+    "supportTeam": "Support Team",
+    "aiAssistant": "AI Assistant",
+    "you": "You",
+    "support": "Support",
+    "text": "text",
+    "attachments": "Attachments",
+    "closedNotice": "This ticket is closed. Reopen it to reply.",
+    "replyPlaceholder": "Write a reply… (Markdown & code blocks supported)",
+    "sendReply": "Send reply",
+    "attach": "Attach",
+    "timeline": "Timeline",
+    "byAi": "by AI",
+    "by": "by {{name}}",
+    "copilot": "AI Copilot",
+    "copilotSubtitle": "Summarize, find the root cause, and draft a reply — plus priority & assignment suggestions.",
+    "assistantSubtitle": "Get a summary, likely root cause, and a suggested fix for this ticket.",
+    "analyze": "Analyze ticket",
+    "reAnalyze": "Re-analyze",
+    "issueSummary": "Issue Summary",
+    "rootCause": "Root Cause",
+    "suggestedFix": "Suggested Fix",
+    "suggestedReply": "Suggested Reply",
+    "useAsReply": "Use as reply",
+    "suggestedCategory": "Suggested: {{category}}",
+    "suggestedAssignment": "Suggested Assignment",
+    "similarTickets": "Similar tickets",
+    "relatedProject": "Related project",
+    "openInDashboard": "Open in dashboard →",
+    "customer": "Customer",
+    "name": "Name",
+    "email": "Email",
+    "plan": "Plan",
+    "projects": "Projects",
+    "memberSince": "Member since",
+    "manage": "Manage",
+    "assignee": "Assignee",
+    "unassigned": "Unassigned",
+    "internalNotes": "Internal notes (private)",
+    "notePlaceholder": "Add a private note…",
+    "addNote": "Add note",
+    "admin": "Admin",
+    "loadFailed": "Could not load the ticket",
+    "replyFailed": "Reply failed",
+    "updateStatusFailed": "Could not update the ticket",
+    "updateFailed": "Update failed",
+    "updated": "Ticket updated",
+    "addNoteFailed": "Could not add note",
+    "fileTooLarge": "File too large (max 5 MB)",
+    "unsupportedType": "Unsupported file type",
+    "uploadFailed": "Upload failed",
+    "attachmentAdded": "Attachment added"
+  },
+  "event": {
+    "ticket_created": "Ticket created",
+    "reply_added": "Reply added",
+    "status_changed": "Status changed",
+    "priority_changed": "Priority changed",
+    "assigned": "Assigned",
+    "unassigned": "Unassigned",
+    "resolved": "Marked resolved",
+    "closed": "Closed",
+    "reopened": "Reopened",
+    "note_added": "Internal note added",
+    "attachment_added": "Attachment added",
+    "ai_suggestion": "AI suggestion generated"
+  },
+  "admin": {
+    "tileOpen": "Open",
+    "tileInProgress": "In Progress",
+    "tileWaitingCustomer": "Waiting Customer",
+    "tileWaitingAdmin": "Waiting Admin",
+    "tileCritical": "Critical",
+    "tileUnassigned": "Unassigned",
+    "tileResolved": "Resolved",
+    "tileClosed": "Closed",
+    "avgFirstResponse": "Avg. first response",
+    "avgResolution": "Avg. resolution time",
+    "needsAttention": "Needs attention (high & critical, awaiting us)",
+    "searchPlaceholder": "Search all tickets…",
+    "allStatuses": "All statuses",
+    "allPriorities": "All priorities",
+    "allCategories": "All categories",
+    "colNumber": "#",
+    "colSubject": "Subject",
+    "colStatus": "Status",
+    "colPriority": "Priority",
+    "colCategory": "Category",
+    "colAssignee": "Assignee",
+    "colUpdated": "Updated",
+    "noMatches": "No tickets match these filters."
+  },
+  "kb": {
+    "aiBanner": "The AI Support Assistant searches these articles automatically",
+    "aiBannerBody": "Describe your problem when creating a ticket and the assistant will surface the most relevant articles below — often solving it instantly.",
+    "askAi": "Ask the AI Assistant",
+    "comingSoon": "Full self-service Knowledge Base with categories & search is coming soon."
+  },
+  "kbArticle": {
+    "kb-groq-key": {
+      "title": "Enable real AI with a free Groq API key",
+      "excerpt": "The app runs in offline mock mode with no key. Paste a free Groq key into apps/api/.env as GROQ_API_KEY (leave LLM_PROVIDER unset) and restart the API — the startup log shows the resolved provider. Every agent keeps a deterministic fallback, so generation always yields a valid artifact."
+    },
+    "kb-upgrade-pro": {
+      "title": "Upgrade to Pro to unlock the API design, review, roadmap & export",
+      "excerpt": "Free covers the interview, requirements, system design, and database design. The API design and everything after it (AI review, roadmap, cost estimate, export) are Pro. Free also allows 1 project; Pro allows 5. Open the upgrade modal from any locked tab or the quota banner — in mock mode it activates instantly."
+    },
+    "kb-project-limit": {
+      "title": "You have reached your project limit",
+      "excerpt": "Free allows 1 project and Pro allows 5. To start another at the cap, delete an existing project (this frees a slot and cascades all its artifacts) or upgrade to Pro."
+    },
+    "kb-generation-stuck": {
+      "title": "A generation stage is stuck or failed",
+      "excerpt": "Async generation runs on Redis (BullMQ). Ensure docker compose up -d db redis is running. If a job times out, retry it — every agent has a deterministic fallback so it will still produce a valid artifact. Check the API logs for the failing stage."
+    },
+    "kb-reset-password": {
+      "title": "Reset or set your password",
+      "excerpt": "Use \"Forgot password?\" on the login screen to receive a one-time code by email, then set a new password. OAuth-only accounts (Google/GitHub) can set a first password from Settings → Change password (leave current password blank)."
+    },
+    "kb-verify-email": {
+      "title": "Verify your email address",
+      "excerpt": "After registering, click the link in the verification email. If it did not arrive, use the \"Resend\" action in the in-app banner. In local/dev the link may be logged to the API console or an Ethereal preview inbox."
+    },
+    "kb-export-formats": {
+      "title": "Export your design (JSON, Markdown, OpenAPI, PDF)",
+      "excerpt": "From a confirmed project, the Export tab (Pro) offers a JSON bundle, a Markdown report, an OpenAPI 3.0 spec, and a GitHub project structure. PDF is produced via the browser print dialog. You can also direct-export from a project card."
+    },
+    "kb-api-error": {
+      "title": "Troubleshooting API errors (401 / 402 / 409)",
+      "excerpt": "401 means your session expired — the client auto-refreshes; sign in again if it persists. 402 means the feature is Pro (upgrade). 409 means a prerequisite stage has not been generated yet — complete the upstream stage first."
+    }
+  }
+}

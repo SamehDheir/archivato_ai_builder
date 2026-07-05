@@ -20,6 +20,7 @@ import { DiagramsModule } from './diagrams/diagrams.module';
 import { BillingModule } from './billing/billing.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
+import { SupportModule } from './support/support.module';
 
 @Module({
   imports: [
@@ -65,6 +66,8 @@ import { AdminModule } from './admin/admin.module';
     AnalyticsModule,
     // SuperAdmin dashboard: users/projects/subscriptions/traffic reporting.
     AdminModule,
+    // Customer Support Center: ticketing + 3-layer AI Support Assistant.
+    SupportModule,
   ],
 })
 export class AppModule {}
