@@ -10,7 +10,12 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import type { AuthUser, InterviewState, ProjectSummary } from '@archivato/shared';
+import {
+  isStaffUser,
+  type AuthUser,
+  type InterviewState,
+  type ProjectSummary,
+} from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InterviewService } from './interview.service';
@@ -32,17 +37,18 @@ export class InterviewController {
   }
 
   /**
-   * Begin a new interview from a raw idea, owned by the current user. Admin
-   * accounts are dashboard-only (stats/management) and cannot create projects.
+   * Begin a new interview from a raw idea, owned by the current user. Staff
+   * accounts (support / billing / admin — anyone holding a permission) are
+   * console-only and cannot create projects.
    */
   @Post()
   start(
     @CurrentUser() user: AuthUser,
     @Body() dto: StartInterviewDto,
   ): Promise<InterviewState> {
-    if (user.role === 'admin') {
+    if (isStaffUser(user.permissions)) {
       throw new ForbiddenException(
-        'Admin accounts are for platform management only and cannot create projects.',
+        'Staff accounts are for platform operations only and cannot create projects.',
       );
     }
     return this.interview.start(dto, user.id);

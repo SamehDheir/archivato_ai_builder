@@ -17,16 +17,19 @@ import type {
   AuthUser,
 } from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { AdminGuard } from '../auth/admin.guard';
+import { PermissionGuard } from '../auth/permission.guard';
+import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AdminService } from './admin.service';
 import { UpdateRoleDto } from './dto/update-role.dto';
 
 /**
- * SuperAdmin dashboard API. Every route requires an authenticated user with the
- * `admin` role (`JwtAuthGuard` then `AdminGuard` → 403 otherwise).
+ * Platform admin dashboard API — RBAC-gated (`JwtAuthGuard` + `PermissionGuard`).
+ * Reporting requires `admin:analytics` / `admin:users:read`; mutating a user
+ * requires `admin:users:manage`. All held by Super Admin out of the box.
  */
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
+@RequirePermissions('admin:analytics')
 @Controller('admin')
 export class AdminController {
   constructor(private readonly admin: AdminService) {}
@@ -44,6 +47,7 @@ export class AdminController {
   }
 
   /** Paginated users with plan + project count. */
+  @RequirePermissions('admin:users:read')
   @Get('users')
   users(
     @Query('page') page?: string,
@@ -53,6 +57,7 @@ export class AdminController {
   }
 
   /** Promote/demote a user (never your own account — avoids self-lockout). */
+  @RequirePermissions('admin:users:manage')
   @Patch('users/:id/role')
   @HttpCode(204)
   async setRole(
@@ -67,6 +72,7 @@ export class AdminController {
   }
 
   /** Delete a user (not your own account). */
+  @RequirePermissions('admin:users:manage')
   @Delete('users/:id')
   @HttpCode(204)
   async remove(

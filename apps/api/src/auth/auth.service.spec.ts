@@ -16,6 +16,8 @@ import { InMemoryEmailVerificationTokenRepository } from './in-memory-email-veri
 import { InMemoryDeviceRegistrationRepository } from './in-memory-device-registration.repository';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { InMemoryAnalyticsEventRepository } from '../analytics/in-memory-analytics-event.repository';
+import { RoleService } from '../roles/role.service';
+import { InMemoryRoleRepository } from '../roles/in-memory-role.repository';
 
 const REGISTER = {
   email: 'Founder@Example.com',
@@ -28,6 +30,7 @@ describe('AuthService', () => {
   let refreshTokens: InMemoryRefreshTokenRepository;
   let devices: InMemoryDeviceRegistrationRepository;
   let tokens: TokenService;
+  let roles: RoleService;
   let service: AuthService;
 
   beforeEach(() => {
@@ -40,12 +43,14 @@ describe('AuthService', () => {
       JWT_REFRESH_TTL_DAYS: 7,
     });
     tokens = new TokenService(jwt, config, refreshTokens);
+    roles = new RoleService(new InMemoryRoleRepository());
     // No SMTP / no MAIL_PREVIEW configured → MailService logs instead of sending.
     const emailVerification = new EmailVerificationService(
       users,
       new InMemoryEmailVerificationTokenRepository(),
       new MailService(config),
       config,
+      roles,
     );
     service = new AuthService(
       users,
@@ -55,6 +60,7 @@ describe('AuthService', () => {
       emailVerification,
       config,
       new AnalyticsService(new InMemoryAnalyticsEventRepository()),
+      roles,
     );
   });
 
@@ -244,6 +250,68 @@ describe('AuthService', () => {
       password: 'first-pw-123',
     });
     expect(ok.user.id).toBe(oauthUser.id);
+  });
+
+  it('provisions a staff account: pre-verified, generated password, roles assigned', async () => {
+    await roles.onModuleInit(); // seed system roles
+    const supportAgent = (await roles.roleViews()).find(
+      (r) => r.key === 'support_agent',
+    )!;
+
+    const { user, tempPassword } = await service.provisionStaff({
+      email: 'agent@example.com',
+      displayName: 'Support Agent',
+      roleIds: [supportAgent.id],
+    });
+
+    // Account is created ready to use: verified, local password, staff roles.
+    expect(user.email).toBe('agent@example.com');
+    expect(user.emailVerified).toBe(true);
+    expect(user.providers).toEqual(['password']);
+    expect(user.roles).toContain('support_agent');
+    expect(user.permissions).toContain('support:read_all');
+    // A strong password is returned once and actually logs in.
+    expect(tempPassword.length).toBeGreaterThanOrEqual(12);
+    const ok = await service.login({
+      email: 'agent@example.com',
+      password: tempPassword,
+    });
+    expect(ok.user.id).toBe(user.id);
+  });
+
+  it('does not gate provisioning on the device fingerprint (unlike self sign-up)', async () => {
+    await roles.onModuleInit();
+    const billingAdmin = (await roles.roleViews()).find(
+      (r) => r.key === 'billing_admin',
+    )!;
+    // A device that already registered still can't self-register a 2nd account…
+    await service.register({ ...REGISTER, fingerprint: 'shared-device' });
+    // …but an admin can freely provision as many staff accounts as needed.
+    const provisioned = await service.provisionStaff({
+      email: 'billing@example.com',
+      displayName: 'Billing Admin',
+      roleIds: [billingAdmin.id],
+    });
+    expect(provisioned.user.email).toBe('billing@example.com');
+  });
+
+  it('rejects provisioning a duplicate email', async () => {
+    await roles.onModuleInit();
+    const supportAgent = (await roles.roleViews()).find(
+      (r) => r.key === 'support_agent',
+    )!;
+    await service.provisionStaff({
+      email: 'dupe@example.com',
+      displayName: 'First',
+      roleIds: [supportAgent.id],
+    });
+    await expect(
+      service.provisionStaff({
+        email: 'dupe@example.com',
+        displayName: 'Second',
+        roleIds: [supportAgent.id],
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('deletes the account and invalidates its sessions', async () => {

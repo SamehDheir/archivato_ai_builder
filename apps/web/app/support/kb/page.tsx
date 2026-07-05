@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import { BookOpen, Sparkles } from 'lucide-react';
-import type { AuthUser, KbArticleRef } from '@archivato/shared';
+import { hasPermission, type AuthUser, type KbArticleRef } from '@archivato/shared';
 import { authApi, supportApi } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ export default function KnowledgeBasePage() {
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
-      <SupportNav isAdmin={user?.role === 'admin'} />
+      <SupportNav canManageSupport={hasPermission(user?.permissions, 'support:read_all')} />
 
       <Card className="mb-4 border-primary/30 bg-primary/5 p-4">
         <div className="flex items-center gap-2 text-sm font-medium">

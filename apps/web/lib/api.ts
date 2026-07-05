@@ -32,6 +32,11 @@ import type {
   UpdateProfileInput,
   ReviewReport,
   SystemDesign,
+  CreateRoleInput,
+  RoleView,
+  UpdateRoleInput,
+  ProvisionUserInput,
+  ProvisionedUser,
   CreateSupportTicketInput,
   KbArticleRef,
   SupportAdminStats,
@@ -494,6 +499,38 @@ export const adminApi = {
   /** Delete a user (cascades their projects). */
   deleteUser: (id: string) =>
     request<void>(`/admin/users/${id}`, { method: 'DELETE' }),
+};
+
+/** RBAC role management (admin, requires `admin:roles:manage`). */
+export const rolesApi = {
+  list: () => request<RoleView[]>('/admin/roles'),
+  create: (input: CreateRoleInput) =>
+    request<RoleView>('/admin/roles', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  update: (id: string, patch: UpdateRoleInput) =>
+    request<RoleView>(`/admin/roles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  remove: (id: string) =>
+    request<void>(`/admin/roles/${id}`, { method: 'DELETE' }),
+  /** Role ids currently assigned to a user. */
+  userRoles: (userId: string) =>
+    request<{ roleIds: string[] }>(`/admin/roles/user/${userId}`),
+  /** Replace a user's whole role set. */
+  setUserRoles: (userId: string, roleIds: string[]) =>
+    request<void>(`/admin/roles/user/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ roleIds }),
+    }),
+  /** Provision a staff account; returns the generated password once. */
+  provisionUser: (input: ProvisionUserInput) =>
+    request<ProvisionedUser>('/admin/roles/provision-user', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 };
 
 /**

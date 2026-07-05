@@ -13,7 +13,10 @@ import { MailService } from './mail.service';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordResetService } from './password-reset.service';
 import { JwtStrategy } from './jwt.strategy';
+import { SuperAdminSeeder } from './super-admin.seeder';
 import { AdminGuard } from './admin.guard';
+import { PermissionGuard } from './permission.guard';
+import { RolesModule } from '../roles/roles.module';
 import { USER_REPOSITORY } from './user.repository';
 import { PrismaUserRepository } from './prisma-user.repository';
 import { REFRESH_TOKEN_REPOSITORY } from './refresh-token.repository';
@@ -36,6 +39,7 @@ import { PrismaDeviceRegistrationRepository } from './prisma-device-registration
   imports: [
     PassportModule,
     AnalyticsModule,
+    RolesModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -57,7 +61,9 @@ import { PrismaDeviceRegistrationRepository } from './prisma-device-registration
     EmailVerificationService,
     PasswordResetService,
     JwtStrategy,
+    SuperAdminSeeder,
     AdminGuard,
+    PermissionGuard,
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
     { provide: REFRESH_TOKEN_REPOSITORY, useClass: PrismaRefreshTokenRepository },
     {
@@ -74,6 +80,6 @@ import { PrismaDeviceRegistrationRepository } from './prisma-device-registration
     },
   ],
   // Export so later modules (ownership enforcement) can reuse the guard/strategy.
-  exports: [USER_REPOSITORY, AuthService, AdminGuard],
+  exports: [USER_REPOSITORY, AuthService, AdminGuard, PermissionGuard],
 })
 export class AuthModule {}

@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import type { AuthUser } from '@archivato/shared';
+import { hasPermission, type AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
 import { SupportNav } from '@/components/support/SupportNav';
 import { TicketDetail } from '@/components/support/TicketDetail';
 
-/** Admin ticket detail — self-guards (non-admins bounce to the app). */
+/** Staff ticket detail — self-guards on `support:read_all` (else back to /support). */
 export default function AdminTicketPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -15,7 +15,7 @@ export default function AdminTicketPage() {
 
   useEffect(() => {
     authApi.me().then((me) => {
-      if (!me || me.role !== 'admin') {
+      if (!hasPermission(me?.permissions, 'support:read_all')) {
         router.replace('/support');
         return;
       }
@@ -27,7 +27,7 @@ export default function AdminTicketPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
-      <SupportNav isAdmin />
+      <SupportNav canManageSupport />
       <TicketDetail ticketId={params.id} admin />
     </div>
   );

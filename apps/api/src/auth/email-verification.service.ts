@@ -12,6 +12,7 @@ import { USER_REPOSITORY, type UserRepository } from './user.repository';
 import type { User } from './user.entity';
 import { MailService } from './mail.service';
 import { toAuthUser } from './user.mapper';
+import { RoleService } from '../roles/role.service';
 import {
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,
   type EmailVerificationTokenRepository,
@@ -32,6 +33,7 @@ export class EmailVerificationService {
     private readonly tokens: EmailVerificationTokenRepository,
     private readonly mail: MailService,
     private readonly config: ConfigService,
+    private readonly roles: RoleService,
   ) {}
 
   /** Create a fresh token (invalidating prior ones) and email the link. */
@@ -72,7 +74,7 @@ export class EmailVerificationService {
     const updated = user.emailVerified
       ? user
       : await this.users.save({ ...user, emailVerified: true });
-    return toAuthUser(updated);
+    return toAuthUser(updated, await this.roles.resolveAccess(updated.id));
   }
 
   /** Re-send the verification email to a signed-in, still-unverified user. */

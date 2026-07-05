@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import type { AuthUser } from '@archivato/shared';
+import { ALL_PERMISSIONS, type AuthUser } from '@archivato/shared';
 import { SupportService } from './support.service';
 import { SupportAiService } from './support-ai.service';
 import { SupportNotificationsService } from './support-notifications.service';
@@ -8,6 +8,8 @@ import { InMemoryUserRepository } from '../auth/in-memory-user.repository';
 import { InMemoryInterviewSessionRepository } from '../interview/in-memory-interview-session.repository';
 import { SupportAssistantAgent } from '../llm/agents/support-assistant.agent';
 import { MockLlmProvider } from '../llm/mock-llm.provider';
+import { RoleService } from '../roles/role.service';
+import { InMemoryRoleRepository } from '../roles/in-memory-role.repository';
 import type { BillingService } from '../billing/billing.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
@@ -39,6 +41,7 @@ async function makeHarness(): Promise<Harness> {
   } as unknown as BillingService;
   const prisma = { user: { findMany: async () => [] } } as unknown as PrismaService;
 
+  const roleService = new RoleService(new InMemoryRoleRepository());
   const support = new SupportService(
     repo,
     users,
@@ -46,6 +49,7 @@ async function makeHarness(): Promise<Harness> {
     billing,
     notifications,
     prisma,
+    roleService,
   );
   const ai = new SupportAiService(repo, sessions, agent, notifications);
 
@@ -62,6 +66,8 @@ async function makeHarness(): Promise<Harness> {
       displayName: u.displayName,
       emailVerified: true,
       role,
+      roles: role === 'admin' ? ['super_admin'] : [],
+      permissions: role === 'admin' ? [...ALL_PERMISSIONS] : [],
       providers: ['password'],
       createdAt: u.createdAt.toISOString(),
     };

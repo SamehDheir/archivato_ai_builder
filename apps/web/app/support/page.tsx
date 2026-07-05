@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus, Search, Inbox } from 'lucide-react';
-import type {
-  AuthUser,
-  SupportCustomerStats,
-  SupportTicketStatus,
-  SupportTicketSummary,
+import {
+  hasPermission,
+  type AuthUser,
+  type SupportCustomerStats,
+  type SupportTicketStatus,
+  type SupportTicketSummary,
 } from '@archivato/shared';
 import { authApi, supportApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -83,7 +84,7 @@ export default function SupportDashboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
-      <SupportNav isAdmin={user?.role === 'admin'} />
+      <SupportNav canManageSupport={hasPermission(user?.permissions, 'support:read_all')} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {loading

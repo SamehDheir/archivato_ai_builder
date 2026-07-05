@@ -5,11 +5,14 @@ import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  CreditCard,
   FolderOpen,
   LayoutGrid,
+  LifeBuoy,
   Plus,
   Search,
   Settings,
+  Shield,
   ShieldCheck,
 } from 'lucide-react';
 import type {
@@ -17,6 +20,7 @@ import type {
   DatabaseDesign,
   InterviewState,
   JobStatus,
+  Permission,
   PipelineStageName,
   ProjectScale,
   ProjectSnapshot,
@@ -27,6 +31,7 @@ import type {
   SubscriptionView,
   SystemDesign,
 } from '@archivato/shared';
+import { hasPermission, isStaffUser } from '@archivato/shared';
 import {
   ApiError,
   apiDesignApi,
@@ -75,6 +80,100 @@ function saveFile(content: string, filename: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * The dashboard home for **staff** accounts (anyone holding a permission). Shows
+ * a card per console the user's roles grant — the union of their permissions, so
+ * a support agent sees only Support, while a super admin sees them all. Replaces
+ * the project creator, which staff can't use.
+ */
+function StaffHome({ permissions }: { permissions: Permission[] }) {
+  const { t } = useTranslation('dashboard');
+  const canAnalytics = hasPermission(permissions, 'admin:analytics');
+  const cards = [
+    {
+      key: 'support',
+      show: hasPermission(permissions, 'support:read_all'),
+      icon: LifeBuoy,
+      title: t('staff.support.title'),
+      body: t('staff.support.body'),
+      href: '/support/admin',
+      cta: t('staff.support.open'),
+    },
+    {
+      key: 'analytics',
+      show: canAnalytics,
+      icon: ShieldCheck,
+      title: t('staff.analytics.title'),
+      body: t('staff.analytics.body'),
+      href: '/admin',
+      cta: t('staff.analytics.open'),
+    },
+    {
+      key: 'roles',
+      show: hasPermission(permissions, 'admin:roles:manage'),
+      icon: Shield,
+      title: t('staff.roles.title'),
+      body: t('staff.roles.body'),
+      href: '/admin/roles',
+      cta: t('staff.roles.open'),
+    },
+    {
+      key: 'billing',
+      show: hasPermission(permissions, 'billing:manage'),
+      icon: CreditCard,
+      title: t('staff.billing.title'),
+      body: t('staff.billing.body'),
+      // No dedicated billing console yet — link to /admin only if they can see it.
+      href: canAnalytics ? '/admin' : undefined,
+      cta: canAnalytics ? t('staff.billing.open') : t('staff.billing.note'),
+    },
+  ].filter((c) => c.show);
+
+  return (
+    <div>
+      <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+        <h2 className="font-semibold">{t('staff.heading')}</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">{t('staff.subtitle')}</p>
+      </div>
+      {cards.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t('staff.empty')}</p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {cards.map(({ key, icon: Icon, title, body, href, cta }) => {
+            const content = (
+              <>
+                <Icon className="h-6 w-6 text-primary" />
+                <h3 className="mt-2 font-semibold">{title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+                <span
+                  className={`mt-3 inline-block text-sm font-medium ${
+                    href ? 'text-primary' : 'text-muted-foreground'
+                  }`}
+                >
+                  {cta}
+                </span>
+              </>
+            );
+            return href ? (
+              <Link
+                key={key}
+                href={href}
+                className="rounded-lg border border-border p-4 transition-colors hover:border-primary/40"
+              >
+                {content}
+              </Link>
+            ) : (
+              <div key={key} className="rounded-lg border border-border p-4">
+                {content}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const toast = useToast();
   const confirm = useConfirm();
@@ -87,8 +186,9 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
-  // Admins are a management/stats account — they can't create or run projects.
-  const [isAdmin, setIsAdmin] = useState(false);
+  // Staff (support / billing / admin) are console accounts — they can't create
+  // or run projects; the dashboard shows their consoles instead of the creator.
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [sub, setSub] = useState<SubscriptionView | null>(null);
   // True while the "New project" form is open on the projects dashboard.
@@ -145,7 +245,7 @@ export default function Home() {
         const me = await authApi.me();
         if (cancelled || !me) return;
         setUserId(me.id);
-        setIsAdmin(me.role === 'admin');
+        setPermissions(me.permissions ?? []);
         const [list, subscription] = await Promise.all([
           interviewApi.list(),
           billingApi.subscription().catch(() => null),
@@ -556,34 +656,60 @@ export default function Home() {
     refine: !!apiDesign,
     history: !!doc,
   };
+  // Staff (any permission) are console accounts: no project creation. They see
+  // the consoles their roles grant instead.
+  const isStaff = isStaffUser(permissions);
+  const canViewAdmin = hasPermission(permissions, 'admin:analytics');
+  const canSupport = hasPermission(permissions, 'support:read_all');
   const paletteGroups: CommandGroup[] = [
     {
       heading: t('palette.actions'),
       items: [
-        // Admins manage the platform (no project creation); everyone else can
-        // start a new project.
-        isAdmin
-          ? {
-              id: 'admin',
-              label: t('palette.admin'),
-              icon: ShieldCheck,
-              run: () => router.push('/admin'),
-            }
-          : {
-              id: 'new-project',
-              label: t('palette.newProject'),
-              icon: Plus,
-              run: async () => {
-                await backToProjects();
-                setCreating(true);
+        // Staff manage the platform (no project creation); everyone else can
+        // start a new project. Staff get quick links to the consoles they hold.
+        ...(!isStaff
+          ? [
+              {
+                id: 'new-project',
+                label: t('palette.newProject'),
+                icon: Plus,
+                run: async () => {
+                  await backToProjects();
+                  setCreating(true);
+                },
               },
-            },
-        {
-          id: 'all-projects',
-          label: t('palette.backToProjects'),
-          icon: LayoutGrid,
-          run: () => void backToProjects(),
-        },
+            ]
+          : []),
+        ...(canSupport
+          ? [
+              {
+                id: 'support',
+                label: t('palette.support'),
+                icon: LifeBuoy,
+                run: () => router.push('/support/admin'),
+              },
+            ]
+          : []),
+        ...(canViewAdmin
+          ? [
+              {
+                id: 'admin',
+                label: t('palette.admin'),
+                icon: ShieldCheck,
+                run: () => router.push('/admin'),
+              },
+            ]
+          : []),
+        ...(!isStaff
+          ? [
+              {
+                id: 'all-projects',
+                label: t('palette.backToProjects'),
+                icon: LayoutGrid,
+                run: () => void backToProjects(),
+              },
+            ]
+          : []),
         {
           id: 'settings',
           label: t('palette.settings'),
@@ -646,20 +772,8 @@ export default function Home() {
             {t('appSubtitle')}
           </p>
 
-          {isAdmin ? (
-            <div className="rounded-lg border border-primary/30 bg-primary/5 p-6 text-center">
-              <ShieldCheck className="mx-auto h-8 w-8 text-primary" />
-              <h2 className="mt-2 text-lg font-semibold">{t('admin.title')}</h2>
-              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                {t('admin.body')}
-              </p>
-              <Link
-                href="/admin"
-                className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-              >
-                <ShieldCheck className="h-4 w-4" /> {t('admin.open')}
-              </Link>
-            </div>
+          {isStaff ? (
+            <StaffHome permissions={permissions} />
           ) : (
             <>
               {sub && (

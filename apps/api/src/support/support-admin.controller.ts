@@ -18,7 +18,8 @@ import type {
   SupportTicketList,
 } from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { AdminGuard } from '../auth/admin.guard';
+import { PermissionGuard } from '../auth/permission.guard';
+import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SupportService } from './support.service';
 import { SupportAiService } from './support-ai.service';
@@ -27,11 +28,13 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { InternalNoteDto } from './dto/internal-note.dto';
 
 /**
- * Admin Support Panel API — every route requires an authenticated `admin`
- * (`JwtAuthGuard` then `AdminGuard`). Admins see and act on every ticket, add
- * internal notes, (re)assign, and use the AI Copilot.
+ * Support staff API — RBAC-gated (`JwtAuthGuard` + `PermissionGuard`). Reading
+ * requires `support:read_all`; write actions require the matching permission
+ * (`support:manage`/`:note`/`:copilot`). Held by the Support Agent + Super Admin
+ * roles out of the box, but assignable to any custom role.
  */
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
+@RequirePermissions('support:read_all')
 @Controller('support/admin')
 export class SupportAdminController {
   constructor(
@@ -67,6 +70,7 @@ export class SupportAdminController {
   }
 
   /** Change status / priority / category / assignee (each a timeline event). */
+  @RequirePermissions('support:read_all', 'support:manage')
   @Patch('tickets/:id')
   update(
     @CurrentUser() admin: AuthUser,
@@ -77,6 +81,7 @@ export class SupportAdminController {
   }
 
   /** Add a private internal note. */
+  @RequirePermissions('support:read_all', 'support:note')
   @Post('tickets/:id/notes')
   addNote(
     @CurrentUser() admin: AuthUser,
@@ -87,6 +92,7 @@ export class SupportAdminController {
   }
 
   /** AI Copilot: full analysis + urgency, priority, assignment, similar tickets. */
+  @RequirePermissions('support:read_all', 'support:copilot')
   @Post('tickets/:id/ai/copilot')
   @HttpCode(200)
   copilot(

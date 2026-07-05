@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
+import { RolesModule } from './roles/roles.module';
 import { LlmModule } from './llm/llm.module';
 import { InterviewModule } from './interview/interview.module';
 import { RequirementsModule } from './requirements/requirements.module';
@@ -28,6 +29,8 @@ import { SupportModule } from './support/support.module';
     ConfigModule.forRoot({ isGlobal: true }),
     // Persistence: PostgreSQL via Prisma (global PrismaService).
     PrismaModule,
+    // RBAC: dynamic roles + permission catalog (seeds system roles on boot).
+    RolesModule,
     // Slice 9: authentication (register/login/refresh + JWT cookie guard).
     AuthModule,
     // Slice 1: the LLM / Agent core.

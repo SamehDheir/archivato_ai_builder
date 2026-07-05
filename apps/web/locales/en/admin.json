@@ -2,6 +2,9 @@
   "back": "Back to app",
   "title": "Admin dashboard",
   "subtitle": "Live overview of users, projects, revenue, and traffic.",
+  "roles": {
+    "link": "Roles & Permissions"
+  },
   "status": {
     "collecting": "Interviewing",
     "awaiting_confirmation": "Review & confirm",

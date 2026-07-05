@@ -407,8 +407,10 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   charts, projects-by-status, plan mix, top pages/referrers, and a paginated user
   management table. Self-guards (non-admins bounce to the app); an admin-only
   header link opens it.
-- Set `ADMIN_EMAILS=you@example.com` in `apps/api/.env`, then sign in to unlock
-  the dashboard.
+- **Super Admin is seeded on boot.** Set `SUPER_ADMIN_EMAIL` +
+  `SUPER_ADMIN_PASSWORD` in `apps/api/.env` and a pre-verified super-admin account
+  is created on startup — log in directly, no self-registration. (The legacy
+  `ADMIN_EMAILS` promote-on-login allowlist still works but is empty by default.)
 
 ### ✅ Slice — Customer Support Center + AI Support Assistant
 - A professional **ticketing system** (Zendesk/Linear-style) reachable from the
@@ -440,6 +442,40 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - REST API under `/support` (customer) and `/support/admin` (admin). All routes
   are owner-scoped (a customer only ever sees their own tickets; a non-owner gets
   a 404, no existence leak); the AI never reads another user's ticket data.
+
+### ✅ Slice — RBAC (dynamic roles & permissions)
+- The monolithic `admin` is replaced by a **dynamic, DB-managed role system**.
+  The **permission catalog is code-defined** in `@archivato/shared` (a permission
+  only exists because a guard enforces it), while **roles, their granted
+  permissions, and who holds them are editable at runtime**. A user can hold
+  **multiple roles**; their effective permissions are the **union**.
+- **Seeded system roles**: **Super Admin** (full catalog), **Support Agent** (all
+  `support:*` — works tickets without platform access), **Billing Admin**
+  (`billing:manage`), and **User** (none; acts via ownership). `ADMIN_EMAILS`
+  bootstraps the first Super Admin; everyone else is assigned in the UI.
+- Enforcement is a **`PermissionGuard` + `@RequirePermissions(...)`** decorator.
+  `/admin` split into `admin:analytics` / `admin:users:read` / `admin:users:manage`;
+  the Support staff panel now needs `support:read_all` (so a Support Agent can
+  work tickets without being a super admin). The web mirrors this with a shared
+  `hasPermission()` helper driving nav + self-guards.
+- **Role management UI** at **`/admin/roles`** (needs `admin:roles:manage`):
+  create/edit/delete roles with a grouped permission grid, and assign roles to
+  users. Super Admin's permissions are locked to the full catalog (no lock-out)
+  and system roles can't be deleted. REST API under `/admin/roles`.
+
+### ✅ Slice — Role-aware interfaces & staff provisioning
+- **Staff = console-only accounts.** A user who holds *any* permission is
+  **staff** (`isStaffUser`) and **cannot create projects** — `POST /interview`
+  403s them (generalizing the old admin-only block to Support/Billing agents).
+- **Role-aware dashboard.** `/dashboard` shows a **`StaffHome`** to staff instead
+  of the project creator: one card per console their permissions grant (Support,
+  Analytics, Roles, Billing) — the **union** of their roles. Regular users still
+  get the project creator. Fully i18n'd (EN + AR).
+- **Super Admin provisions staff without self-registration.** `POST
+  /admin/roles/provision-user` (`admin:roles:manage`) creates a **pre-verified**
+  account with a **generated strong password** (returned once), **bypassing** the
+  one-account-per-device gate, and assigns RBAC roles. The `/admin/roles` page has
+  a "Provision staff account" card that shows the password once with a copy button.
 
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
@@ -497,8 +533,15 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/admin/stats`         | Admin: KPIs + 30-day trends (admin only)     |
 | GET    | `/api/admin/traffic`       | Admin: traffic detail (admin only)           |
 | GET    | `/api/admin/users`         | Admin: paginated users (admin only)          |
-| PATCH  | `/api/admin/users/:id/role`| Admin: promote/demote a user                 |
+| PATCH  | `/api/admin/users/:id/role`| Admin: promote/demote a user (bridges to RBAC)|
 | DELETE | `/api/admin/users/:id`     | Admin: delete a user                         |
+| GET    | `/api/admin/roles`         | List roles + user counts (`admin:roles:manage`)|
+| POST   | `/api/admin/roles`         | Create a custom role                         |
+| PATCH  | `/api/admin/roles/:id`     | Edit a role's name/description/permissions   |
+| DELETE | `/api/admin/roles/:id`     | Delete a custom role (system roles protected)|
+| GET    | `/api/admin/roles/user/:id`| A user's assigned role ids                   |
+| PUT    | `/api/admin/roles/user/:id`| Replace a user's whole role set              |
+| POST   | `/api/admin/roles/provision-user`| Provision a staff account (generated password, returned once)|
 | GET    | `/api/support/stats`       | Customer's ticket counts by status           |
 | GET    | `/api/support/kb`          | Knowledge Base articles (also used by the AI)|
 | GET    | `/api/support/tickets`     | List my tickets (filter/search/paginate)     |

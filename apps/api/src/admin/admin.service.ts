@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   PLANS,
+  SUPER_ADMIN_ROLE_KEY,
   type AccountRole,
   type AdminStats,
   type AdminTraffic,
@@ -13,6 +14,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { USER_REPOSITORY, type UserRepository } from '../auth/user.repository';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { RoleService } from '../roles/role.service';
 import type { AnalyticsEvent } from '../analytics/analytics-event.entity';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -41,6 +43,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
+    private readonly roles: RoleService,
   ) {}
 
   /** Headline KPIs + 30-day signup/pageview trend series. */
@@ -192,11 +195,16 @@ export class AdminService {
       counts.map((c) => [c.userId, c._count._all] as const),
     );
 
-    const users: AdminUserRow[] = rows.map((r) => ({
+    const roleKeys = await Promise.all(
+      rows.map((r) => this.roles.roleKeysForUser(r.id)),
+    );
+
+    const users: AdminUserRow[] = rows.map((r, i) => ({
       id: r.id,
       email: r.email,
       displayName: r.displayName,
       role: r.role as AccountRole,
+      roles: roleKeys[i],
       emailVerified: r.emailVerified,
       providers: r.providers as AdminUserRow['providers'],
       plan: effectivePlan(r.subscription, now),
@@ -207,10 +215,20 @@ export class AdminService {
     return { users, total };
   }
 
-  /** Promote/demote a user's role. */
+  /**
+   * Promote/demote a user's coarse role. Bridges to RBAC: `admin` grants the
+   * super-admin role (full permissions), `user` removes it. The legacy `role`
+   * column is kept in sync for back-compat. Fine-grained role assignment lives
+   * in the dedicated role-management API.
+   */
   async setRole(userId: string, role: AccountRole): Promise<void> {
     const user = await this.users.findById(userId);
     if (!user) return;
+    if (role === 'admin') {
+      await this.roles.assignByKey(userId, SUPER_ADMIN_ROLE_KEY);
+    } else {
+      await this.roles.removeByKey(userId, SUPER_ADMIN_ROLE_KEY);
+    }
     await this.users.save({ ...user, role });
   }
 

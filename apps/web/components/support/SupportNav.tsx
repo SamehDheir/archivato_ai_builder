@@ -35,7 +35,7 @@ const ITEMS: NavItem[] = [
  * Admin). Rendered at the top of every support page; the "Admin" tab appears
  * only for admins.
  */
-export function SupportNav({ isAdmin }: { isAdmin: boolean }) {
+export function SupportNav({ canManageSupport }: { canManageSupport: boolean }) {
   const pathname = usePathname() ?? '';
   const { t } = useTranslation('support');
 
@@ -50,7 +50,7 @@ export function SupportNav({ isAdmin }: { isAdmin: boolean }) {
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{t('nav.subtitle')}</p>
       <nav className="mt-4 flex flex-wrap gap-1 border-b border-border">
-        {ITEMS.filter((i) => !i.adminOnly || isAdmin).map((item) => {
+        {ITEMS.filter((i) => !i.adminOnly || canManageSupport).map((item) => {
           const active = isActive(item);
           const Icon = item.icon;
           return (

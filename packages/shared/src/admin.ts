@@ -8,6 +8,7 @@
 import type { AccountRole, AuthProvider } from './auth';
 import type { SubscriptionPlan } from './billing';
 import type { InterviewStatus } from './interview';
+import type { Permission } from './permissions';
 
 /** The kinds of analytics events we record. */
 export type AnalyticsEventType = 'pageview' | 'signup' | 'login' | 'generate';
@@ -76,6 +77,8 @@ export interface AdminUserRow {
   email: string;
   displayName: string;
   role: AccountRole;
+  /** RBAC role keys assigned to the user (for the roles column + editor). */
+  roles: string[];
   emailVerified: boolean;
   providers: AuthProvider[];
   plan: SubscriptionPlan;
@@ -87,6 +90,39 @@ export interface AdminUserRow {
 export interface AdminUsersPage {
   users: AdminUserRow[];
   total: number;
+}
+
+// ── RBAC role management (admin) ──────────────────────────────────────────────
+
+/** A role as shown in the role-management UI. */
+export interface RoleView {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  permissions: Permission[];
+  isSystem: boolean;
+  /** How many users currently hold this role. */
+  userCount: number;
+}
+
+/** Body for creating a role. */
+export interface CreateRoleInput {
+  name: string;
+  description?: string;
+  permissions: Permission[];
+}
+
+/** Body for editing a role (system roles: name/description/permissions only). */
+export interface UpdateRoleInput {
+  name?: string;
+  description?: string;
+  permissions?: Permission[];
+}
+
+/** Body for replacing a user's whole role set. */
+export interface SetUserRolesInput {
+  roleIds: string[];
 }
 
 /** Traffic detail: daily series + top pages/referrers. */

@@ -16,7 +16,12 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import type { AdminStats, AdminTraffic, TimePoint } from '@archivato/shared';
+import {
+  hasPermission,
+  type AdminStats,
+  type AdminTraffic,
+  type TimePoint,
+} from '@archivato/shared';
 import { adminApi, authApi, ApiError } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,6 +37,7 @@ export function AdminDashboard() {
   const { t } = useTranslation('admin');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [traffic, setTraffic] = useState<AdminTraffic | null>(null);
+  const [canManageRoles, setCanManageRoles] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,9 +45,12 @@ export function AdminDashboard() {
     (async () => {
       try {
         const me = await authApi.me().catch(() => null);
-        if (!me || me.role !== 'admin') {
+        if (!hasPermission(me?.permissions, 'admin:analytics')) {
           router.replace('/dashboard');
           return;
+        }
+        if (!cancelled) {
+          setCanManageRoles(hasPermission(me?.permissions, 'admin:roles:manage'));
         }
         const [s, t] = await Promise.all([adminApi.stats(), adminApi.traffic()]);
         if (!cancelled) {
@@ -84,9 +93,19 @@ export function AdminDashboard() {
       >
         <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" /> {t('back')}
       </Link>
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">{t('title')}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-6 w-6 text-primary" />
+          <h1 className="text-2xl font-bold">{t('title')}</h1>
+        </div>
+        {canManageRoles && (
+          <Link
+            href="/admin/roles"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:border-primary/50"
+          >
+            <ShieldCheck className="h-4 w-4" /> {t('roles.link')}
+          </Link>
+        )}
       </div>
       <p className="mb-6 mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
 

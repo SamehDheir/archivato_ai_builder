@@ -54,7 +54,7 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
   `export`, `chat`, `jobs`, `versions`, `diagrams`, `auth`, `billing`,
-  `analytics`, `admin`, `support`).
+  `analytics`, `admin`, `support`, `roles`).
   Modules export their repository token + service for downstream use.
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
@@ -158,10 +158,16 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   toggle, and a danger-zone **delete account** (`DELETE /auth/me`, cascades all
   projects). `UserRepository.delete` added across impls.
 - **SuperAdmin + analytics.** `User.role` (`'user'|'admin'`, shared
-  `AccountRole` — distinct from the requirement-doc `UserRole`) is bootstrapped
-  from the **`ADMIN_EMAILS`** env allowlist: `AuthService.syncRole` promotes a
-  listed email to `admin` on login/session issue + `/auth/me` (promote-only;
-  never auto-demote). `AdminGuard` (exported by AuthModule) 403s non-admins.
+  `AccountRole` — distinct from the requirement-doc `UserRole`). The primary
+  bootstrap is a **seeded account**: `SuperAdminSeeder` (`onModuleInit`, AuthModule)
+  reads **`SUPER_ADMIN_EMAIL` + `SUPER_ADMIN_PASSWORD`** and, on boot, creates a
+  **pre-verified, ready-to-log-in** super-admin (no self-registration), always
+  ensuring the `super_admin` role + legacy `role='admin'` column and keeping the
+  password in sync with the env (credentials-as-config; runs after RoleService
+  seeds the roles). The legacy **`ADMIN_EMAILS`** allowlist (`AuthService.syncRole`,
+  promote-on-login, promote-only) still works but is now **empty by default** —
+  superseded by the seeded account. `AdminGuard` (exported by AuthModule) 403s
+  non-admins.
   **Analytics** (`analytics` module) records events (`AnalyticsEvent`: pageview
   / signup / login / generate): a **public `POST /analytics/track`** beacon logs
   anonymous landing pageviews (sets an httpOnly `archivato_vid` visitor cookie),
@@ -179,6 +185,53 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   /interview` 403s for them (`InterviewController.start`) and the dashboard shows
   an admin notice (link to `/admin`) instead of the project creator — so an admin
   account never owns or generates projects.
+- **RBAC (`roles`) — dynamic roles + a static permission catalog.** Authorization
+  has **three independent axes**, kept separate: **ownership** (`SessionOwnerGuard`
+  / owner-or-permission checks), **entitlement** (`ProGuard`, plan/billing), and
+  **role/permission** (this). The **permission catalog is code-defined** in
+  `@archivato/shared` (`permissions.ts` — a `Permission` only means something
+  because a guard checks it, so admins can't invent capabilities), while
+  **roles, their granted permissions, and assignment are DB-managed/editable at
+  runtime** (`roles` + `user_roles` tables). A user holds **multiple roles**;
+  effective permissions = **union** (`resolvePermissions`, filtered by
+  `isPermission` so stale DB strings grant nothing). `RoleService`
+  (`onModuleInit`) seeds the system roles (`SYSTEM_ROLES`): **super_admin** (full
+  catalog, reconciled every boot + locked in `updateRole` so it can't be locked
+  out), **support_agent** (all `support:*`), **billing_admin** (`billing:manage`),
+  **user** (none). `AuthUser` is enriched with `roles`/`permissions` in
+  `JwtStrategy.validate` (resolved fresh per request → grants apply promptly) and
+  every `AuthService` response; the legacy `role` field is **derived** (`admin`
+  iff holds super_admin). Enforcement = **`PermissionGuard` + `@RequirePermissions`**
+  (AND semantics; method metadata overrides class). `ADMIN_EMAILS` bootstraps
+  super_admin in `syncRole` (also keeps the legacy column in sync); `AdminService.setRole`
+  bridges the old promote/demote button to assign/remove super_admin. `RolesModule`
+  imports **nothing** from Auth (AuthModule imports it — one-way, no cycle);
+  role-management controllers live in **AdminModule** (which has both Auth guards +
+  RoleService), gated by `admin:roles:manage`. `/admin` split into
+  `admin:analytics`/`users:read`/`users:manage`; the support staff panel now needs
+  `support:read_all` (a support_agent works tickets without full admin), and
+  ticket assignees must hold `support:read_all` (`assertAssignable`). **Web:** a
+  shared `hasPermission()` drives nav + self-guards (the Support "Admin" tab, the
+  `/admin/roles` link, page redirects); the **`/admin/roles`** page has a grouped
+  **permission grid** (roles CRUD) + a **user role-assignment** editor.
+- **Staff = console-only accounts (`isStaffUser`).** A user is **staff** iff they
+  hold *any* permission (`isStaffUser(permissions)` in `@archivato/shared` — a
+  plain `user` holds none). Staff **cannot create projects**: `InterviewController.start`
+  403s any staff (generalizing the old `role==='admin'` block to support/billing
+  agents too). The web dashboard (`/dashboard`) renders a **`StaffHome`** for staff
+  instead of the project creator — a card per console their permissions grant
+  (Support → `/support/admin`, Analytics → `/admin`, Roles → `/admin/roles`,
+  Billing), so the view is the **union** of their roles (a support agent sees only
+  Support; a super admin sees all). i18n'd (`dashboard.staff.*`, EN+AR).
+- **Super-admin provisions staff (no self-registration).** `AuthService.provisionStaff`
+  creates an account directly: it **bypasses the one-account-per-device gate**,
+  marks it **pre-verified**, generates a **strong random password** (`password-generator.ts`,
+  CSPRNG, unambiguous charset) returned **once** in plaintext for hand-off (only the
+  hash is stored), then assigns the given RBAC roles. Endpoint: `POST
+  /admin/roles/provision-user` on `AdminRolesController` (already `admin:roles:manage`
+  → Super Admin only), body `ProvisionUserDto` (email + displayName + non-empty
+  `roleIds`). **Web:** a "Provision staff account" card on `/admin/roles` (English,
+  matching that internal admin page) shows the password once with a copy button.
 - **Customer Support Center (`support`).** A Zendesk-style ticketing system with
   an embedded **three-layer AI Support Assistant**, **free for all users** (no
   Pro gate). One `SupportRepository` (interface + in-memory + Prisma) owns the

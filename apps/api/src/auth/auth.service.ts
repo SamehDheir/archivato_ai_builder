@@ -6,13 +6,17 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SUPER_ADMIN_ROLE_KEY } from '@archivato/shared';
 import type {
   AuthUser,
   ChangePasswordInput,
   LoginInput,
+  ProvisionUserInput,
+  ProvisionedUser,
   RegisterInput,
   UpdateProfileInput,
 } from '@archivato/shared';
+import { generateStrongPassword } from './password-generator';
 import { USER_REPOSITORY, type UserRepository } from './user.repository';
 import {
   DEVICE_REGISTRATION_REPOSITORY,
@@ -23,6 +27,7 @@ import { PasswordService } from './password.service';
 import { TokenService, hashToken, type IssuedRefreshToken } from './token.service';
 import { EmailVerificationService } from './email-verification.service';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { RoleService } from '../roles/role.service';
 import { toAuthUser } from './user.mapper';
 
 /**
@@ -46,7 +51,13 @@ export class AuthService {
     private readonly emailVerification: EmailVerificationService,
     private readonly config: ConfigService,
     private readonly analytics: AnalyticsService,
+    private readonly roles: RoleService,
   ) {}
+
+  /** Map a user to the client-safe shape, enriched with their RBAC access. */
+  private async buildAuthUser(user: User): Promise<AuthUser> {
+    return toAuthUser(user, await this.roles.resolveAccess(user.id));
+  }
 
   /** Create a local account, send a verification email, and start a session. */
   async register(input: RegisterInput): Promise<AuthSession> {
@@ -91,6 +102,33 @@ export class AuthService {
     return this.startSession(user);
   }
 
+  /**
+   * Provision a staff account directly (super-admin action). Unlike self-service
+   * registration this **bypasses the one-account-per-device gate**, creates the
+   * account **pre-verified**, generates a strong random password (returned once
+   * in plaintext for hand-off — only its hash is stored), and assigns the given
+   * RBAC roles. No verification email is sent; the staff member signs in with
+   * the temp password and can change it in settings.
+   */
+  async provisionStaff(input: ProvisionUserInput): Promise<ProvisionedUser> {
+    const email = input.email.trim();
+    const existing = await this.users.findByEmail(email);
+    if (existing) {
+      throw new ConflictException('Email already registered');
+    }
+    const tempPassword = generateStrongPassword();
+    const passwordHash = await this.passwords.hash(tempPassword);
+    const user = await this.users.create({
+      email,
+      passwordHash,
+      displayName: input.displayName.trim(),
+      emailVerified: true,
+      providers: ['password'],
+    });
+    await this.roles.setUserRoles(user.id, input.roleIds);
+    return { user: await this.buildAuthUser(user), tempPassword };
+  }
+
   /** Verify credentials and start a session. */
   async login(input: LoginInput): Promise<AuthSession> {
     const user = await this.users.findByEmail(input.email);
@@ -115,7 +153,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
     return {
-      user: toAuthUser(user),
+      user: await this.buildAuthUser(user),
       accessToken: this.tokens.signAccessToken(user),
       refresh,
     };
@@ -130,7 +168,7 @@ export class AuthService {
   async getUser(userId: string): Promise<AuthUser> {
     const user = await this.users.findById(userId);
     if (!user) throw new UnauthorizedException();
-    return toAuthUser(await this.syncRole(user));
+    return this.buildAuthUser(await this.syncRole(user));
   }
 
   /** Update the signed-in user's editable profile fields (display name). */
@@ -144,7 +182,7 @@ export class AuthService {
       ...user,
       displayName: input.displayName.trim(),
     });
-    return toAuthUser(saved);
+    return this.buildAuthUser(saved);
   }
 
   /**
@@ -201,7 +239,7 @@ export class AuthService {
     const synced = await this.syncRole(user);
     const refresh = await this.tokens.issueRefreshToken(synced.id);
     return {
-      user: toAuthUser(synced),
+      user: await this.buildAuthUser(synced),
       accessToken: this.tokens.signAccessToken(synced),
       refresh,
     };
@@ -217,10 +255,12 @@ export class AuthService {
       .split(',')
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean);
-    if (
-      user.role !== 'admin' &&
-      allowlist.includes(user.email.toLowerCase())
-    ) {
+    if (!allowlist.includes(user.email.toLowerCase())) return user;
+
+    // RBAC: ensure the allowlisted user holds the super-admin role (idempotent).
+    await this.roles.assignByKey(user.id, SUPER_ADMIN_ROLE_KEY).catch(() => undefined);
+    // Keep the legacy `role` column in sync for any not-yet-migrated readers.
+    if (user.role !== 'admin') {
       return this.users.save({ ...user, role: 'admin' });
     }
     return user;

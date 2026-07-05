@@ -1,5 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { hasPermission } from '@archivato/shared';
 import type {
   AuthUser,
   SimilarTicketRef,
@@ -133,7 +134,8 @@ export class SupportAiService {
   ): Promise<SupportTicketBundle> {
     const bundle = await this.repo.findTicketBundle(ticketId);
     if (!bundle) throw new NotFoundException(`Support ticket ${ticketId} not found.`);
-    if (user.role !== 'admin' && bundle.ticket.userId !== user.id) {
+    const isStaff = hasPermission(user.permissions, 'support:read_all');
+    if (!isStaff && bundle.ticket.userId !== user.id) {
       // 404, not 403 — no existence leak (mirrors SupportService).
       throw new NotFoundException(`Support ticket ${ticketId} not found.`);
     }

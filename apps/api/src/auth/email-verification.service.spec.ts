@@ -7,6 +7,8 @@ import {
 import { MailService } from './mail.service';
 import { InMemoryUserRepository } from './in-memory-user.repository';
 import { InMemoryEmailVerificationTokenRepository } from './in-memory-email-verification-token.repository';
+import { RoleService } from '../roles/role.service';
+import { InMemoryRoleRepository } from '../roles/in-memory-role.repository';
 
 describe('EmailVerificationService', () => {
   let users: InMemoryUserRepository;
@@ -27,7 +29,13 @@ describe('EmailVerificationService', () => {
       .mockImplementation(async (to, url) => {
         sent.push({ to, url });
       });
-    service = new EmailVerificationService(users, tokenRepo, mail, config);
+    service = new EmailVerificationService(
+      users,
+      tokenRepo,
+      mail,
+      config,
+      new RoleService(new InMemoryRoleRepository()),
+    );
   });
 
   async function newUser() {

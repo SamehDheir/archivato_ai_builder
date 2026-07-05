@@ -35,6 +35,8 @@ model User {
   verificationTokens  EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
   deviceRegistrations DeviceRegistration[]
+  // RBAC: roles assigned to this user (many-to-many via UserRole).
+  userRoles           UserRole[]
   subscription        Subscription?
   // Pipeline projects owned by this user (ownership enforcement).
   interviewSessions   InterviewSession[]
@@ -129,6 +131,46 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+// --- RBAC (roles & permissions) -----------------------------------------------
+//
+// Dynamic, DB-managed roles. The *permission catalog* is code-defined
+// (@archivato/shared), but which permissions a role grants — and which roles a
+// user holds — are editable at runtime. A user's effective permissions are the
+// union of their roles' `permissions`. Seeded system roles are `isSystem` (can't
+// be deleted / key-renamed). Permissions are stored as validated string arrays
+// (project convention, cf. User.providers), not Prisma enums.
+
+model Role {
+  id          String   @id @default(uuid())
+  // Stable slug used by code + bootstrapping (e.g. "super_admin"). Unique.
+  key         String   @unique
+  name        String
+  description String   @default("")
+  permissions String[] @default([]) // Permission[] (validated against the catalog)
+  // Seeded roles are protected from deletion and key edits.
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId     String
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
 }
 
 // --- Pipeline -----------------------------------------------------------------

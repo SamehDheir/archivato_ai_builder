@@ -2,19 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { AuthUser } from '@archivato/shared';
+import { hasPermission, type AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
 import { SupportNav } from '@/components/support/SupportNav';
 import { AdminSupportDashboard } from '@/components/support/AdminSupportDashboard';
 
-/** Admin Support Panel — self-guards (non-admins bounce to the customer view). */
+/** Support staff panel — self-guards on `support:read_all` (else back to /support). */
 export default function SupportAdminPage() {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
     authApi.me().then((me) => {
-      if (!me || me.role !== 'admin') {
+      if (!hasPermission(me?.permissions, 'support:read_all')) {
         router.replace('/support');
         return;
       }
@@ -26,7 +26,7 @@ export default function SupportAdminPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
-      <SupportNav isAdmin />
+      <SupportNav canManageSupport />
       <AdminSupportDashboard />
     </div>
   );

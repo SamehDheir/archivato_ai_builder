@@ -20,6 +20,32 @@
     "body": "Admin accounts manage the platform and don't create projects. Head to the admin dashboard for users, revenue, and traffic stats.",
     "open": "Open admin dashboard"
   },
+  "staff": {
+    "heading": "Staff console",
+    "subtitle": "You have a staff account. Jump into the tools your role grants — staff accounts don't create projects.",
+    "empty": "Your account has staff permissions but no console is available yet.",
+    "support": {
+      "title": "Support console",
+      "body": "Work customer tickets, replies, and the AI copilot.",
+      "open": "Open support"
+    },
+    "analytics": {
+      "title": "Analytics dashboard",
+      "body": "Users, revenue, traffic, and platform KPIs.",
+      "open": "Open dashboard"
+    },
+    "roles": {
+      "title": "Roles & staff",
+      "body": "Manage roles, permissions, and staff accounts.",
+      "open": "Manage roles"
+    },
+    "billing": {
+      "title": "Billing",
+      "body": "Manage subscriptions and billing.",
+      "open": "Open dashboard",
+      "note": "Billing management"
+    }
+  },
   "quota": {
     "plan": "{{plan}} plan",
     "used": "{{count}} of {{quota}} projects used",
@@ -85,6 +111,7 @@
     "backToProjects": "Back to projects",
     "settings": "Account settings",
     "admin": "Admin dashboard",
+    "support": "Support console",
     "stage": "Stage",
     "placeholder": "Search projects, stages, actions…",
     "noMatches": "No matches.",

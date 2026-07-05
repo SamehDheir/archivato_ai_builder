@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { RolesModule } from '../roles/roles.module';
 import { AdminController } from './admin.controller';
+import { AdminRolesController } from './admin-roles.controller';
 import { AdminService } from './admin.service';
 
 /**
@@ -10,8 +12,8 @@ import { AdminService } from './admin.service';
  * AnalyticsModule (event aggregation). PrismaService is global.
  */
 @Module({
-  imports: [AuthModule, AnalyticsModule],
-  controllers: [AdminController],
+  imports: [AuthModule, AnalyticsModule, RolesModule],
+  controllers: [AdminController, AdminRolesController],
   providers: [AdminService],
 })
 export class AdminModule {}

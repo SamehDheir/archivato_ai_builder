@@ -22,6 +22,7 @@ import {
   SUPPORT_CATEGORIES,
   SUPPORT_PRIORITIES,
   SUPPORT_STATUSES,
+  hasPermission,
 } from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
@@ -30,6 +31,7 @@ import {
 import { USER_REPOSITORY, type UserRepository } from '../auth/user.repository';
 import { BillingService } from '../billing/billing.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RoleService } from '../roles/role.service';
 import type { SupportAgentRef } from '@archivato/shared';
 import {
   SUPPORT_REPOSITORY,
@@ -72,16 +74,24 @@ export class SupportService {
     private readonly billing: BillingService,
     private readonly notifications: SupportNotificationsService,
     private readonly prisma: PrismaService,
+    private readonly roles: RoleService,
   ) {}
 
-  /** Admins who can be assigned a ticket (assignment dropdown). */
+  /** Staff who can be assigned a ticket — anyone with `support:read_all`. */
   async listAgents(): Promise<SupportAgentRef[]> {
-    const admins = await this.prisma.user.findMany({
-      where: { role: 'admin' },
+    const ids = await this.roles.userIdsWithPermission('support:read_all');
+    if (ids.length === 0) return [];
+    const agents = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
       select: { id: true, displayName: true, email: true },
       orderBy: { displayName: 'asc' },
     });
-    return admins.map((a) => ({ id: a.id, name: a.displayName, email: a.email }));
+    return agents.map((a) => ({ id: a.id, name: a.displayName, email: a.email }));
+  }
+
+  /** Whether the user acts as support staff (drives author/actor typing). */
+  private isStaff(user: AuthUser): boolean {
+    return hasPermission(user.permissions, 'support:read_all');
   }
 
   // ── Tickets ───────────────────────────────────────────────────────────────
@@ -178,7 +188,7 @@ export class SupportService {
         'This ticket is closed. Reopen it before replying.',
       );
     }
-    const isAdmin = user.role === 'admin';
+    const isAdmin = this.isStaff(user);
     const now = new Date();
 
     await this.repo.addMessage({
@@ -238,7 +248,7 @@ export class SupportService {
       closedAt: null,
       resolvedAt: null,
     });
-    await this.recordEvent(ticketId, 'reopened', user.role === 'admin' ? 'admin' : 'customer', user.id, {
+    await this.recordEvent(ticketId, 'reopened', this.isStaff(user) ? 'admin' : 'customer', user.id, {
       from: ticket.status,
     });
     return this.getTicketDetail(user, ticketId);
@@ -292,7 +302,7 @@ export class SupportService {
     if (patch.assigneeId !== undefined) {
       const assigneeId = patch.assigneeId ? patch.assigneeId : null;
       if (assigneeId !== ticket.assigneeId) {
-        if (assigneeId) await this.assertAdminExists(assigneeId);
+        if (assigneeId) await this.assertAssignable(assigneeId);
         update.assigneeId = assigneeId;
         if (assigneeId) {
           await this.recordEvent(ticketId, 'assigned', 'admin', admin.id, { assigneeId });
@@ -356,7 +366,7 @@ export class SupportService {
     await this.recordEvent(
       ticketId,
       'attachment_added',
-      user.role === 'admin' ? 'admin' : 'customer',
+      this.isStaff(user) ? 'admin' : 'customer',
       user.id,
       { filename: input.filename },
     );
@@ -417,9 +427,12 @@ export class SupportService {
     return ticket;
   }
 
-  /** Owner or admin only — 404 (not 403) for non-owners to avoid an ID leak. */
+  /**
+   * Owner, or staff with `support:read_all`, may access a ticket — 404 (not 403)
+   * for anyone else to avoid an ID leak.
+   */
   private assertAccess(user: AuthUser, ticket: SupportTicketRecord): void {
-    if (user.role === 'admin') return;
+    if (hasPermission(user.permissions, 'support:read_all')) return;
     if (ticket.userId !== user.id) throw this.notFound(ticket.id);
   }
 
@@ -464,16 +477,17 @@ export class SupportService {
     return this.recordEvent(
       ticketId,
       type,
-      actor.role === 'admin' ? 'admin' : 'customer',
+      this.isStaff(actor) ? 'admin' : 'customer',
       actor.id,
       { from, to },
     );
   }
 
-  private async assertAdminExists(userId: string): Promise<void> {
-    const u = await this.users.findById(userId);
-    if (!u || u.role !== 'admin') {
-      throw new ConflictException('Assignee must be an existing admin user.');
+  /** A ticket may only be assigned to support staff (holds `support:read_all`). */
+  private async assertAssignable(userId: string): Promise<void> {
+    const { permissions } = await this.roles.resolveAccess(userId);
+    if (!hasPermission(permissions, 'support:read_all')) {
+      throw new ConflictException('Assignee must be a support agent.');
     }
   }
 
@@ -519,7 +533,7 @@ export class SupportService {
     bundle: SupportTicketBundle,
   ): Promise<SupportTicketDetail> {
     const { ticket, messages, attachments, notes, events, aiSuggestions } = bundle;
-    const isAdmin = user.role === 'admin';
+    const isAdmin = this.isStaff(user);
 
     const authorIds = [
       ...messages.map((m) => m.authorId),
