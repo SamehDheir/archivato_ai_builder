@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   Plus,
@@ -23,7 +24,6 @@ import {
   type AdminUserRow,
   type AuthUser,
   type Permission,
-  type PermissionDomain,
   type RoleView,
 } from '@archivato/shared';
 import { adminApi, authApi, rolesApi } from '@/lib/api';
@@ -37,13 +37,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/shared/toast';
 import { useConfirm } from '@/components/shared/confirm-dialog';
 
-const DOMAIN_LABEL: Record<PermissionDomain, string> = {
-  support: 'Support',
-  admin: 'Administration',
-  billing: 'Billing',
-};
-
 const DOMAINS = [...new Set(PERMISSION_CATALOG.map((p) => p.domain))];
+
+/** Permission keys carry ':' (an i18next namespace separator) — map to '_' for keys. */
+const permKey = (k: string) => k.replace(/:/g, '_');
 
 /** A grid of permission checkboxes grouped by domain. */
 function PermissionGrid({
@@ -55,37 +52,42 @@ function PermissionGrid({
   onToggle: (p: Permission) => void;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation('admin');
   return (
     <div className="space-y-3">
       {DOMAINS.map((domain) => (
         <div key={domain}>
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {DOMAIN_LABEL[domain]}
+            {t(`roles.domain.${domain}`)}
           </div>
           <div className="grid gap-1.5 sm:grid-cols-2">
-            {PERMISSION_CATALOG.filter((p) => p.domain === domain).map((p) => (
-              <label
-                key={p.key}
-                className={`flex items-start gap-2 rounded-md border border-border p-2 text-sm ${
-                  disabled ? 'opacity-60' : 'cursor-pointer hover:border-primary/40'
-                }`}
-                title={p.description}
-              >
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={selected.has(p.key)}
-                  disabled={disabled}
-                  onChange={() => onToggle(p.key)}
-                />
-                <span>
-                  <span className="font-medium">{p.label}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {p.description}
+            {PERMISSION_CATALOG.filter((p) => p.domain === domain).map((p) => {
+              const label = t(`roles.perm.${permKey(p.key)}.label`);
+              const description = t(`roles.perm.${permKey(p.key)}.description`);
+              return (
+                <label
+                  key={p.key}
+                  className={`flex items-start gap-2 rounded-md border border-border p-2 text-sm ${
+                    disabled ? 'opacity-60' : 'cursor-pointer hover:border-primary/40'
+                  }`}
+                  title={description}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={selected.has(p.key)}
+                    disabled={disabled}
+                    onChange={() => onToggle(p.key)}
+                  />
+                  <span>
+                    <span className="font-medium">{label}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {description}
+                    </span>
                   </span>
-                </span>
-              </label>
-            ))}
+                </label>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -103,6 +105,7 @@ function RoleCard({
   onSaved: (r: RoleView) => void;
   onDeleted: (id: string) => void;
 }) {
+  const { t } = useTranslation('admin');
   const toast = useToast();
   const confirm = useConfirm();
   const [name, setName] = useState(role.name);
@@ -135,10 +138,10 @@ function RoleCard({
         permissions: [...perms],
       });
       onSaved(updated);
-      toast({ title: `Role "${updated.name}" saved`, variant: 'success' });
+      toast({ title: t('roles.toast.saved', { name: updated.name }), variant: 'success' });
     } catch (e) {
       toast({
-        title: 'Could not save the role',
+        title: t('roles.toast.saveFailed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -149,20 +152,19 @@ function RoleCard({
 
   async function remove() {
     const ok = await confirm({
-      title: `Delete role "${role.name}"?`,
-      description:
-        'Users currently holding this role will lose the permissions it grants.',
-      confirmLabel: 'Delete role',
+      title: t('roles.confirm.deleteTitle', { name: role.name }),
+      description: t('roles.confirm.deleteBody'),
+      confirmLabel: t('roles.confirm.deleteConfirm'),
       destructive: true,
     });
     if (!ok) return;
     try {
       await rolesApi.remove(role.id);
       onDeleted(role.id);
-      toast({ title: 'Role deleted', variant: 'success' });
+      toast({ title: t('roles.toast.deleted'), variant: 'success' });
     } catch (e) {
       toast({
-        title: 'Could not delete the role',
+        title: t('roles.toast.deleteFailed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -187,10 +189,10 @@ function RoleCard({
             <code className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
               {role.key}
             </code>
-            {role.isSystem && <Badge variant="secondary">System</Badge>}
+            {role.isSystem && <Badge variant="secondary">{t('roles.system')}</Badge>}
             {locked && (
               <Badge variant="primary">
-                <Lock className="me-1 h-3 w-3" /> Full access
+                <Lock className="me-1 h-3 w-3" /> {t('roles.fullAccess')}
               </Badge>
             )}
           </div>
@@ -201,13 +203,13 @@ function RoleCard({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="mt-2 min-h-[44px]"
-              placeholder="Describe this role…"
+              placeholder={t('roles.describePlaceholder')}
             />
           )}
         </div>
         <div className="shrink-0 text-end">
           <div className="text-xs text-muted-foreground">
-            {role.userCount} {role.userCount === 1 ? 'user' : 'users'}
+            {t('roles.userCount', { n: role.userCount })}
           </div>
           {!role.isSystem && (
             <Button
@@ -230,10 +232,10 @@ function RoleCard({
         <div className="mt-3 flex items-center gap-2">
           <Button size="sm" onClick={save} disabled={!dirty || busy}>
             {busy && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
-            Save changes
+            {t('roles.saveChanges')}
           </Button>
           {dirty && (
-            <span className="text-xs text-muted-foreground">Unsaved changes</span>
+            <span className="text-xs text-muted-foreground">{t('roles.unsaved')}</span>
           )}
         </div>
       )}
@@ -243,6 +245,7 @@ function RoleCard({
 
 /** Create-role form. */
 function CreateRole({ onCreated }: { onCreated: (r: RoleView) => void }) {
+  const { t } = useTranslation('admin');
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -252,7 +255,7 @@ function CreateRole({ onCreated }: { onCreated: (r: RoleView) => void }) {
 
   async function create() {
     if (name.trim().length < 2) {
-      toast({ title: 'Give the role a name', variant: 'error' });
+      toast({ title: t('roles.nameRequired'), variant: 'error' });
       return;
     }
     setBusy(true);
@@ -263,14 +266,14 @@ function CreateRole({ onCreated }: { onCreated: (r: RoleView) => void }) {
         permissions: [...perms],
       });
       onCreated(role);
-      toast({ title: `Role "${role.name}" created`, variant: 'success' });
+      toast({ title: t('roles.toast.created', { name: role.name }), variant: 'success' });
       setName('');
       setDescription('');
       setPerms(new Set());
       setOpen(false);
     } catch (e) {
       toast({
-        title: 'Could not create the role',
+        title: t('roles.toast.createFailed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -282,30 +285,34 @@ function CreateRole({ onCreated }: { onCreated: (r: RoleView) => void }) {
   if (!open) {
     return (
       <Button onClick={() => setOpen(true)}>
-        <Plus className="me-1.5 h-4 w-4" /> New role
+        <Plus className="me-1.5 h-4 w-4" /> {t('roles.newRole')}
       </Button>
     );
   }
 
   return (
     <Card className="border-primary/30 p-4">
-      <div className="font-semibold">New role</div>
+      <div className="font-semibold">{t('roles.newRoleHeading')}</div>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <div>
-          <Label>Name</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Triage Team" />
+          <Label>{t('roles.nameLabel')}</Label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t('roles.namePlaceholder')}
+          />
         </div>
         <div>
-          <Label>Description</Label>
+          <Label>{t('roles.descLabel')}</Label>
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="What this role is for"
+            placeholder={t('roles.descPlaceholder')}
           />
         </div>
       </div>
       <div className="mt-3">
-        <Label>Permissions</Label>
+        <Label>{t('roles.permsLabel')}</Label>
         <div className="mt-1">
           <PermissionGrid
             selected={perms}
@@ -323,10 +330,10 @@ function CreateRole({ onCreated }: { onCreated: (r: RoleView) => void }) {
       <div className="mt-3 flex items-center gap-2">
         <Button size="sm" onClick={create} disabled={busy}>
           {busy && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
-          Create role
+          {t('roles.createRole')}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-          Cancel
+          {t('roles.cancel')}
         </Button>
       </div>
     </Card>
@@ -343,6 +350,7 @@ function UserRoleEditor({
   roles: RoleView[];
   onChanged: (keys: string[]) => void;
 }) {
+  const { t } = useTranslation('admin');
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [ids, setIds] = useState<Set<string> | null>(null);
@@ -366,11 +374,11 @@ function UserRoleEditor({
       await rolesApi.setUserRoles(user.id, [...ids]);
       const keys = roles.filter((r) => ids.has(r.id)).map((r) => r.key);
       onChanged(keys);
-      toast({ title: 'Roles updated', variant: 'success' });
+      toast({ title: t('roles.toast.rolesUpdated'), variant: 'success' });
       setOpen(false);
     } catch (e) {
       toast({
-        title: 'Could not update roles',
+        title: t('roles.toast.rolesFailed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -390,7 +398,7 @@ function UserRoleEditor({
         </div>
         <div className="flex items-center gap-1.5">
           {user.roles.length === 0 ? (
-            <span className="text-xs text-muted-foreground">No roles</span>
+            <span className="text-xs text-muted-foreground">{t('roles.noRoles')}</span>
           ) : (
             user.roles.map((k) => (
               <Badge key={k} variant="secondary">
@@ -399,7 +407,7 @@ function UserRoleEditor({
             ))
           )}
           <Button size="sm" variant="ghost" onClick={open ? () => setOpen(false) : expand}>
-            {open ? 'Close' : 'Edit'}
+            {open ? t('roles.close') : t('roles.edit')}
           </Button>
         </div>
       </div>
@@ -438,7 +446,7 @@ function UserRoleEditor({
               </div>
               <Button size="sm" className="mt-2" onClick={save} disabled={busy}>
                 {busy && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
-                Save roles
+                {t('roles.saveRoles')}
               </Button>
             </>
           )}
@@ -460,6 +468,7 @@ function ProvisionStaff({
   roles: RoleView[];
   onProvisioned: () => void;
 }) {
+  const { t } = useTranslation('admin');
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
@@ -472,7 +481,7 @@ function ProvisionStaff({
   const [copied, setCopied] = useState(false);
 
   // Roles that actually grant something — assigning only "user" wouldn't make
-  // this a staff account. Sort staff-granting system roles first.
+  // this a staff account.
   const assignableRoles = useMemo(
     () => roles.filter((r) => r.permissions.length > 0),
     [roles],
@@ -486,7 +495,7 @@ function ProvisionStaff({
 
   async function provision() {
     if (roleIds.size === 0) {
-      toast({ title: 'Pick at least one role', variant: 'error' });
+      toast({ title: t('roles.provision.pickRole'), variant: 'error' });
       return;
     }
     setBusy(true);
@@ -501,7 +510,7 @@ function ProvisionStaff({
       onProvisioned();
     } catch (e) {
       toast({
-        title: 'Could not create the account',
+        title: t('roles.provision.createFailed'),
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
@@ -517,7 +526,7 @@ function ProvisionStaff({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      toast({ title: 'Copy failed — select the password manually', variant: 'error' });
+      toast({ title: t('roles.provision.copyFailed'), variant: 'error' });
     }
   }
 
@@ -527,21 +536,24 @@ function ProvisionStaff({
     return (
       <Card className="border-primary/40 p-4">
         <div className="flex items-center gap-2 font-semibold text-primary">
-          <Check className="h-4 w-4" /> Account created
+          <Check className="h-4 w-4" /> {t('roles.provision.createdTitle')}
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Share these credentials securely. The password is shown{' '}
-          <strong>once</strong> and cannot be recovered.
+          {t('roles.provision.createdBody')}
         </p>
         <div className="mt-3 space-y-2 rounded-md border border-border bg-muted/40 p-3">
           <div>
-            <div className="text-xs text-muted-foreground">Email</div>
+            <div className="text-xs text-muted-foreground">
+              {t('roles.provision.email')}
+            </div>
             <code dir="ltr" className="text-sm">
               {result.email}
             </code>
           </div>
           <div>
-            <div className="text-xs text-muted-foreground">Temporary password</div>
+            <div className="text-xs text-muted-foreground">
+              {t('roles.provision.tempPassword')}
+            </div>
             <div className="flex items-center gap-2">
               <code dir="ltr" className="select-all text-sm font-semibold">
                 {result.password}
@@ -564,7 +576,7 @@ function ProvisionStaff({
             setOpen(false);
           }}
         >
-          Done
+          {t('roles.provision.done')}
         </Button>
       </Card>
     );
@@ -573,7 +585,7 @@ function ProvisionStaff({
   if (!open) {
     return (
       <Button variant="secondary" onClick={() => setOpen(true)}>
-        <UserPlus className="me-1.5 h-4 w-4" /> Provision staff account
+        <UserPlus className="me-1.5 h-4 w-4" /> {t('roles.provision.open')}
       </Button>
     );
   }
@@ -581,37 +593,36 @@ function ProvisionStaff({
   return (
     <Card className="border-primary/30 p-4">
       <div className="flex items-center gap-2 font-semibold">
-        <KeyRound className="h-4 w-4 text-primary" /> New staff account
+        <KeyRound className="h-4 w-4 text-primary" /> {t('roles.provision.heading')}
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        Creates a pre-verified account with a generated password — the person
-        does not register themselves.
+        {t('roles.provision.subtitle')}
       </p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <div>
-          <Label>Email</Label>
+          <Label>{t('roles.provision.emailLabel')}</Label>
           <Input
             dir="ltr"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="agent@company.com"
+            placeholder={t('roles.provision.emailPlaceholder')}
           />
         </div>
         <div>
-          <Label>Display name</Label>
+          <Label>{t('roles.provision.nameLabel')}</Label>
           <Input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="e.g. Sara Ahmed"
+            placeholder={t('roles.provision.namePlaceholder')}
           />
         </div>
       </div>
       <div className="mt-3">
-        <Label>Roles</Label>
+        <Label>{t('roles.provision.rolesLabel')}</Label>
         {assignableRoles.length === 0 ? (
           <p className="mt-1 text-xs text-muted-foreground">
-            No staff roles available. Create a role with permissions first.
+            {t('roles.provision.noStaffRoles')}
           </p>
         ) : (
           <div className="mt-1 flex flex-wrap gap-1.5">
@@ -645,7 +656,7 @@ function ProvisionStaff({
       <div className="mt-3 flex items-center gap-2">
         <Button size="sm" onClick={provision} disabled={busy}>
           {busy && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
-          Create account
+          {t('roles.provision.create')}
         </Button>
         <Button
           size="sm"
@@ -655,7 +666,7 @@ function ProvisionStaff({
             reset();
           }}
         >
-          Cancel
+          {t('roles.cancel')}
         </Button>
       </div>
     </Card>
@@ -663,6 +674,7 @@ function ProvisionStaff({
 }
 
 export default function RolesPage() {
+  const { t } = useTranslation('admin');
   const router = useRouter();
   const toast = useToast();
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -684,7 +696,7 @@ export default function RolesPage() {
         })
         .catch((e) =>
           toast({
-            title: 'Could not load roles',
+            title: t('roles.toast.loadFailed'),
             description: e instanceof Error ? e.message : String(e),
             variant: 'error',
           }),
@@ -707,18 +719,14 @@ export default function RolesPage() {
         href="/admin"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" /> Admin dashboard
+        <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" /> {t('roles.back')}
       </Link>
 
       <div className="mt-3 flex items-center gap-2">
         <Shield className="h-5 w-5 text-primary" />
-        <h1 className="text-xl font-bold">Roles &amp; Permissions</h1>
+        <h1 className="text-xl font-bold">{t('roles.title')}</h1>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Define what staff can do and assign roles to users. Permissions are the
-        capabilities the app enforces; a user&apos;s access is the union of their
-        roles.
-      </p>
+      <p className="mt-1 text-sm text-muted-foreground">{t('roles.subtitle')}</p>
 
       {loading ? (
         <div className="mt-6 space-y-3">
@@ -729,7 +737,7 @@ export default function RolesPage() {
       ) : (
         <>
           <div className="mt-6 flex items-center justify-between">
-            <h2 className="font-semibold">Roles</h2>
+            <h2 className="font-semibold">{t('roles.rolesHeading')}</h2>
             <CreateRole onCreated={(r) => setRoles((prev) => [...prev, r])} />
           </div>
           <div className="mt-3 space-y-3">
@@ -749,12 +757,9 @@ export default function RolesPage() {
 
           <div className="mt-8 flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold">Staff accounts</h2>
+            <h2 className="font-semibold">{t('roles.staffHeading')}</h2>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create accounts for support, billing, or admin staff — they sign in
-            with a generated password, no self-registration.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('roles.staffSubtitle')}</p>
           <div className="mt-3">
             <ProvisionStaff
               roles={roles}
@@ -769,10 +774,10 @@ export default function RolesPage() {
 
           <div className="mt-8 flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold">Assign roles to users</h2>
+            <h2 className="font-semibold">{t('roles.assignHeading')}</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Showing the {users.length} most recent users.
+            {t('roles.assignSubtitle', { n: users.length })}
           </p>
           <div className="mt-3 space-y-2">
             {users.map((u) => (
