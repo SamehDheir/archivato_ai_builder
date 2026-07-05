@@ -477,6 +477,14 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   one-account-per-device gate, and assigns RBAC roles. The `/admin/roles` page has
   a "Provision staff account" card that shows the password once with a copy button.
 
+### ✅ Slice — Professional landing page + waitlist
+- The public landing page was redesigned into a conversion flow: **Hero (with the
+  looping build video) → Problem → Solution → Pricing → FAQ → Waitlist**. Pricing
+  reads from `PLANS`; FAQ is an accordion; copy is fully i18n'd (EN + AR, RTL).
+- **Waitlist** is a real backend: a public `POST /waitlist` (repo pattern +
+  `waitlist_entries` table) with **idempotent**, normalized email signup. The
+  landing form posts to it with success / already-joined / invalid states.
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
@@ -542,6 +550,7 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/admin/roles/user/:id`| A user's assigned role ids                   |
 | PUT    | `/api/admin/roles/user/:id`| Replace a user's whole role set              |
 | POST   | `/api/admin/roles/provision-user`| Provision a staff account (generated password, returned once)|
+| POST   | `/api/waitlist`            | Public: join the marketing waitlist (idempotent)|
 | GET    | `/api/support/stats`       | Customer's ticket counts by status           |
 | GET    | `/api/support/kb`          | Knowledge Base articles (also used by the AI)|
 | GET    | `/api/support/tickets`     | List my tickets (filter/search/paginate)     |

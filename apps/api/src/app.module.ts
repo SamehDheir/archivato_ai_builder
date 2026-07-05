@@ -22,6 +22,7 @@ import { BillingModule } from './billing/billing.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
 import { SupportModule } from './support/support.module';
+import { WaitlistModule } from './waitlist/waitlist.module';
 
 @Module({
   imports: [
@@ -71,6 +72,8 @@ import { SupportModule } from './support/support.module';
     AdminModule,
     // Customer Support Center: ticketing + 3-layer AI Support Assistant.
     SupportModule,
+    // Public marketing waitlist signup (landing page).
+    WaitlistModule,
   ],
 })
 export class AppModule {}

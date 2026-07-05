@@ -493,3 +493,17 @@ model SupportAiInteraction {
   @@index([userId])
   @@map("support_ai_interactions")
 }
+
+// --- Marketing waitlist -------------------------------------------------------
+
+// A public landing-page waitlist signup. Email is unique + normalized
+// (trim + lowercase) so signup can be idempotent.
+model WaitlistEntry {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  locale    String? // UI locale at signup (e.g. 'en' | 'ar')
+  source    String? // optional campaign/section tag
+  createdAt DateTime @default(now())
+
+  @@map("waitlist_entries")
+}

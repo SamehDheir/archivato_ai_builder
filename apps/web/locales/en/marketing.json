@@ -1,8 +1,9 @@
 {
   "nav": {
-    "pipeline": "Pipeline",
-    "features": "Features",
-    "how": "How it works",
+    "problem": "Problem",
+    "solution": "Solution",
+    "pricing": "Pricing",
+    "faq": "FAQ",
     "signIn": "Sign in",
     "startBuilding": "Start building",
     "dashboard": "Dashboard"
@@ -10,99 +11,146 @@
   "hero": {
     "badge": "AI Software Architecture Generator",
     "titleLead": "Describe your idea.",
-    "titleAccent": "Get a complete system design.",
-    "body": "Archivato interviews you about your app, then generates the whole blueprint — requirements, architecture, database, API, a scored review, and a build roadmap. You edit, refine, and export. Not a chatbot; an architecture engine.",
-    "start": "Start building",
-    "see": "See how it works",
+    "titleAccent": "Ship a complete system design.",
+    "body": "Archivato interviews you about your app, then generates the entire blueprint — requirements, architecture, database, API, a scored review, and a build roadmap. You edit, refine, and export. Not a chatbot; an architecture engine.",
+    "joinWaitlist": "Join the waitlist",
+    "start": "Try it now",
     "demoCaption": "A looping demo — watch an idea become a complete system design."
   },
-  "pipeline": {
-    "kicker": "The pipeline",
-    "title": "One idea flows through eight gated stages.",
-    "body": "The core stages run as a gated trunk — nothing generates until the stage before it exists and you've confirmed the interview. Two standalone views branch off: Product Vision from the interview, and the Roadmap from the finished design.",
-    "legendGated": "gated stage",
-    "legendStandalone": "standalone branch",
-    "standalone": "standalone",
-    "nodes": {
-      "idea": { "label": "Idea", "desc": "A sentence about the software you want to build." },
-      "interview": { "label": "Interview", "desc": "Adaptive Q&A until requirements are complete — then you confirm." },
-      "requirements": { "label": "Requirements", "desc": "Functional & non-functional requirements, roles, rules, constraints." },
-      "system": { "label": "System Design", "desc": "Architecture pattern, tech stack, and the service breakdown." },
-      "database": { "label": "Database", "desc": "Entities, primary/foreign keys, and relationships." },
-      "api": { "label": "API", "desc": "REST endpoints by module with request/response schemas." },
-      "review": { "label": "Review", "desc": "A scored critique across security, scalability, performance, and cost." },
-      "export": { "label": "Export", "desc": "JSON, Markdown, OpenAPI, or a scaffolded project repo." }
-    },
-    "branches": {
-      "productVision": { "label": "Product Vision", "desc": "A PM view of the confirmed interview: vision, goals, MVP, metrics, personas." },
-      "roadmap": { "label": "Roadmap", "desc": "The finished design sequenced into phases → milestones → tasks." }
-    }
-  },
-  "features": {
-    "kicker": "Everything in the box",
-    "title": "A full design studio, not a single answer.",
-    "body": "Every stage produces a real, editable artifact — and the standalone views (vision, roadmap, review) frame it for the people who need them.",
-    "groups": {
-      "capture": {
-        "kicker": "01 · Capture",
-        "label": "Turn an idea into a spec",
-        "items": {
-          "interview": { "title": "Adaptive AI interview", "body": "A phased interview clarifies your idea — goals, users, rules, scale, and tech — until requirements are complete. Then it waits for your confirmation." },
-          "requirements": { "title": "Formal requirements", "body": "Functional & non-functional requirements, user roles with permissions, business rules, constraints, and assumptions — as a structured document." },
-          "vision": { "title": "Product Vision", "body": "A PM view of the confirmed interview: north-star vision, goals, a lean MVP vs. a future roadmap, success metrics, and user personas." }
-        }
+  "problem": {
+    "kicker": "The problem",
+    "title": "Going from idea to a real architecture is where projects stall.",
+    "body": "Founders and teams know what they want to build — but turning that into requirements, a database, an API, and a defensible architecture is slow, manual, and easy to get wrong.",
+    "items": {
+      "blank": {
+        "title": "The blank-page problem",
+        "body": "You have the idea, but staring at an empty doc — requirements, schema, endpoints — is where momentum dies. Most people never get past it."
       },
-      "design": {
-        "kicker": "02 · Design",
-        "label": "Generate the system",
-        "items": {
-          "systemDb": { "title": "System & database design", "body": "An architecture (pattern, tech stack, services) and a schema — entities, keys, and relationships — derived from the requirements." },
-          "api": { "title": "REST API design", "body": "Endpoints grouped by module with request/response schemas and status codes, plus a live OpenAPI/Swagger view." },
-          "diagrams": { "title": "Diagrams & interactive canvas", "body": "Auto-generated Mermaid diagrams plus a React-Flow canvas you can rearrange — edits save back to the same design." },
-          "roadmap": { "title": "Implementation roadmap", "body": "The whole design sequenced into ordered phases → milestones → tasks, with rough effort estimates and dependencies." }
-        }
+      "slow": {
+        "title": "Weeks of back-and-forth",
+        "body": "Scoping meetings, spec drafts, diagram tools, review cycles. It takes weeks to reach a design a team can actually build from."
       },
-      "ship": {
-        "kicker": "03 · Ship",
-        "label": "Review, refine & export",
-        "items": {
-          "review": { "title": "AI Architect Review", "body": "A scored critique across security, scalability, performance, and cost — with an overall score, per-dimension sub-scores, and critical-issue callouts." },
-          "refine": { "title": "Refine by chat", "body": "Change the design in plain language after generation. Every change is versioned, so you can compare and restore any point." },
-          "editors": { "title": "Structured editors", "body": "Every artifact is directly editable through structured forms — not a wall of text — with unsaved-change guards." },
-          "export": { "title": "Export anywhere", "body": "Download the whole system as JSON, Markdown, OpenAPI, or a ready-to-scaffold project structure." },
-          "secure": { "title": "Secure by default", "body": "JWT + rotating refresh in httpOnly cookies, email verification, OAuth, and per-project ownership on every route." }
-        }
+      "costly": {
+        "title": "Expensive to get wrong",
+        "body": "A weak schema or a missed non-functional requirement surfaces in production. Rework, hiring a consultant, or rebuilding costs real time and money."
       }
     }
   },
-  "how": {
-    "kicker": "How it works",
-    "title": "From a sentence to a shippable design.",
-    "stepLabel": "Step {{n}}",
-    "steps": {
-      "1": { "title": "Describe the idea", "body": "Type a sentence about the software you want. Add an industry or scale if you like." },
-      "2": { "title": "Answer the interview", "body": "The AI asks only what it needs, then summarizes. You confirm before any design begins." },
-      "3": { "title": "Generate the system", "body": "Requirements, architecture, database, API, and a scored review — each stage builds on the last." },
-      "4": { "title": "Refine, review & export", "body": "Tweak by chat or canvas, read the roadmap, then export to JSON, Markdown, OpenAPI, or a repo." }
+  "solution": {
+    "kicker": "The solution",
+    "title": "One sentence in. A full, editable system design out.",
+    "body": "Archivato runs a short adaptive interview, then generates every artifact an engineering team would actually build from — each one structured, versioned, and yours to edit.",
+    "items": {
+      "interview": {
+        "title": "It interviews you",
+        "body": "A short, adaptive AI interview clarifies goals, users, rules, scale, and tech — then waits for you to confirm before anything is generated."
+      },
+      "design": {
+        "title": "It designs the system",
+        "body": "Requirements, architecture, database schema, and a REST API — with diagrams and an interactive canvas — each stage building on the last."
+      },
+      "ship": {
+        "title": "It gets you ready to ship",
+        "body": "A scored architect review, an implementation roadmap, refine-by-chat, and export to JSON, Markdown, OpenAPI, or a scaffolded repo."
+      }
+    },
+    "pipelineNote": "One idea flows through the pipeline",
+    "pipeline": {
+      "idea": "Idea",
+      "interview": "Interview",
+      "requirements": "Requirements",
+      "system": "System",
+      "database": "Database",
+      "api": "API",
+      "review": "Review",
+      "export": "Export"
     }
   },
-  "manifesto": {
-    "kicker": "// not a chatbot",
-    "titleLead": "Most AI tools hand you a wall of text.",
-    "titleAccent": "Archivato hands you a system to build from.",
-    "body": "Structured, versioned, reviewable artifacts — the exact things an engineering team would actually build from.",
-    "design": "Design your system",
-    "create": "Create an account"
+  "pricing": {
+    "kicker": "Pricing",
+    "title": "Simple, honest pricing.",
+    "body": "Start free with your first project. Upgrade to Pro when you need the API design, AI review, roadmap, and export.",
+    "perMonth": "/mo",
+    "freePrice": "Free",
+    "mostPopular": "Most popular",
+    "free": {
+      "name": "Free",
+      "tagline": "Everything you need to shape a first idea into a real spec.",
+      "cta": "Start for free",
+      "features": [
+        "1 project",
+        "Adaptive AI interview → requirements",
+        "System & database design",
+        "Diagrams & interactive canvas",
+        "Product Vision"
+      ]
+    },
+    "pro": {
+      "name": "Pro",
+      "tagline": "The full studio — design, review, plan, and export, for up to 5 projects.",
+      "cta": "Go Pro",
+      "features": [
+        "Up to 5 projects",
+        "REST API design (endpoints & schemas)",
+        "AI Architect Review — security, scalability, performance & cost",
+        "Implementation roadmap with effort estimates",
+        "Interactive OpenAPI / Swagger explorer",
+        "Refine by chat — every change versioned",
+        "Export to JSON, Markdown & OpenAPI"
+      ]
+    }
+  },
+  "faq": {
+    "kicker": "FAQ",
+    "title": "Questions, answered.",
+    "items": {
+      "q1": {
+        "q": "Is this just another AI chatbot?",
+        "a": "No. Archivato is an architecture engine. Instead of a wall of chat text, it produces structured, versioned, editable artifacts — requirements, schema, API, review, roadmap — the exact things a team builds from."
+      },
+      "q2": {
+        "q": "Do I need to be technical to use it?",
+        "a": "No. You describe your idea in plain language and answer a short interview. Archivato handles the technical translation into requirements, database, and API design — which you can then edit or hand to a developer."
+      },
+      "q3": {
+        "q": "What do I actually get out of it?",
+        "a": "A complete, editable system design: a requirements document, system architecture, database schema with diagrams, a REST API, a scored architect review, and an implementation roadmap — exportable to JSON, Markdown, OpenAPI, or a scaffolded repo."
+      },
+      "q4": {
+        "q": "What's the difference between Free and Pro?",
+        "a": "Free covers one project through the interview, requirements, system and database design, and Product Vision. Pro unlocks the API design, AI review, roadmap, cost estimate, and export — for up to five projects."
+      },
+      "q5": {
+        "q": "Can I edit what the AI generates?",
+        "a": "Yes. Every artifact is directly editable through structured forms — not free text — and you can refine the whole design by chat. Every change is versioned so you can compare and restore any point."
+      },
+      "q6": {
+        "q": "Which languages are supported?",
+        "a": "The interface is available in English and Arabic (with full right-to-left support), and the interview adapts its questions to the language of your idea."
+      }
+    }
+  },
+  "waitlist": {
+    "kicker": "Get early access",
+    "title": "Join the waitlist.",
+    "body": "Be first to turn your next idea into a complete system design. Drop your email and we'll let you know the moment your spot opens.",
+    "placeholder": "you@company.com",
+    "cta": "Join waitlist",
+    "successNew": "You're on the list — we'll be in touch soon.",
+    "successExisting": "You're already on the list — hang tight!",
+    "invalid": "Please enter a valid email address.",
+    "privacy": "No spam. One email when it's your turn. Unsubscribe anytime."
   },
   "footer": {
     "tagline": "Turn a business idea into a complete software system design — not a chatbot, an architecture engine.",
-    "start": "Start building",
+    "start": "Join the waitlist",
     "explore": "Explore",
     "account": "Account",
     "links": {
-      "pipeline": "Pipeline",
-      "features": "Features",
-      "how": "How it works",
+      "problem": "Problem",
+      "solution": "Solution",
+      "pricing": "Pricing",
+      "faq": "FAQ",
       "signIn": "Sign in",
       "createAccount": "Create account",
       "dashboard": "Dashboard"

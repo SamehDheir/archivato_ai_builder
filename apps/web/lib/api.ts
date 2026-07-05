@@ -37,6 +37,8 @@ import type {
   UpdateRoleInput,
   ProvisionUserInput,
   ProvisionedUser,
+  WaitlistSignupInput,
+  WaitlistSignupResult,
   CreateSupportTicketInput,
   KbArticleRef,
   SupportAdminStats,
@@ -552,6 +554,15 @@ export const analyticsApi = {
       /* never let analytics break the page */
     }
   },
+};
+
+/** Public marketing waitlist signup (landing page). */
+export const waitlistApi = {
+  join: (input: WaitlistSignupInput) =>
+    request<WaitlistSignupResult>('/waitlist', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 };
 
 /** Build a query string from a support ticket filter (skips empty values). */

@@ -54,7 +54,7 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
   `export`, `chat`, `jobs`, `versions`, `diagrams`, `auth`, `billing`,
-  `analytics`, `admin`, `support`, `roles`).
+  `analytics`, `admin`, `support`, `roles`, `waitlist`).
   Modules export their repository token + service for downstream use.
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
@@ -333,11 +333,22 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   `app/icon.svg` and `LogoMark` visually in sync. A `currentColor` SVG loaded via
   `<img>` does **not** inherit the page color (renders black), so theme-adaptive
   logos must be inlined, not `<img>`-referenced.
-- **Landing** (`components/marketing/`): a self-contained public marketing page
-  (`LandingPage`) with a looping, auto-playing `IdeaToProductDemo` reel
-  (client-only, respects `prefers-reduced-motion`), a horizontal pipeline flow
-  rail, and an artistic staggered "how it works". Purely presentational — safe to
-  restyle without touching the app.
+- **Landing** (`components/marketing/`): a conversion-oriented public marketing
+  page (`LandingPage`) structured as **Hero → Problem → Solution → Pricing → FAQ →
+  Waitlist → Footer**. The Hero keeps the looping, auto-playing `IdeaToProductDemo`
+  reel (client-only, respects `prefers-reduced-motion`) — treated as the page's
+  "video". Pricing reads plan numbers from `PLANS` (single source of truth) with
+  copy/features from i18n; FAQ is a client accordion; the **Waitlist** posts to the
+  real backend (`waitlistApi.join` → `POST /waitlist`) with a success/duplicate/
+  invalid state machine. Fully i18n'd (`marketing` namespace, EN + AR, RTL-safe).
+  Nav/footer anchor to the section ids. Presentational except the waitlist form.
+- **Waitlist (`waitlist`).** A public, unauthenticated signup endpoint for the
+  landing page (`POST /waitlist`, `HTTP 200`). `WaitlistService.join` is
+  **idempotent** — email is normalized (trim+lowercase), a duplicate returns
+  `{ok:true, alreadyJoined:true}` (never leaks prior signup; a unique-constraint
+  race is swallowed to the same result). Repo pattern (interface + in-memory +
+  Prisma `waitlist_entries`, unique email). Stores optional `locale`/`source`.
+  `JoinWaitlistDto` validates the email. Exported service for a future admin view.
 - **Projects hub** (`ProjectsDashboard`): the post-login project list, presentational
   (all state/handlers come from `app/dashboard/page.tsx`). **Grid/list toggle**
   (persisted `archivato.projectsView`). Each project has an optional **`title`**
