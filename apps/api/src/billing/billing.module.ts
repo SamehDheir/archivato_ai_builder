@@ -2,13 +2,17 @@ import { Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { BillingController } from './billing.controller';
+import { BillingAdminController } from './billing-admin.controller';
 import { BillingService } from './billing.service';
+import { BillingAdminService } from './billing-admin.service';
 import { ProGuard } from './pro.guard';
 import { BILLING_PROVIDER, type BillingProvider } from './billing.provider';
 import { MockBillingProvider } from './mock-billing.provider';
 import { PaddleBillingProvider } from './paddle-billing.provider';
 import { SUBSCRIPTION_REPOSITORY } from './subscription.repository';
 import { PrismaSubscriptionRepository } from './prisma-subscription.repository';
+import { BILLING_EVENT_REPOSITORY } from './billing-event.repository';
+import { PrismaBillingEventRepository } from './prisma-billing-event.repository';
 
 /**
  * Billing (subscriptions + project quota). Payments sit behind a
@@ -17,14 +21,19 @@ import { PrismaSubscriptionRepository } from './prisma-subscription.repository';
  * Exports `BillingService` so the interview module can enforce quota at confirm.
  */
 @Module({
-  imports: [AuthModule], // provides USER_REPOSITORY (for the customer email)
-  controllers: [BillingController],
+  imports: [AuthModule], // provides USER_REPOSITORY (+ PermissionGuard for billing-admin)
+  controllers: [BillingController, BillingAdminController],
   providers: [
     BillingService,
+    BillingAdminService,
     ProGuard,
     MockBillingProvider,
     PaddleBillingProvider,
     { provide: SUBSCRIPTION_REPOSITORY, useClass: PrismaSubscriptionRepository },
+    {
+      provide: BILLING_EVENT_REPOSITORY,
+      useClass: PrismaBillingEventRepository,
+    },
     {
       provide: BILLING_PROVIDER,
       inject: [ConfigService, MockBillingProvider, PaddleBillingProvider],

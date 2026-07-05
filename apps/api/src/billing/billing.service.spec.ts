@@ -1,18 +1,21 @@
 import { BillingService } from './billing.service';
 import { InMemorySubscriptionRepository } from './in-memory-subscription.repository';
+import { InMemoryBillingEventRepository } from './in-memory-billing-event.repository';
 import { MockBillingProvider } from './mock-billing.provider';
 import { InMemoryUserRepository } from '../auth/in-memory-user.repository';
 
 describe('BillingService', () => {
   let subs: InMemorySubscriptionRepository;
   let users: InMemoryUserRepository;
+  let events: InMemoryBillingEventRepository;
   let service: BillingService;
   let userId: string;
 
   beforeEach(async () => {
     subs = new InMemorySubscriptionRepository();
     users = new InMemoryUserRepository();
-    service = new BillingService(subs, users, new MockBillingProvider());
+    events = new InMemoryBillingEventRepository();
+    service = new BillingService(subs, users, new MockBillingProvider(), events);
     const u = await users.create({
       email: 'u@example.com',
       passwordHash: null,
@@ -57,6 +60,47 @@ describe('BillingService', () => {
     const view = await service.getView(userId);
     expect(view.plan).toBe('free');
     expect(view.projectQuota).toBe(1);
+  });
+
+  it('admin grants Pro (comp, no expiry) and audits the event', async () => {
+    await service.adminGrantPro(userId, 'admin-1');
+    const view = await service.getView(userId);
+    expect(view.plan).toBe('pro');
+    expect(view.projectQuota).toBe(5);
+    // Comp grant has no expiry → still Pro far in the future.
+    expect(view.periodEnd).toBeNull();
+
+    const log = await events.findByUserId(userId);
+    expect(log[0]).toMatchObject({ type: 'admin_grant_pro', actorId: 'admin-1' });
+  });
+
+  it('admin revokes Pro immediately and audits the event', async () => {
+    await service.adminGrantPro(userId, 'admin-1');
+    await service.adminRevoke(userId, 'admin-1');
+    expect((await service.getView(userId)).plan).toBe('free');
+    const log = await events.findByUserId(userId);
+    expect(log).toHaveLength(2);
+    expect(log.map((e) => e.type)).toEqual(
+      expect.arrayContaining(['admin_revoke', 'admin_grant_pro']),
+    );
+  });
+
+  it('refuses admin actions on a Paddle-backed subscription (409)', async () => {
+    const sub = await service.getOrCreate(userId);
+    await subs.save({ ...sub, paddleSubscriptionId: 'sub_paddle_123' });
+    await expect(service.adminGrantPro(userId, 'admin-1')).rejects.toMatchObject({
+      response: { code: 'paddle_managed' },
+    });
+  });
+
+  it('records checkout and cancel events for self-serve flows', async () => {
+    await service.startCheckout(userId);
+    await service.cancel(userId);
+    const log = await events.findByUserId(userId);
+    expect(log).toHaveLength(2);
+    expect(log.map((e) => e.type)).toEqual(
+      expect.arrayContaining(['cancel', 'checkout']),
+    );
   });
 
   it('assertPro gates free users (402) and passes for Pro', async () => {

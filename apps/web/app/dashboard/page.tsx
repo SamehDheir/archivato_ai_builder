@@ -123,9 +123,8 @@ function StaffHome({ permissions }: { permissions: Permission[] }) {
       icon: CreditCard,
       title: t('staff.billing.title'),
       body: t('staff.billing.body'),
-      // No dedicated billing console yet — link to /admin only if they can see it.
-      href: canAnalytics ? '/admin' : undefined,
-      cta: canAnalytics ? t('staff.billing.open') : t('staff.billing.note'),
+      href: '/admin/billing',
+      cta: t('staff.billing.open'),
     },
   ].filter((c) => c.show);
 

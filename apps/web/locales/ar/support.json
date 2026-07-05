@@ -99,6 +99,7 @@
     "text": "نص",
     "attachments": "المرفقات",
     "closedNotice": "هذه التذكرة مغلقة. أعد فتحها للرد.",
+    "readOnlyNotice": "لديك صلاحية اطّلاع فقط على هذه التذكرة.",
     "replyPlaceholder": "اكتب رداً… (يدعم Markdown وكتل الأكواد)",
     "sendReply": "إرسال الرد",
     "attach": "إرفاق",

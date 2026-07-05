@@ -551,6 +551,11 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | PUT    | `/api/admin/roles/user/:id`| Replace a user's whole role set              |
 | POST   | `/api/admin/roles/provision-user`| Provision a staff account (generated password, returned once)|
 | POST   | `/api/waitlist`            | Public: join the marketing waitlist (idempotent)|
+| GET    | `/api/billing/admin`       | Billing-admin: KPIs + filtered/paginated subscriptions (`billing:manage`)|
+| GET    | `/api/billing/admin/trends`| Billing-admin: 30-day new-Pro vs churn series                |
+| GET    | `/api/billing/admin/subscriptions/:id`| Billing-admin: one customer's detail + event history|
+| POST   | `/api/billing/admin/subscriptions/:id/grant-pro`| Billing-admin: comp a user to Pro   |
+| POST   | `/api/billing/admin/subscriptions/:id/revoke`| Billing-admin: downgrade a user to Free|
 | GET    | `/api/support/stats`       | Customer's ticket counts by status           |
 | GET    | `/api/support/kb`          | Knowledge Base articles (also used by the AI)|
 | GET    | `/api/support/tickets`     | List my tickets (filter/search/paginate)     |

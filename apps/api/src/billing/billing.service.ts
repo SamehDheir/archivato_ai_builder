@@ -12,11 +12,16 @@ import {
   type SubscriptionPlan,
   type SubscriptionView,
 } from '@archivato/shared';
+import type { BillingEventType } from '@archivato/shared';
 import { USER_REPOSITORY, type UserRepository } from '../auth/user.repository';
 import {
   SUBSCRIPTION_REPOSITORY,
   type SubscriptionRepository,
 } from './subscription.repository';
+import {
+  BILLING_EVENT_REPOSITORY,
+  type BillingEventRepository,
+} from './billing-event.repository';
 import { BILLING_PROVIDER, type BillingProvider } from './billing.provider';
 import type { Subscription } from './subscription.entity';
 
@@ -51,7 +56,19 @@ export class BillingService {
     private readonly subs: SubscriptionRepository,
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
     @Inject(BILLING_PROVIDER) private readonly provider: BillingProvider,
+    @Inject(BILLING_EVENT_REPOSITORY)
+    private readonly events: BillingEventRepository,
   ) {}
+
+  /** Append a billing event, best-effort — auditing never breaks a billing flow. */
+  private record(
+    userId: string,
+    type: BillingEventType,
+    actorId: string | null = null,
+    note: string | null = null,
+  ): void {
+    void this.events.create({ userId, type, actorId, note }).catch(() => undefined);
+  }
 
   /** The user's subscription, creating a default free one on first access. */
   async getOrCreate(userId: string): Promise<Subscription> {
@@ -121,6 +138,7 @@ export class BillingService {
         periodStart: now,
         periodEnd: addDays(now, PRO_PERIOD_DAYS),
       });
+      this.record(userId, 'checkout', userId);
     }
     return response;
   }
@@ -137,7 +155,50 @@ export class BillingService {
       sub.cancelAtPeriodEnd = true;
       await this.subs.save(sub);
     }
+    this.record(userId, 'cancel', userId);
     return this.getView(userId);
+  }
+
+  /**
+   * Admin: comp a user to Pro (no payment) — a perpetual grant until revoked.
+   * Refuses Paddle-backed subscriptions (those must be changed in Paddle, or the
+   * local state would desync from the source of truth). Records an audit event.
+   */
+  async adminGrantPro(userId: string, actorId: string): Promise<void> {
+    const sub = await this.getOrCreate(userId);
+    if (sub.paddleSubscriptionId) this.throwPaddleManaged();
+    await this.subs.save({
+      ...sub,
+      plan: 'pro',
+      status: 'active',
+      cancelAtPeriodEnd: false,
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: null, // no expiry — a comped grant
+    });
+    this.record(userId, 'admin_grant_pro', actorId);
+    this.logger.log(`Admin ${actorId} granted Pro to ${userId}`);
+  }
+
+  /** Admin: immediately downgrade a user to Free. Refuses Paddle-backed subs. */
+  async adminRevoke(userId: string, actorId: string): Promise<void> {
+    const sub = await this.getOrCreate(userId);
+    if (sub.paddleSubscriptionId) this.throwPaddleManaged();
+    await this.downgradeToFree(sub);
+    this.record(userId, 'admin_revoke', actorId);
+    this.logger.log(`Admin ${actorId} revoked Pro from ${userId}`);
+  }
+
+  private throwPaddleManaged(): never {
+    throw new HttpException(
+      {
+        statusCode: HttpStatus.CONFLICT,
+        error: 'Conflict',
+        code: 'paddle_managed',
+        message:
+          'This subscription is managed by Paddle — change it in the Paddle dashboard.',
+      },
+      HttpStatus.CONFLICT,
+    );
   }
 
   /** Apply a verified Paddle webhook event to the matching subscription. */
@@ -159,6 +220,7 @@ export class BillingService {
     const active = data.status === 'active' || data.status === 'trialing';
     if (type === 'subscription.canceled' || data.status === 'canceled') {
       await this.downgradeToFree(sub);
+      this.record(sub.userId, 'cancel');
       return;
     }
     if (
@@ -167,6 +229,7 @@ export class BillingService {
         type === 'subscription.created' ||
         type === 'subscription.updated')
     ) {
+      const wasPro = this.effectivePlan(sub) === 'pro';
       const now = new Date();
       const start = data.current_billing_period?.starts_at
         ? new Date(data.current_billing_period.starts_at)
@@ -180,6 +243,8 @@ export class BillingService {
         paddleCustomerId: data.customer_id ?? null,
         paddleSubscriptionId: paddleSubId ?? null,
       });
+      // Only count a genuine new activation (not a routine period update).
+      if (!wasPro) this.record(sub.userId, 'checkout');
     }
   }
 

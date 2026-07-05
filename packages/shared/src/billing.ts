@@ -43,6 +43,104 @@ export interface SubscriptionView {
   provider: BillingProviderId;
 }
 
+// ── Billing admin console (billing:manage) ───────────────────────────────────
+
+/** Headline subscription/revenue KPIs for the billing-admin dashboard. */
+export interface BillingAdminSummary {
+  totalUsers: number;
+  /** Subscriptions whose EFFECTIVE plan is Pro (active + within the period). */
+  proActive: number;
+  free: number;
+  /** Effective-Pro subs set to cancel at period end. */
+  canceling: number;
+  pastDue: number;
+  /** Monthly recurring revenue estimate in USD (active Pro × price). */
+  mrrUsd: number;
+  /** Average revenue per user (MRR ÷ total users), 0 when there are no users. */
+  arpuUsd: number;
+  /** The active billing backend (mock offline vs Paddle). */
+  provider: BillingProviderId;
+}
+
+/** One row of the billing-admin subscriptions table. */
+export interface BillingSubscriptionRow {
+  userId: string;
+  email: string;
+  displayName: string;
+  /** The stored plan on the subscription row. */
+  plan: SubscriptionPlan;
+  /** Pro only while active + within the billing period; else free. */
+  effectivePlan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  cancelAtPeriodEnd: boolean;
+  /** End of the current Pro billing period (ISO), or null. */
+  periodEnd: string | null;
+  /** Whether this subscription is backed by a real Paddle subscription. */
+  paddle: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The billing-admin overview payload: KPIs + a page of subscription rows. */
+export interface BillingAdminData {
+  summary: BillingAdminSummary;
+  subscriptions: BillingSubscriptionRow[];
+  /** Total subscription records matching the filter (for pagination). */
+  total: number;
+  /** Echo of the applied filter (so the client can keep its controls in sync). */
+  filter: BillingAdminFilter;
+}
+
+/** Query filter for the billing-admin subscriptions table. */
+export interface BillingAdminFilter {
+  /** Filter by the stored plan column. */
+  plan?: SubscriptionPlan;
+  status?: SubscriptionStatus;
+  /** Case-insensitive search over customer email / display name. */
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** An audited billing lifecycle event (for trends + per-customer history). */
+export type BillingEventType =
+  | 'checkout'
+  | 'cancel'
+  | 'admin_grant_pro'
+  | 'admin_revoke';
+
+/** A billing event as shown in the customer detail timeline. */
+export interface BillingEventView {
+  id: string;
+  type: BillingEventType;
+  /** The admin who performed an admin action (null for self-serve/system). */
+  actorId: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+/** Full billing detail for one customer (drill-in), including recent events. */
+export interface BillingSubscriptionDetail extends BillingSubscriptionRow {
+  periodStart: string | null;
+  paddleCustomerId: string | null;
+  paddleSubscriptionId: string | null;
+  events: BillingEventView[];
+}
+
+/** A single point in a daily series (kept local to avoid a cross-module cycle). */
+export interface BillingTrendPoint {
+  date: string;
+  value: number;
+}
+
+/** 30-day billing trends derived from the event log. */
+export interface BillingTrends {
+  /** New Pro activations per day (checkout + admin grants). */
+  newPro: BillingTrendPoint[];
+  /** Churn per day (cancellations + admin revokes). */
+  churn: BillingTrendPoint[];
+}
+
 /**
  * Result of starting a Pro checkout. In mock mode the upgrade is applied
  * server-side immediately (`status: 'activated'`). With Paddle the client opens

@@ -24,5 +24,82 @@
     "refine": { "lead": "Refine the whole design by chat", "detail": "every change versioned" },
     "export": { "lead": "Export to JSON, Markdown & OpenAPI", "detail": "import straight into Postman" },
     "scaffold": { "lead": "Scaffold a ready-to-build project repo", "detail": "plus Print / Save as PDF" }
+  },
+  "admin": {
+    "back": "Dashboard",
+    "title": "Billing",
+    "subtitle": "Subscriptions, revenue, and plan status across the platform.",
+    "providerLabel": "Provider",
+    "providers": { "mock": "Offline (mock)", "paddle": "Paddle" },
+    "loadFailed": "Could not load billing data",
+    "exportFailed": "Could not export subscriptions",
+    "kpi": {
+      "mrr": "MRR",
+      "mrrHint": "Monthly recurring revenue",
+      "proActive": "Active Pro",
+      "free": "Free",
+      "ofTotal": "of {{total}} users",
+      "arpu": "ARPU",
+      "canceling": "Canceling",
+      "pastDue": "Past due"
+    },
+    "trends": {
+      "title": "New Pro vs. churn",
+      "newPro": "New Pro",
+      "churn": "Churn",
+      "last30": "Last 30 days"
+    },
+    "filters": {
+      "search": "Search by name or email…",
+      "allPlans": "All plans",
+      "allStatuses": "All statuses",
+      "exportCsv": "Export CSV"
+    },
+    "table": {
+      "title": "Subscriptions",
+      "subtitle": "{{n}} subscription records.",
+      "customer": "Customer",
+      "plan": "Plan",
+      "status": "Status",
+      "renews": "Renews",
+      "updated": "Updated",
+      "manage": "Manage",
+      "empty": "No subscriptions match your filters.",
+      "cancels": "Cancels at period end",
+      "noEnd": "—"
+    },
+    "page": {
+      "prev": "Previous",
+      "next": "Next",
+      "of": "Page {{page}} of {{pages}}"
+    },
+    "actions": {
+      "grant": "Grant Pro",
+      "revoke": "Revoke Pro",
+      "grantConfirmTitle": "Grant Pro to {{name}}?",
+      "grantConfirmBody": "This comps the user to Pro immediately at no charge, with no expiry until you revoke it.",
+      "revokeConfirmTitle": "Revoke Pro from {{name}}?",
+      "revokeConfirmBody": "This immediately downgrades the user to Free.",
+      "grantDone": "Granted Pro",
+      "revokeDone": "Revoked Pro",
+      "failed": "Action failed",
+      "paddleManaged": "This subscription is managed by Paddle — change it in the Paddle dashboard."
+    },
+    "detail": {
+      "created": "Created",
+      "periodStart": "Current period start",
+      "paddleSub": "Paddle subscription",
+      "viewInPaddle": "View in Paddle",
+      "history": "Billing history",
+      "noEvents": "No billing events yet."
+    },
+    "event": {
+      "checkout": "Upgraded to Pro",
+      "cancel": "Canceled",
+      "admin_grant_pro": "Pro granted by admin",
+      "admin_revoke": "Pro revoked by admin"
+    },
+    "plan": { "free": "Free", "pro": "Pro" },
+    "status": { "active": "Active", "canceled": "Canceled", "past_due": "Past due" }
   }
 }

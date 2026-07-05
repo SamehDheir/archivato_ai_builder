@@ -507,3 +507,21 @@ model WaitlistEntry {
 
   @@map("waitlist_entries")
 }
+
+// --- Billing audit log --------------------------------------------------------
+
+// A billing lifecycle event, used for the billing-admin trends chart and the
+// per-customer history timeline. Recorded best-effort on checkout / cancel and
+// on admin grant / revoke. No FK (kept append-only + independent of cascades).
+model BillingEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  actorId   String? // the admin who performed an admin action (null = self/system)
+  type      String // BillingEventType
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("billing_events")
+}

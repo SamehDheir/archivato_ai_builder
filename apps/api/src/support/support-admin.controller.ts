@@ -69,8 +69,13 @@ export class SupportAdminController {
     return this.support.getTicketDetail(admin, id);
   }
 
-  /** Change status / priority / category / assignee (each a timeline event). */
-  @RequirePermissions('support:read_all', 'support:manage')
+  /**
+   * Change status / priority / category / assignee (each a timeline event).
+   * Only `support:read_all` is required to reach this route; the service then
+   * enforces the per-axis permission (`support:manage` for status/priority/
+   * category, `support:assign` for assignment), so a role holding just one can
+   * do just that.
+   */
   @Patch('tickets/:id')
   update(
     @CurrentUser() admin: AuthUser,

@@ -207,10 +207,39 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   bridges the old promote/demote button to assign/remove super_admin. `RolesModule`
   imports **nothing** from Auth (AuthModule imports it — one-way, no cycle);
   role-management controllers live in **AdminModule** (which has both Auth guards +
-  RoleService), gated by `admin:roles:manage`. `/admin` split into
+  RoleService), gated by `admin:roles:manage`. **Billing Admin console:**
+  `billing:manage` gates a dedicated console (`BillingAdminController` +
+  `BillingAdminService` in BillingModule, a Prisma reporting read-model like
+  AdminService). Read: `GET /billing/admin` (subscription/revenue KPIs — MRR, ARPU,
+  active-Pro, free, canceling, past-due — plus a **filtered, paginated** page of
+  rows: `?q=&plan=&status=&page=&pageSize=`), `GET /billing/admin/trends` (30-day
+  new-Pro vs churn), `GET /billing/admin/subscriptions/:userId` (detail + event
+  history). Write actions run through **`BillingService`** (not the read-model):
+  `POST …/:userId/grant-pro` (comp to Pro, no expiry) and `…/revoke` (immediate
+  downgrade) — both **refuse Paddle-backed subs** (409 `paddle_managed`; those are
+  managed in Paddle) and write a **`BillingEvent`** audit row. That audit log
+  (`billing_events`, own repo; recorded best-effort on checkout/cancel + admin
+  grant/revoke) is the source for the trends chart and the per-customer history.
+  Web `/admin/billing` self-guards on `billing:manage`: KPI tiles, trend chart,
+  search + plan/status filters, pagination, CSV export, and expandable rows with
+  grant/revoke + a Paddle deep-link. i18n `billing.admin.*` (EN + AR). Scoped to
+  billing only — no user/analytics access. `/admin` split into
   `admin:analytics`/`users:read`/`users:manage`; the support staff panel now needs
   `support:read_all` (a support_agent works tickets without full admin), and
-  ticket assignees must hold `support:read_all` (`assertAssignable`). **Web:** a
+  ticket assignees must hold `support:read_all` (`assertAssignable`). **Support
+  permissions are enforced per action, not just per panel:** `support:read_all`
+  grants *read* to every ticket, but each write needs its own permission —
+  `support:reply` to answer a ticket you don't own (an owner always replies as the
+  customer), `support:manage` to change status/priority/category (incl. staff
+  close/reopen of others' tickets), `support:assign` to (re)assign, `support:note`
+  for internal notes, `support:copilot` for the admin AI copilot. Enforced in
+  `SupportService` (per-field in `adminUpdateTicket`; `requirePermission`/
+  `assertCanChangeStatus` helpers), so a "view all tickets"-only role can look but
+  not touch. The admin `PATCH /support/admin/tickets/:id` route only guards
+  `support:read_all` (the service splits manage vs assign). **Web:** the staff
+  `TicketDetail` takes a `caps` prop ({reply,manage,assign,note,copilot} from the
+  viewer's permissions) and hides the reply box (→ read-only notice), status
+  buttons, manage/assign selects, notes, and copilot accordingly. A
   shared `hasPermission()` drives nav + self-guards (the Support "Admin" tab, the
   `/admin/roles` link, page redirects); the **`/admin/roles`** page has a grouped
   **permission grid** (roles CRUD) + a **user role-assignment** editor.
@@ -316,6 +345,19 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   `/verify` are public (`PUBLIC_EXACT` / `PUBLIC_PREFIXES`); `/login`+`/register`
   are guest-only (signed-in users bounce to `/dashboard`); every other route
   shows the `AuthForm` when signed out. The app itself lives at `/dashboard`.
+- **Per-page access guard** (`lib/use-page-access.ts`). `usePageAccess(redirectFor)`
+  fetches `/auth/me`, asks `redirectFor(me)` for a target, and `router.replace`s
+  there (returning `null` meanwhile so nothing sensitive renders/flashes). This is
+  a **UX guard only** — every protected API is independently permission-gated on
+  the server, so a direct URL never leaks data; the redirect just avoids rendering
+  a page the visitor can't use. Two factories: `requirePermission(perm, userFallback)`
+  (staff lacking `perm` → `/dashboard`, regular users → `userFallback`) gates the
+  admin/staff consoles; `customerOnly` gates the **customer** support area — staff
+  are operators, not customers, so a support agent is sent to `/support/admin` and
+  any other staff (e.g. a Billing Admin) to `/dashboard`. Applied across
+  `/support/*` (customer + admin). The header **support link** in `AuthGate` follows
+  the same rule: shown to customers (→ `/support`) and support staff (→ `/support/admin`),
+  hidden for non-support staff.
 - Design system: Tailwind + shadcn/ui under `components/ui/`. Colors are HSL CSS
   vars in `globals.css` (light on `:root`, dark on `.dark`); theme toggled by
   `ThemeProvider`. Providers: Theme → Toast → Confirm → **Upgrade** → AuthGate.

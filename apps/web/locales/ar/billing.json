@@ -24,5 +24,82 @@
     "refine": { "lead": "حسِّن التصميم بالكامل عبر المحادثة", "detail": "كل تغيير مُؤرشَف بإصدارات" },
     "export": { "lead": "التصدير إلى JSON وMarkdown وOpenAPI", "detail": "استيراد مباشر إلى Postman" },
     "scaffold": { "lead": "إنشاء هيكل مشروع جاهز للبناء", "detail": "بالإضافة إلى الطباعة / الحفظ كـPDF" }
+  },
+  "admin": {
+    "back": "لوحة التحكم",
+    "title": "الفوترة",
+    "subtitle": "الاشتراكات والإيرادات وحالة الخطط عبر المنصّة.",
+    "providerLabel": "المزوّد",
+    "providers": { "mock": "دون اتصال (تجريبي)", "paddle": "Paddle" },
+    "loadFailed": "تعذّر تحميل بيانات الفوترة",
+    "exportFailed": "تعذّر تصدير الاشتراكات",
+    "kpi": {
+      "mrr": "الإيراد الشهري المتكرر",
+      "mrrHint": "الإيراد الشهري المتكرر",
+      "proActive": "اشتراكات Pro النشطة",
+      "free": "مجاني",
+      "ofTotal": "من {{total}} مستخدم",
+      "arpu": "متوسّط الإيراد لكل مستخدم",
+      "canceling": "قيد الإلغاء",
+      "pastDue": "متأخّرة السداد"
+    },
+    "trends": {
+      "title": "اشتراكات Pro الجديدة مقابل الإلغاء",
+      "newPro": "Pro جديد",
+      "churn": "الإلغاء",
+      "last30": "آخر 30 يوماً"
+    },
+    "filters": {
+      "search": "ابحث بالاسم أو البريد…",
+      "allPlans": "كل الخطط",
+      "allStatuses": "كل الحالات",
+      "exportCsv": "تصدير CSV"
+    },
+    "table": {
+      "title": "الاشتراكات",
+      "subtitle": "{{n}} سجل اشتراك.",
+      "customer": "العميل",
+      "plan": "الخطة",
+      "status": "الحالة",
+      "renews": "تُجدَّد",
+      "updated": "آخر تحديث",
+      "manage": "إدارة",
+      "empty": "لا اشتراكات تطابق عوامل التصفية.",
+      "cancels": "يُلغى في نهاية الفترة",
+      "noEnd": "—"
+    },
+    "page": {
+      "prev": "السابق",
+      "next": "التالي",
+      "of": "صفحة {{page}} من {{pages}}"
+    },
+    "actions": {
+      "grant": "منح Pro",
+      "revoke": "سحب Pro",
+      "grantConfirmTitle": "منح Pro لـ{{name}}؟",
+      "grantConfirmBody": "يمنح المستخدم Pro فوراً دون رسوم، بلا انتهاء حتى تسحبه.",
+      "revokeConfirmTitle": "سحب Pro من {{name}}؟",
+      "revokeConfirmBody": "يخفّض المستخدم إلى المجاني فوراً.",
+      "grantDone": "تم منح Pro",
+      "revokeDone": "تم سحب Pro",
+      "failed": "فشل الإجراء",
+      "paddleManaged": "هذا الاشتراك مُدار عبر Paddle — غيّره من لوحة Paddle."
+    },
+    "detail": {
+      "created": "أُنشئ في",
+      "periodStart": "بداية الفترة الحالية",
+      "paddleSub": "اشتراك Paddle",
+      "viewInPaddle": "عرض في Paddle",
+      "history": "سجل الفوترة",
+      "noEvents": "لا أحداث فوترة بعد."
+    },
+    "event": {
+      "checkout": "الترقية إلى Pro",
+      "cancel": "تم الإلغاء",
+      "admin_grant_pro": "مُنح Pro من المشرف",
+      "admin_revoke": "سُحب Pro من المشرف"
+    },
+    "plan": { "free": "مجاني", "pro": "احترافي" },
+    "status": { "active": "نشط", "canceled": "مُلغى", "past_due": "متأخّر السداد" }
   }
 }

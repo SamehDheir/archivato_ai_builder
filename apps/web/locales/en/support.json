@@ -99,6 +99,7 @@
     "text": "text",
     "attachments": "Attachments",
     "closedNotice": "This ticket is closed. Reopen it to reply.",
+    "readOnlyNotice": "You have read-only access to this ticket.",
     "replyPlaceholder": "Write a reply… (Markdown & code blocks supported)",
     "sendReply": "Send reply",
     "attach": "Attach",

@@ -5,12 +5,12 @@ import Link from 'next/link';
 import { Plus, Search, Inbox } from 'lucide-react';
 import {
   hasPermission,
-  type AuthUser,
   type SupportCustomerStats,
   type SupportTicketStatus,
   type SupportTicketSummary,
 } from '@archivato/shared';
-import { authApi, supportApi } from '@/lib/api';
+import { supportApi } from '@/lib/api';
+import { usePageAccess, customerOnly } from '@/lib/use-page-access';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -36,7 +36,7 @@ const ALL = 'all';
 
 export default function SupportDashboardPage() {
   const { t, statusLabel, timeAgo } = useSupportMeta();
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const user = usePageAccess(customerOnly);
   const [stats, setStats] = useState<SupportCustomerStats | null>(null);
   const [tickets, setTickets] = useState<SupportTicketSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,25 +53,24 @@ export default function SupportDashboardPage() {
   }, [search, status]);
 
   useEffect(() => {
+    if (!user) return;
     let cancelled = false;
-    (async () => {
-      const me = await authApi.me();
-      if (cancelled) return;
-      setUser(me);
-      const [s] = await Promise.all([supportApi.stats().catch(() => null)]);
-      if (!cancelled) setStats(s);
-      setLoading(false);
-    })();
+    supportApi
+      .stats()
+      .then((s) => !cancelled && setStats(s))
+      .catch(() => !cancelled && setStats(null))
+      .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user]);
 
   // Reload the list when filters change (debounced for search typing).
   useEffect(() => {
+    if (!user) return;
     const t = setTimeout(() => void loadList().catch(() => undefined), 250);
     return () => clearTimeout(t);
-  }, [loadList]);
+  }, [user, loadList]);
 
   const tiles: { label: string; value: number }[] = stats
     ? [
@@ -82,9 +81,11 @@ export default function SupportDashboardPage() {
       ]
     : [];
 
+  if (!user) return null;
+
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
-      <SupportNav canManageSupport={hasPermission(user?.permissions, 'support:read_all')} />
+      <SupportNav canManageSupport={hasPermission(user.permissions, 'support:read_all')} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {loading

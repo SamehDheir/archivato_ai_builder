@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type {
   AuthUser,
   CreateSupportTicketInput,
+  Permission,
   SupportAdminStats,
   SupportCustomerInfo,
   SupportCustomerStats,
@@ -92,6 +93,22 @@ export class SupportService {
   /** Whether the user acts as support staff (drives author/actor typing). */
   private isStaff(user: AuthUser): boolean {
     return hasPermission(user.permissions, 'support:read_all');
+  }
+
+  /**
+   * Fine-grained gate for a staff action on a ticket the user does NOT own.
+   * `support:read_all` grants read access to every ticket, but each write action
+   * needs its own permission (reply / manage / assign / note) — so a role scoped
+   * to "view all tickets" can look but not touch. Throws 403 when missing.
+   */
+  private requirePermission(
+    user: AuthUser,
+    permission: Permission,
+    message: string,
+  ): void {
+    if (!hasPermission(user.permissions, permission)) {
+      throw new ForbiddenException(message);
+    }
   }
 
   // ── Tickets ───────────────────────────────────────────────────────────────
@@ -188,13 +205,23 @@ export class SupportService {
         'This ticket is closed. Reopen it before replying.',
       );
     }
-    const isAdmin = this.isStaff(user);
+    // Acting as staff = replying to a ticket you don't own (an owner always
+    // replies as the customer, even if they're also staff). A staff reply needs
+    // `support:reply`; a "view all tickets"-only role can read but not answer.
+    const asStaff = this.isStaff(user) && ticket.userId !== user.id;
+    if (asStaff) {
+      this.requirePermission(
+        user,
+        'support:reply',
+        'You do not have permission to reply to tickets.',
+      );
+    }
     const now = new Date();
 
     await this.repo.addMessage({
       id: randomUUID(),
       ticketId,
-      authorType: isAdmin ? 'admin' : 'customer',
+      authorType: asStaff ? 'admin' : 'customer',
       authorId: user.id,
       body: body.trim(),
       aiLayer: null,
@@ -207,13 +234,13 @@ export class SupportService {
     // a status change, not as a side effect of replying.
     const patch: Parameters<SupportRepository['updateTicket']>[1] = {
       lastMessageAt: now,
-      status: isAdmin ? 'waiting_customer' : 'waiting_admin',
+      status: asStaff ? 'waiting_customer' : 'waiting_admin',
     };
-    if (isAdmin && !ticket.firstResponseAt) patch.firstResponseAt = now;
+    if (asStaff && !ticket.firstResponseAt) patch.firstResponseAt = now;
     const updated = await this.repo.updateTicket(ticketId, patch);
 
-    await this.recordEvent(ticketId, 'reply_added', isAdmin ? 'admin' : 'customer', user.id);
-    await this.notifications.replyAdded(updated, isAdmin ? 'admin' : 'customer');
+    await this.recordEvent(ticketId, 'reply_added', asStaff ? 'admin' : 'customer', user.id);
+    await this.notifications.replyAdded(updated, asStaff ? 'admin' : 'customer');
     return this.getTicketDetail(user, ticketId);
   }
 
@@ -224,6 +251,7 @@ export class SupportService {
     ticketId: string,
   ): Promise<SupportTicketDetail> {
     const ticket = await this.loadForAccess(user, ticketId);
+    this.assertCanChangeStatus(user, ticket);
     if (ticket.status === 'closed') return this.getTicketDetail(user, ticketId);
     await this.repo.updateTicket(ticketId, {
       status: 'closed',
@@ -240,6 +268,7 @@ export class SupportService {
     ticketId: string,
   ): Promise<SupportTicketDetail> {
     const ticket = await this.loadForAccess(user, ticketId);
+    this.assertCanChangeStatus(user, ticket);
     if (ticket.status !== 'closed' && ticket.status !== 'resolved') {
       throw new ConflictException('Only a resolved or closed ticket can be reopened.');
     }
@@ -269,6 +298,32 @@ export class SupportService {
   ): Promise<SupportTicketDetail> {
     const ticket = await this.repo.findTicketById(ticketId);
     if (!ticket) throw this.notFound(ticketId);
+
+    // Enforce a distinct permission per axis: changing status/priority/category
+    // needs `support:manage`; (re)assigning needs `support:assign`. A role may
+    // hold one without the other.
+    const wantsWorkflow =
+      (patch.status !== undefined && patch.status !== ticket.status) ||
+      (patch.priority !== undefined && patch.priority !== ticket.priority) ||
+      (patch.category !== undefined && patch.category !== ticket.category);
+    const nextAssignee =
+      patch.assigneeId === undefined ? undefined : patch.assigneeId || null;
+    const wantsAssign =
+      nextAssignee !== undefined && nextAssignee !== ticket.assigneeId;
+    if (wantsWorkflow) {
+      this.requirePermission(
+        admin,
+        'support:manage',
+        'You do not have permission to manage tickets.',
+      );
+    }
+    if (wantsAssign) {
+      this.requirePermission(
+        admin,
+        'support:assign',
+        'You do not have permission to assign tickets.',
+      );
+    }
 
     const now = new Date();
     const update: Parameters<SupportRepository['updateTicket']>[1] = {};
@@ -434,6 +489,24 @@ export class SupportService {
   private assertAccess(user: AuthUser, ticket: SupportTicketRecord): void {
     if (hasPermission(user.permissions, 'support:read_all')) return;
     if (ticket.userId !== user.id) throw this.notFound(ticket.id);
+  }
+
+  /**
+   * A customer may always close/reopen their OWN ticket. Staff acting on a
+   * ticket they don't own are changing workflow state, so they need
+   * `support:manage` — a read-only support role can't close others' tickets.
+   */
+  private assertCanChangeStatus(
+    user: AuthUser,
+    ticket: SupportTicketRecord,
+  ): void {
+    if (this.isStaff(user) && ticket.userId !== user.id) {
+      this.requirePermission(
+        user,
+        'support:manage',
+        'You do not have permission to change ticket status.',
+      );
+    }
   }
 
   private async resolveRelatedSession(

@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import { BookOpen, Sparkles } from 'lucide-react';
-import { hasPermission, type AuthUser, type KbArticleRef } from '@archivato/shared';
-import { authApi, supportApi } from '@/lib/api';
+import { hasPermission, type KbArticleRef } from '@archivato/shared';
+import { supportApi } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SupportNav } from '@/components/support/SupportNav';
+import { usePageAccess, customerOnly } from '@/lib/use-page-access';
 
 /**
  * Knowledge Base — a placeholder listing (no CRUD yet). The same seed articles
@@ -17,20 +18,22 @@ import { SupportNav } from '@/components/support/SupportNav';
  */
 export default function KnowledgeBasePage() {
   const { t } = useTranslation('support');
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const user = usePageAccess(customerOnly);
   const [articles, setArticles] = useState<KbArticleRef[] | null>(null);
 
   useEffect(() => {
-    authApi.me().then(setUser).catch(() => undefined);
+    if (!user) return;
     supportApi
       .kb()
       .then((r) => setArticles(r.articles))
       .catch(() => setArticles([]));
-  }, []);
+  }, [user]);
+
+  if (!user) return null;
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
-      <SupportNav canManageSupport={hasPermission(user?.permissions, 'support:read_all')} />
+      <SupportNav canManageSupport={hasPermission(user.permissions, 'support:read_all')} />
 
       <Card className="mb-4 border-primary/30 bg-primary/5 p-4">
         <div className="flex items-center gap-2 text-sm font-medium">

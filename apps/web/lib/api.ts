@@ -39,6 +39,10 @@ import type {
   ProvisionedUser,
   WaitlistSignupInput,
   WaitlistSignupResult,
+  BillingAdminData,
+  BillingAdminFilter,
+  BillingSubscriptionDetail,
+  BillingTrends,
   CreateSupportTicketInput,
   KbArticleRef,
   SupportAdminStats,
@@ -482,6 +486,38 @@ export const billingApi = {
 
   /** Cancel Pro. */
   cancel: () => request<SubscriptionView>('/billing/cancel', { method: 'POST' }),
+};
+
+/** Billing-admin console (requires `billing:manage`). */
+export const billingAdminApi = {
+  /** KPIs + a filtered, paginated page of subscription records. */
+  overview: (filter: BillingAdminFilter = {}) => {
+    const p = new URLSearchParams();
+    if (filter.page) p.set('page', String(filter.page));
+    if (filter.pageSize) p.set('pageSize', String(filter.pageSize));
+    if (filter.plan) p.set('plan', filter.plan);
+    if (filter.status) p.set('status', filter.status);
+    if (filter.q) p.set('q', filter.q);
+    const qs = p.toString();
+    return request<BillingAdminData>(`/billing/admin${qs ? `?${qs}` : ''}`);
+  },
+  /** 30-day new-Pro + churn trend series. */
+  trends: () => request<BillingTrends>('/billing/admin/trends'),
+  /** Full billing detail + event history for one customer. */
+  detail: (userId: string) =>
+    request<BillingSubscriptionDetail>(`/billing/admin/subscriptions/${userId}`),
+  /** Comp a user to Pro. */
+  grantPro: (userId: string) =>
+    request<BillingSubscriptionDetail>(
+      `/billing/admin/subscriptions/${userId}/grant-pro`,
+      { method: 'POST' },
+    ),
+  /** Immediately downgrade a user to Free. */
+  revoke: (userId: string) =>
+    request<BillingSubscriptionDetail>(
+      `/billing/admin/subscriptions/${userId}/revoke`,
+      { method: 'POST' },
+    ),
 };
 
 export const adminApi = {

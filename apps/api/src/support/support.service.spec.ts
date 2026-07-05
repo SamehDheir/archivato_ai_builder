@@ -1,5 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
-import { ALL_PERMISSIONS, type AuthUser } from '@archivato/shared';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ALL_PERMISSIONS, type AuthUser, type Permission } from '@archivato/shared';
 import { SupportService } from './support.service';
 import { SupportAiService } from './support-ai.service';
 import { SupportNotificationsService } from './support-notifications.service';
@@ -19,6 +19,8 @@ interface Harness {
   customer: AuthUser;
   other: AuthUser;
   admin: AuthUser;
+  /** Create a real staff account carrying exactly the given permissions. */
+  mkStaff: (email: string, permissions: Permission[]) => Promise<AuthUser>;
 }
 
 async function makeHarness(): Promise<Harness> {
@@ -73,12 +75,35 @@ async function makeHarness(): Promise<Harness> {
     };
   };
 
+  const mkStaff = async (
+    email: string,
+    permissions: Permission[],
+  ): Promise<AuthUser> => {
+    const u = await users.create({
+      email,
+      passwordHash: 'x',
+      displayName: email.split('@')[0],
+    });
+    return {
+      id: u.id,
+      email: u.email,
+      displayName: u.displayName,
+      emailVerified: true,
+      role: 'user',
+      roles: ['support_agent'],
+      permissions,
+      providers: ['password'],
+      createdAt: u.createdAt.toISOString(),
+    };
+  };
+
   return {
     support,
     ai,
     customer: await mk('cust@example.com', 'user'),
     other: await mk('other@example.com', 'user'),
     admin: await mk('admin@example.com', 'admin'),
+    mkStaff,
   };
 }
 
@@ -122,6 +147,62 @@ describe('SupportService', () => {
     const afterAdmin = await h.support.reply(h.admin, t.id, 'Looking into it now.');
     expect(afterAdmin.status).toBe('waiting_customer');
     expect(afterAdmin.messages.some((m) => m.authorType === 'admin')).toBe(true);
+  });
+
+  it('lets a read-only staff role see a ticket but NOT reply to it', async () => {
+    const h = await makeHarness();
+    const t = await h.support.createTicket(h.customer, NEW_TICKET);
+    const viewer = await h.mkStaff('viewer@example.com', ['support:read_all']);
+
+    // Can read every ticket…
+    await expect(h.support.getTicketDetail(viewer, t.id)).resolves.toBeTruthy();
+    // …but cannot answer without `support:reply`.
+    await expect(h.support.reply(viewer, t.id, 'Hi')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+
+    const replier = await h.mkStaff('replier@example.com', [
+      'support:read_all',
+      'support:reply',
+    ]);
+    await expect(h.support.reply(replier, t.id, 'On it')).resolves.toBeTruthy();
+  });
+
+  it('requires support:manage to change status/priority and support:assign to assign', async () => {
+    const h = await makeHarness();
+    const t = await h.support.createTicket(h.customer, NEW_TICKET);
+    const agent = await h.mkStaff('agent@example.com', ['support:read_all']);
+
+    // read-only → no workflow changes, no assignment, no close.
+    await expect(
+      h.support.adminUpdateTicket(agent, t.id, { status: 'in_progress' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      h.support.adminUpdateTicket(agent, t.id, { assigneeId: agent.id }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(h.support.closeTicket(agent, t.id)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+
+    // manage (not assign) → can change status, still can't assign.
+    const manager = await h.mkStaff('mgr@example.com', [
+      'support:read_all',
+      'support:manage',
+    ]);
+    await expect(
+      h.support.adminUpdateTicket(manager, t.id, { status: 'in_progress' }),
+    ).resolves.toBeTruthy();
+    await expect(
+      h.support.adminUpdateTicket(manager, t.id, { assigneeId: manager.id }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('lets the ticket owner close their own ticket without support:manage', async () => {
+    const h = await makeHarness();
+    const t = await h.support.createTicket(h.customer, NEW_TICKET);
+    await expect(h.support.closeTicket(h.customer, t.id)).resolves.toMatchObject({
+      status: 'closed',
+    });
   });
 
   it('keeps internal notes admin-only', async () => {

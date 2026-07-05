@@ -58,14 +58,40 @@ function isTextFile(file: File): boolean {
   );
 }
 
+/** Per-action capabilities for the staff (admin) view, from the user's permissions. */
+export interface TicketCaps {
+  reply: boolean;
+  manage: boolean;
+  assign: boolean;
+  note: boolean;
+  copilot: boolean;
+}
+
+const ALL_CAPS: TicketCaps = {
+  reply: true,
+  manage: true,
+  assign: true,
+  note: true,
+  copilot: true,
+};
+
 export function TicketDetail({
   ticketId,
   admin,
+  caps = ALL_CAPS,
 }: {
   ticketId: string;
   admin: boolean;
+  /** Staff capabilities (admin view only). Customers act on their own tickets. */
+  caps?: TicketCaps;
 }) {
   const toast = useToast();
+  // In the customer view the owner may always act on their own ticket; in the
+  // staff view each control is gated by the matching permission.
+  const canReply = !admin || caps.reply;
+  const canChangeStatus = !admin || caps.manage;
+  const showAi = !admin || caps.copilot;
+  const showAdminCard = admin && (caps.manage || caps.assign || caps.note);
   const { t, statusLabel, priorityLabel, categoryLabel, timeAgo, eventLabel } =
     useSupportMeta();
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -257,17 +283,19 @@ export function TicketDetail({
             <CategoryBadge category={detail.category} />
           </div>
         </div>
-        <div className="flex gap-2">
-          {isClosed ? (
-            <Button variant="secondary" size="sm" onClick={() => changeStatus('reopen')}>
-              {t('detail.reopen')}
-            </Button>
-          ) : (
-            <Button variant="secondary" size="sm" onClick={() => changeStatus('close')}>
-              {t('detail.close')}
-            </Button>
-          )}
-        </div>
+        {canChangeStatus && (
+          <div className="flex gap-2">
+            {isClosed ? (
+              <Button variant="secondary" size="sm" onClick={() => changeStatus('reopen')}>
+                {t('detail.reopen')}
+              </Button>
+            ) : (
+              <Button variant="secondary" size="sm" onClick={() => changeStatus('close')}>
+                {t('detail.close')}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -345,6 +373,10 @@ export function TicketDetail({
             <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
               <Lock className="h-4 w-4" /> {t('detail.closedNotice')}
             </Card>
+          ) : !canReply ? (
+            <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+              <Lock className="h-4 w-4" /> {t('detail.readOnlyNotice')}
+            </Card>
           ) : (
             <Card className="p-4">
               <Textarea
@@ -409,6 +441,7 @@ export function TicketDetail({
         {/* Sidebar: AI assistant + context + admin controls */}
         <div className="space-y-4">
           {/* AI assistant / copilot */}
+          {showAi && (
           <Card className="border-primary/30 p-4">
             <div className="flex items-center gap-1.5 text-sm font-semibold">
               <Sparkles className="h-4 w-4 text-primary" />
@@ -444,7 +477,7 @@ export function TicketDetail({
                   <p dir="auto" className="mt-0.5 whitespace-pre-wrap">
                     {analysis.suggestedReply}
                   </p>
-                  {!isClosed && (
+                  {!isClosed && canReply && (
                     <Button
                       type="button"
                       size="sm"
@@ -489,6 +522,7 @@ export function TicketDetail({
               </div>
             )}
           </Card>
+          )}
 
           {/* Related project */}
           {detail.relatedProject && (
@@ -533,39 +567,46 @@ export function TicketDetail({
           )}
 
           {/* Admin controls */}
-          {admin && (
+          {showAdminCard && (
             <Card className="space-y-3 p-4">
               <div className="text-sm font-semibold">{t('detail.manage')}</div>
-              <LabeledSelect
-                label={t('admin.colStatus')}
-                value={detail.status}
-                options={STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))}
-                onChange={(v) => adminUpdate({ status: v })}
-              />
-              <LabeledSelect
-                label={t('admin.colPriority')}
-                value={detail.priority}
-                options={PRIORITIES.map((p) => ({ value: p, label: priorityLabel(p) }))}
-                onChange={(v) => adminUpdate({ priority: v })}
-              />
-              <LabeledSelect
-                label={t('admin.colCategory')}
-                value={detail.category}
-                options={CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) }))}
-                onChange={(v) => adminUpdate({ category: v })}
-              />
-              <LabeledSelect
-                label={t('detail.assignee')}
-                value={detail.assigneeId ?? UNASSIGNED}
-                options={[
-                  { value: UNASSIGNED, label: t('detail.unassigned') },
-                  ...agents.map((a) => ({ value: a.id, label: a.name })),
-                ]}
-                onChange={(v) =>
-                  adminUpdate({ assigneeId: v === UNASSIGNED ? null : v })
-                }
-              />
+              {caps.manage && (
+                <>
+                  <LabeledSelect
+                    label={t('admin.colStatus')}
+                    value={detail.status}
+                    options={STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))}
+                    onChange={(v) => adminUpdate({ status: v })}
+                  />
+                  <LabeledSelect
+                    label={t('admin.colPriority')}
+                    value={detail.priority}
+                    options={PRIORITIES.map((p) => ({ value: p, label: priorityLabel(p) }))}
+                    onChange={(v) => adminUpdate({ priority: v })}
+                  />
+                  <LabeledSelect
+                    label={t('admin.colCategory')}
+                    value={detail.category}
+                    options={CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) }))}
+                    onChange={(v) => adminUpdate({ category: v })}
+                  />
+                </>
+              )}
+              {caps.assign && (
+                <LabeledSelect
+                  label={t('detail.assignee')}
+                  value={detail.assigneeId ?? UNASSIGNED}
+                  options={[
+                    { value: UNASSIGNED, label: t('detail.unassigned') },
+                    ...agents.map((a) => ({ value: a.id, label: a.name })),
+                  ]}
+                  onChange={(v) =>
+                    adminUpdate({ assigneeId: v === UNASSIGNED ? null : v })
+                  }
+                />
+              )}
 
+              {caps.note && (
               <div>
                 <div className="text-xs font-semibold text-muted-foreground">
                   {t('detail.internalNotes')}
@@ -604,6 +645,7 @@ export function TicketDetail({
                   {t('detail.addNote')}
                 </Button>
               </div>
+              )}
             </Card>
           )}
         </div>
