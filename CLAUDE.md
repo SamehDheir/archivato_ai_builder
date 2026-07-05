@@ -358,6 +358,14 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
   `/support/*` (customer + admin). The header **support link** in `AuthGate` follows
   the same rule: shown to customers (→ `/support`) and support staff (→ `/support/admin`),
   hidden for non-support staff.
+- **Permission revalidation on focus.** Permissions resolve fresh server-side, but
+  the client caches the last `/auth/me` in component state. So the **dashboard**
+  (StaffHome consoles) and **AuthGate** (header support/admin links) re-fetch
+  `/auth/me` on `focus` / `visibilitychange` / `pageshow[persisted]` (bfcache) and
+  update `permissions`/`user` — a just-revoked permission's console/link disappears
+  (and a granted one appears) on tab-return without a hard reload. Console *pages*
+  already re-check on mount via `usePageAccess`, and every API is server-gated, so
+  this is UX freshness, not the security boundary.
 - Design system: Tailwind + shadcn/ui under `components/ui/`. Colors are HSL CSS
   vars in `globals.css` (light on `:root`, dark on `.dark`); theme toggled by
   `ThemeProvider`. Providers: Theme → Toast → Confirm → **Upgrade** → AuthGate.

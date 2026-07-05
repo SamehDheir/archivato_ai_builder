@@ -65,6 +65,28 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       .finally(() => setChecking(false));
   }, [isPublic]);
 
+  // Keep the header's role-based links (support / admin) in sync when the tab
+  // regains focus or is restored from bfcache — a revoked permission drops its
+  // link without a hard reload (permissions resolve fresh server-side).
+  useEffect(() => {
+    if (isPublic) return;
+    const revalidate = () => authApi.me().then(setUser).catch(() => undefined);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void revalidate();
+    };
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void revalidate();
+    };
+    window.addEventListener('focus', revalidate);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      window.removeEventListener('focus', revalidate);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [isPublic]);
+
   useEffect(() => {
     if (!checking && user && isGuestOnly) {
       router.replace('/dashboard');

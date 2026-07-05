@@ -270,6 +270,32 @@ export default function Home() {
     }
   }, [userId, state?.sessionId]);
 
+  // Re-validate permissions when the tab regains focus or is restored from the
+  // browser's back/forward cache. Permissions resolve fresh server-side, so this
+  // makes a just-revoked permission's console disappear (and a just-granted one
+  // appear) without a hard reload.
+  useEffect(() => {
+    const revalidate = () =>
+      authApi
+        .me()
+        .then((me) => me && setPermissions(me.permissions ?? []))
+        .catch(() => undefined);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void revalidate();
+    };
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void revalidate();
+    };
+    window.addEventListener('focus', revalidate);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      window.removeEventListener('focus', revalidate);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, []);
+
   async function refreshProjects() {
     try {
       const [list, subscription] = await Promise.all([
