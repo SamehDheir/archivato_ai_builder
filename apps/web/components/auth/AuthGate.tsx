@@ -22,7 +22,7 @@ import { Logo } from '@/components/shared/Logo';
 /** Always-public routes, matched by prefix (rendered regardless of auth state). */
 const PUBLIC_PREFIXES = ['/verify'];
 /** Always-public routes, matched exactly (e.g. the marketing landing at `/`). */
-const PUBLIC_EXACT = ['/'];
+const PUBLIC_EXACT = ['/', '/privacy', '/terms'];
 /** Guest-only routes: signed-in users are redirected home, can't view these. */
 const GUEST_ONLY_PATHS = ['/login', '/register'];
 

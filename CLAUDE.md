@@ -353,7 +353,7 @@ to Express `trust proxy`) or every request shares the proxy's IP / one bucket.
 - **i18n (English + Arabic, toggle-based, RTL).** `react-i18next` with statically
   **bundled** JSON resources (`locales/{en,ar}/<namespace>.json`, registered in
   `lib/i18n/resources.ts` — namespaces: common, auth, marketing, dashboard,
-  billing, interview, project, stages, settings, admin, support). No locale routing: the
+  billing, interview, project, stages, settings, admin, support, legal). No locale routing: the
   `LanguageToggle` flips locale, persisted to `localStorage` + `archivato_locale`
   cookie; `LocaleProvider` (under ThemeProvider) applies it and sets
   `<html lang/dir>` (a pre-paint script in `layout.tsx` sets `dir` first to avoid
@@ -431,6 +431,18 @@ to Express `trust proxy`) or every request shares the proxy's IP / one bucket.
   real backend (`waitlistApi.join` → `POST /waitlist`) with a success/duplicate/
   invalid state machine. Fully i18n'd (`marketing` namespace, EN + AR, RTL-safe).
   Nav/footer anchor to the section ids. Presentational except the waitlist form.
+  The footer has a **Legal** column linking `/privacy` + `/terms`.
+- **Legal pages + cookie consent.** Public `/privacy` and `/terms` routes (added
+  to `AuthGate` `PUBLIC_EXACT`) render via one data-driven `LegalDocument`
+  component from the **`legal`** i18n namespace (EN+AR, `returnObjects` sections
+  array; RTL-safe). Content carries `[LEGAL_ENTITY]`/`[JURISDICTION]`/
+  `[CONTACT_EMAIL]` placeholders to fill before launch; contact routes to the
+  in-app Support Center. A **`CookieConsent`** banner (in `layout.tsx`, outside
+  `AuthGate` so it shows everywhere) gates **analytics only** — essential cookies
+  (auth/locale/theme) always run. Choice persists in `localStorage`
+  (`archivato.cookieConsent`) via `lib/consent.ts`, which fires a window event so
+  **`PageviewTracker`** starts/stops the beacon live (the analytics visitor cookie
+  is only set after `accepted`). No consent → no `POST /analytics/track`.
 - **Waitlist (`waitlist`).** A public, unauthenticated signup endpoint for the
   landing page (`POST /waitlist`, `HTTP 200`). `WaitlistService.join` is
   **idempotent** — email is normalized (trim+lowercase), a duplicate returns

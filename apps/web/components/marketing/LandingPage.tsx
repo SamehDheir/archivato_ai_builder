@@ -516,7 +516,7 @@ export function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-border/60">
         <div className="mx-auto max-w-6xl px-5 py-12 sm:px-6 lg:px-8">
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr]">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
             <div>
               <Logo />
               <p className="mt-3 max-w-xs text-sm text-muted-foreground">
@@ -544,6 +544,13 @@ export function LandingPage() {
                 [t('footer.links.signIn'), '/login'],
                 [t('footer.links.createAccount'), '/register'],
                 [t('footer.links.dashboard'), '/dashboard'],
+              ]}
+            />
+            <FooterCol
+              title={t('footer.legal')}
+              links={[
+                [t('footer.links.privacy'), '/privacy'],
+                [t('footer.links.terms'), '/terms'],
               ]}
             />
           </div>

@@ -7,6 +7,7 @@ import { ConfirmProvider } from '@/components/shared/confirm-dialog';
 import { UpgradeProvider } from '@/components/billing/upgrade-dialog';
 import { LocaleProvider } from '@/components/shared/i18n';
 import { PageviewTracker } from '@/components/shared/pageview-tracker';
+import { CookieConsent } from '@/components/shared/cookie-consent';
 
 // Public origin used to resolve absolute URLs for OpenGraph/Twitter cards.
 // Override in prod via NEXT_PUBLIC_SITE_URL; falls back to local dev.
@@ -93,6 +94,7 @@ export default function RootLayout({
                 </UpgradeProvider>
               </ConfirmProvider>
             </ToastProvider>
+            <CookieConsent />
           </LocaleProvider>
         </ThemeProvider>
       </body>

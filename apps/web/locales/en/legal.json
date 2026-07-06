@@ -1,0 +1,199 @@
+{
+  "nav": {
+    "backHome": "Back to home",
+    "contact": "Questions? Reach us through the in-app Support Center, or email [CONTACT_EMAIL]."
+  },
+  "consent": {
+    "message": "We use essential cookies to run Archivato, and analytics cookies — only with your consent — to understand how the product is used.",
+    "accept": "Accept analytics",
+    "decline": "Essential only",
+    "privacyLink": "Privacy Policy"
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "updated": "Last updated: July 6, 2026",
+    "intro": "This Privacy Policy explains what Archivato (\"we\", \"us\") collects when you use the Archivato AI Builder, how we use it, and the choices you have. Archivato is operated by [LEGAL_ENTITY]. If anything here is unclear, contact us through the in-app Support Center or at [CONTACT_EMAIL].",
+    "sections": [
+      {
+        "heading": "Information we collect",
+        "body": ["We collect only what we need to provide the service:"],
+        "list": [
+          "Account information — your email address, display name, and either a hashed password or, if you use Google/GitHub sign-in, your provider identity. We never store your password in plain text.",
+          "Content you create — the business ideas, interview answers, and design artifacts you generate, plus any support tickets and attachments you submit.",
+          "Anti-spam data — a one-way hash of a browser fingerprint, used only to limit one free account per device. We cannot reverse it to identify your device.",
+          "Usage & analytics — pages viewed, referring site, and an anonymous visitor ID cookie. These are collected only after you consent to analytics cookies.",
+          "Payment data — handled entirely by our payment provider (a Merchant of Record). We do not see or store your full card details."
+        ]
+      },
+      {
+        "heading": "How we use your information",
+        "body": ["We use the information above to:"],
+        "list": [
+          "Provide and operate the design pipeline and generate your artifacts.",
+          "Authenticate you and keep your account secure.",
+          "Prevent abuse and enforce fair-use limits.",
+          "Process subscriptions and send transactional email (verification, password reset).",
+          "Respond to your support requests and improve the product."
+        ]
+      },
+      {
+        "heading": "AI processing",
+        "body": [
+          "To generate designs, the text you submit — your idea, interview answers, refinement chats, and support messages — is sent to third-party AI providers that produce the outputs. Please do not submit passwords, secrets, or sensitive personal data in these fields."
+        ]
+      },
+      {
+        "heading": "Cookies",
+        "body": [
+          "Essential cookies (authentication, language, and theme) are always active because the service cannot function without them.",
+          "Analytics cookies (an anonymous visitor ID) are set only after you accept them in the cookie banner. You can withdraw consent at any time by choosing \"Essential only\" or clearing the cookie in your browser."
+        ]
+      },
+      {
+        "heading": "Sharing and third parties",
+        "body": ["We do not sell your personal data. We share it only with the providers that make the service work:"],
+        "list": [
+          "Our payment provider, to process subscriptions.",
+          "AI providers, to generate the design artifacts from your input.",
+          "Our email provider, to deliver verification and password-reset messages.",
+          "Google and GitHub, if you choose to sign in with them."
+        ]
+      },
+      {
+        "heading": "Data retention",
+        "body": [
+          "We keep your information for as long as your account is active. When you delete your account, we cascade the deletion to your projects and their artifacts. Some records may be retained where required by law or for legitimate business needs (for example, billing records)."
+        ]
+      },
+      {
+        "heading": "Your rights",
+        "body": ["Depending on your location, you may have the right to:"],
+        "list": [
+          "Access and correct your personal data (edit your profile in Settings).",
+          "Delete your account and its data (Settings → Delete account, which cascades to all projects).",
+          "Export your content (each project offers JSON, Markdown, and OpenAPI export).",
+          "Object to or restrict certain processing — contact us to make a request."
+        ]
+      },
+      {
+        "heading": "Security",
+        "body": [
+          "We protect your data with hashed passwords, hashed refresh tokens, httpOnly authentication cookies, and encryption in transit (HTTPS). No method of transmission or storage is completely secure, so we cannot guarantee absolute security."
+        ]
+      },
+      {
+        "heading": "International transfers",
+        "body": [
+          "Our providers may process your data in countries other than your own. Where that happens, we rely on the safeguards offered by those providers."
+        ]
+      },
+      {
+        "heading": "Children",
+        "body": [
+          "Archivato is not intended for anyone under the age required to consent to online services in their country. We do not knowingly collect data from children."
+        ]
+      },
+      {
+        "heading": "Changes to this policy",
+        "body": [
+          "We may update this policy from time to time. When we do, we will revise the \"Last updated\" date above. Your continued use of Archivato after a change means you accept the updated policy."
+        ]
+      },
+      {
+        "heading": "Contact us",
+        "body": [
+          "For privacy questions or to exercise your rights, reach us through the in-app Support Center or at [CONTACT_EMAIL]. Archivato is operated by [LEGAL_ENTITY]."
+        ]
+      }
+    ]
+  },
+  "terms": {
+    "title": "Terms of Service",
+    "updated": "Last updated: July 6, 2026",
+    "intro": "These Terms of Service (\"Terms\") govern your use of the Archivato AI Builder, operated by [LEGAL_ENTITY] (\"we\", \"us\"). By creating an account or using the service, you agree to these Terms. If you do not agree, do not use the service.",
+    "sections": [
+      {
+        "heading": "The service",
+        "body": [
+          "Archivato is an AI tool that turns a business idea into software-design artifacts — requirements, system, database and API designs, a scored review, a roadmap, and a cost estimate. These outputs are AI-generated suggestions to help you plan. They are not professional engineering, legal, financial, or security advice, and they may contain errors."
+        ]
+      },
+      {
+        "heading": "Your account",
+        "body": [
+          "You must provide accurate information and keep your credentials secure. You are responsible for all activity under your account. To reduce spam, we limit one free account per device. You must be old enough to form a binding contract in your country to use Archivato."
+        ]
+      },
+      {
+        "heading": "Acceptable use",
+        "body": ["You agree not to:"],
+        "list": [
+          "Use the service for any unlawful, infringing, or harmful purpose.",
+          "Attempt to reverse-engineer, scrape, overload, or bypass the rate limits or security of the service.",
+          "Resell or provide the service to third parties except as expressly permitted.",
+          "Submit content you do not have the right to submit."
+        ]
+      },
+      {
+        "heading": "Your content and intellectual property",
+        "body": [
+          "You keep ownership of the ideas you submit and the design artifacts generated for you. You grant us a limited licence to store and process that content solely to provide the service. We own the Archivato platform, software, and branding; these Terms do not transfer any of our intellectual property to you."
+        ]
+      },
+      {
+        "heading": "AI-generated output",
+        "body": [
+          "AI outputs can be inaccurate, incomplete, or inconsistent. You are responsible for reviewing and validating any output before relying on it, and for any decisions you make based on it. We do not warrant that outputs are correct, fit for a particular purpose, or free of third-party rights."
+        ]
+      },
+      {
+        "heading": "Subscriptions and billing",
+        "body": [
+          "Archivato offers a Free plan (one project) and a Pro plan ($19/month, up to five projects). Paid plans are billed through our payment provider, which acts as Merchant of Record. Pro renews automatically until cancelled. Cancellation takes effect at the end of the current billing period — you keep Pro until then, and are not charged again. Except where required by law, payments are non-refundable. We may change prices with reasonable notice."
+        ]
+      },
+      {
+        "heading": "Availability",
+        "body": [
+          "The service is provided on an \"as is\" and \"as available\" basis. We may add, change, or discontinue features, and we do not guarantee uninterrupted or error-free operation."
+        ]
+      },
+      {
+        "heading": "Termination",
+        "body": [
+          "You may delete your account at any time from Settings. We may suspend or terminate your access if you breach these Terms or use the service in a way that risks harm to others or to the service."
+        ]
+      },
+      {
+        "heading": "Disclaimers and limitation of liability",
+        "body": [
+          "To the maximum extent permitted by law, we disclaim all warranties, express or implied. To the maximum extent permitted by law, our total liability for any claim relating to the service is limited to the amount you paid us in the twelve months before the claim. We are not liable for indirect, incidental, or consequential damages."
+        ]
+      },
+      {
+        "heading": "Indemnification",
+        "body": [
+          "You agree to indemnify us against claims arising from your misuse of the service or your violation of these Terms or of any law or third-party right."
+        ]
+      },
+      {
+        "heading": "Governing law",
+        "body": [
+          "These Terms are governed by the laws of [JURISDICTION], without regard to its conflict-of-law rules. The courts of [JURISDICTION] will have exclusive jurisdiction over any dispute, unless mandatory law provides otherwise."
+        ]
+      },
+      {
+        "heading": "Changes to these Terms",
+        "body": [
+          "We may update these Terms from time to time. When we do, we will revise the \"Last updated\" date above. Your continued use of Archivato after a change means you accept the updated Terms."
+        ]
+      },
+      {
+        "heading": "Contact us",
+        "body": [
+          "Questions about these Terms? Reach us through the in-app Support Center or at [CONTACT_EMAIL]."
+        ]
+      }
+    ]
+  }
+}

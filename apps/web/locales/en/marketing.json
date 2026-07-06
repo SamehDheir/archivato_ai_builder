@@ -146,6 +146,7 @@
     "start": "Join the waitlist",
     "explore": "Explore",
     "account": "Account",
+    "legal": "Legal",
     "links": {
       "problem": "Problem",
       "solution": "Solution",
@@ -153,7 +154,9 @@
       "faq": "FAQ",
       "signIn": "Sign in",
       "createAccount": "Create account",
-      "dashboard": "Dashboard"
+      "dashboard": "Dashboard",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service"
     },
     "rights": "© {{year}} Archivato AI Builder",
     "tagshort": "AI Software Architecture Generator"

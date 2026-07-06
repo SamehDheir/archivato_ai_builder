@@ -9,6 +9,7 @@ import enStages from '@/locales/en/stages.json';
 import enSettings from '@/locales/en/settings.json';
 import enAdmin from '@/locales/en/admin.json';
 import enSupport from '@/locales/en/support.json';
+import enLegal from '@/locales/en/legal.json';
 import arCommon from '@/locales/ar/common.json';
 import arAuth from '@/locales/ar/auth.json';
 import arMarketing from '@/locales/ar/marketing.json';
@@ -20,6 +21,7 @@ import arStages from '@/locales/ar/stages.json';
 import arSettings from '@/locales/ar/settings.json';
 import arAdmin from '@/locales/ar/admin.json';
 import arSupport from '@/locales/ar/support.json';
+import arLegal from '@/locales/ar/legal.json';
 
 /** Translation namespaces. Add new domains here as later phases land. */
 export const namespaces = [
@@ -34,6 +36,7 @@ export const namespaces = [
   'settings',
   'admin',
   'support',
+  'legal',
 ] as const;
 export const defaultNS = 'common';
 
@@ -51,6 +54,7 @@ export const resources = {
     settings: enSettings,
     admin: enAdmin,
     support: enSupport,
+    legal: enLegal,
   },
   ar: {
     common: arCommon,
@@ -64,5 +68,6 @@ export const resources = {
     settings: arSettings,
     admin: arAdmin,
     support: arSupport,
+    legal: arLegal,
   },
 } as const;

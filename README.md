@@ -490,6 +490,19 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   `waitlist_entries` table) with **idempotent**, normalized email signup. The
   landing form posts to it with success / already-joined / invalid states.
 
+### ✅ Slice — Legal pages + cookie consent
+- Public **`/privacy`** and **`/terms`** pages, rendered from one data-driven
+  `LegalDocument` component and a bilingual **`legal`** i18n namespace (EN + AR,
+  RTL-safe). The content honestly reflects the app (account data, hashed device
+  fingerprint, AI processing of your input, Paddle billing, self-serve account
+  deletion + export) and carries `[LEGAL_ENTITY]` / `[JURISDICTION]` /
+  `[CONTACT_EMAIL]` **placeholders to fill before launch**; "contact us" points to
+  the in-app Support Center. Linked from the landing footer's new **Legal** column.
+- A **cookie-consent banner** (shown on every page until you choose) gates
+  **analytics only** — essential cookies (auth, locale, theme) always run. The
+  anonymous pageview beacon + its visitor cookie fire **only after consent**; the
+  choice persists in `localStorage` and updates the tracker live (no reload).
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
