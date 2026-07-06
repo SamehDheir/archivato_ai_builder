@@ -9,6 +9,7 @@ import type {
   Severity,
 } from '@archivato/shared';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { Empty, Section } from '@/components/design/RequirementDocumentView';
 
@@ -112,28 +113,28 @@ export function ReviewView({ report }: { report: ReviewReport }) {
 
       {/* Critical Issues — the worst findings across every dimension, up top. */}
       {critical.length > 0 && (
-        <div className="mt-5 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-destructive">
-            <AlertTriangle className="h-4 w-4" />{' '}
-            {t('review.critical', { count: critical.length })}
-          </div>
-          <ul className="space-y-1.5">
-            {critical.map((f, i) => (
-              <li key={i} className="text-sm" dir="auto">
-                <span
-                  className={cn(
-                    'me-2 text-xs font-semibold uppercase',
-                    SEVERITY_CLASS[f.severity],
-                  )}
-                >
-                  {t(`review.severity.${f.severity}`, { defaultValue: f.severity })}
-                </span>
-                <span className="font-medium">{f.title}</span>
-                <span className="text-muted-foreground"> — {f.detail}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <Alert variant="destructive" className="mt-5">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>{t('review.critical', { count: critical.length })}</AlertTitle>
+          <AlertDescription>
+            <ul className="space-y-1.5">
+              {critical.map((f, i) => (
+                <li key={i} className="text-sm" dir="auto">
+                  <span
+                    className={cn(
+                      'me-2 text-xs font-semibold uppercase',
+                      SEVERITY_CLASS[f.severity],
+                    )}
+                  >
+                    {t(`review.severity.${f.severity}`, { defaultValue: f.severity })}
+                  </span>
+                  <span className="font-medium">{f.title}</span>
+                  <span className="text-muted-foreground"> — {f.detail}</span>
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
       )}
 
       <FindingSection

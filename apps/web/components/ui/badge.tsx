@@ -14,6 +14,9 @@ const badgeVariants = cva(
         primary: 'border-primary/40 bg-primary/15 text-primary',
         destructive: 'border-destructive/40 bg-destructive/15 text-destructive',
         warning: 'border-warning/40 bg-warning/15 text-warning',
+        // Soft neutral pill (e.g. relation cardinality "M:N") — same surface as
+        // secondary but dimmed text, so it reads quieter than a status badge.
+        muted: 'border-border bg-muted text-muted-foreground',
         outline: 'border-border text-foreground',
       },
     },

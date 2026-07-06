@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SummaryView } from "@/components/interview/SummaryView";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
 /**
@@ -219,9 +220,9 @@ export function InterviewPanel({
             <CardTitle>{t("summaryTitle")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="mb-3 text-sm text-muted-foreground">
-              {t("summaryHelp")}
-            </p>
+            <Alert variant="info" className="mb-3">
+              <AlertDescription>{t("summaryHelp")}</AlertDescription>
+            </Alert>
             <SummaryView summary={state.summary} />
             <div className="mt-4 flex gap-2">
               <Button variant="success" onClick={onConfirm} disabled={busy}>

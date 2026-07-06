@@ -71,36 +71,35 @@ export function ProjectWizard({
           </span>
         </div>
 
-        <ol className="flex items-start gap-1 overflow-x-auto pb-1">
+        <ol className="scrollbar-thin flex items-center gap-1 overflow-x-auto pb-2">
           {steps.map((step, i) => {
             const isCurrent = i === currentIndex;
             const locked = !isPro && !!step.pro && !step.done;
             const navigable =
               !!onNavigate && !!step.tab && (step.done || isCurrent);
             return (
-              <li key={step.key} className="flex flex-1 items-start">
+              <li key={step.key} className="flex flex-1 items-center">
                 <button
                   type="button"
                   disabled={!navigable}
                   onClick={() => navigable && onNavigate?.(step.tab as string)}
                   title={navigable ? t('wizard.goTo', { label: step.label }) : undefined}
                   className={cn(
-                    'flex min-w-0 flex-col items-center gap-1.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                    'group flex min-w-0 items-center gap-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                     navigable ? 'cursor-pointer' : 'cursor-default',
                   )}
                 >
                   <span
                     className={cn(
-                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-medium transition-colors',
-                      step.done &&
-                        'border-primary bg-primary text-primary-foreground',
-                      isCurrent &&
-                        !step.done &&
-                        'border-primary text-primary ring-2 ring-primary/30',
-                      !step.done &&
-                        !isCurrent &&
-                        'border-border text-muted-foreground',
-                      navigable && 'group-hover:opacity-90 hover:scale-105',
+                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
+                      // Done: green ring + green check on a transparent fill.
+                      step.done && 'border-success bg-transparent text-success',
+                      // Current: solid blue circle with a white step number.
+                      isCurrent && !step.done && 'border-blue-500 bg-blue-500 text-white',
+                      // Locked / future: filled gray chip with a lock or number.
+                      !step.done && !isCurrent &&
+                        'border-transparent bg-muted text-muted-foreground',
+                      navigable && 'group-hover:scale-105',
                     )}
                     aria-current={isCurrent ? 'step' : undefined}
                   >
@@ -114,23 +113,18 @@ export function ProjectWizard({
                   </span>
                   <span
                     className={cn(
-                      'whitespace-nowrap text-[11px] leading-tight',
-                      step.done || isCurrent
-                        ? 'font-medium text-foreground'
-                        : 'text-muted-foreground',
-                      navigable && 'hover:underline',
+                      'whitespace-nowrap text-sm leading-tight',
+                      step.done && 'font-semibold text-success',
+                      isCurrent && !step.done && 'font-semibold text-foreground',
+                      !step.done && !isCurrent && 'text-muted-foreground',
+                      navigable && 'group-hover:underline',
                     )}
                   >
                     {step.label}
                   </span>
                 </button>
                 {i < steps.length - 1 && (
-                  <span
-                    className={cn(
-                      'mx-1 mt-4 h-px min-w-[12px] flex-1',
-                      step.done ? 'bg-primary' : 'bg-border',
-                    )}
-                  />
+                  <span className="mx-2 h-px min-w-[16px] flex-1 bg-border" />
                 )}
               </li>
             );

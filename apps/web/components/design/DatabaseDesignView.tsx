@@ -96,7 +96,7 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
             {design.relations.map((r, i) => (
               <li key={i}>
                 <span className="font-mono text-xs">{r.from}</span>{' '}
-                <Badge variant="secondary">{r.type}</Badge>{' '}
+                <Badge variant="muted">{r.type}</Badge>{' '}
                 <span className="font-mono text-xs">{r.to}</span>
                 {r.description && (
                   <span className="text-muted-foreground"> — {r.description}</span>

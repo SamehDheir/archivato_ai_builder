@@ -47,6 +47,13 @@ npm run prisma:deploy  --workspace @archivato/api    # apply in prod
 
 **Run prereq:** `docker compose up -d db redis`, then `prisma:migrate`, before
 `dev:api`. Redis is required for `/jobs` (async generation + snapshots).
+Compose maps **Postgres to host port 5433** (not 5432, to avoid clashing with a
+local Postgres) and Redis to 6379; `DATABASE_URL` in `apps/api/.env` must match.
+
+**API surface:** the NestJS app runs on **:3001** under a global **`/api`** prefix
+(`main.ts` `setGlobalPrefix('api')`) — every route is `http://localhost:3001/api/...`.
+`main.ts` also sets `rawBody: true` (Paddle webhook HMAC) + a global
+`ValidationPipe`; CORS is locked to `WEB_ORIGIN` with credentials.
 
 ## Architecture
 

@@ -35,7 +35,7 @@ import type {
   SystemDesign,
 } from '@archivato/shared';
 import { PIPELINE_STAGES } from '@archivato/shared';
-import { Badge } from '@/components/ui/badge';
+import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -255,9 +255,10 @@ export function ProjectStages({
   return (
     <Card>
       <CardContent className="space-y-4 p-5">
-        <Badge className="gap-1">
-          <CheckCircle2 className="h-3.5 w-3.5" /> {t('confirmed')}
-        </Badge>
+        <Alert variant="success" className="[&>svg]:text-success">
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertTitle className="mb-0">{t('confirmed')}</AlertTitle>
+        </Alert>
 
         {job && <JobProgress job={job} />}
 

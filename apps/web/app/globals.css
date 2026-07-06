@@ -104,5 +104,30 @@
   }
 }
 
+@layer utilities {
+  /* Thin, subtle horizontal/vertical scrollbar — used where content scrolls
+     inside a container (e.g. the project wizard stepper) so the native bar
+     doesn't feel heavy. Track is transparent; the thumb uses the border color
+     and brightens on hover. Firefox honors scrollbar-width/color. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: hsl(var(--border));
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.5);
+  }
+}
+
 /* Print: only the export print-window opens a fresh document, so no app-wide
    print rules are needed here. */

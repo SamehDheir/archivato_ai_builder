@@ -9,6 +9,9 @@ import { Progress } from '@/components/ui/progress';
 export function ProgressPanel({ state }: { state: InterviewState }) {
   const { t } = useTranslation('interview');
   const pct = Math.round(state.completeness * 100);
+  // Once the interview crosses the gate (awaiting confirmation or confirmed),
+  // the completeness bar turns green (success); it stays blue while collecting.
+  const reached = state.status !== 'collecting';
   const status = t(`status.${state.status}`, {
     defaultValue: state.status.replace(/_/g, ' '),
   });
@@ -19,7 +22,7 @@ export function ProgressPanel({ state }: { state: InterviewState }) {
           <span>{t('progress.completeness')}</span>
           <span>{pct}%</span>
         </div>
-        <Progress value={pct} />
+        <Progress value={pct} indicatorClassName={reached ? 'bg-success' : undefined} />
         <div className="mt-2 flex justify-between text-xs text-muted-foreground">
           <span>{t('progress.status', { status })}</span>
           {state.phase && (
