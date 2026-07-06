@@ -516,6 +516,33 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   healthchecks), a **`scripts/backup-db.sh`** pg_dump/retention script, and a full
   **[`DEPLOY.md`](./DEPLOY.md)** guide (single-host and managed-hosting paths).
 
+### ✅ Slice — Code scaffolding (design → runnable backend)
+- Closes the "last mile": a Pro-only stage that turns the confirmed design into a
+  **runnable NestJS + Prisma backend**. Fully **deterministic** (no LLM):
+  `buildBackendScaffold()` in `@archivato/shared` maps entities/relations → a
+  `prisma/schema.prisma` and API modules/endpoints → NestJS
+  modules/controllers/services + class-validator DTOs, plus root project files.
+  The output always compiles (FKs are documented scalar fields; service methods
+  are typed "Not implemented" stubs; a PK is synthesized when missing).
+- **Two deliveries**: **Download ZIP** (`GET /api/scaffold/:id/zip`) and **Push to
+  GitHub** (`POST /api/scaffold/:id/github`). The push creates the repo with
+  `auto_init` (GitHub refuses a tree on an empty repo), then commits the scaffold
+  onto `main`; the GitHub client retries transient failures with backoff.
+
+### ✅ Slice — "Connect with GitHub" (one-click push)
+- Instead of pasting a token, a **Connect with GitHub** button runs an OAuth popup
+  and stores a per-user connection so pushes need no token. The access token is
+  **encrypted at rest** (AES-256-GCM); the OAuth `state` is HMAC-signed to bind the
+  callback to the user. A **Personal Access Token** remains as a fallback (used
+  once, never stored).
+- Reuses your existing **login GitHub OAuth App** — set the scaffold callback URL
+  (`…/api/scaffold/github/connect/callback`) on it and leave
+  `GITHUB_SCAFFOLD_CLIENT_ID/SECRET` empty (they fall back to `GITHUB_CLIENT_ID/SECRET`).
+  New endpoints: `GET /api/scaffold/github/connect/start`, `…/connect/callback`,
+  `GET/DELETE /api/scaffold/github/connection`.
+- **Web**: the "Generate code" section shows Connect → connected state (with
+  Disconnect) → push, plus a "use a token instead" toggle. i18n'd (EN + AR).
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
@@ -568,6 +595,13 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/export/:sessionId/markdown`| Markdown report                         |
 | GET    | `/api/export/:sessionId/openapi`| OpenAPI 3.0 spec (JSON)                   |
 | GET    | `/api/export/:sessionId/structure`| GitHub project structure manifest       |
+| GET    | `/api/scaffold/:sessionId` | Scaffold file manifest (Pro)                 |
+| GET    | `/api/scaffold/:sessionId/zip`| Download the generated backend as a .zip (Pro)|
+| POST   | `/api/scaffold/:sessionId/github`| Create a GitHub repo + push the scaffold (Pro)|
+| GET    | `/api/scaffold/github/connection`| GitHub connection status (available/connected)|
+| GET    | `/api/scaffold/github/connect/start`| Begin the Connect-with-GitHub OAuth popup |
+| GET    | `/api/scaffold/github/connect/callback`| OAuth callback (stores the connection)  |
+| DELETE | `/api/scaffold/github/connection`| Disconnect the stored GitHub connection      |
 | POST   | `/api/analytics/track`     | Anonymous pageview beacon (no auth)          |
 | GET    | `/api/admin/stats`         | Admin: KPIs + 30-day trends (admin only)     |
 | GET    | `/api/admin/traffic`       | Admin: traffic detail (admin only)           |

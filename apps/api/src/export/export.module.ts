@@ -22,5 +22,8 @@ import { ExportService } from './export.service';
   ],
   controllers: [ExportController],
   providers: [ExportService],
+  // Exported so the scaffold module can reuse the assembled design bundle
+  // (and its "pipeline complete through API design" gate).
+  exports: [ExportService],
 })
 export class ExportModule {}

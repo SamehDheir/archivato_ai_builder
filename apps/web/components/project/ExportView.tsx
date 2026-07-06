@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Download, Printer } from 'lucide-react';
 import { exportApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { ScaffoldView } from './ScaffoldView';
 
 /** Triggers a client-side file download for a string payload. */
 function download(filename: string, content: string, mime: string) {
@@ -139,6 +140,8 @@ export function ExportView({ sessionId }: { sessionId: string }) {
         </Button>
       </div>
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+
+      <ScaffoldView sessionId={sessionId} />
     </div>
   );
 }

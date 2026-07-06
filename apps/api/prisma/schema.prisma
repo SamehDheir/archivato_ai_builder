@@ -38,6 +38,8 @@ model User {
   // RBAC: roles assigned to this user (many-to-many via UserRole).
   userRoles           UserRole[]
   subscription        Subscription?
+  // Optional stored GitHub connection for one-click scaffold push.
+  githubConnection    GithubConnection?
   // Pipeline projects owned by this user (ownership enforcement).
   interviewSessions   InterviewSession[]
   // Support Center: tickets the user opened + tickets assigned to them (admins).
@@ -83,6 +85,25 @@ model DeviceRegistration {
 
   @@index([userId])
   @@map("device_registrations")
+}
+
+// Stored GitHub connection for one-click scaffold push. The OAuth access token
+// is encrypted at rest (AES-256-GCM) — only the ciphertext is stored here, never
+// the raw token. One connection per user; cascades on account delete.
+model GithubConnection {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // AES-256-GCM ciphertext (iv:tag:data, base64) of the GitHub access token.
+  tokenEncrypted String
+  // The connected GitHub login/username (for display + repo URLs).
+  githubLogin    String
+  // Space-separated scopes granted, for diagnostics.
+  scopes         String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("github_connections")
 }
 
 // One-time password (OTP) codes for forgot-password (Slice 9b). Only the

@@ -112,6 +112,49 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   best-value recommendation. Stable across runs (unit-testable, offline). The
   service only reads system/database/API designs; the estimate is a labeled
   planning figure, not a quote.
+- **Code scaffolding (`scaffold`).** A Pro-only stage that turns the confirmed
+  design into a **runnable NestJS + Prisma backend**. Like the cost estimator, the
+  generation is **fully deterministic — no LLM**: `buildBackendScaffold()` in
+  `@archivato/shared` (`scaffold.ts`, runtime-free) maps DB entities/relations →
+  `prisma/schema.prisma` models, and API modules/endpoints → NestJS
+  modules/controllers/services + class-validator DTOs, plus root project files.
+  **Correctness over richness:** output always compiles / `prisma validate`s —
+  FKs are emitted as scalar fields + a `// FK →` comment (never Prisma relations,
+  which could be invalid), service methods are typed stubs that throw "Not
+  implemented", exactly one `@id` is guaranteed (a flagged PK, else a promoted
+  `id` column, else a synthesized one — never a duplicate), and colliding
+  module/entity names are uniquified so the generated project always builds. The
+  `ScaffoldService` reuses `ExportService.bundle()` (so it inherits the "pipeline
+  complete through API design" 409 gate). Owner-guarded + `ProGuard` (mirrors
+  export); GitHub routes throttled (`THROTTLE_EXTERNAL`). Delivered two ways:
+  - **ZIP** (`GET /scaffold/:id/zip`, server-zipped via `jszip`).
+  - **Push to GitHub** (`POST /scaffold/:id/github`) via a native-`fetch` client.
+    Because GitHub's Git Data API **rejects a tree on an empty repo (409 "Git
+    Repository is empty")**, the repo is created with **`auto_init:true`**, then:
+    read base ref → create tree of our files → commit parented on the initial
+    commit → **fast-forward `main` (PATCH ref)**. The client **retries transient
+    failures with backoff** (network timeouts + 404/409/5xx — the git backend
+    lags just after repo creation) and surfaces GitHub's real status/message on
+    failure. Token resolution: an optional **PAT** in the request (used once,
+    never stored) **or** the user's **stored OAuth connection** (below).
+- **"Connect with GitHub" (stored OAuth).** A per-user GitHub connection so push
+  needs no token. Separate concern from login OAuth: `GithubOAuthService` (scope
+  `repo`, callback `/api/scaffold/github/connect/callback`) uses
+  `GITHUB_SCAFFOLD_CLIENT_ID/SECRET`, **falling back to the login
+  `GITHUB_CLIENT_ID/SECRET`** so users can reuse their existing OAuth App (they
+  just add the scaffold callback URL). Flow (popup): `GET …/connect/start`
+  (`JwtAuthGuard`) sets an **HMAC-signed state cookie** binding userId+nonce+exp,
+  redirects to GitHub; `GET …/connect/callback` (public, state-verified) exchanges
+  the code, **encrypts the access token at rest** (`TokenCipher`, AES-256-GCM;
+  key from `GITHUB_TOKEN_SECRET` ?? `JWT_ACCESS_SECRET`), upserts
+  `github_connections` (one per user, cascades on delete), and returns HTML that
+  `postMessage`s the result to the opener and closes. `GET …/connection` (status:
+  `available`/`connected`/`login`), `DELETE …/connection` (disconnect). Repo
+  pattern (in-memory + Prisma). **Web:** `ScaffoldView` (in `ExportView`) shows a
+  **Connect with GitHub** button (opens the popup, listens for the `postMessage`
+  from the API origin) → connected state (`login` + Disconnect) → push with no
+  token; a **"use a token instead"** toggle keeps the PAT path. i18n'd
+  `stages.scaffold.*` (EN+AR).
 - **Agents backfill via `normalize()`.** Where an artifact has many optional
   parts (e.g. the reviewer's per-dimension scores/findings), the agent trusts a
   valid LLM response but fills any omitted field deterministically, so the shape

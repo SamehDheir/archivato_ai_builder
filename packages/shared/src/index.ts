@@ -22,6 +22,7 @@ export * from './product-vision';
 export * from './roadmap';
 export * from './cost-estimate';
 export * from './export';
+export * from './scaffold';
 export * from './auth';
 export * from './permissions';
 export * from './billing';

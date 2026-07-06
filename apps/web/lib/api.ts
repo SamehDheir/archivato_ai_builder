@@ -18,6 +18,9 @@ import type {
   ProjectDiagrams,
   ProjectSnapshot,
   ProjectStructure,
+  ScaffoldManifest,
+  GithubPushResult,
+  GithubConnectionStatus,
   ProductVision,
   ProjectRoadmap,
   CostEstimate,
@@ -369,6 +372,37 @@ async function requestText(path: string): Promise<string> {
   return res.text();
 }
 
+/**
+ * Like `request`, but returns the raw response as a Blob (for binary downloads,
+ * e.g. the scaffold ZIP). Keeps the 401→refresh→retry behavior and throws a
+ * typed `ApiError` (with server `code`) so callers can branch on 402/upgrade.
+ */
+async function requestBlob(path: string, allowRefresh = true): Promise<Blob> {
+  const res = await fetch(`${API_URL}${path}`, { credentials: 'include' });
+  if (res.status === 401 && allowRefresh) {
+    const refreshed = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (refreshed.ok) return requestBlob(path, false);
+  }
+  if (!res.ok) {
+    let detail = res.statusText;
+    let code: string | undefined;
+    try {
+      const body = await res.json();
+      detail = Array.isArray(body?.message)
+        ? body.message.join(', ')
+        : body?.message ?? detail;
+      if (typeof body?.code === 'string') code = body.code;
+    } catch {
+      /* keep statusText */
+    }
+    throw new ApiError(detail, res.status, code);
+  }
+  return res.blob();
+}
+
 export const authApi = {
   register: async (input: RegisterInput) => {
     const user = await request<AuthUser>('/auth/register', {
@@ -707,4 +741,42 @@ export const exportApi = {
     request<Record<string, unknown>>(`/export/${sessionId}/openapi`),
   structure: (sessionId: string) =>
     request<ProjectStructure>(`/export/${sessionId}/structure`),
+};
+
+export const scaffoldApi = {
+  /** File manifest (paths + contents) of the generated backend. */
+  manifest: (sessionId: string) =>
+    request<ScaffoldManifest>(`/scaffold/${sessionId}`),
+
+  /** The scaffold as a downloadable .zip Blob. */
+  zip: (sessionId: string) => requestBlob(`/scaffold/${sessionId}/zip`),
+
+  /**
+   * Create a GitHub repo and push the scaffold. Omit `token` to use the stored
+   * OAuth connection; pass a PAT to use it once (never stored).
+   */
+  pushToGithub: (
+    sessionId: string,
+    input: { token?: string; repoName: string; isPrivate?: boolean },
+  ) =>
+    request<GithubPushResult>(`/scaffold/${sessionId}/github`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  /** The signed-in user's GitHub connection state (per-user, not per-session). */
+  githubStatus: () =>
+    request<GithubConnectionStatus>(`/scaffold/github/connection`),
+
+  /** Full URL that begins the GitHub connect OAuth flow (opened in a popup). */
+  githubConnectUrl: () => `${API_URL}/scaffold/github/connect/start`,
+
+  /** The API origin — used to validate the connect popup's postMessage. */
+  apiOrigin: () => new URL(API_URL).origin,
+
+  /** Remove the stored GitHub connection. */
+  disconnectGithub: () =>
+    request<{ success: true }>(`/scaffold/github/connection`, {
+      method: 'DELETE',
+    }),
 };

@@ -28,3 +28,9 @@ export const THROTTLE_WAITLIST = { default: { limit: 5, ttl: MINUTE } };
  * Bounds a single client's spend even with a valid session.
  */
 export const THROTTLE_AI = { default: { limit: 15, ttl: MINUTE } };
+
+/**
+ * Endpoints that make outbound calls to a third party on the user's behalf
+ * (e.g. pushing a scaffold to GitHub). Kept low to bound external-API usage.
+ */
+export const THROTTLE_EXTERNAL = { default: { limit: 10, ttl: MINUTE } };

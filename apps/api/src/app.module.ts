@@ -19,6 +19,7 @@ import { ProductVisionModule } from './product-vision/product-vision.module';
 import { RoadmapModule } from './roadmap/roadmap.module';
 import { CostEstimateModule } from './cost-estimate/cost-estimate.module';
 import { ExportModule } from './export/export.module';
+import { ScaffoldModule } from './scaffold/scaffold.module';
 import { ChatModule } from './chat/chat.module';
 import { JobsModule } from './jobs/jobs.module';
 import { VersionsModule } from './versions/versions.module';
@@ -70,6 +71,8 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     CostEstimateModule,
     // Slice 8: Export (JSON / Markdown / OpenAPI / GitHub structure).
     ExportModule,
+    // Code scaffolding: runnable NestJS + Prisma backend (ZIP + push to GitHub).
+    ScaffoldModule,
     // Slice 10: post-generation AI chat (refine the design in natural language).
     ChatModule,
     // Async pipeline generation (BullMQ/Redis): enqueue + poll job status.
