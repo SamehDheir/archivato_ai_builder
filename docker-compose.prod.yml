@@ -1,0 +1,93 @@
+# Production-style compose for a single-host (VPS) deploy: db + redis + api + web.
+# For managed hosting, use the Dockerfiles directly with a managed Postgres/Redis
+# (and their automated backups) instead of this file.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Secrets come from a root .env file (see .env.example). NEXT_PUBLIC_* are baked
+# in at BUILD time, so they are passed as build args to the web image.
+
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-archivato}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-archivato}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-archivato}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      WEB_ORIGIN: ${WEB_ORIGIN:?set WEB_ORIGIN in .env}
+      API_ORIGIN: ${API_ORIGIN:-}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env}
+      # Behind the reverse proxy that terminates TLS:
+      COOKIE_SECURE: 'true'
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      # Optional integrations (see .env.example)
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+    ports:
+      - '3001:3001'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "fetch('http://localhost:3001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - '3000:3000'
+
+volumes:
+  pgdata:
+  redisdata:

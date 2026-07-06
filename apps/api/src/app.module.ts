@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { validateEnv } from './config/env.validation';
+import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { RolesModule } from './roles/roles.module';
@@ -40,6 +42,8 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }]),
     // Persistence: PostgreSQL via Prisma (global PrismaService).
     PrismaModule,
+    // Liveness + readiness probes (DB + Redis) for load balancers / orchestrators.
+    HealthModule,
     // RBAC: dynamic roles + permission catalog (seeds system roles on boot).
     RolesModule,
     // Slice 9: authentication (register/login/refresh + JWT cookie guard).
@@ -89,6 +93,8 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     // Enforce the throttler on every route (overridable per-route with
     // `@Throttle`/`@SkipThrottle`).
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Global error handling: structured logging + optional Sentry, generic 500s.
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
 export class AppModule {}

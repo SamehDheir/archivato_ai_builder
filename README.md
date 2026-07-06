@@ -503,6 +503,19 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   anonymous pageview beacon + its visitor cookie fire **only after consent**; the
   choice persists in `localStorage` and updates the tracker live (no reload).
 
+### ✅ Slice — Production hardening (health, errors, deploy)
+- **Health probes** (root-level, un-throttled, outside the `/api` prefix):
+  `GET /health` (liveness) and `GET /health/ready` (readiness — checks Postgres
+  **and** Redis, returns `503` if either is down) for load balancers / orchestrators.
+- **Global exception handling**: an `AllExceptionsFilter` preserves known HTTP
+  error bodies, returns a generic 500 for unexpected errors (no stack/detail leak),
+  logs 5xx with request context, and reports to **Sentry** when `SENTRY_DSN` is set
+  (a no-op otherwise).
+- **Deployment**: multi-stage **Dockerfiles** for the API and web (Next standalone
+  output), a **`docker-compose.prod.yml`** (db + redis + api + web, with
+  healthchecks), a **`scripts/backup-db.sh`** pg_dump/retention script, and a full
+  **[`DEPLOY.md`](./DEPLOY.md)** guide (single-host and managed-hosting paths).
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 

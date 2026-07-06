@@ -75,6 +75,19 @@ Paddle **webhook is `@SkipThrottle()`** (Paddle must never be rejected). Throttl
 keys off the client IP, so behind a proxy set **`TRUST_PROXY`** (`main.ts` applies it
 to Express `trust proxy`) or every request shares the proxy's IP / one bucket.
 
+**Health, errors, deploy.** `HealthModule` exposes probes **excluded from the
+`/api` prefix** (root-level, `@SkipThrottle()`): `GET /health` (liveness — process
+up) and `GET /health/ready` (readiness — `HealthService` pings Postgres via
+`$queryRaw` + Redis via a short-lived non-retrying `ioredis` client; **503** if
+either is down). A global **`AllExceptionsFilter`** (`APP_FILTER`) preserves known
+`HttpException` bodies but returns a generic 500 for everything else (never leaks
+stacks), logs 5xx with request context, and calls `Sentry.captureException` —
+a **no-op unless `SENTRY_DSN`** is set (`main.ts` inits Sentry only then). Deploy:
+multi-stage **Dockerfiles** for api + web (build from **repo root** for the
+workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
+`docker-compose.prod.yml` (db+redis+api+web with healthchecks), `scripts/backup-db.sh`
+(pg_dump + retention), all documented in **`DEPLOY.md`**.
+
 ## Architecture
 
 - **Modular monolith.** Each pipeline stage is its own Nest module

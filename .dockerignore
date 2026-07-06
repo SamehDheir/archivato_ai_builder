@@ -1,0 +1,23 @@
+# Keep build contexts small and deterministic — deps are installed inside the
+# image, artifacts are built inside the image.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+
+# Local env + secrets (never bake into an image)
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.local.example
+
+# VCS / editor / OS
+.git
+.gitignore
+**/.DS_Store
+**/*.log
+npm-debug.log*
+
+# Docs / meta not needed at build time
+*.md
