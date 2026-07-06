@@ -2,6 +2,9 @@
   "confirmed": "Requirements confirmed",
   "generating": "Generating {{stage}}…",
   "step": "Step {{step}} of {{total}} · ",
+  "stream": {
+    "live": "Live"
+  },
   "stage": {
     "requirements": "requirement document",
     "system-design": "system design",

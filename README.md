@@ -543,6 +543,22 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - **Web**: the "Generate code" section shows Connect → connected state (with
   Disconnect) → push, plus a "use a token instead" toggle. i18n'd (EN + AR).
 
+### ✅ Slice — Streaming generation (live "narration" console)
+- Generating a pipeline stage now streams a **live narration** of the work over
+  **Server-Sent Events** (`GET /api/stream/:sessionId/:stage`) instead of a flat
+  progress bar — a terminal-style console types out each step as the design takes
+  shape (roles found → requirements derived → services decomposed → endpoints
+  defined → review scored), with an active-step spinner and a blinking caret.
+- Because artifacts are structured JSON and every agent has a deterministic
+  offline fallback, we stream a **human-readable narration derived from the
+  finished artifact** (the pure, unit-tested `buildNarration()` in
+  `@archivato/shared`), not raw JSON tokens — so it reads identically in mock mode
+  and with a real provider. The endpoint runs the **same generation** the async
+  worker does (persist + version snapshot); the **Pro gate is enforced server-side
+  before any generation**; and the **poll-based `/jobs` path remains the fallback**
+  (the web client degrades to it automatically if SSE is blocked or the auth cookie
+  needs a refresh).
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
@@ -582,6 +598,7 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/chat/:sessionId`  | Fetch the refinement conversation                |
 | POST   | `/api/jobs/:sessionId/:stage` | Enqueue async generation of a stage        |
 | GET    | `/api/jobs/:sessionId/:jobId` | Poll a generation job's status + result    |
+| GET    | `/api/stream/:sessionId/:stage` | Stream a stage's generation as SSE narration (owner-scoped) |
 | GET    | `/api/versions/:sessionId` | List a project's version history             |
 | GET    | `/api/versions/:sessionId/:version` | Fetch one version's full snapshot   |
 | POST   | `/api/versions/:sessionId/:version/restore` | Restore the project to a version |

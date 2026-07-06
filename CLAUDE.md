@@ -93,8 +93,8 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
-  `export`, `chat`, `jobs`, `versions`, `diagrams`, `auth`, `billing`,
-  `analytics`, `admin`, `support`, `roles`, `waitlist`).
+  `export`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
+  `billing`, `analytics`, `admin`, `support`, `roles`, `waitlist`).
   Modules export their repository token + service for downstream use.
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
@@ -155,6 +155,31 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   from the API origin) → connected state (`login` + Disconnect) → push with no
   token; a **"use a token instead"** toggle keeps the PAT path. i18n'd
   `stages.scaffold.*` (EN+AR).
+- **Streaming generation (`stream`) — the "narration layer".** A live alternative
+  to the poll-based `/jobs` path for the 5 pipeline stages. `GET /stream/:sessionId/:stage`
+  is a Nest **`@Sse()`** endpoint (owner-guarded by the same `SessionOwnerGuard`,
+  `@Throttle(THROTTLE_AI)`, records the `generate` analytics event). Because
+  artifacts are **structured JSON** and every agent has a **deterministic fallback**
+  (mock mode / a failed model call emit zero tokens), we do **not** stream raw JSON.
+  Instead `StreamService.run()` (async generator → Observable) runs the **same
+  `service.generate()` the worker runs** (real LLM or fallback — persists +
+  `versions.snapshot()`), then streams a human-readable **narration** of the
+  finished artifact via the pure `buildNarration(stage, artifact)` in
+  `@archivato/shared` (`streaming.ts`, runtime-free, unit-tested) — typed out
+  chunk-by-chunk. Deterministic ⇒ reads identically offline and with a real
+  provider. The **Pro gate is asserted first**, inside the generator (before any
+  generation), emitted as an `error` event `code:'upgrade_required'` — a direct
+  SSE connection can't bypass it. Heartbeat `ping` events keep the connection
+  alive through a slow model call. **BullMQ/`/jobs` stays as the fallback.**
+  **Web:** `streamStage()` (`lib/stream.ts`) opens a native `EventSource`
+  (`withCredentials`), folds events with `reduceStreamEvent` into a `StreamView`,
+  and **falls back to `jobsApi.run` if SSE errors before the first event** (covers
+  proxies that block SSE + expired auth cookies EventSource can't refresh).
+  `StreamingConsole` renders the live terminal-style feed (active-step spinner +
+  typed reveal + blinking caret, `motion-reduce`-aware); `dashboard/page.tsx`
+  `generateStage` drives it. Narration text is **server-side English** (per the
+  i18n convention that AI output stays English); only the chrome is i18n'd
+  (`project.stream.live`, EN+AR).
 - **Agents backfill via `normalize()`.** Where an artifact has many optional
   parts (e.g. the reviewer's per-dimension scores/findings), the agent trusts a
   valid LLM response but fills any omitted field deterministically, so the shape

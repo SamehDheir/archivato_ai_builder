@@ -13,7 +13,6 @@ import {
   FileText,
   Flag,
   History,
-  Loader2,
   Lock,
   MessageSquare,
   Network,
@@ -34,11 +33,11 @@ import type {
   ReviewReport,
   SystemDesign,
 } from '@archivato/shared';
-import { PIPELINE_STAGES } from '@archivato/shared';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import { StreamingConsole } from '@/components/project/StreamingConsole';
+import type { StreamView } from '@/lib/stream';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RequirementDocumentView } from '@/components/design/RequirementDocumentView';
 import { RequirementDocumentEditor } from '@/components/design/RequirementDocumentEditor';
@@ -63,7 +62,8 @@ import { ProductVisionPanel } from '@/components/product/ProductVisionPanel';
 import { useConfirm } from '@/components/shared/confirm-dialog';
 import { useUpgrade } from '@/components/billing/upgrade-dialog';
 
-export type ActiveJob = { stage: PipelineStageName; progress: number };
+/** The in-flight streaming generation: which stage + the accumulated console view. */
+export type StreamState = { stage: PipelineStageName; view: StreamView };
 
 /** Tab order + icons (drives the tab bar). Labels come from `project.tab.*`. */
 const TABS: { value: TabKey; icon: LucideIcon }[] = [
@@ -131,7 +131,7 @@ export function ProjectStages({
   review,
   isPro,
   busy,
-  job,
+  stream,
   error,
   versionsReload,
   tab,
@@ -161,7 +161,7 @@ export function ProjectStages({
   /** Whether the owner is on Pro (unlocks API design → review → roadmap → export). */
   isPro: boolean;
   busy: boolean;
-  job: ActiveJob | null;
+  stream: StreamState | null;
   error: string | null;
   versionsReload: number;
   tab: TabKey;
@@ -260,7 +260,9 @@ export function ProjectStages({
           <AlertTitle className="mb-0">{t('confirmed')}</AlertTitle>
         </Alert>
 
-        {job && <JobProgress job={job} />}
+        {stream && (
+          <StreamingConsole stage={stream.stage} view={stream.view} />
+        )}
 
         <Tabs value={tab} onValueChange={(v) => goTo(v as TabKey)}>
           <TabsList className="sticky top-16 z-30 flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto shadow-sm md:flex-wrap md:overflow-visible">
@@ -582,35 +584,6 @@ export function ProjectStages({
         {error && <p className="text-sm text-destructive">{error}</p>}
       </CardContent>
     </Card>
-  );
-}
-
-/** Live progress for the running async generation job (stage + step + sheen). */
-function JobProgress({ job }: { job: ActiveJob }) {
-  const { t } = useTranslation('project');
-  const step = PIPELINE_STAGES.indexOf(job.stage) + 1;
-  const total = PIPELINE_STAGES.length;
-  return (
-    <div
-      className="rounded-md border border-border bg-muted/30 p-3"
-      role="status"
-      aria-live="polite"
-    >
-      <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
-        <span className="flex items-center gap-2 font-medium">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-          {t('generating', { stage: t(`stage.${job.stage}`) })}
-        </span>
-        <span className="text-muted-foreground">
-          {step > 0 ? t('step', { step, total }) : ''}
-          {job.progress}%
-        </span>
-      </div>
-      <Progress
-        value={job.progress}
-        indicatorClassName="bg-[linear-gradient(90deg,hsl(var(--primary))_0%,hsl(var(--primary)_/_0.6)_50%,hsl(var(--primary))_100%)] bg-[length:200%_100%] animate-shimmer"
-      />
-    </div>
   );
 }
 

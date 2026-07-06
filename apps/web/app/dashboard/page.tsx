@@ -19,7 +19,6 @@ import type {
   ApiDesign,
   DatabaseDesign,
   InterviewState,
-  JobStatus,
   Permission,
   PipelineStageName,
   ProjectScale,
@@ -40,7 +39,6 @@ import {
   databaseDesignApi,
   exportApi,
   interviewApi,
-  jobsApi,
   requirementsApi,
   reviewApi,
   systemDesignApi,
@@ -56,7 +54,8 @@ import {
 import { ProgressPanel } from '@/components/interview/ProgressPanel';
 import { ProjectWizard } from '@/components/project/ProjectWizard';
 import { InterviewPanel } from '@/components/interview/InterviewPanel';
-import { ProjectStages, type ActiveJob, type TabKey } from '@/components/project/ProjectStages';
+import { ProjectStages, type StreamState, type TabKey } from '@/components/project/ProjectStages';
+import { streamStage, reduceStreamEvent, emptyStreamView } from '@/lib/stream';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CommandPalette, type CommandGroup } from '@/components/shared/command-palette';
 
@@ -205,8 +204,8 @@ export default function Home() {
   const [apiDesign, setApiDesign] = useState<ApiDesign | null>(null);
   const [review, setReview] = useState<ReviewReport | null>(null);
 
-  // The async generation job currently running (drives the progress bar).
-  const [job, setJob] = useState<ActiveJob | null>(null);
+  // The streaming generation currently running (drives the live console).
+  const [stream, setStream] = useState<StreamState | null>(null);
   // Bumped whenever artifacts change, so Version History reloads its list.
   const [versionsReload, setVersionsReload] = useState(0);
   // The active stage tab (lifted here so the Project Wizard can navigate to it).
@@ -330,10 +329,12 @@ export default function Home() {
     if (!state) return;
     setBusy(true);
     setError(null);
-    setJob({ stage, progress: 0 });
+    setStream({ stage, view: emptyStreamView });
     try {
-      const result = await jobsApi.run<T>(state.sessionId, stage, (s: JobStatus) =>
-        setJob({ stage, progress: s.progress }),
+      const result = await streamStage<T>(state.sessionId, stage, (event) =>
+        setStream((cur) =>
+          cur ? { stage, view: reduceStreamEvent(cur.view, event) } : cur,
+        ),
       );
       setter(result);
       setVersionsReload((k) => k + 1);
@@ -343,16 +344,23 @@ export default function Home() {
         variant: 'success',
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
-      toast({
-        title: t('toast.generateFailed', { stage: t(`stage.${stage}`) }),
-        description: msg,
-        variant: 'error',
-      });
+      // A Pro-gated stage reached without Pro (defense-in-depth) pops the modal;
+      // on upgrade we refresh so the user can re-run the (now unlocked) stage.
+      if (e instanceof ApiError && e.status === 402) {
+        const upgraded = await openUpgrade({ feature: t(`stage.${stage}`) });
+        if (upgraded) void refreshProjects();
+      } else {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(msg);
+        toast({
+          title: t('toast.generateFailed', { stage: t(`stage.${stage}`) }),
+          description: msg,
+          variant: 'error',
+        });
+      }
     } finally {
       setBusy(false);
-      setJob(null);
+      setStream(null);
     }
   }
 
@@ -912,7 +920,7 @@ export default function Home() {
               review={review}
               isPro={sub?.plan === 'pro'}
               busy={busy}
-              job={job}
+              stream={stream}
               error={error}
               versionsReload={versionsReload}
               tab={stageTab}

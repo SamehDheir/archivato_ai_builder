@@ -2,6 +2,9 @@
   "confirmed": "تم تأكيد المتطلبات",
   "generating": "جارٍ توليد {{stage}}…",
   "step": "الخطوة {{step}} من {{total}} · ",
+  "stream": {
+    "live": "مباشر"
+  },
   "stage": {
     "requirements": "مستند المتطلبات",
     "system-design": "تصميم النظام",
