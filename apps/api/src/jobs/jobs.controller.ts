@@ -1,5 +1,7 @@
 import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { AuthUser, JobStatus } from '@archivato/shared';
+import { THROTTLE_AI } from '../common/throttling';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionOwnerGuard } from '../interview/session-owner.guard';
@@ -30,6 +32,7 @@ export class JobsController {
 
   /** Enqueue generation of one stage; returns the initial job status. */
   @Post(':sessionId/:stage')
+  @Throttle(THROTTLE_AI)
   async enqueue(
     @Param('sessionId') sessionId: string,
     @Param('stage') stage: string,

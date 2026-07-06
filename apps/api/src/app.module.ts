@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { validateEnv } from './config/env.validation';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { RolesModule } from './roles/roles.module';
@@ -26,8 +29,15 @@ import { WaitlistModule } from './waitlist/waitlist.module';
 
 @Module({
   imports: [
-    // Load .env once, globally, so every module can read config.
-    ConfigModule.forRoot({ isGlobal: true }),
+    // Load .env once, globally, so every module can read config. `validate`
+    // fails the boot on an insecure production config (e.g. a missing/weak JWT
+    // secret) — see `config/env.validation.ts`.
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    // Global rate limiting (per client IP). A generous default acts as an
+    // app-wide safety net; sensitive routes tighten it via `@Throttle(...)`
+    // presets in `common/throttling.ts`. Behind a proxy, set TRUST_PROXY so the
+    // real client IP (not the proxy's) is the throttle key — see `main.ts`.
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }]),
     // Persistence: PostgreSQL via Prisma (global PrismaService).
     PrismaModule,
     // RBAC: dynamic roles + permission catalog (seeds system roles on boot).
@@ -74,6 +84,11 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     SupportModule,
     // Public marketing waitlist signup (landing page).
     WaitlistModule,
+  ],
+  providers: [
+    // Enforce the throttler on every route (overridable per-route with
+    // `@Throttle`/`@SkipThrottle`).
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

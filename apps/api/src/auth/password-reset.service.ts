@@ -1,5 +1,10 @@
 import { createHash, randomInt } from 'node:crypto';
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { USER_REPOSITORY, type UserRepository } from './user.repository';
 import { PasswordService } from './password.service';
 import { MailService } from './mail.service';
@@ -23,6 +28,8 @@ const MAX_ATTEMPTS = 5;
  */
 @Injectable()
 export class PasswordResetService {
+  private readonly logger = new Logger(PasswordResetService.name);
+
   constructor(
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
     @Inject(PASSWORD_RESET_TOKEN_REPOSITORY)
@@ -45,7 +52,17 @@ export class PasswordResetService {
       codeHash: hashCode(code),
       expiresAt: new Date(Date.now() + OTP_TTL_MS),
     });
-    await this.mail.sendPasswordResetOtp(user.email, code);
+
+    // Best-effort: a mail-provider failure must NOT surface here, or the
+    // resulting 500 (only reachable for accounts that exist) would let an
+    // attacker enumerate registered emails against the always-200 miss path.
+    try {
+      await this.mail.sendPasswordResetOtp(user.email, code);
+    } catch (err) {
+      this.logger.error(
+        `Failed to send password-reset OTP: ${(err as Error).message}`,
+      );
+    }
   }
 
   /** Verify the OTP and set a new password; revokes all existing sessions. */

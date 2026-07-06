@@ -18,8 +18,10 @@ import type {
   SupportTicketFilter,
   SupportTicketList,
 } from '@archivato/shared';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { THROTTLE_AI } from '../common/throttling';
 import { SupportService } from './support.service';
 import { SupportAiService } from './support-ai.service';
 import { KNOWLEDGE_BASE, getKnowledgeArticle } from './support-knowledge-base';
@@ -135,6 +137,7 @@ export class SupportController {
   /** Pre-ticket deflection: analyze the issue and suggest a solution. */
   @Post('ai/deflect')
   @HttpCode(200)
+  @Throttle(THROTTLE_AI)
   deflect(
     @CurrentUser() user: AuthUser,
     @Body() dto: AskAiDto,
@@ -145,6 +148,7 @@ export class SupportController {
   /** In-ticket assistant: summarize, root-cause, and draft a fix + reply. */
   @Post('tickets/:id/ai/analyze')
   @HttpCode(200)
+  @Throttle(THROTTLE_AI)
   analyze(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,

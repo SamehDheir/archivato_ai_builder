@@ -17,10 +17,12 @@ import type {
   SupportTicketDetail,
   SupportTicketList,
 } from '@archivato/shared';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { THROTTLE_AI } from '../common/throttling';
 import { SupportService } from './support.service';
 import { SupportAiService } from './support-ai.service';
 import { parseFilter } from './support.controller';
@@ -100,6 +102,7 @@ export class SupportAdminController {
   @RequirePermissions('support:read_all', 'support:copilot')
   @Post('tickets/:id/ai/copilot')
   @HttpCode(200)
+  @Throttle(THROTTLE_AI)
   copilot(
     @CurrentUser() admin: AuthUser,
     @Param('id') id: string,

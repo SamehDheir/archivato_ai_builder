@@ -11,6 +11,26 @@ async function bootstrap() {
 
   const config = app.get(ConfigService);
 
+  // Behind a reverse proxy / load balancer (prod), trust the forwarding headers
+  // so `req.ip` is the real client IP — the rate limiter keys off it, and
+  // without this every request would share the proxy's IP (one throttle bucket).
+  // Value: `true`/`false`, a hop count, or a subnet. Leave unset locally.
+  const trustProxy = config.get<string>('TRUST_PROXY');
+  if (trustProxy) {
+    const numeric = Number(trustProxy);
+    app
+      .getHttpAdapter()
+      .getInstance()
+      .set(
+        'trust proxy',
+        trustProxy === 'true'
+          ? true
+          : Number.isNaN(numeric)
+            ? trustProxy
+            : numeric,
+      );
+  }
+
   // Parse cookies so the JWT strategy can read the httpOnly access/refresh cookies.
   app.use(cookieParser());
 

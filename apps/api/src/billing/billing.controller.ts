@@ -11,6 +11,7 @@ import {
   type RawBodyRequest,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import {
   PLANS,
@@ -65,6 +66,7 @@ export class BillingController {
    */
   @Post('webhook')
   @HttpCode(200)
+  @SkipThrottle()
   async webhook(
     @Req() req: RawBodyRequest<Request>,
     @Headers('paddle-signature') signature: string | undefined,

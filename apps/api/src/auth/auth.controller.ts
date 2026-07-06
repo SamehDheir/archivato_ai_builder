@@ -11,8 +11,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { AuthUser } from '@archivato/shared';
+import { THROTTLE_AUTH, THROTTLE_EMAIL } from '../common/throttling';
 import { AuthService } from './auth.service';
 import { TokenService } from './token.service';
 import { EmailVerificationService } from './email-verification.service';
@@ -45,6 +47,7 @@ export class AuthController {
   ) {}
 
   @Post('register')
+  @Throttle(THROTTLE_AUTH)
   async register(
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res: Response,
@@ -56,6 +59,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
+  @Throttle(THROTTLE_AUTH)
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
@@ -92,6 +96,7 @@ export class AuthController {
   /** Email a one-time reset code if the account exists. Public, no enumeration. */
   @Post('forgot-password')
   @HttpCode(200)
+  @Throttle(THROTTLE_EMAIL)
   async forgotPassword(
     @Body() dto: ForgotPasswordDto,
   ): Promise<{ success: true }> {
@@ -102,6 +107,7 @@ export class AuthController {
   /** Verify the OTP and set a new password (revokes all sessions). Public. */
   @Post('reset-password')
   @HttpCode(200)
+  @Throttle(THROTTLE_EMAIL)
   async resetPassword(
     @Body() dto: ResetPasswordDto,
   ): Promise<{ success: true }> {
@@ -119,6 +125,7 @@ export class AuthController {
   /** Re-send the verification email to the signed-in user. */
   @Post('resend-verification')
   @HttpCode(200)
+  @Throttle(THROTTLE_EMAIL)
   @UseGuards(JwtAuthGuard)
   async resendVerification(
     @CurrentUser() user: AuthUser,

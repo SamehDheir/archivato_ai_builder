@@ -4,6 +4,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -27,6 +28,8 @@ const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
  */
 @Injectable()
 export class EmailVerificationService {
+  private readonly logger = new Logger(EmailVerificationService.name);
+
   constructor(
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
     @Inject(EMAIL_VERIFICATION_TOKEN_REPOSITORY)
@@ -50,7 +53,17 @@ export class EmailVerificationService {
 
     const base = this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000');
     const verifyUrl = `${base}/verify?token=${raw}`;
-    await this.mail.sendVerificationEmail(user.email, verifyUrl);
+
+    // Best-effort: the token is already persisted, so a transient mail-provider
+    // outage must not fail registration (or an explicit resend). The user can
+    // always trigger a resend; blocking sign-up on the mail API would be worse.
+    try {
+      await this.mail.sendVerificationEmail(user.email, verifyUrl);
+    } catch (err) {
+      this.logger.error(
+        `Failed to send verification email: ${(err as Error).message}`,
+      );
+    }
   }
 
   /** Confirm a token from the emailed link and mark the email verified. */

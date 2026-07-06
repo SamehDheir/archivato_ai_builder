@@ -291,10 +291,15 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 
 ### ✅ Slice 9b — Email verification (+ UI)
 - **Single-use, 24h verification tokens** (only a SHA-256 hash stored) issued on
-  registration and on demand. Three-tier delivery in `MailService`: **real SMTP**
-  (nodemailer) when `SMTP_HOST` is set; an **Ethereal preview** inbox when
-  `MAIL_PREVIEW=true` and no SMTP (actually sends and logs a clickable preview
-  URL — zero setup); otherwise it logs the link to the server console.
+  registration and on demand. `MailService` picks a transport via `MAIL_PROVIDER`
+  or auto-resolves in priority order: **Resend** (HTTP API, recommended for prod —
+  `RESEND_API_KEY`, works where SMTP ports are blocked) → **SMTP** (nodemailer,
+  `SMTP_HOST`) → **Ethereal preview** (`MAIL_PREVIEW=true`, zero-setup dev inbox +
+  logged preview URL) → **console log**. The resolved provider is logged on boot,
+  and `preview`/`log` under `NODE_ENV=production` logs a loud warning (they don't
+  deliver real mail). Verification + reset sends are **best-effort** at the call
+  site, so a transient provider outage never fails sign-up and never lets
+  forgot-password enumerate registered emails.
 - REST API (`/auth/verify-email`, `/auth/resend-verification`).
 - **Frontend**: a `/verify` landing page that confirms the token, plus an
   "unverified" banner with a **Resend** action for signed-in users.
@@ -579,4 +584,10 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 ## Notes
 - All pipeline data is **persisted in PostgreSQL** (Prisma); artifacts survive
   API restarts. The API requires a reachable `DATABASE_URL` to boot.
+- **Production boot is validated.** With `NODE_ENV=production` the API refuses to
+  start on an insecure config — a missing / default / too-short `JWT_ACCESS_SECRET`
+  (generate one with `openssl rand -base64 48`), or `COOKIE_SAMESITE=none` without
+  Secure cookies. See `apps/api/src/config/env.validation.ts`. For a cross-domain
+  deploy (web + API on different hosts) set `COOKIE_SAMESITE=none` and
+  `COOKIE_SECURE=true` (auto-on in production) so the auth cookies are sent.
 - See [`CLAUDE.md`](./CLAUDE.md) for the running log of decisions and phase status.

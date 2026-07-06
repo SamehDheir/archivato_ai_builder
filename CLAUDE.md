@@ -55,6 +55,26 @@ local Postgres) and Redis to 6379; `DATABASE_URL` in `apps/api/.env` must match.
 `main.ts` also sets `rawBody: true` (Paddle webhook HMAC) + a global
 `ValidationPipe`; CORS is locked to `WEB_ORIGIN` with credentials.
 
+**Boot-time env validation.** `ConfigModule.forRoot({ validate })` runs
+`config/env.validation.ts` on startup and **aborts the boot** on an insecure
+config. Checks (most fire only when `NODE_ENV=production`, so dev/tests stay
+zero-config): `JWT_ACCESS_SECRET` must be present, not a known dev default, and
+≥ 32 chars (the signing/verifying code still carries a `dev-insecure-secret`
+fallback for local runs — the guard is what makes that fallback impossible in
+prod, closing the token-forgery hole); and `COOKIE_SAMESITE=none` requires Secure
+cookies (any env). Prod auto-secures cookies (`NODE_ENV==='production'` in
+`auth-cookies.ts`).
+
+**Rate limiting.** `@nestjs/throttler` runs as a **global `APP_GUARD`** (registered
+in `app.module.ts`) with a generous default (**300 req/min per IP**) as an app-wide
+safety net. Sensitive routes tighten it with `@Throttle(...)` using presets from
+`common/throttling.ts`: **auth** login/register (10/min), **email-sending** forgot/
+reset/resend (5/15min), **waitlist** (5/min), and **AI/paid-LLM** routes — support
+`ai/deflect`·`analyze`·`copilot` and `POST /jobs/:sessionId/:stage` (15/min). The
+Paddle **webhook is `@SkipThrottle()`** (Paddle must never be rejected). Throttling
+keys off the client IP, so behind a proxy set **`TRUST_PROXY`** (`main.ts` applies it
+to Express `trust proxy`) or every request shares the proxy's IP / one bucket.
+
 ## Architecture
 
 - **Modular monolith.** Each pipeline stage is its own Nest module
@@ -145,6 +165,18 @@ local Postgres) and Redis to 6379; `DATABASE_URL` in `apps/api/.env` must match.
   (`archivato_access` 15m, `archivato_refresh` 7d). Only token *hashes* stored;
   refresh rotated single-use. Email verify + forgot-password (OTP) + OAuth
   (Google/GitHub, manual code flow). Web client auto-refreshes on 401.
+- **Mail behind a provider switch** (`MailService`, mirrors `LlmProvider`/
+  `BillingProvider`). `MAIL_PROVIDER=resend|smtp|preview|log` forces it, else
+  auto-resolves: `RESEND_API_KEY` → **resend** (HTTP API via native `fetch`, no
+  SDK — recommended for prod, survives blocked SMTP ports) → `SMTP_HOST` → **smtp**
+  → `MAIL_PREVIEW=true` → **preview** (Ethereal) → **log**. `from` = `MAIL_FROM`
+  ?? `SMTP_FROM` (must be a provider-verified domain). Provider is logged on boot;
+  `preview`/`log` under `NODE_ENV=production` warns. **Sends are best-effort at
+  the caller** (`EmailVerificationService.issueAndSend`,
+  `PasswordResetService.request` wrap the send in try/catch): a provider outage
+  must not fail sign-up, and — critically — must not turn forgot-password into an
+  email-enumeration oracle (a throw is only reachable for accounts that exist,
+  vs. the always-200 miss path).
 - **One account per device (anti-spam):** local registration is gated on a
   client-computed browser fingerprint (`apps/web/lib/device-fingerprint.ts`).
   Only its SHA-256 hash is stored (`device_registrations`, unique — race-safe);
