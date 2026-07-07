@@ -59,6 +59,7 @@ model Subscription {
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan                 String    @default("free") // 'free' | 'pro'
   status               String    @default("active") // 'active' | 'canceled' | 'past_due'
+  billingCycle         String    @default("monthly") // 'monthly' | 'annual'
   // Pro billing window; the pro quota counts usage within it. Null for free.
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?

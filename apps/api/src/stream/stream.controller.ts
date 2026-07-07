@@ -13,7 +13,6 @@ import { THROTTLE_AI } from '../common/throttling';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionOwnerGuard } from '../interview/session-owner.guard';
-import { AnalyticsService } from '../analytics/analytics.service';
 import { StreamService } from './stream.service';
 
 /**
@@ -28,10 +27,7 @@ import { StreamService } from './stream.service';
 @UseGuards(JwtAuthGuard, SessionOwnerGuard)
 @Controller('stream')
 export class StreamController {
-  constructor(
-    private readonly stream: StreamService,
-    private readonly analytics: AnalyticsService,
-  ) {}
+  constructor(private readonly stream: StreamService) {}
 
   @Sse(':sessionId/:stage')
   @Throttle(THROTTLE_AI)
@@ -51,12 +47,8 @@ export class StreamController {
       });
     }
 
-    void this.analytics.recordSafe({
-      type: 'generate',
-      userId: user.id,
-      meta: { stage, transport: 'stream' },
-    });
-
+    // The generate analytics event is recorded inside the service, after the Pro
+    // gate passes (so a gated free user doesn't inflate the metric).
     return this.toSse(
       this.stream.run(sessionId, stage as PipelineStageName, user.id),
     );

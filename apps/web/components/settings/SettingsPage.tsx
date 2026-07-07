@@ -322,6 +322,9 @@ function BillingSection() {
                     {t('billing.planLabel', { plan: planName })}
                   </span>
                   {isPro && <Badge variant="primary">{t('billing.proBadge')}</Badge>}
+                  {isPro && sub.billingCycle === 'annual' && (
+                    <Badge variant="secondary">{t('billing.annualBadge')}</Badge>
+                  )}
                   {sub.cancelAtPeriodEnd && (
                     <Badge variant="warning">{t('billing.cancelsBadge')}</Badge>
                   )}

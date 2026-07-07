@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { CheckoutResponse } from '@archivato/shared';
+import type { BillingCycle, CheckoutResponse } from '@archivato/shared';
 import type { BillingProvider, StartCheckoutContext } from './billing.provider';
 import type { Subscription } from './subscription.entity';
 
@@ -24,7 +24,7 @@ export class PaddleBillingProvider implements BillingProvider {
     return {
       status: 'checkout',
       paddle: {
-        priceId: this.config.get<string>('PADDLE_PRICE_ID', ''),
+        priceId: this.priceIdFor(ctx.cycle),
         clientToken: this.config.get<string>('PADDLE_CLIENT_TOKEN', ''),
         environment:
           this.config.get<string>('PADDLE_ENV', 'sandbox') === 'production'
@@ -54,6 +54,19 @@ export class PaddleBillingProvider implements BillingProvider {
     }
     // The subscription.canceled webhook flips our state at the period boundary.
     return { downgradeNow: false };
+  }
+
+  /**
+   * The Paddle price id for a cadence. Annual uses `PADDLE_PRICE_ID_ANNUAL`,
+   * falling back to the monthly `PADDLE_PRICE_ID` if it isn't configured (so a
+   * missing annual price degrades to monthly rather than an empty checkout).
+   */
+  private priceIdFor(cycle: BillingCycle): string {
+    const monthly = this.config.get<string>('PADDLE_PRICE_ID', '');
+    if (cycle === 'annual') {
+      return this.config.get<string>('PADDLE_PRICE_ID_ANNUAL', '') || monthly;
+    }
+    return monthly;
   }
 
   private apiBase(): string {

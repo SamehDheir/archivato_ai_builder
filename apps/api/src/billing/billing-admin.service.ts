@@ -1,9 +1,11 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   PLANS,
+  monthlyEquivalent,
   type BillingAdminData,
   type BillingAdminFilter,
   type BillingAdminSummary,
+  type BillingCycle,
   type BillingEventType,
   type BillingEventView,
   type BillingSubscriptionDetail,
@@ -66,10 +68,13 @@ export class BillingAdminService {
       };
     }
 
-    const [totalUsers, proActive, pastDue, canceling, matching, rows] =
+    const [totalUsers, proActive, annualProActive, pastDue, canceling, matching, rows] =
       await Promise.all([
         this.prisma.user.count(),
         this.prisma.subscription.count({ where: effectiveProWhere }),
+        this.prisma.subscription.count({
+          where: { ...effectiveProWhere, billingCycle: 'annual' },
+        }),
         this.prisma.subscription.count({ where: { status: 'past_due' } }),
         this.prisma.subscription.count({
           where: { ...effectiveProWhere, cancelAtPeriodEnd: true },
@@ -84,7 +89,14 @@ export class BillingAdminService {
         }),
       ]);
 
-    const mrrUsd = proActive * PLANS.pro.priceUsd;
+    // MRR normalizes cadence: an annual Pro contributes annualPrice/12 per month.
+    const monthlyProActive = Math.max(0, proActive - annualProActive);
+    const mrrUsd =
+      Math.round(
+        (monthlyProActive * monthlyEquivalent(PLANS.pro, 'monthly') +
+          annualProActive * monthlyEquivalent(PLANS.pro, 'annual')) *
+          100,
+      ) / 100;
     const summary: BillingAdminSummary = {
       totalUsers,
       proActive,
@@ -159,6 +171,7 @@ export class BillingAdminService {
       userId: string;
       plan: string;
       status: string;
+      billingCycle: string;
       cancelAtPeriodEnd: boolean;
       currentPeriodEnd: Date | null;
       paddleSubscriptionId: string | null;
@@ -180,6 +193,7 @@ export class BillingAdminService {
       status: r.status as SubscriptionStatus,
       cancelAtPeriodEnd: r.cancelAtPeriodEnd,
       periodEnd: r.currentPeriodEnd ? r.currentPeriodEnd.toISOString() : null,
+      billingCycle: (r.billingCycle as BillingCycle) ?? 'monthly',
       paddle: Boolean(r.paddleSubscriptionId),
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),

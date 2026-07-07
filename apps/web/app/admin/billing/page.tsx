@@ -442,6 +442,7 @@ function toRow(d: BillingSubscriptionDetail): BillingSubscriptionRow {
     status: d.status,
     cancelAtPeriodEnd: d.cancelAtPeriodEnd,
     periodEnd: d.periodEnd,
+    billingCycle: d.billingCycle,
     paddle: d.paddle,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,

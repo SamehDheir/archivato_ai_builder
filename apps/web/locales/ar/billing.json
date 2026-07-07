@@ -8,6 +8,15 @@
   "perMonth": "/شهريًا",
   "maybeLater": "ربما لاحقًا",
   "upgradeCta": "الترقية — ${{price}}/شهريًا",
+  "upgradeCtaAnnual": "الترقية — ${{price}}/سنويًا",
+  "cycle": {
+    "label": "دورة الفوترة",
+    "monthly": "شهري",
+    "annual": "سنوي",
+    "save": "وفّر {{pct}}%",
+    "billedAnnually": "تُدفع ${{price}} سنويًا",
+    "annualBadge": "سنوي · وفّر {{pct}}%"
+  },
   "working": "جارٍ التنفيذ…",
   "cancelNote": "يمكنك الإلغاء في أي وقت — وتبقى على Pro حتى نهاية الفترة.",
   "upgradedToast": "تمت الترقية إلى Pro 🎉",

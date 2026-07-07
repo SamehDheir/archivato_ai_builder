@@ -33,14 +33,40 @@ describe('BillingService', () => {
     expect(await service.getProjectQuota(userId)).toBe(1);
   });
 
-  it('upgrades to Pro (mock) → quota becomes 5', async () => {
+  it('upgrades to Pro (mock) → quota becomes 5, monthly cadence by default', async () => {
     const res = await service.startCheckout(userId);
     expect(res.status).toBe('activated');
 
     const view = await service.getView(userId);
     expect(view.plan).toBe('pro');
     expect(view.projectQuota).toBe(5);
+    expect(view.billingCycle).toBe('monthly');
     expect(await service.getProjectQuota(userId)).toBe(5);
+
+    // Monthly period is ~30 days out.
+    const sub = await subs.findByUserId(userId);
+    const days = Math.round(
+      (sub!.currentPeriodEnd!.getTime() - sub!.currentPeriodStart!.getTime()) /
+        (24 * 60 * 60 * 1000),
+    );
+    expect(days).toBe(30);
+  });
+
+  it('upgrades annually → same Pro entitlement, ~365-day period, annual cadence', async () => {
+    const res = await service.startCheckout(userId, 'annual');
+    expect(res.status).toBe('activated');
+
+    const view = await service.getView(userId);
+    expect(view.plan).toBe('pro');
+    expect(view.projectQuota).toBe(5); // same entitlement as monthly
+    expect(view.billingCycle).toBe('annual');
+
+    const sub = await subs.findByUserId(userId);
+    const days = Math.round(
+      (sub!.currentPeriodEnd!.getTime() - sub!.currentPeriodStart!.getTime()) /
+        (24 * 60 * 60 * 1000),
+    );
+    expect(days).toBe(365);
   });
 
   it('cancel (mock) keeps Pro until period end, then flips to Free', async () => {

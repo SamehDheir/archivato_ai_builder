@@ -1,4 +1,8 @@
-import type { BillingProviderId, CheckoutResponse } from '@archivato/shared';
+import type {
+  BillingCycle,
+  BillingProviderId,
+  CheckoutResponse,
+} from '@archivato/shared';
 import type { Subscription } from './subscription.entity';
 
 /** DI token for the active billing provider (mock | paddle). */
@@ -9,6 +13,8 @@ export interface StartCheckoutContext {
   userId: string;
   email: string;
   subscription: Subscription;
+  /** Which cadence the user is buying (selects the price / Paddle price id). */
+  cycle: BillingCycle;
 }
 
 /**

@@ -24,7 +24,12 @@ import {
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
-import { PLANS } from '@archivato/shared';
+import {
+  PLANS,
+  annualSavings,
+  planPriceForCycle,
+  type BillingCycle,
+} from '@archivato/shared';
 import { cn } from '@/lib/utils';
 import { waitlistApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -212,13 +217,18 @@ function WaitlistForm() {
 /** One pricing plan card. */
 function PriceCard({
   plan,
+  cycle,
   featured,
 }: {
   plan: 'free' | 'pro';
+  cycle: BillingCycle;
   featured?: boolean;
 }) {
   const { t } = useTranslation('marketing');
-  const price = PLANS[plan].priceUsd;
+  const info = PLANS[plan];
+  const isPaidAnnual = info.priceUsd > 0 && cycle === 'annual';
+  // Paid plans always show a monthly figure; annual shows the effective /mo.
+  const monthly = isPaidAnnual ? annualSavings(info).perMonthUsd : info.priceUsd;
   const features = t(`pricing.${plan}.features`, {
     returnObjects: true,
   }) as string[];
@@ -240,11 +250,17 @@ function PriceCard({
       </div>
       <div className="mt-3 flex items-baseline gap-1">
         <span className="text-4xl font-bold tracking-tight" dir="ltr">
-          {price === 0 ? t('pricing.freePrice') : `$${price}`}
+          {info.priceUsd === 0 ? t('pricing.freePrice') : `$${monthly}`}
         </span>
-        {price > 0 && (
+        {info.priceUsd > 0 && (
           <span className="text-sm text-muted-foreground">{t('pricing.perMonth')}</span>
         )}
+      </div>
+      <div className="mt-1 h-4 text-xs text-muted-foreground" dir="ltr">
+        {isPaidAnnual &&
+          t('pricing.billedAnnually', {
+            price: planPriceForCycle(info, 'annual'),
+          })}
       </div>
       <p className="mt-2 text-sm text-muted-foreground" dir="auto">
         {t(`pricing.${plan}.tagline`)}
@@ -271,9 +287,55 @@ function PriceCard({
   );
 }
 
+/** Monthly | Annual segmented toggle for the pricing section. */
+function PricingCycleToggle({
+  cycle,
+  onChange,
+}: {
+  cycle: BillingCycle;
+  onChange: (cycle: BillingCycle) => void;
+}) {
+  const { t } = useTranslation('marketing');
+  const savePct = annualSavings(PLANS.pro).savePct;
+  return (
+    <div
+      role="radiogroup"
+      aria-label={t('pricing.cycle.label')}
+      className="inline-grid grid-cols-2 gap-1 rounded-full border border-border bg-muted/40 p-1"
+    >
+      {(['monthly', 'annual'] as const).map((c) => {
+        const active = cycle === c;
+        return (
+          <button
+            key={c}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(c)}
+            className={cn(
+              'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              active
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {t(`pricing.cycle.${c}`)}
+            {c === 'annual' && savePct > 0 && (
+              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                {t('pricing.cycle.save', { pct: savePct })}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function LandingPage() {
   const { t } = useTranslation('marketing');
   const [openFaq, setOpenFaq] = useState<string | null>('q1');
+  const [cycle, setCycle] = useState<BillingCycle>('annual');
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -450,11 +512,14 @@ export function LandingPage() {
             <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
               {t('pricing.body')}
             </p>
+            <div className="mt-6 flex justify-center">
+              <PricingCycleToggle cycle={cycle} onChange={setCycle} />
+            </div>
           </div>
 
-          <div className="mt-12 grid gap-6 sm:grid-cols-2">
-            <PriceCard plan="free" />
-            <PriceCard plan="pro" featured />
+          <div className="mt-10 grid gap-6 sm:grid-cols-2">
+            <PriceCard plan="free" cycle={cycle} />
+            <PriceCard plan="pro" cycle={cycle} featured />
           </div>
         </div>
       </section>

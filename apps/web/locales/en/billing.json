@@ -8,6 +8,15 @@
   "perMonth": "/mo",
   "maybeLater": "Maybe later",
   "upgradeCta": "Upgrade — ${{price}}/mo",
+  "upgradeCtaAnnual": "Upgrade — ${{price}}/yr",
+  "cycle": {
+    "label": "Billing cadence",
+    "monthly": "Monthly",
+    "annual": "Annual",
+    "save": "Save {{pct}}%",
+    "billedAnnually": "billed ${{price}}/yr",
+    "annualBadge": "Annual · save {{pct}}%"
+  },
   "working": "Working…",
   "cancelNote": "Cancel anytime — you keep Pro until the period ends.",
   "upgradedToast": "Upgraded to Pro 🎉",

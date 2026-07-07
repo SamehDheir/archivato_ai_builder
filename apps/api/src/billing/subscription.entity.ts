@@ -1,4 +1,5 @@
 import type {
+  BillingCycle,
   SubscriptionPlan,
   SubscriptionStatus,
 } from '@archivato/shared';
@@ -9,6 +10,8 @@ export interface Subscription {
   userId: string;
   plan: SubscriptionPlan;
   status: SubscriptionStatus;
+  /** Billing cadence (monthly vs annual); defaults to monthly. */
+  billingCycle: BillingCycle;
   currentPeriodStart: Date | null;
   currentPeriodEnd: Date | null;
   cancelAtPeriodEnd: boolean;

@@ -11,6 +11,18 @@ export type SubscriptionPlan = 'free' | 'pro';
 
 export type SubscriptionStatus = 'active' | 'canceled' | 'past_due';
 
+/**
+ * Billing cadence for a paid plan. Orthogonal to the plan tier: annual is the
+ * SAME Pro entitlement (isPro, project quota, freemium gate all key on `plan`) —
+ * it only changes the price, the period length, and the Paddle price id.
+ */
+export type BillingCycle = 'monthly' | 'annual';
+
+export const BILLING_CYCLES: readonly BillingCycle[] = [
+  'monthly',
+  'annual',
+] as const;
+
 /** Which billing backend is active (mirrors the LlmProvider pattern). */
 export type BillingProviderId = 'mock' | 'paddle';
 
@@ -18,14 +30,52 @@ export type BillingProviderId = 'mock' | 'paddle';
 export interface PlanInfo {
   plan: SubscriptionPlan;
   name: string;
-  /** Price in USD (0 for free). */
+  /** Price in USD (0 for free). For paid plans this is the MONTHLY price. */
   priceUsd: number;
+  /**
+   * Total price in USD when billed annually (paid plans only). Cheaper than
+   * `priceUsd × 12`; `undefined` for free. The client shows the savings.
+   */
+  annualPriceUsd?: number;
   /** How many projects the plan allows. */
   projectQuota: number;
   /** `once` = lifetime quota (free); `month` = quota resets each billing cycle. */
   interval: 'once' | 'month';
   /** Short marketing bullets for the pricing UI. */
   features: string[];
+}
+
+/** The price a plan charges for a given cadence (annual falls back to 12× monthly). */
+export function planPriceForCycle(plan: PlanInfo, cycle: BillingCycle): number {
+  if (cycle === 'annual') return plan.annualPriceUsd ?? plan.priceUsd * 12;
+  return plan.priceUsd;
+}
+
+/** Monthly-normalized price for a cadence (annual ÷ 12) — used for MRR + "/mo" copy. */
+export function monthlyEquivalent(plan: PlanInfo, cycle: BillingCycle): number {
+  return cycle === 'annual'
+    ? planPriceForCycle(plan, 'annual') / 12
+    : plan.priceUsd;
+}
+
+/** Annual savings vs paying monthly for a year (amount + rounded percent). */
+export function annualSavings(plan: PlanInfo): {
+  fullUsd: number;
+  annualUsd: number;
+  saveUsd: number;
+  savePct: number;
+  perMonthUsd: number;
+} {
+  const fullUsd = plan.priceUsd * 12;
+  const annualUsd = plan.annualPriceUsd ?? fullUsd;
+  const saveUsd = Math.max(0, fullUsd - annualUsd);
+  return {
+    fullUsd,
+    annualUsd,
+    saveUsd,
+    savePct: fullUsd ? Math.round((saveUsd / fullUsd) * 100) : 0,
+    perMonthUsd: Math.round((annualUsd / 12) * 100) / 100,
+  };
 }
 
 /**
@@ -40,7 +90,14 @@ export interface SubscriptionView {
   /** End of the current pro billing period (ISO), or null for free. */
   periodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  /** The billing cadence in force (monthly vs annual). */
+  billingCycle: BillingCycle;
   provider: BillingProviderId;
+}
+
+/** Body of `POST /billing/checkout` — which cadence to buy (defaults monthly). */
+export interface CheckoutInput {
+  billingCycle?: BillingCycle;
 }
 
 // ── Billing admin console (billing:manage) ───────────────────────────────────
@@ -75,6 +132,8 @@ export interface BillingSubscriptionRow {
   cancelAtPeriodEnd: boolean;
   /** End of the current Pro billing period (ISO), or null. */
   periodEnd: string | null;
+  /** The billing cadence (monthly vs annual). */
+  billingCycle: BillingCycle;
   /** Whether this subscription is backed by a real Paddle subscription. */
   paddle: boolean;
   createdAt: string;
@@ -175,6 +234,7 @@ export const PLANS: Record<SubscriptionPlan, PlanInfo> = {
     plan: 'pro',
     name: 'Pro',
     priceUsd: 19,
+    annualPriceUsd: 182, // 20% off $228 (2+ months free); $15.17/mo effective
     projectQuota: 5,
     interval: 'month',
     features: [

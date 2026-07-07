@@ -5,6 +5,7 @@ import type {
   AdminUsersPage,
   ApiDesign,
   AuthUser,
+  BillingCycle,
   ChangePasswordInput,
   ChatMessage,
   CheckoutResponse,
@@ -514,9 +515,12 @@ export const billingApi = {
   /** The signed-in user's subscription + quota usage. */
   subscription: () => request<SubscriptionView>('/billing'),
 
-  /** Upgrade to Pro (mock activates instantly; Paddle returns checkout params). */
-  checkout: () =>
-    request<CheckoutResponse>('/billing/checkout', { method: 'POST' }),
+  /** Upgrade to Pro at the given cadence (mock activates instantly; Paddle returns checkout params). */
+  checkout: (billingCycle: BillingCycle = 'monthly') =>
+    request<CheckoutResponse>('/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ billingCycle }),
+    }),
 
   /** Cancel Pro. */
   cancel: () => request<SubscriptionView>('/billing/cancel', { method: 'POST' }),

@@ -32,6 +32,7 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
       userId: input.userId,
       plan: input.plan ?? 'free',
       status: input.status ?? 'active',
+      billingCycle: 'monthly',
       currentPeriodStart: null,
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,

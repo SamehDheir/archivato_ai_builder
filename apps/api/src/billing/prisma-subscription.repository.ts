@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  BillingCycle,
   SubscriptionPlan,
   SubscriptionStatus,
 } from '@archivato/shared';
@@ -44,6 +45,7 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
       data: {
         plan: subscription.plan,
         status: subscription.status,
+        billingCycle: subscription.billingCycle,
         currentPeriodStart: subscription.currentPeriodStart,
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
@@ -60,6 +62,7 @@ function toEntity(row: {
   userId: string;
   plan: string;
   status: string;
+  billingCycle: string;
   currentPeriodStart: Date | null;
   currentPeriodEnd: Date | null;
   cancelAtPeriodEnd: boolean;
@@ -73,6 +76,7 @@ function toEntity(row: {
     userId: row.userId,
     plan: row.plan as SubscriptionPlan,
     status: row.status as SubscriptionStatus,
+    billingCycle: row.billingCycle as BillingCycle,
     currentPeriodStart: row.currentPeriodStart,
     currentPeriodEnd: row.currentPeriodEnd,
     cancelAtPeriodEnd: row.cancelAtPeriodEnd,

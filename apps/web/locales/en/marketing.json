@@ -73,6 +73,13 @@
     "perMonth": "/mo",
     "freePrice": "Free",
     "mostPopular": "Most popular",
+    "billedAnnually": "billed ${{price}}/yr",
+    "cycle": {
+      "label": "Billing cadence",
+      "monthly": "Monthly",
+      "annual": "Annual",
+      "save": "Save {{pct}}%"
+    },
     "free": {
       "name": "Free",
       "tagline": "Everything you need to shape a first idea into a real spec.",

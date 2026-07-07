@@ -33,6 +33,7 @@
     "planFree": "Free",
     "planPro": "Pro",
     "proBadge": "Pro",
+    "annualBadge": "Annual",
     "cancelsBadge": "cancels at period end",
     "usage_one": "{{used}} of {{quota}} project used",
     "usage_other": "{{used}} of {{quota}} projects used",

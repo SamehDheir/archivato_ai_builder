@@ -11,6 +11,7 @@ import { ApiDesignService } from '../api-design/api-design.service';
 import { ReviewService } from '../review/review.service';
 import { VersionsService } from '../versions/versions.service';
 import { BillingService } from '../billing/billing.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 /**
  * Stages that require an active Pro plan — mirrors `JobsController.PRO_STAGES`.
@@ -57,6 +58,7 @@ export class StreamService {
     private readonly review: ReviewService,
     private readonly versions: VersionsService,
     private readonly billing: BillingService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   async *run(
@@ -77,6 +79,15 @@ export class StreamService {
         return;
       }
     }
+
+    // Record the generate event only once the gate has passed — a gated free
+    // user that never generates must not inflate the metric (mirrors JobsController,
+    // which records after assertPro).
+    void this.analytics.recordSafe({
+      type: 'generate',
+      userId,
+      meta: { stage, transport: 'stream' },
+    });
 
     // 2. "Working" step: the model call happens here; heartbeats keep the SSE
     //    connection alive through a long generation.

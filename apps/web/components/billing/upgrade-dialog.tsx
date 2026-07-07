@@ -25,10 +25,11 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { PLANS } from '@archivato/shared';
+import { PLANS, annualSavings, type BillingCycle } from '@archivato/shared';
 import { billingApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/shared/toast';
+import { cn } from '@/lib/utils';
 
 export interface UpgradeOptions {
   /**
@@ -117,7 +118,10 @@ function UpgradeModal({
   const toast = useToast();
   const { t } = useTranslation('billing');
   const pro = PLANS.pro;
+  const save = annualSavings(pro);
+  const [cycle, setCycle] = useState<BillingCycle>('annual');
   const [busy, setBusy] = useState(false);
+  const perMonth = cycle === 'annual' ? save.perMonthUsd : pro.priceUsd;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -130,7 +134,7 @@ function UpgradeModal({
   async function upgrade() {
     setBusy(true);
     try {
-      const res = await billingApi.checkout();
+      const res = await billingApi.checkout(cycle);
       if (res.status === 'activated') {
         toast({ title: t('upgradedToast'), variant: 'success' });
         onSettle(true);
@@ -199,11 +203,16 @@ function UpgradeModal({
             <h2 id="upgrade-title" className="text-lg font-semibold leading-tight">
               {feature ? t('upgradeTo', { feature }) : t('unlock')}
             </h2>
-            <div className="shrink-0 text-end leading-none">
-              <span className="text-2xl font-bold">${pro.priceUsd}</span>
+            <div className="shrink-0 text-end leading-none" dir="ltr">
+              <span className="text-2xl font-bold">${perMonth}</span>
               <span className="text-sm text-muted-foreground">
                 {t('perMonth')}
               </span>
+              {cycle === 'annual' && (
+                <div className="mt-1 text-[11px] font-normal text-muted-foreground">
+                  {t('cycle.billedAnnually', { price: save.annualUsd })}
+                </div>
+              )}
             </div>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -239,8 +248,9 @@ function UpgradeModal({
           })}
         </ul>
 
-        {/* Pinned footer — actions always reachable */}
+        {/* Pinned footer — cadence toggle + actions always reachable */}
         <div className="shrink-0 space-y-3 border-t border-border bg-card p-4">
+          <CycleToggle cycle={cycle} onChange={setCycle} savePct={save.savePct} disabled={busy} />
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               variant="secondary"
@@ -259,7 +269,11 @@ function UpgradeModal({
               ) : (
                 <Zap className="h-4 w-4" />
               )}
-              {busy ? t('working') : t('upgradeCta', { price: pro.priceUsd })}
+              {busy
+                ? t('working')
+                : cycle === 'annual'
+                  ? t('upgradeCtaAnnual', { price: save.annualUsd })
+                  : t('upgradeCta', { price: pro.priceUsd })}
             </Button>
           </div>
           <p className="text-center text-[11px] text-muted-foreground">
@@ -267,6 +281,55 @@ function UpgradeModal({
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Segmented Monthly | Annual selector with a savings pill on the annual side. */
+function CycleToggle({
+  cycle,
+  onChange,
+  savePct,
+  disabled,
+}: {
+  cycle: BillingCycle;
+  onChange: (cycle: BillingCycle) => void;
+  savePct: number;
+  disabled?: boolean;
+}) {
+  const { t } = useTranslation('billing');
+  return (
+    <div
+      role="radiogroup"
+      aria-label={t('cycle.label')}
+      className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1"
+    >
+      {(['monthly', 'annual'] as const).map((c) => {
+        const active = cycle === c;
+        return (
+          <button
+            key={c}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onChange(c)}
+            className={cn(
+              'flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60',
+              active
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {t(`cycle.${c}`)}
+            {c === 'annual' && savePct > 0 && (
+              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                {t('cycle.save', { pct: savePct })}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

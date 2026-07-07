@@ -559,6 +559,21 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   (the web client degrades to it automatically if SSE is blocked or the auth cookie
   needs a refresh).
 
+### ✅ Slice — Annual Pro plan (annual billing option)
+- Pro can now be billed **annually — $182/yr (20% off $228, ~$15.17/mo)** alongside
+  the $19/mo option. Annual is modeled as a **billing cadence, not a new tier**: an
+  orthogonal `billingCycle` (`monthly` | `annual`) changes only the price, the
+  period length, and the Paddle price id — the Pro entitlement (5-project quota, the
+  freemium unlock) is byte-for-byte identical, so none of the `plan === 'pro'` logic
+  changed.
+- Cadence is chosen at **checkout** (`POST /api/billing/checkout` now takes an
+  optional `{ billingCycle }`); switching cadence is just a fresh checkout / new
+  period (mock applies it instantly with a 365-day period; Paddle handles proration
+  as Merchant-of-Record via `PADDLE_PRICE_ID_ANNUAL`). The **in-app upgrade modal**
+  and the **landing pricing** both get a Monthly/Annual toggle with the savings
+  badge; **settings** shows an "Annual" badge; and the billing-admin **MRR
+  normalizes** annual subscriptions to their monthly-equivalent revenue.
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
@@ -605,7 +620,7 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/diagrams/:sessionId` | Architecture diagrams (Mermaid source per kind) |
 | GET    | `/api/billing/plans`       | Public plan catalogue (Free / Pro)           |
 | GET    | `/api/billing`             | Current subscription + project-quota usage   |
-| POST   | `/api/billing/checkout`    | Upgrade to Pro (mock activates; Paddle checkout) |
+| POST   | `/api/billing/checkout`    | Upgrade to Pro at `{billingCycle}` monthly/annual (mock activates; Paddle checkout) |
 | POST   | `/api/billing/cancel`      | Cancel Pro                                   |
 | POST   | `/api/billing/webhook`     | Paddle webhook (HMAC-verified; no auth)      |
 | GET    | `/api/export/:sessionId/json`| Full artifact bundle (JSON)                 |

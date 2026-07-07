@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   PLANS,
+  type BillingCycle,
   type CheckoutResponse,
   type SubscriptionPlan,
   type SubscriptionView,
@@ -25,8 +26,11 @@ import {
 import { BILLING_PROVIDER, type BillingProvider } from './billing.provider';
 import type { Subscription } from './subscription.entity';
 
-/** Mock Pro period length (Paddle supplies real dates via webhook). */
-const PRO_PERIOD_DAYS = 30;
+/** Mock Pro period length per cadence (Paddle supplies real dates via webhook). */
+const PRO_PERIOD_DAYS: Record<BillingCycle, number> = {
+  monthly: 30,
+  annual: 365,
+};
 
 /** Minimal shape of a Paddle webhook event we care about. */
 interface PaddleEvent {
@@ -117,26 +121,44 @@ export class BillingService {
       periodEnd:
         plan === 'pro' ? (sub.currentPeriodEnd?.toISOString() ?? null) : null,
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      billingCycle: sub.billingCycle,
       provider: this.provider.id,
     };
   }
 
-  /** Start (or, in mock mode, immediately apply) an upgrade to Pro. */
-  async startCheckout(userId: string): Promise<CheckoutResponse> {
-    const sub = await this.getOrCreate(userId);
+  /**
+   * Start (or, in mock mode, immediately apply) an upgrade to Pro. The chosen
+   * cadence is persisted first (so the Paddle checkout label + eventual mock
+   * activation both reflect it) and drives the mock period length.
+   */
+  async startCheckout(
+    userId: string,
+    cycle: BillingCycle = 'monthly',
+  ): Promise<CheckoutResponse> {
+    let sub = await this.getOrCreate(userId);
     const user = await this.users.findById(userId);
     if (!user) throw new UnauthorizedException();
+
+    // Persist the chosen cadence up front so the Paddle activation webhook (which
+    // doesn't carry the cadence) preserves it and its period-length fallback is
+    // right. This means a Free user mid-Paddle-checkout briefly reads as their
+    // *pending* cadence; entitlement (isPro/quota) is unaffected. The mock/default
+    // path activates immediately, so there's no such window there.
+    if (sub.billingCycle !== cycle) {
+      sub = await this.subs.save({ ...sub, billingCycle: cycle });
+    }
 
     const response = await this.provider.startProCheckout({
       userId,
       email: user.email,
       subscription: sub,
+      cycle,
     });
     if (response.status === 'activated') {
       const now = new Date();
       await this.applyProState(sub, {
         periodStart: now,
-        periodEnd: addDays(now, PRO_PERIOD_DAYS),
+        periodEnd: addDays(now, PRO_PERIOD_DAYS[cycle]),
       });
       this.record(userId, 'checkout', userId);
     }
@@ -236,7 +258,7 @@ export class BillingService {
         : now;
       const end = data.current_billing_period?.ends_at
         ? new Date(data.current_billing_period.ends_at)
-        : addDays(now, PRO_PERIOD_DAYS);
+        : addDays(now, PRO_PERIOD_DAYS[sub.billingCycle]);
       await this.applyProState(sub, {
         periodStart: start,
         periodEnd: end,

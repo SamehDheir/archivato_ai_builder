@@ -33,6 +33,7 @@
     "planFree": "مجانية",
     "planPro": "احترافية",
     "proBadge": "احترافي",
+    "annualBadge": "سنوي",
     "cancelsBadge": "يُلغى في نهاية الفترة",
     "usage_zero": "{{used}} من {{quota}} مشروع مستخدم",
     "usage_one": "{{used}} من {{quota}} مشروع مستخدم",

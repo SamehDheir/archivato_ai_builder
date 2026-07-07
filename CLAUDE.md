@@ -189,7 +189,19 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   impl (used by unit tests, DB-free) + Prisma impl. Feature modules provide the
   Prisma repo.
 - **Billing / project quota.** Capacity is a **max-projects-owned** count (dollars
-  are plan prices): **Free = 1 project**, **Pro = $19/mo → 5 projects**. Enforced
+  are plan prices): **Free = 1 project**, **Pro → 5 projects** (**$19/mo** or
+  **$182/yr — 20% off**). **Annual is a cadence, not a tier:** an orthogonal
+  `billingCycle: 'monthly' | 'annual'` on the subscription changes only the price,
+  the period length (mock: +30d vs +365d; Paddle supplies real dates), and the
+  Paddle price id (`PADDLE_PRICE_ID_ANNUAL`, falls back to the monthly id). Nothing
+  keyed on `plan` changes — `isPro`/quota/`effectivePlan`/the freemium gate are
+  identical for annual. Cadence is chosen at **checkout** (`POST /billing/checkout`
+  body `{billingCycle}`, `CheckoutDto`); switching = a fresh checkout/new period
+  (mock immediate; Paddle prorates as MoR). `annualSavings()`/`monthlyEquivalent()`
+  in `@archivato/shared` are pure helpers; **admin MRR normalizes annual** to
+  `annualPrice/12`. Web: monthly/annual toggle in the **UpgradeModal** (default
+  annual) + **landing pricing**, cadence badge in **settings** (i18n `billing.cycle.*`
+  / `pricing.cycle.*`, EN+AR). Enforced
   at **project creation** (`InterviewService.start`: `repo.countByUserId` vs
   `BillingService.getProjectQuota` → **402** when at the limit). To start another
   at the cap you **delete** a project (`DELETE /interview/:id`, owner-guarded,

@@ -73,6 +73,13 @@
     "perMonth": "/شهر",
     "freePrice": "مجاناً",
     "mostPopular": "الأكثر شيوعاً",
+    "billedAnnually": "تُدفع ${{price}} سنوياً",
+    "cycle": {
+      "label": "دورة الفوترة",
+      "monthly": "شهري",
+      "annual": "سنوي",
+      "save": "وفّر {{pct}}%"
+    },
     "free": {
       "name": "مجاني",
       "tagline": "كل ما تحتاجه لتحويل فكرة أولى إلى مواصفات حقيقية.",

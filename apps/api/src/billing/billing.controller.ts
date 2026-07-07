@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Headers,
@@ -23,6 +24,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { BillingService } from './billing.service';
+import { CheckoutDto } from './checkout.dto';
 
 @Controller('billing')
 export class BillingController {
@@ -48,8 +50,11 @@ export class BillingController {
   @Post('checkout')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
-  checkout(@CurrentUser() user: AuthUser): Promise<CheckoutResponse> {
-    return this.billing.startCheckout(user.id);
+  checkout(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CheckoutDto,
+  ): Promise<CheckoutResponse> {
+    return this.billing.startCheckout(user.id, dto.billingCycle ?? 'monthly');
   }
 
   /** Cancel Pro (immediate in mock; effective at period end via Paddle). */
