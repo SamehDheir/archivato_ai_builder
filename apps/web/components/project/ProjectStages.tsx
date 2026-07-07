@@ -11,12 +11,14 @@ import {
   Database as DatabaseIcon,
   Download,
   FileText,
+  FlaskConical,
   Flag,
   History,
   Lock,
   MessageSquare,
   Network,
   Shapes,
+  ShieldAlert,
   Sparkles,
   Webhook,
   Workflow,
@@ -50,6 +52,8 @@ import { ApiDesignEditor } from '@/components/design/ApiDesignEditor';
 import { ReviewView } from '@/components/review/ReviewView';
 import { RoadmapPanel } from '@/components/roadmap/RoadmapPanel';
 import { CostEstimatePanel } from '@/components/cost/CostEstimatePanel';
+import { ThreatModelPanel } from '@/components/security/ThreatModelPanel';
+import { QaPlanPanel } from '@/components/qa/QaPlanPanel';
 import { ExportView } from '@/components/project/ExportView';
 import { OpenApiView } from '@/components/design/OpenApiView';
 import { ChatPanel } from '@/components/project/ChatPanel';
@@ -77,6 +81,8 @@ const TABS: { value: TabKey; icon: LucideIcon }[] = [
   { value: 'review', icon: ClipboardCheck },
   { value: 'roadmap', icon: Flag },
   { value: 'cost', icon: Coins },
+  { value: 'threat', icon: ShieldAlert },
+  { value: 'qa', icon: FlaskConical },
   { value: 'export', icon: Download },
   { value: 'apidocs', icon: BookOpen },
   { value: 'refine', icon: MessageSquare },
@@ -94,6 +100,8 @@ export type TabKey =
   | 'review'
   | 'roadmap'
   | 'cost'
+  | 'threat'
+  | 'qa'
   | 'export'
   | 'apidocs'
   | 'refine'
@@ -111,6 +119,8 @@ const PRO_TABS = new Set<TabKey>([
   'review',
   'roadmap',
   'cost',
+  'threat',
+  'qa',
   'export',
   'apidocs',
   'refine',
@@ -222,6 +232,8 @@ export function ProjectStages({
     review: !!apiDesign,
     roadmap: !!apiDesign,
     cost: !!apiDesign,
+    threat: !!apiDesign,
+    qa: !!apiDesign,
     export: !!apiDesign,
     apidocs: !!apiDesign,
     refine: !!apiDesign,
@@ -554,6 +566,16 @@ export function ProjectStages({
           {/* Cost Estimator (standalone, gated on the full pipeline) */}
           <TabsContent value="cost" className="mt-4">
             <CostEstimatePanel sessionId={sessionId} reloadKey={versionsReload} />
+          </TabsContent>
+
+          {/* Threat Model (standalone STRIDE analysis, gated on the full pipeline) */}
+          <TabsContent value="threat" className="mt-4">
+            <ThreatModelPanel sessionId={sessionId} reloadKey={versionsReload} />
+          </TabsContent>
+
+          {/* Test / QA Plan (standalone, gated on the full pipeline) */}
+          <TabsContent value="qa" className="mt-4">
+            <QaPlanPanel sessionId={sessionId} reloadKey={versionsReload} />
           </TabsContent>
 
           {/* Export */}

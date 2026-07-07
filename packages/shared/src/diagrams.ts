@@ -31,8 +31,34 @@ export interface Diagram {
   note?: string;
 }
 
+/**
+ * A single user/request flow rendered as its own sequence diagram. Unlike the
+ * generic `sequence` {@link Diagram} (one representative happy path), flows are
+ * generated **per API endpoint** so every meaningful interaction has its own
+ * diagram, grouped by module. Deterministic (no LLM), built from the API +
+ * system design.
+ */
+export interface SequenceFlow {
+  /** Stable id (module + method + path), safe to use as a React key. */
+  id: string;
+  /** The owning module name, used to group flows in the picker. */
+  group: string;
+  /** Human label, e.g. "POST /api/billing — create invoice". */
+  title: string;
+  method: string;
+  path: string;
+  /** Mermaid `sequenceDiagram` source. */
+  mermaid: string;
+}
+
 export interface ProjectDiagrams {
   sessionId: string;
   generatedAt: string;
   diagrams: Diagram[];
+  /**
+   * Per-flow sequence diagrams (one per endpoint). Empty until the API design
+   * exists; the generic `sequence` diagram in {@link diagrams} stays as an
+   * overview.
+   */
+  flows: SequenceFlow[];
 }

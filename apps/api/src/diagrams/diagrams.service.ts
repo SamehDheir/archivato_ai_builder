@@ -1,5 +1,9 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { buildAllDiagrams, type ProjectDiagrams } from '@archivato/shared';
+import {
+  buildAllDiagrams,
+  buildSequenceFlows,
+  type ProjectDiagrams,
+} from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -51,6 +55,7 @@ export class DiagramsService {
       sessionId,
       generatedAt: new Date().toISOString(),
       diagrams: buildAllDiagrams({ systemDesign, databaseDesign, apiDesign }),
+      flows: buildSequenceFlows(apiDesign, systemDesign),
     };
   }
 }

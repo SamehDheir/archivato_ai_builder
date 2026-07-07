@@ -18,6 +18,8 @@ import { ReviewModule } from './review/review.module';
 import { ProductVisionModule } from './product-vision/product-vision.module';
 import { RoadmapModule } from './roadmap/roadmap.module';
 import { CostEstimateModule } from './cost-estimate/cost-estimate.module';
+import { ThreatModelModule } from './threat-model/threat-model.module';
+import { QaPlanModule } from './qa-plan/qa-plan.module';
 import { ExportModule } from './export/export.module';
 import { ScaffoldModule } from './scaffold/scaffold.module';
 import { ChatModule } from './chat/chat.module';
@@ -71,6 +73,10 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     RoadmapModule,
     // Cost Estimator stage: standalone deterministic per-provider monthly cost.
     CostEstimateModule,
+    // Threat Modeler stage: standalone STRIDE security threat model (Pro).
+    ThreatModelModule,
+    // QA Planner stage: standalone test/QA plan (Pro).
+    QaPlanModule,
     // Slice 8: Export (JSON / Markdown / OpenAPI / GitHub structure).
     ExportModule,
     // Code scaffolding: runnable NestJS + Prisma backend (ZIP + push to GitHub).

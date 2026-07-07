@@ -684,6 +684,8 @@ export default function Home() {
     review: !!apiDesign,
     roadmap: !!apiDesign,
     cost: !!apiDesign,
+    threat: !!apiDesign,
+    qa: !!apiDesign,
     export: !!apiDesign,
     apidocs: !!apiDesign,
     refine: !!apiDesign,

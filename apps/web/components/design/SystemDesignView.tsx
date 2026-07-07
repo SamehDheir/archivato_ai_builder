@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Boxes, Layers, Network } from 'lucide-react';
-import type { SystemDesign } from '@archivato/shared';
+import type { DecisionRef, SystemDesign } from '@archivato/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -16,9 +17,15 @@ import {
 import { ArtifactDownload } from '@/components/shared/ArtifactDownload';
 import { systemDesignToMarkdown } from '@/lib/artifact-markdown';
 import { Section } from '@/components/design/RequirementDocumentView';
+import {
+  DecisionExplainModal,
+  ExplainButton,
+} from '@/components/design/ExplainDecision';
 
 export function SystemDesignView({ design }: { design: SystemDesign }) {
   const { t } = useTranslation('stages');
+  // The decision the "Explain" modal is currently showing (null = closed).
+  const [explaining, setExplaining] = useState<DecisionRef | null>(null);
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -47,11 +54,16 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
       </div>
 
       <Section title={t('system.architecture')} icon={Network} tone="blue">
-        <Badge variant="primary">
-          {t(`system.arch.${design.architecture}`, {
-            defaultValue: design.architecture,
-          })}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="primary">
+            {t(`system.arch.${design.architecture}`, {
+              defaultValue: design.architecture,
+            })}
+          </Badge>
+          <ExplainButton
+            onClick={() => setExplaining({ kind: 'architecture', key: '' })}
+          />
+        </div>
         <p className="mt-1.5 text-sm text-muted-foreground" dir="auto">
           {design.architectureRationale}
         </p>
@@ -64,15 +76,23 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
               <TableHead className="w-32">{t('system.col.layer')}</TableHead>
               <TableHead>{t('system.col.technology')}</TableHead>
               <TableHead>{t('system.col.why')}</TableHead>
+              <TableHead className="w-24" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {design.techStack.map((t) => (
-              <TableRow key={t.layer + t.technology}>
-                <TableCell className="font-mono text-xs">{t.layer}</TableCell>
-                <TableCell className="font-medium">{t.technology}</TableCell>
+            {design.techStack.map((tech) => (
+              <TableRow key={tech.layer + tech.technology}>
+                <TableCell className="font-mono text-xs">{tech.layer}</TableCell>
+                <TableCell className="font-medium">{tech.technology}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {t.rationale}
+                  {tech.rationale}
+                </TableCell>
+                <TableCell className="text-end">
+                  <ExplainButton
+                    onClick={() =>
+                      setExplaining({ kind: 'tech', key: tech.layer })
+                    }
+                  />
                 </TableCell>
               </TableRow>
             ))}
@@ -85,7 +105,14 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
           {design.services.map((s) => (
             <Card key={s.name} className="border-l-2 border-l-emerald-500/60">
               <CardContent className="p-4">
-                <div className="font-semibold" dir="auto">{s.name}</div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold" dir="auto">{s.name}</div>
+                  <ExplainButton
+                    onClick={() =>
+                      setExplaining({ kind: 'service', key: s.name })
+                    }
+                  />
+                </div>
                 <p className="mt-1 text-sm text-muted-foreground" dir="auto">
                   {s.responsibility}
                 </p>
@@ -104,6 +131,14 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
           ))}
         </div>
       </Section>
+
+      {explaining && (
+        <DecisionExplainModal
+          sessionId={design.sessionId}
+          decision={explaining}
+          onClose={() => setExplaining(null)}
+        />
+      )}
     </div>
   );
 }

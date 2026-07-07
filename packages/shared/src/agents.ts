@@ -19,6 +19,12 @@ export enum AgentRole {
   Refiner = 'refiner',
   /** Customer Support Assistant: deflection, in-ticket analysis, admin copilot. */
   SupportAssistant = 'support_assistant',
+  /** Explains a single architecture decision on demand (rationale/tradeoffs). */
+  ArchitectExplainer = 'architect_explainer',
+  /** STRIDE security threat model of the generated design. */
+  ThreatModeler = 'threat_modeler',
+  /** Structured test / QA plan derived from the generated design. */
+  QaPlanner = 'qa_planner',
 }
 
 /** A single turn in an LLM conversation. */

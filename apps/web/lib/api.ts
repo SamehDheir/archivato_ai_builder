@@ -10,6 +10,8 @@ import type {
   ChatMessage,
   CheckoutResponse,
   DatabaseDesign,
+  DecisionExplanation,
+  DecisionRef,
   ExportBundle,
   InterviewState,
   JobStatus,
@@ -37,6 +39,8 @@ import type {
   UpdateProfileInput,
   ReviewReport,
   SystemDesign,
+  ThreatModel,
+  QaPlan,
   CreateRoleInput,
   RoleView,
   UpdateRoleInput,
@@ -225,6 +229,12 @@ export const systemDesignApi = {
       method: 'PUT',
       body: JSON.stringify(design),
     }),
+
+  explain: (sessionId: string, ref: DecisionRef) =>
+    request<DecisionExplanation>(`/system-design/${sessionId}/explain`, {
+      method: 'POST',
+      body: JSON.stringify(ref),
+    }),
 };
 
 export const databaseDesignApi = {
@@ -284,6 +294,24 @@ export const roadmapApi = {
     }),
 
   get: (sessionId: string) => request<ProjectRoadmap>(`/roadmap/${sessionId}`),
+};
+
+export const threatModelApi = {
+  generate: (sessionId: string) =>
+    request<ThreatModel>(`/threat-model/${sessionId}/generate`, {
+      method: 'POST',
+    }),
+
+  get: (sessionId: string) => request<ThreatModel>(`/threat-model/${sessionId}`),
+};
+
+export const qaPlanApi = {
+  generate: (sessionId: string) =>
+    request<QaPlan>(`/qa-plan/${sessionId}/generate`, {
+      method: 'POST',
+    }),
+
+  get: (sessionId: string) => request<QaPlan>(`/qa-plan/${sessionId}`),
 };
 
 export const costEstimateApi = {

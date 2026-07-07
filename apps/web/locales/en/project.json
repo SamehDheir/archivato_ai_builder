@@ -23,6 +23,8 @@
     "review": "Review",
     "roadmap": "Roadmap",
     "cost": "Cost",
+    "threat": "Security",
+    "qa": "QA Plan",
     "export": "Export",
     "apidocs": "API Docs",
     "refine": "Refine",

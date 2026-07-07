@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lock } from "lucide-react";
-import type { Diagram, ProjectDiagrams } from "@archivato/shared";
+import type { Diagram, ProjectDiagrams, SequenceFlow } from "@archivato/shared";
 import { diagramsApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -31,6 +33,7 @@ export function DiagramsView({
   const { t } = useTranslation("stages");
   const [data, setData] = useState<ProjectDiagrams | null>(null);
   const [kind, setKind] = useState<string | null>(null);
+  const [flowId, setFlowId] = useState<string>("overview");
   const [error, setError] = useState<string | null>(null);
   const [showSource, setShowSource] = useState(false);
 
@@ -66,6 +69,15 @@ export function DiagramsView({
   const active: Diagram | undefined =
     data.diagrams.find((d) => d.kind === kind) ?? data.diagrams[0];
 
+  const flows: SequenceFlow[] = data.flows ?? [];
+  const showFlows = active?.kind === "sequence" && flows.length > 0;
+  const activeFlow = showFlows
+    ? flows.find((f) => f.id === flowId)
+    : undefined;
+  // On the sequence tab, "overview" keeps the generic happy-path diagram; any
+  // other selection renders that endpoint's dedicated flow.
+  const renderMermaid = activeFlow ? activeFlow.mermaid : active?.mermaid ?? "";
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -89,7 +101,10 @@ export function DiagramsView({
             ))}
           </SelectContent>
         </Select>
-        {active?.mermaid && (
+
+        {showFlows && <FlowPicker flows={flows} value={flowId} onChange={setFlowId} />}
+
+        {renderMermaid && (
           <>
             <Button
               variant="secondary"
@@ -101,7 +116,7 @@ export function DiagramsView({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => navigator.clipboard?.writeText(active.mermaid)}
+              onClick={() => navigator.clipboard?.writeText(renderMermaid)}
             >
               {t("diagrams.copyMermaid")}
             </Button>
@@ -109,20 +124,75 @@ export function DiagramsView({
         )}
       </div>
 
+      {showFlows && (
+        <p className="text-xs text-muted-foreground" dir="auto">
+          {t("diagrams.flowsHint")}
+        </p>
+      )}
+
       {active && !active.mermaid && (
         <p className="text-sm text-muted-foreground" dir="auto">
           {active.note}
         </p>
       )}
 
-      {active?.mermaid &&
+      {renderMermaid &&
         (showSource ? (
-          <pre className="max-h-[28rem] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs">
-            {active.mermaid}
+          <pre
+            dir="ltr"
+            className="max-h-[28rem] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs"
+          >
+            {renderMermaid}
           </pre>
         ) : (
-          <MermaidView code={active.mermaid} />
+          <MermaidView code={renderMermaid} />
         ))}
     </div>
+  );
+}
+
+/** The per-flow sub-picker shown when the Sequence diagram is active. */
+function FlowPicker({
+  flows,
+  value,
+  onChange,
+}: {
+  flows: SequenceFlow[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const { t } = useTranslation("stages");
+  // Group flows by their owning module for a scannable dropdown.
+  const groups = useMemo(() => {
+    const map = new Map<string, SequenceFlow[]>();
+    for (const f of flows) {
+      const list = map.get(f.group) ?? [];
+      list.push(f);
+      map.set(f.group, list);
+    }
+    return Array.from(map.entries());
+  }, [flows]);
+
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-72">
+        <SelectValue placeholder={t("diagrams.chooseFlow")} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="overview">{t("diagrams.overview")}</SelectItem>
+        {groups.map(([group, items]) => (
+          <SelectGroup key={group}>
+            <SelectLabel dir="auto">{group}</SelectLabel>
+            {items.map((f) => (
+              <SelectItem key={f.id} value={f.id}>
+                <span dir="auto" className="font-mono text-xs">
+                  {f.method} {f.path}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

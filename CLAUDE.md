@@ -93,7 +93,7 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
-  `export`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
+  `threat-model`, `qa-plan`, `export`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
   `billing`, `analytics`, `admin`, `support`, `notifications`, `roles`,
   `waitlist`).
   Modules export their repository token + service for downstream use.
@@ -113,6 +113,33 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   best-value recommendation. Stable across runs (unit-testable, offline). The
   service only reads system/database/API designs; the estimate is a labeled
   planning figure, not a quote.
+- **Threat model (`threat-model`).** A standalone **Pro** stage: a **STRIDE**
+  security analysis of the generated design (Spoofing/Tampering/Repudiation/Info
+  Disclosure/DoS/Elevation of Privilege), each threat with a component, severity,
+  and mitigation, plus trust boundaries + assumptions. **LLM + deterministic
+  fallback** (`ThreatModelerAgent`, like `reviewer`): the fallback derives threats
+  from design signals (auth+rate-limit, permission-less roles → broken access
+  control, `:id` routes → IDOR, sensitive entities without encryption, missing
+  queue/cache) and guarantees every STRIDE category is represented (the LLM path's
+  `normalize()` backfills any skipped category). Full-pipeline gate (409 until the
+  API design exists), owner-guarded + `ProGuard` + `THROTTLE_AI`, own
+  `threat_models` table — **not** in version snapshots (like roadmap/cost).
+  Mirrors the `roadmap` module structure. Web: a **Security** tab
+  (`ThreatModelPanel`/`ThreatModelView`) grouping threats by STRIDE category with a
+  severity tally; i18n `stages.threat.*` + `project.tab.threat` (EN+AR). Shared:
+  `threat-model.ts` (`STRIDE_CATEGORIES`, reuses `Severity` from `review`).
+- **Test/QA plan (`qa-plan`).** A standalone **Pro** stage: a structured testing
+  plan — strategy + suites of concrete `TC-n` cases grouped by `TestType`
+  (unit/integration/e2e/security/performance/acceptance) + coverage goals /
+  tooling / out-of-scope. **LLM + deterministic fallback** (`QaPlannerAgent`): the
+  fallback maps services→unit, API modules→integration, flows→e2e, roles/authz→
+  security, list endpoints→performance, functional reqs→acceptance, with a shared
+  sequential id counter. Same module shape + gating as `threat-model`
+  (`ProGuard` + `THROTTLE_AI`, full-pipeline 409, own `qa_plans` table, not in
+  snapshots). Web: a **QA Plan** tab (`QaPlanPanel`/`QaPlanView`) grouping suites
+  by test type; i18n `stages.qa.*` (tally uses `{{n}}`, not `count`, to dodge the
+  Arabic CLDR-plural trap) + `project.tab.qa` (EN+AR). Shared: `qa-plan.ts`
+  (`TEST_TYPES`).
 - **Code scaffolding (`scaffold`).** A Pro-only stage that turns the confirmed
   design into a **runnable NestJS + Prisma backend**. Like the cost estimator, the
   generation is **fully deterministic — no LLM**: `buildBackendScaffold()` in
@@ -181,6 +208,17 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   `generateStage` drives it. Narration text is **server-side English** (per the
   i18n convention that AI output stays English); only the chrome is i18n'd
   (`project.stream.live`, EN+AR).
+- **"Explain this decision" (`ArchitectExplainer`).** An on-demand rationale for
+  one System Design choice — the architecture, a tech-stack pick, or a service.
+  `POST /system-design/:sessionId/explain` (owner-guarded, `@Throttle(THROTTLE_AI)`),
+  body `{ kind:'architecture'|'tech'|'service', key }` (`ExplainDecisionDto`).
+  LLM-driven with a deterministic knowledge-based fallback
+  (`buildDecisionExplanation()` in `@archivato/shared` — pure/tested; a
+  `TECH_KB`/`ARCHITECTURE_KB` map + generic path so unknown techs still get a
+  complete shape). **Ephemeral** (never persisted). Free stage (no `ProGuard`),
+  just throttled. Web: an `ExplainButton` beside each choice in `SystemDesignView`
+  opens `DecisionExplainModal` (rationale/tradeoffs/alternatives/risks). i18n
+  `stages.system.explain.*` (EN+AR).
 - **Agents backfill via `normalize()`.** Where an artifact has many optional
   parts (e.g. the reviewer's per-dimension scores/findings), the agent trusts a
   valid LLM response but fills any omitted field deterministically, so the shape
@@ -611,6 +649,13 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
 - **Mermaid:** validate with `mermaid.parse(code, { suppressErrors:true })`
   BEFORE `render` (a parse error injects a persistent "bomb" SVG into `body`).
   Sanitize column *types* (spaces/parens break the ERD grammar).
+- **Per-flow sequence diagrams.** `buildSequenceFlows(api, sys)` in
+  `@archivato/shared` (pure/tested) emits one Mermaid `sequenceDiagram` **per API
+  endpoint** (grouped by module), shaped by method + auth-module heuristics +
+  cache/queue in the tech stack. `ProjectDiagrams.flows` carries them; the generic
+  `sequence` `Diagram` stays as the "Overview". Capped at `MAX_FLOWS` (60). Web
+  `DiagramsView` shows a grouped flow sub-picker only when the Sequence kind is
+  active (`SelectLabel` was added to `components/ui/select.tsx`).
 - **ER diagram export.** The ER diagram (`ErDiagram`) exports five formats, all
   client-side/offline: **Mermaid** (`.mmd`), **Draw.io** (`.drawio` editable
   mxGraph tables via `buildErdDrawio` in `@archivato/shared` — pure/testable),

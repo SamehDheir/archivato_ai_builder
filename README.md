@@ -590,6 +590,63 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   ticket. Emails HTML-escape the user-supplied subject and carry an absolute
   deep-link; `MailService` gained a public `sendNotificationEmail`.
 
+### ✅ Slice — Per-flow sequence diagrams
+- The **Diagrams** tab's single Sequence diagram is now a **per-flow** set: pick
+  any endpoint (grouped by module) and see its own sequence diagram. Auth flows
+  (login / register / refresh) are specialised — credential check, password-hash
+  verify, token issuance + `Set-Cookie` — while reads show a cache lookup and
+  writes an optional queue enqueue (both driven by the system design's tech
+  stack). Fully **deterministic** (no LLM): `buildSequenceFlows()` in
+  `@archivato/shared` builds one Mermaid `sequenceDiagram` per endpoint. The
+  generic Sequence entry stays as an "Overview (happy path)"; `ProjectDiagrams`
+  gained a `flows: SequenceFlow[]` field. No new endpoints — `GET /api/diagrams/:id`
+  now returns the flows too. i18n'd (EN + AR).
+
+### ✅ Slice — "Explain this decision" (architecture rationale on demand)
+- The **System Design** view gained an **Explain** button next to the
+  architecture, every tech-stack pick, and every service. Clicking it asks a new
+  **`ArchitectExplainer`** agent for the decision's **rationale, tradeoffs,
+  alternatives (and why-not), and risks** — rendered in a modal. Like every
+  agent it's **LLM-driven with a deterministic, knowledge-based fallback**
+  (`buildDecisionExplanation()` in `@archivato/shared`), so it always returns a
+  coherent answer offline and in tests.
+- New endpoint `POST /api/system-design/:sessionId/explain` (owner-guarded,
+  `THROTTLE_AI`), body `{ kind: 'architecture'|'tech'|'service', key }`. The
+  result is **ephemeral** — nothing is persisted. Available on the (free)
+  System Design stage. i18n'd (EN + AR).
+
+### ✅ Slice — Security threat model (STRIDE)
+- A new **Security** tab (Pro) runs a **STRIDE threat model** of the generated
+  design: for each category — **Spoofing, Tampering, Repudiation, Information
+  Disclosure, Denial of Service, Elevation of Privilege** — it enumerates
+  concrete threats against the system's components/entry points, each with a
+  **severity** and a **mitigation**, plus the **trust boundaries** and
+  **assumptions**. A new **`ThreatModeler`** agent generates it — **LLM-driven
+  with a deterministic heuristic fallback** that inspects the design (auth &
+  rate-limiting, roles/permissions, id-scoped routes → IDOR, sensitive entities,
+  cache/queue), so it always yields a complete model offline and in tests.
+- Standalone Pro artifact (own `threat_models` table; not in version snapshots),
+  mirroring roadmap/cost: `POST /api/threat-model/:sessionId/generate`
+  (owner-guarded + `ProGuard` + `THROTTLE_AI`) and `GET /api/threat-model/:sessionId`.
+  Web: a `ThreatModelView` grouping threats by STRIDE category with a severity
+  tally + JSON download. i18n'd (EN + AR).
+
+### ✅ Slice — Test / QA plan
+- A new **QA Plan** tab (Pro) turns the generated design into a **structured
+  testing plan**: an overall strategy plus suites of concrete, verifiable test
+  cases grouped by type — **unit, integration, end-to-end, security,
+  performance, acceptance** — each case with an expected result and priority,
+  plus **coverage goals**, recommended **tooling** (derived from the stack), and
+  **out-of-scope** notes. A new **`QaPlanner`** agent generates it — **LLM-driven
+  with a deterministic fallback** that maps services → unit tests, API modules →
+  integration tests, key flows → e2e, roles/authz → security, list endpoints →
+  performance, and functional requirements → acceptance (with sequential `TC-n`
+  ids), so it always yields a complete plan offline and in tests.
+- Standalone Pro artifact (own `qa_plans` table; not in version snapshots):
+  `POST /api/qa-plan/:sessionId/generate` (owner-guarded + `ProGuard` +
+  `THROTTLE_AI`) and `GET /api/qa-plan/:sessionId`. Web: a `QaPlanView` grouping
+  suites by test type with a per-type tally + JSON download. i18n'd (EN + AR).
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
@@ -619,12 +676,17 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/requirements/:sessionId`| Fetch a generated Requirement Document    |
 | POST   | `/api/system-design/:sessionId/generate`| Generate the System Design (requirements required) |
 | GET    | `/api/system-design/:sessionId`| Fetch a generated System Design          |
+| POST   | `/api/system-design/:sessionId/explain`| Explain one design decision (rationale/tradeoffs; ephemeral) |
 | POST   | `/api/database-design/:sessionId/generate`| Generate the Database Design (system design required) |
 | GET    | `/api/database-design/:sessionId`| Fetch a generated Database Design       |
 | POST   | `/api/api-design/:sessionId/generate`| Generate the API Design (database design required) |
 | GET    | `/api/api-design/:sessionId`| Fetch a generated API Design                 |
 | POST   | `/api/review/:sessionId/generate`| Run the AI Review (full pipeline required)  |
 | GET    | `/api/review/:sessionId`| Fetch a generated Review report                  |
+| POST   | `/api/threat-model/:sessionId/generate`| Generate the STRIDE threat model (Pro; full pipeline) |
+| GET    | `/api/threat-model/:sessionId`| Fetch a generated threat model             |
+| POST   | `/api/qa-plan/:sessionId/generate`| Generate the test/QA plan (Pro; full pipeline) |
+| GET    | `/api/qa-plan/:sessionId`| Fetch a generated QA plan                       |
 | POST   | `/api/chat/:sessionId`  | Refine the design from a chat instruction        |
 | GET    | `/api/chat/:sessionId`  | Fetch the refinement conversation                |
 | POST   | `/api/jobs/:sessionId/:stage` | Enqueue async generation of a stage        |

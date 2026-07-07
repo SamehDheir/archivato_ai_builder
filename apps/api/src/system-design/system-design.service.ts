@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { SystemDesign } from '@archivato/shared';
+import type { DecisionExplanation, DecisionRef, SystemDesign } from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -14,6 +14,7 @@ import {
   type RequirementDocumentRepository,
 } from '../requirements/requirement-document.repository';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
+import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
 import {
   SYSTEM_DESIGN_REPOSITORY,
   type SystemDesignRepository,
@@ -29,6 +30,7 @@ export class SystemDesignService {
     @Inject(SYSTEM_DESIGN_REPOSITORY)
     private readonly designs: SystemDesignRepository,
     private readonly architect: SystemArchitectAgent,
+    private readonly explainer: ArchitectExplainerAgent,
   ) {}
 
   /**
@@ -62,6 +64,28 @@ export class SystemDesignService {
     });
 
     return this.designs.upsert(design);
+  }
+
+  /**
+   * Explain one decision in the system design (architecture / a tech pick / a
+   * service boundary). Ephemeral — nothing is persisted. Requires an existing
+   * system design; the session is already owner-checked by the guard.
+   */
+  async explainDecision(
+    sessionId: string,
+    ref: DecisionRef,
+  ): Promise<DecisionExplanation> {
+    const session = await this.sessions.findById(sessionId);
+    if (!session) {
+      throw new NotFoundException(`Interview session ${sessionId} not found.`);
+    }
+    const design = await this.designs.findBySessionId(sessionId);
+    if (!design) {
+      throw new ConflictException(
+        'Generate the system design before explaining a decision.',
+      );
+    }
+    return this.explainer.explain({ idea: session.input.idea, design, ref });
   }
 
   async get(sessionId: string): Promise<SystemDesign> {

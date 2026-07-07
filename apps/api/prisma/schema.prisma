@@ -246,6 +246,8 @@ model InterviewSession {
   productVision       ProductVision?
   roadmap             ProjectRoadmap?
   costEstimate        CostEstimate?
+  threatModel         ThreatModel?
+  qaPlan              QaPlan?
   chatMessages        ChatMessage[]
   versions            ProjectVersion[]
   // Support tickets a customer optionally linked to this project.
@@ -370,6 +372,32 @@ model CostEstimate {
   updatedAt DateTime         @updatedAt
 
   @@map("cost_estimates")
+}
+
+// Security Threat Model (Threat Modeler stage). Standalone Pro artifact — a
+// STRIDE analysis derived from the generated design (LLM + deterministic
+// fallback). Not part of version snapshots.
+model ThreatModel {
+  sessionId String           @id
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("threat_models")
+}
+
+// Test / QA Plan (QA Planner stage). Standalone Pro artifact — a structured
+// testing plan derived from the generated design (LLM + deterministic fallback).
+// Not part of version snapshots.
+model QaPlan {
+  sessionId String           @id
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("qa_plans")
 }
 
 // --- Analytics (superAdmin) ---------------------------------------------------

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { InterviewModule } from '../interview/interview.module';
 import { RequirementsModule } from '../requirements/requirements.module';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
+import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
 import { SystemDesignController } from './system-design.controller';
 import { SystemDesignService } from './system-design.service';
 import { SYSTEM_DESIGN_REPOSITORY } from './system-design.repository';
@@ -14,6 +15,7 @@ import { PrismaSystemDesignRepository } from './prisma-system-design.repository'
   providers: [
     SystemDesignService,
     SystemArchitectAgent,
+    ArchitectExplainerAgent,
     {
       provide: SYSTEM_DESIGN_REPOSITORY,
       useClass: PrismaSystemDesignRepository,

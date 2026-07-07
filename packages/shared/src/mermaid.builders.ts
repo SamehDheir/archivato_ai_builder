@@ -1,6 +1,6 @@
-import type { ApiDesign } from './api-design';
+import type { ApiDesign, ApiEndpoint, ApiModule } from './api-design';
 import type { DatabaseDesign, Relation } from './database-design';
-import type { Diagram } from './diagrams';
+import type { Diagram, SequenceFlow } from './diagrams';
 import type { SystemDesign } from './system-design';
 
 /**
@@ -234,6 +234,168 @@ export function buildSequence(
     `  A-->>C: ${(endpoint?.statusCodes?.[0] ?? 200)} response`,
   ];
   return lines.join('\n');
+}
+
+// ── Per-flow sequence diagrams ───────────────────────────────────────────────
+
+/** How many flow diagrams to emit (keeps the picker + payload bounded). */
+const MAX_FLOWS = 60;
+
+type FlowKind =
+  | 'login'
+  | 'register'
+  | 'refresh'
+  | 'read'
+  | 'create'
+  | 'write'
+  | 'delete';
+
+/**
+ * One sequence diagram **per API endpoint**, grouped by module — so every
+ * meaningful interaction (login, create X, list Y, delete Z…) has its own flow,
+ * not just the single representative {@link buildSequence}. Deterministic; the
+ * steps are shaped by the endpoint's method, its module, and whether the system
+ * design provisions a cache/queue. Returns `[]` without an API design.
+ */
+export function buildSequenceFlows(
+  api: ApiDesign | null,
+  sys: SystemDesign | null,
+): SequenceFlow[] {
+  if (!api) return [];
+  const hasCache = !!sys?.techStack.some((t) => /cache/i.test(t.layer));
+  const hasQueue = !!sys?.techStack.some((t) => /queue|message|broker/i.test(t.layer));
+
+  const flows: SequenceFlow[] = [];
+  for (const module of api.modules) {
+    for (const endpoint of module.endpoints) {
+      if (flows.length >= MAX_FLOWS) return flows;
+      flows.push({
+        id: flowId(module.name, endpoint.method, endpoint.path),
+        group: label(module.name),
+        title: `${endpoint.method} ${endpoint.path} — ${label(endpoint.summary || 'request')}`,
+        method: endpoint.method,
+        path: endpoint.path,
+        mermaid: buildFlowSequence(module, endpoint, sys, { hasCache, hasQueue }),
+      });
+    }
+  }
+  return flows;
+}
+
+function classifyFlow(module: ApiModule, endpoint: ApiEndpoint): FlowKind {
+  const hay = `${module.name} ${endpoint.path} ${endpoint.summary}`.toLowerCase();
+  const isAuth = module.name.toLowerCase() === 'auth' || /\bauth\b/.test(hay);
+  if (isAuth) {
+    if (/login|sign[\s-]?in/.test(hay)) return 'login';
+    if (/register|sign[\s-]?up/.test(hay)) return 'register';
+    if (/refresh/.test(hay)) return 'refresh';
+  }
+  switch (endpoint.method) {
+    case 'GET':
+      return 'read';
+    case 'POST':
+      return 'create';
+    case 'DELETE':
+      return 'delete';
+    default:
+      return 'write';
+  }
+}
+
+function buildFlowSequence(
+  module: ApiModule,
+  endpoint: ApiEndpoint,
+  sys: SystemDesign | null,
+  caps: { hasCache: boolean; hasQueue: boolean },
+): string {
+  const svc = label(module.name || sys?.services[0]?.name || 'Service');
+  const { method, path } = endpoint;
+  const summary = label(endpoint.summary || 'request');
+  const ok =
+    endpoint.statusCodes?.find((c) => c < 400) ?? (method === 'POST' ? 201 : 200);
+  const kind = classifyFlow(module, endpoint);
+
+  const useCache = caps.hasCache && kind === 'read';
+  const useQueue = caps.hasQueue && (kind === 'create' || kind === 'write');
+
+  const head = [
+    'sequenceDiagram',
+    '  actor C as Client',
+    '  participant A as API',
+    `  participant S as ${svc}`,
+    '  participant D as Database',
+  ];
+  if (useCache) head.push('  participant Ca as Cache');
+  if (useQueue) head.push('  participant Q as Queue');
+
+  const body: string[] = [`  C->>A: ${method} ${path}`];
+  switch (kind) {
+    case 'login':
+      body.push('  A->>A: Validate credentials payload');
+      body.push(`  A->>S: ${summary}`);
+      body.push('  S->>D: Find user by email');
+      body.push('  D-->>S: User record');
+      body.push('  S->>S: Verify password hash');
+      body.push('  S-->>A: Issue access + refresh tokens');
+      body.push(`  A-->>C: ${ok} + Set-Cookie (httpOnly)`);
+      break;
+    case 'register':
+      body.push('  A->>A: Validate & check uniqueness');
+      body.push(`  A->>S: ${summary}`);
+      body.push('  S->>D: Insert user (hashed password)');
+      body.push('  D-->>S: New user');
+      body.push('  S-->>A: Issue tokens + queue verification email');
+      body.push(`  A-->>C: ${ok} + Set-Cookie`);
+      break;
+    case 'refresh':
+      body.push('  A->>S: Rotate refresh token');
+      body.push('  S->>D: Validate + revoke old token');
+      body.push('  D-->>S: OK');
+      body.push('  S-->>A: New access + refresh tokens');
+      body.push(`  A-->>C: ${ok} + Set-Cookie`);
+      break;
+    case 'read':
+      body.push('  A->>A: Authenticate & authorize');
+      if (useCache) {
+        body.push('  A->>Ca: Lookup cached result');
+        body.push('  Ca-->>A: miss');
+      }
+      body.push(`  A->>S: ${summary}`);
+      body.push('  S->>D: Query');
+      body.push('  D-->>S: Rows');
+      if (useCache) body.push('  A->>Ca: Store result (TTL)');
+      body.push('  S-->>A: Result');
+      body.push(`  A-->>C: ${ok} response`);
+      break;
+    case 'delete':
+      body.push('  A->>A: Authenticate & authorize (owner)');
+      body.push(`  A->>S: ${summary}`);
+      body.push('  S->>D: Delete (cascade)');
+      body.push('  D-->>S: OK');
+      body.push('  S-->>A: Deleted');
+      body.push(`  A-->>C: ${ok} response`);
+      break;
+    case 'create':
+    case 'write':
+    default:
+      body.push('  A->>A: Authenticate, authorize & validate');
+      body.push(`  A->>S: ${summary}`);
+      body.push('  S->>D: Persist changes');
+      body.push('  D-->>S: Saved');
+      if (useQueue) body.push('  S->>Q: Enqueue side-effects (email, jobs)');
+      body.push('  S-->>A: Result');
+      body.push(`  A-->>C: ${ok} response`);
+      break;
+  }
+
+  return [...head, ...body].join('\n');
+}
+
+/** Stable, Mermaid/React-safe id for a flow. */
+function flowId(moduleName: string, method: string, path: string): string {
+  return `${nodeId(moduleName)}_${method}_${path}`
+    .replace(/[^a-zA-Z0-9_]/g, '_')
+    .replace(/_+/g, '_');
 }
 
 // ── Flow chart (request lifecycle) ───────────────────────────────────────────

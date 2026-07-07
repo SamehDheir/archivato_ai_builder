@@ -28,6 +28,15 @@
       "monolith": "Monolith",
       "modular_monolith": "Modular Monolith",
       "microservices": "Microservices"
+    },
+    "explain": {
+      "button": "Explain",
+      "loadingTitle": "Explaining this decision…",
+      "close": "Close",
+      "tradeoffs": "Tradeoffs",
+      "alternatives": "Alternatives considered",
+      "risks": "Risks to watch",
+      "disclaimer": "AI-generated rationale — a starting point for discussion, not a verdict."
     }
   },
   "database": {
@@ -164,6 +173,63 @@
     "generated": "Roadmap generated",
     "failed": "Could not generate the roadmap"
   },
+  "threat": {
+    "generate": "Generate Threat Model",
+    "regenerate": "Regenerate",
+    "working": "Analyzing…",
+    "download": "Download threat model",
+    "generated": "Threat model generated",
+    "failed": "Could not generate the threat model",
+    "emptyTitle": "Model the security threats",
+    "emptyDescription": "Run a STRIDE analysis of the generated design: concrete threats across Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege — each with a severity and a mitigation.",
+    "generated_at": "Generated {{date}}",
+    "mitigation": "Mitigation",
+    "trustBoundaries": "Trust boundaries",
+    "assumptions": "Assumptions",
+    "severity": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
+    },
+    "property": {
+      "spoofing": "Authentication",
+      "tampering": "Integrity",
+      "repudiation": "Non-repudiation",
+      "information_disclosure": "Confidentiality",
+      "denial_of_service": "Availability",
+      "elevation_of_privilege": "Authorization"
+    }
+  },
+  "qa": {
+    "generate": "Generate QA Plan",
+    "regenerate": "Regenerate",
+    "working": "Planning…",
+    "download": "Download QA plan",
+    "generated": "QA plan generated",
+    "failed": "Could not generate the QA plan",
+    "emptyTitle": "Plan the testing",
+    "emptyDescription": "Turn the generated design into a structured test plan: a strategy plus suites of concrete cases (unit, integration, end-to-end, security, performance, acceptance), with coverage goals and tooling.",
+    "generated_at": "Generated {{date}}",
+    "totalCases": "{{n}} test cases",
+    "strategy": "Strategy",
+    "coverageGoals": "Coverage goals",
+    "tooling": "Recommended tooling",
+    "outOfScope": "Out of scope",
+    "type": {
+      "unit": "Unit",
+      "integration": "Integration",
+      "e2e": "End-to-End",
+      "security": "Security",
+      "performance": "Performance",
+      "acceptance": "Acceptance"
+    },
+    "priority": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    }
+  },
   "vision": {
     "title": "Product Vision",
     "generated": "Generated {{date}}",
@@ -188,7 +254,10 @@
     "showDiagram": "Show diagram",
     "viewSource": "View source",
     "copyMermaid": "Copy Mermaid",
-    "pro": "Pro"
+    "pro": "Pro",
+    "chooseFlow": "Choose a flow",
+    "overview": "Overview (happy path)",
+    "flowsHint": "One sequence diagram per endpoint, grouped by module."
   },
   "canvas": {
     "loading": "Loading canvas…",

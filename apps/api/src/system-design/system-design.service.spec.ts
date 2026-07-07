@@ -3,6 +3,7 @@ import type { RequirementDocument } from '@archivato/shared';
 import { SystemDesignService } from './system-design.service';
 import { InMemorySystemDesignRepository } from './in-memory-system-design.repository';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
+import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
 import { InterviewService } from '../interview/interview.service';
 import { InMemoryInterviewSessionRepository } from '../interview/in-memory-interview-session.repository';
 import { RequirementsService } from '../requirements/requirements.service';
@@ -46,6 +47,7 @@ function makeHarness(): Harness {
     docRepo,
     designRepo,
     new SystemArchitectAgent(mock),
+    new ArchitectExplainerAgent(mock),
   );
   return { interview, requirements, service, mock };
 }

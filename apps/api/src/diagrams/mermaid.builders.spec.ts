@@ -6,6 +6,7 @@ import {
   buildFlowchart,
   buildMicroservices,
   buildSequence,
+  buildSequenceFlows,
   type ApiDesign,
   type DatabaseDesign,
   type SystemDesign,
@@ -149,6 +150,72 @@ describe('mermaid builders', () => {
     expect(m.startsWith('sequenceDiagram')).toBe(true);
     expect(m).toContain('POST /api/billing');
     expect(m).toContain('201 response');
+  });
+
+  it('per-flow sequences build one diagram per endpoint, grouped by module', () => {
+    const authApi: ApiDesign = {
+      sessionId: 's1',
+      generatedAt: 'now',
+      modules: [
+        {
+          name: 'Auth',
+          basePath: '/api/auth',
+          endpoints: [
+            {
+              method: 'POST',
+              path: '/api/auth/login',
+              summary: 'Sign in',
+              requestSchema: [],
+              responseSchema: [],
+              statusCodes: [200],
+            },
+          ],
+        },
+        {
+          name: 'Billing',
+          basePath: '/api/billing',
+          endpoints: [
+            {
+              method: 'GET',
+              path: '/api/billing',
+              summary: 'List invoices',
+              requestSchema: [],
+              responseSchema: [],
+              statusCodes: [200],
+            },
+            {
+              method: 'POST',
+              path: '/api/billing',
+              summary: 'Create invoice',
+              requestSchema: [],
+              responseSchema: [],
+              statusCodes: [201],
+            },
+          ],
+        },
+      ],
+    };
+
+    const flows = buildSequenceFlows(authApi, sys);
+    expect(flows).toHaveLength(3);
+    expect(flows.every((f) => f.mermaid.startsWith('sequenceDiagram'))).toBe(true);
+    expect(flows.every((f) => f.id)).toBe(true);
+    // Stable, unique ids (safe as React keys).
+    expect(new Set(flows.map((f) => f.id)).size).toBe(3);
+
+    // The auth login flow is specialised (token issuance), not the generic CRUD path.
+    const login = flows.find((f) => f.method === 'POST' && f.path.endsWith('/login'));
+    expect(login?.group).toBe('Auth');
+    expect(login?.mermaid).toContain('Verify password hash');
+    expect(login?.mermaid).toContain('Set-Cookie');
+
+    // A GET flow uses the cache (sys provisions Redis) and only queries.
+    const list = flows.find((f) => f.method === 'GET');
+    expect(list?.mermaid).toContain('Cache');
+    expect(list?.mermaid).toContain('200 response');
+
+    // No API design ⇒ no flows.
+    expect(buildSequenceFlows(null, sys)).toEqual([]);
   });
 
   it('flowchart renders a request lifecycle', () => {
