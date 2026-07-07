@@ -12,6 +12,20 @@ import type { User } from './user.entity';
 /** The OAuth providers we support (a subset of AuthProvider). */
 export type OAuthProvider = 'google' | 'github';
 
+/**
+ * Thrown when a provider returns no email, or an email it won't vouch for as
+ * verified. We refuse to link on an unverified email (account-takeover guard),
+ * so this is surfaced to the user as a specific, actionable error rather than a
+ * generic failure — e.g. "make your GitHub email public/verified, or sign in
+ * with your password".
+ */
+export class OAuthEmailUnverifiedError extends Error {
+  constructor() {
+    super('OAuth provider did not return a verified email');
+    this.name = 'OAuthEmailUnverifiedError';
+  }
+}
+
 /** Normalized profile pulled from a provider after the code exchange. */
 interface OAuthProfile {
   email: string;
@@ -85,7 +99,7 @@ export class OAuthService {
     // Require a verified email: linking accounts by an unverified email is an
     // account-takeover vector.
     if (!profile.email || !profile.emailVerified) {
-      throw new Error('OAuth provider did not return a verified email');
+      throw new OAuthEmailUnverifiedError();
     }
     return this.linkOrCreate(provider, profile, fingerprint);
   }
@@ -97,7 +111,9 @@ export class OAuthService {
     profile: OAuthProfile,
     fingerprint?: string,
   ): Promise<User> {
-    const email = profile.email.trim();
+    // Normalize to match how accounts are stored (repos lowercase on write), so
+    // a provider that returns mixed-case email still links to the same account.
+    const email = profile.email.trim().toLowerCase();
     const existing = await this.users.findByEmail(email);
     if (existing) {
       // Existing account → this is a sign-in / provider link, not a new

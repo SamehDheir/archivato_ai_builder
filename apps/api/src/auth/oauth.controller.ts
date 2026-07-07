@@ -13,7 +13,11 @@ import { ConfigService } from '@nestjs/config';
 import type { CookieOptions, Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { TokenService } from './token.service';
-import { OAuthService, type OAuthProvider } from './oauth.service';
+import {
+  OAuthEmailUnverifiedError,
+  OAuthService,
+  type OAuthProvider,
+} from './oauth.service';
 import { setAuthCookies } from './auth-cookies';
 
 const STATE_COOKIE = 'archivato_oauth_state';
@@ -95,6 +99,11 @@ export class OAuthController {
       // A device that already has an account → send a specific, friendly code.
       if (err instanceof ConflictException) {
         return void res.redirect(this.webError('oauth_device'));
+      }
+      // Provider didn't give us a verified email → we can't safely link, so tell
+      // the user exactly why (esp. GitHub with a private/unverified email).
+      if (err instanceof OAuthEmailUnverifiedError) {
+        return void res.redirect(this.webError('oauth_email_unverified'));
       }
       // eslint-disable-next-line no-console
       console.error(`OAuth ${p} callback failed:`, err);

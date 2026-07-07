@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { ConflictException } from '@nestjs/common';
-import { OAuthService } from './oauth.service';
+import { OAuthEmailUnverifiedError, OAuthService } from './oauth.service';
 import { InMemoryUserRepository } from './in-memory-user.repository';
 import { InMemoryDeviceRegistrationRepository } from './in-memory-device-registration.repository';
 
@@ -151,7 +151,9 @@ describe('OAuthService', () => {
 
   it('rejects a profile with no email', async () => {
     mockFetch([{ access_token: 'tok' }, { name: 'No Email' }]);
-    await expect(service.loginWithCode('google', 'code')).rejects.toThrow();
+    await expect(service.loginWithCode('google', 'code')).rejects.toBeInstanceOf(
+      OAuthEmailUnverifiedError,
+    );
   });
 
   it('rejects an UNVERIFIED provider email (account-linking guard)', async () => {
@@ -165,9 +167,28 @@ describe('OAuthService', () => {
       { access_token: 'tok' },
       { email: 'victim@example.com', name: 'X', verified_email: false },
     ]);
-    await expect(service.loginWithCode('google', 'code')).rejects.toThrow();
+    await expect(service.loginWithCode('google', 'code')).rejects.toBeInstanceOf(
+      OAuthEmailUnverifiedError,
+    );
     // The victim account was NOT linked.
     const victim = await users.findByEmail('victim@example.com');
     expect(victim?.providers).toEqual(['password']);
+  });
+
+  it('links to the existing account even when the provider email is mixed-case', async () => {
+    const existing = await users.create({
+      email: 'me@example.com',
+      passwordHash: 'hash',
+      displayName: 'Me',
+      providers: ['password'],
+    });
+    // Provider returns the SAME address but upper-cased — must still link.
+    mockFetch([
+      { access_token: 'tok' },
+      { email: 'ME@Example.com', name: 'Me', verified_email: true },
+    ]);
+    const user = await service.loginWithCode('google', 'code');
+    expect(user.id).toBe(existing.id);
+    expect(user.providers).toEqual(['password', 'google']);
   });
 });

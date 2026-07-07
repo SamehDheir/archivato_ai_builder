@@ -20,6 +20,7 @@ const OAUTH_ERROR_CODES = new Set([
   'oauth_state',
   'oauth_failed',
   'oauth_device',
+  'oauth_email_unverified',
 ]);
 
 /**
@@ -106,12 +107,34 @@ export function AuthForm({
   }
 
   return (
-    <div className="mx-auto max-w-md px-5 py-12">
-      <div className="flex items-center gap-2.5">
-        <LogoMark className="h-9 w-9" />
-        <h1 className="text-2xl font-bold">{t('title')}</h1>
-      </div>
-      <p className="mb-6 mt-2 text-sm text-muted-foreground">{t('subtitle')}</p>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-12">
+      {/* Blueprint grid backdrop — echoes the landing page's "system design" concept. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.35] dark:opacity-25"
+        style={{
+          backgroundImage:
+            'linear-gradient(hsl(var(--border)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border)) 1px, transparent 1px)',
+          backgroundSize: '44px 44px',
+          maskImage:
+            'radial-gradient(ellipse 60% 50% at 50% 45%, #000 55%, transparent 100%)',
+          WebkitMaskImage:
+            'radial-gradient(ellipse 60% 50% at 50% 45%, #000 55%, transparent 100%)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-1/4 -z-10 h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl"
+      />
+
+      <div className="w-full max-w-md">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-card shadow-sm ring-1 ring-primary/10">
+            <LogoMark className="h-8 w-8" />
+          </span>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">{t('subtitle')}</p>
+        </div>
 
       <Tabs
         value={mode}
@@ -179,7 +202,7 @@ export function AuthForm({
 
             <div className="space-y-1.5">
               <Label htmlFor="password">{t('field.password')}</Label>
-              <div className="relative">
+              <div className="relative" dir="ltr">
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
@@ -290,6 +313,7 @@ export function AuthForm({
           {isRegister ? t('switch.toLogin') : t('switch.toRegister')}
         </Button>
       </p>
+      </div>
     </div>
   );
 }
