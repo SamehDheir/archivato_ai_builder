@@ -6,12 +6,17 @@ import { RolesModule } from '../roles/roles.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SupportController } from './support.controller';
 import { SupportAdminController } from './support-admin.controller';
+import { KbController } from './kb.controller';
+import { KbAdminController } from './kb-admin.controller';
 import { SupportService } from './support.service';
 import { SupportAiService } from './support-ai.service';
+import { KbService } from './kb.service';
 import { SupportNotificationsService } from './support-notifications.service';
 import { SupportAssistantAgent } from '../llm/agents/support-assistant.agent';
 import { SUPPORT_REPOSITORY } from './support.repository';
 import { PrismaSupportRepository } from './prisma-support.repository';
+import { KB_REPOSITORY } from './kb.repository';
+import { PrismaKbRepository } from './prisma-kb.repository';
 
 /**
  * Customer Support Center: a professional ticketing system with an embedded
@@ -22,13 +27,20 @@ import { PrismaSupportRepository } from './prisma-support.repository';
  */
 @Module({
   imports: [AuthModule, InterviewModule, BillingModule, RolesModule, NotificationsModule],
-  controllers: [SupportController, SupportAdminController],
+  controllers: [
+    SupportController,
+    SupportAdminController,
+    KbController,
+    KbAdminController,
+  ],
   providers: [
     SupportService,
     SupportAiService,
+    KbService,
     SupportNotificationsService,
     SupportAssistantAgent,
     { provide: SUPPORT_REPOSITORY, useClass: PrismaSupportRepository },
+    { provide: KB_REPOSITORY, useClass: PrismaKbRepository },
   ],
   exports: [SUPPORT_REPOSITORY, SupportService],
 })

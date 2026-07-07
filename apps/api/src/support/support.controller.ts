@@ -10,7 +10,6 @@ import {
 } from '@nestjs/common';
 import type {
   AuthUser,
-  KbArticleRef,
   SupportAiAnalysis,
   SupportCustomerStats,
   SupportDeflectionResult,
@@ -24,7 +23,6 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { THROTTLE_AI } from '../common/throttling';
 import { SupportService } from './support.service';
 import { SupportAiService } from './support-ai.service';
-import { KNOWLEDGE_BASE, getKnowledgeArticle } from './support-knowledge-base';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { ReplyDto } from './dto/reply.dto';
 import { AskAiDto } from './dto/ask-ai.dto';
@@ -51,26 +49,7 @@ export class SupportController {
     return this.support.customerStats(user);
   }
 
-  // ── Knowledge Base (placeholder content the AI also uses) ──────────────────
-
-  @Get('kb')
-  kb(): { articles: KbArticleRef[] } {
-    return {
-      articles: KNOWLEDGE_BASE.map((a) => ({
-        id: a.id,
-        title: a.title,
-        excerpt: a.body.length > 180 ? `${a.body.slice(0, 177)}…` : a.body,
-      })),
-    };
-  }
-
-  @Get('kb/:id')
-  kbArticle(@Param('id') id: string): { article: KbArticleRef | null; body: string | null } {
-    const a = getKnowledgeArticle(id);
-    return a
-      ? { article: { id: a.id, title: a.title, excerpt: a.body }, body: a.body }
-      : { article: null, body: null };
-  }
+  // Knowledge Base moved to its own controllers (KbController / KbAdminController).
 
   // ── Tickets ─────────────────────────────────────────────────────────────────
 

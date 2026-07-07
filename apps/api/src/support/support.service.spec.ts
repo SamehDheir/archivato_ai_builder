@@ -2,6 +2,8 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ALL_PERMISSIONS, type AuthUser, type Permission } from '@archivato/shared';
 import { SupportService } from './support.service';
 import { SupportAiService } from './support-ai.service';
+import { KbService } from './kb.service';
+import { InMemoryKbRepository } from './in-memory-kb.repository';
 import { SupportNotificationsService } from './support-notifications.service';
 import { InMemorySupportRepository } from './in-memory-support.repository';
 import { InMemoryUserRepository } from '../auth/in-memory-user.repository';
@@ -72,7 +74,11 @@ async function makeHarness(): Promise<Harness> {
     prisma,
     roleService,
   );
-  const ai = new SupportAiService(repo, sessions, agent, notifications);
+  // A real KB service over an in-memory store, seeded with the curated set so
+  // deflection can match articles offline (mirrors the boot seeder).
+  const kb = new KbService(new InMemoryKbRepository());
+  await kb.onModuleInit();
+  const ai = new SupportAiService(repo, sessions, agent, kb, notifications);
 
   const mk = async (email: string, role: 'user' | 'admin'): Promise<AuthUser> => {
     const u = await users.create({

@@ -32,6 +32,7 @@ export * from './billing';
 export * from './admin';
 export * from './chat';
 export * from './support';
+export * from './kb';
 export * from './jobs';
 export * from './versions';
 export * from './diagrams';

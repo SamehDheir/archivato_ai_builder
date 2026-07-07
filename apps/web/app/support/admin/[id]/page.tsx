@@ -26,7 +26,10 @@ export default function AdminTicketPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
-      <SupportNav canManageSupport />
+      <SupportNav
+        canManageSupport
+        canManageKb={hasPermission(user.permissions, 'support:kb:manage')}
+      />
       <TicketDetail ticketId={params.id} admin caps={caps} />
     </div>
   );

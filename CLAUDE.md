@@ -456,10 +456,32 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   (admin — `analyze` plus suggestedAssignment + system-wide similar tickets).
   **Security:** deflection/analyze "similar tickets" are scoped to the caller's
   own tickets; only the admin copilot (behind `AdminGuard`) searches all tickets —
-  the AI never leaks another user's data. The Knowledge Base is a **seed set in
-  `support-knowledge-base.ts`** (placeholder UI, no CRUD) that `searchKnowledgeBase()`
-  queries for deflection. In-ticket/copilot runs persist a `SupportAiSuggestion`
+  the AI never leaks another user's data. Deflection queries the **Knowledge Base
+  store** (below) via `KbService.searchForDeflection` (published articles only).
+  In-ticket/copilot runs persist a `SupportAiSuggestion`
   + an `ai_suggestion` event; deflection logs a best-effort `SupportAiInteraction`.
+- **Knowledge Base (`kb`) — real, editable store.** No longer a static seed: a
+  `kb_articles` table + repository (interface + in-memory + Prisma) owned by
+  `KbService`, which **seeds the curated `KB_SEED`** (in `support-knowledge-base.ts`)
+  on first boot **only when empty** (`onModuleInit`, best-effort — never blocks
+  boot). Articles have a **`published`** flag: **drafts are hidden from customers
+  AND excluded from AI deflection**. The keyword scorer is now the pure
+  `searchArticles(articles, query, limit)` in `@archivato/shared` (`kb.ts`),
+  shared by public search + deflection (deterministic/tested). **Public**
+  (`KbController`, `JwtAuthGuard`): `GET /support/kb?q=` (published cards, `q`
+  ranks via the scorer), `GET /support/kb/:id` (published detail, 404 on
+  draft/missing). **Admin CRUD** (`KbAdminController`, `PermissionGuard` +
+  `@RequirePermissions('support:kb:manage')`): `GET/POST /support/admin/kb`,
+  `GET/PATCH/DELETE /support/admin/kb/:id`. New permission **`support:kb:manage`**
+  (in `SUPPORT_PERMISSIONS` → Support Agent + Super Admin; super_admin auto-
+  reconciled on boot — an **existing** support_agent role row needs the grant via
+  `/admin/roles` since non-super-admin system roles aren't re-seeded). **Web:** the
+  `/support/kb` reader (live-debounced search + category badges) + a
+  `/support/kb/[id]` detail page (Markdown body via `MessageBody`); a
+  **`/support/admin/kb`** manager (`KbManager`: list incl. drafts, create/edit
+  form with published toggle, delete) gated by `usePageAccess(requirePermission('support:kb:manage'))`.
+  `SupportNav` gained a `canManageKb` "Manage KB" tab. i18n `support.kb.*` /
+  `support.kbAdmin.*` (EN+AR); article content itself stays server-side English.
 - **Attachments = metadata + inline text.** No object store: the client extracts
   text from text-based files (log/txt/json) and sends it as `textContent` (stored
   inline for AI log analysis); binary files (image/pdf/zip) are metadata-only (no

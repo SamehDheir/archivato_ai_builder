@@ -578,6 +578,24 @@ model WaitlistEntry {
   @@map("waitlist_entries")
 }
 
+// Knowledge Base article (Support Center). A real, editable help store (CRUD by
+// staff with `support:kb:manage`) that also powers the AI deflection layer.
+// Seeded on first boot from KB_SEED. Drafts (`published=false`) are hidden from
+// customers and excluded from AI deflection.
+model KbArticle {
+  id        String   @id @default(uuid())
+  title     String
+  body      String
+  category  String
+  keywords  String[]
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([published])
+  @@map("kb_articles")
+}
+
 // --- Billing audit log --------------------------------------------------------
 
 // A billing lifecycle event, used for the billing-admin trends chart and the

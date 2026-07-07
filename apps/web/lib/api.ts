@@ -53,7 +53,12 @@ import type {
   BillingSubscriptionDetail,
   BillingTrends,
   CreateSupportTicketInput,
-  KbArticleRef,
+  KbArticle,
+  KbArticleSummary,
+  KbPublicArticle,
+  KbPublicArticleDetail,
+  CreateKbArticleInput,
+  UpdateKbArticleInput,
   SupportAdminStats,
   SupportAgentRef,
   SupportAiAnalysis,
@@ -693,9 +698,14 @@ function supportQuery(filter: SupportTicketFilter = {}): string {
 
 /** Customer Support Center — tickets, conversation, attachments, and AI. */
 export const supportApi = {
-  // Dashboard + Knowledge Base
+  // Dashboard + Knowledge Base (public, published only)
   stats: () => request<SupportCustomerStats>('/support/stats'),
-  kb: () => request<{ articles: KbArticleRef[] }>('/support/kb'),
+  kb: (q?: string) =>
+    request<{ articles: KbPublicArticle[] }>(
+      `/support/kb${q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`,
+    ),
+  kbArticle: (id: string) =>
+    request<KbPublicArticleDetail>(`/support/kb/${id}`),
 
   // Tickets (customer scope)
   list: (filter?: SupportTicketFilter) =>
@@ -744,6 +754,24 @@ export const supportApi = {
     request<SupportAiAnalysis>(`/support/tickets/${id}/ai/analyze`, {
       method: 'POST',
     }),
+};
+
+/** Knowledge Base management (staff with `support:kb:manage`). */
+export const kbAdminApi = {
+  list: () => request<{ articles: KbArticleSummary[] }>('/support/admin/kb'),
+  get: (id: string) => request<KbArticle>(`/support/admin/kb/${id}`),
+  create: (input: CreateKbArticleInput) =>
+    request<KbArticle>('/support/admin/kb', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  update: (id: string, patch: UpdateKbArticleInput) =>
+    request<KbArticle>(`/support/admin/kb/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  remove: (id: string) =>
+    request<void>(`/support/admin/kb/${id}`, { method: 'DELETE' }),
 };
 
 /** Admin Support Panel — every ticket, assignment, notes, and AI copilot. */

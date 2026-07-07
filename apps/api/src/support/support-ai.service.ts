@@ -19,7 +19,7 @@ import {
   SUPPORT_REPOSITORY,
   type SupportRepository,
 } from './support.repository';
-import { searchKnowledgeBase } from './support-knowledge-base';
+import { KbService } from './kb.service';
 import { SupportNotificationsService } from './support-notifications.service';
 import type {
   SupportTicketBundle,
@@ -47,6 +47,7 @@ export class SupportAiService {
     @Inject(INTERVIEW_SESSION_REPOSITORY)
     private readonly sessions: InterviewSessionRepository,
     private readonly agent: SupportAssistantAgent,
+    private readonly kb: KbService,
     private readonly notifications: SupportNotificationsService,
   ) {}
 
@@ -56,7 +57,7 @@ export class SupportAiService {
     user: AuthUser,
     dto: SupportAskAiInput,
   ): Promise<SupportDeflectionResult> {
-    const articles = searchKnowledgeBase(dto.message, 3);
+    const articles = await this.kb.searchForDeflection(dto.message, 3);
     const similarTickets = await this.findSimilar(
       user.id,
       dto.message,

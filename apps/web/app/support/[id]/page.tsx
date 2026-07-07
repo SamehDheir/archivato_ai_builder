@@ -13,7 +13,10 @@ export default function TicketPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
-      <SupportNav canManageSupport={hasPermission(user.permissions, 'support:read_all')} />
+      <SupportNav
+        canManageSupport={hasPermission(user.permissions, 'support:read_all')}
+        canManageKb={hasPermission(user.permissions, 'support:kb:manage')}
+      />
       <TicketDetail ticketId={params.id} admin={false} />
     </div>
   );

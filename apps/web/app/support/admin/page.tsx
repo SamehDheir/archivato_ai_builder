@@ -1,5 +1,6 @@
 'use client';
 
+import { hasPermission } from '@archivato/shared';
 import { SupportNav } from '@/components/support/SupportNav';
 import { AdminSupportDashboard } from '@/components/support/AdminSupportDashboard';
 import { usePageAccess, requirePermission } from '@/lib/use-page-access';
@@ -11,7 +12,10 @@ export default function SupportAdminPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
-      <SupportNav canManageSupport />
+      <SupportNav
+        canManageSupport
+        canManageKb={hasPermission(user.permissions, 'support:kb:manage')}
+      />
       <AdminSupportDashboard />
     </div>
   );

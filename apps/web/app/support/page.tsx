@@ -85,7 +85,10 @@ export default function SupportDashboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
-      <SupportNav canManageSupport={hasPermission(user.permissions, 'support:read_all')} />
+      <SupportNav
+        canManageSupport={hasPermission(user.permissions, 'support:read_all')}
+        canManageKb={hasPermission(user.permissions, 'support:kb:manage')}
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {loading

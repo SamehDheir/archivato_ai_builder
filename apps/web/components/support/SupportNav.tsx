@@ -8,6 +8,7 @@ import {
   LifeBuoy,
   Plus,
   BookOpen,
+  BookMarked,
   ShieldCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -19,6 +20,8 @@ interface NavItem {
   labelKey: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  /** Show only to staff who can manage the Knowledge Base. */
+  kbAdminOnly?: boolean;
   /** Match this exact path only (else prefix-match). */
   exact?: boolean;
 }
@@ -27,20 +30,42 @@ const ITEMS: NavItem[] = [
   { href: '/support', labelKey: 'dashboard', icon: LayoutDashboard, exact: true },
   { href: '/support/new', labelKey: 'new', icon: Plus },
   { href: '/support/kb', labelKey: 'kb', icon: BookOpen },
+  {
+    href: '/support/admin/kb',
+    labelKey: 'kbAdmin',
+    icon: BookMarked,
+    kbAdminOnly: true,
+  },
   { href: '/support/admin', labelKey: 'admin', icon: ShieldCheck, adminOnly: true },
 ];
 
 /**
  * The Support Center's own sub-navigation (Dashboard · New · Knowledge Base ·
- * Admin). Rendered at the top of every support page; the "Admin" tab appears
- * only for admins.
+ * Manage KB · Admin). The "Manage KB" tab appears only for staff with
+ * `support:kb:manage`; the "Admin" tab only for support staff.
  */
-export function SupportNav({ canManageSupport }: { canManageSupport: boolean }) {
+export function SupportNav({
+  canManageSupport,
+  canManageKb = false,
+}: {
+  canManageSupport: boolean;
+  canManageKb?: boolean;
+}) {
   const pathname = usePathname() ?? '';
   const { t } = useTranslation('support');
 
-  const isActive = (item: NavItem) =>
-    item.exact ? pathname === item.href : pathname.startsWith(item.href);
+  const isActive = (item: NavItem) => {
+    if (item.exact) return pathname === item.href;
+    // The Admin tab prefix-matches its section, but the nested "Manage KB"
+    // section (/support/admin/kb) has its own tab — don't light up both.
+    if (item.href === '/support/admin') {
+      return (
+        pathname.startsWith('/support/admin') &&
+        !pathname.startsWith('/support/admin/kb')
+      );
+    }
+    return pathname.startsWith(item.href);
+  };
 
   return (
     <div className="mb-6">
@@ -50,7 +75,11 @@ export function SupportNav({ canManageSupport }: { canManageSupport: boolean }) 
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{t('nav.subtitle')}</p>
       <nav className="mt-4 flex flex-wrap gap-1 border-b border-border">
-        {ITEMS.filter((i) => !i.adminOnly || canManageSupport).map((item) => {
+        {ITEMS.filter(
+          (i) =>
+            (!i.adminOnly || canManageSupport) &&
+            (!i.kbAdminOnly || canManageKb),
+        ).map((item) => {
           const active = isActive(item);
           const Icon = item.icon;
           return (

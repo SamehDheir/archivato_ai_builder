@@ -647,6 +647,22 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   `THROTTLE_AI`) and `GET /api/qa-plan/:sessionId`. Web: a `QaPlanView` grouping
   suites by test type with a per-type tally + JSON download. i18n'd (EN + AR).
 
+### ✅ Slice — Editable Knowledge Base (real store + CRUD)
+- The Support Center's Knowledge Base is no longer a static in-code seed: it's a
+  real **`kb_articles`** store (repository pattern: interface + in-memory +
+  Prisma) with **staff CRUD**. On first boot the curated set is **seeded only
+  when empty**, so AI deflection and the reader keep working out of the box.
+- Articles carry a **draft/published** state — **drafts are hidden from customers
+  and excluded from AI deflection**. A new **`support:kb:manage`** permission
+  (held by Support Agent + Super Admin) gates authoring; the keyword scorer is now
+  a pure, shared `searchArticles()` used by both public search and deflection.
+- **Public** (any signed-in user): `GET /api/support/kb?q=` (published,
+  keyword-ranked) and `GET /api/support/kb/:id` (full body). **Admin**
+  (`support:kb:manage`): full CRUD under `/api/support/admin/kb`. **Web**: the KB
+  page is now a real **reader with live search + article detail pages** (Markdown
+  body), plus a **Manage KB** console (`/support/admin/kb`) to create/edit/publish/
+  delete. i18n'd (EN + AR).
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
@@ -735,7 +751,13 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | POST   | `/api/billing/admin/subscriptions/:id/grant-pro`| Billing-admin: comp a user to Pro   |
 | POST   | `/api/billing/admin/subscriptions/:id/revoke`| Billing-admin: downgrade a user to Free|
 | GET    | `/api/support/stats`       | Customer's ticket counts by status           |
-| GET    | `/api/support/kb`          | Knowledge Base articles (also used by the AI)|
+| GET    | `/api/support/kb`          | Published KB articles (optional `?q=` search; also used by the AI)|
+| GET    | `/api/support/kb/:id`      | One published KB article (full body)         |
+| GET    | `/api/support/admin/kb`    | List all KB articles incl. drafts (`support:kb:manage`)|
+| POST   | `/api/support/admin/kb`    | Create a KB article (`support:kb:manage`)    |
+| GET    | `/api/support/admin/kb/:id`| Fetch one KB article for editing (`support:kb:manage`)|
+| PATCH  | `/api/support/admin/kb/:id`| Update a KB article (`support:kb:manage`)    |
+| DELETE | `/api/support/admin/kb/:id`| Delete a KB article (`support:kb:manage`)    |
 | GET    | `/api/support/tickets`     | List my tickets (filter/search/paginate)     |
 | POST   | `/api/support/tickets`     | Open a new support ticket                    |
 | GET    | `/api/support/tickets/:id` | Ticket detail (conversation + timeline)      |

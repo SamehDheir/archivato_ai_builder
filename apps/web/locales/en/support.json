@@ -5,7 +5,8 @@
     "dashboard": "Dashboard",
     "new": "New Ticket",
     "kb": "Knowledge Base",
-    "admin": "Admin"
+    "admin": "Admin",
+    "kbAdmin": "Manage KB"
   },
   "status": {
     "open": "Open",
@@ -188,7 +189,15 @@
     "aiBanner": "The AI Support Assistant searches these articles automatically",
     "aiBannerBody": "Describe your problem when creating a ticket and the assistant will surface the most relevant articles below — often solving it instantly.",
     "askAi": "Ask the AI Assistant",
-    "comingSoon": "Full self-service Knowledge Base with categories & search is coming soon."
+    "comingSoon": "Full self-service Knowledge Base with categories & search is coming soon.",
+    "searchPlaceholder": "Search the Knowledge Base…",
+    "empty": "No articles yet.",
+    "noResults": "No articles match “{{q}}”.",
+    "backToList": "Back to Knowledge Base",
+    "notFound": "This article is unavailable.",
+    "updated": "Updated {{date}}",
+    "stillNeedHelp": "Didn’t solve it? Open a ticket and the AI Assistant will help.",
+    "openTicket": "Open a ticket"
   },
   "kbArticle": {
     "kb-groq-key": {
@@ -222,6 +231,37 @@
     "kb-api-error": {
       "title": "Troubleshooting API errors (401 / 402 / 409)",
       "excerpt": "401 means your session expired — the client auto-refreshes; sign in again if it persists. 402 means the feature is Pro (upgrade). 409 means a prerequisite stage has not been generated yet — complete the upstream stage first."
+    }
+  },
+  "kbAdmin": {
+    "title": "Knowledge Base",
+    "new": "New article",
+    "empty": "No articles yet. Create the first one.",
+    "published": "Published",
+    "draft": "Draft",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteTitle": "Delete this article?",
+    "deleteBody": "“{{title}}” will be permanently removed from the Knowledge Base and AI deflection.",
+    "deleted": "Article deleted",
+    "deleteFailed": "Could not delete the article",
+    "loadFailed": "Could not load the article",
+    "saved": "Article saved",
+    "saveFailed": "Could not save the article",
+    "saving": "Saving…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "newTitle": "New article",
+    "editTitle": "Edit article",
+    "field": {
+      "title": "Title",
+      "titlePlaceholder": "e.g. Reset or set your password",
+      "category": "Category",
+      "status": "Status",
+      "keywords": "Keywords",
+      "keywordsHint": "Comma-separated. The AI matches these when deflecting tickets.",
+      "body": "Body",
+      "bodyHint": "Plain text with optional ``` fenced code blocks (Markdown)."
     }
   }
 }

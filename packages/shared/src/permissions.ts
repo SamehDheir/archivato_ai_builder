@@ -19,6 +19,7 @@ export type Permission =
   | 'support:manage'
   | 'support:note'
   | 'support:copilot'
+  | 'support:kb:manage'
   // Platform administration
   | 'admin:analytics'
   | 'admin:users:read'
@@ -74,6 +75,12 @@ export const PERMISSION_CATALOG: readonly PermissionMeta[] = [
     domain: 'support',
     label: 'AI copilot',
     description: 'Use the admin AI copilot on tickets.',
+  },
+  {
+    key: 'support:kb:manage',
+    domain: 'support',
+    label: 'Manage Knowledge Base',
+    description: 'Create, edit, publish, and delete Knowledge Base articles.',
   },
   {
     key: 'admin:analytics',
@@ -189,6 +196,7 @@ const SUPPORT_PERMISSIONS: Permission[] = [
   'support:manage',
   'support:note',
   'support:copilot',
+  'support:kb:manage',
 ];
 
 /**

@@ -1,15 +1,15 @@
-import type { KbArticleRef, SupportCategory } from '@archivato/shared';
+import type { SupportCategory } from '@archivato/shared';
 
 /**
- * A tiny, in-code Knowledge Base for the Support Center.
+ * The curated **seed** set of Knowledge Base articles.
  *
- * The Knowledge Base UI is a placeholder (no CRUD yet), but the AI Support
- * Assistant *must* use KB content when available — so we ship a curated seed set
- * of help articles here and a keyword search the deflection layer queries before
- * suggesting a ticket. Replace this with a real KB store later without changing
- * the AI callers (they only depend on `searchKnowledgeBase`).
+ * The KB is now a real, editable store (see `kb.service.ts` / `kb.repository.ts`).
+ * On first boot the store is empty, so `KbService` seeds it from this set — the
+ * AI deflection layer and the public KB keep working out of the box, and staff
+ * can then edit/add/remove articles via `support:kb:manage`. Ids are stable so
+ * re-seeding is idempotent.
  */
-export interface KbArticle {
+export interface SeedKbArticle {
   id: string;
   title: string;
   body: string;
@@ -17,7 +17,7 @@ export interface KbArticle {
   keywords: string[];
 }
 
-export const KNOWLEDGE_BASE: readonly KbArticle[] = [
+export const KB_SEED: readonly SeedKbArticle[] = [
   {
     id: 'kb-groq-key',
     title: 'Enable real AI with a free Groq API key',
@@ -75,45 +75,3 @@ export const KNOWLEDGE_BASE: readonly KbArticle[] = [
     body: '401 means your session expired — the client auto-refreshes; sign in again if it persists. 402 means the feature is Pro (upgrade). 409 means a prerequisite stage has not been generated yet — complete the upstream stage first.',
   },
 ];
-
-const tokenize = (s: string): string[] =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]+/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length > 2);
-
-/**
- * Keyword search over the seed KB. Scores each article by how many of its
- * keywords/title tokens appear in the query; returns the top matches as light
- * `KbArticleRef`s (id + title + excerpt) for the AI + the UI.
- */
-export function searchKnowledgeBase(query: string, limit = 3): KbArticleRef[] {
-  const q = ` ${query.toLowerCase()} `;
-  const qTokens = new Set(tokenize(query));
-
-  const scored = KNOWLEDGE_BASE.map((a) => {
-    let score = 0;
-    for (const kw of a.keywords) {
-      if (q.includes(` ${kw} `) || q.includes(kw)) score += 2;
-    }
-    for (const t of tokenize(a.title)) {
-      if (qTokens.has(t)) score += 1;
-    }
-    return { a, score };
-  })
-    .filter((x) => x.score > 0)
-    .sort((x, y) => y.score - x.score)
-    .slice(0, limit);
-
-  return scored.map(({ a }) => ({
-    id: a.id,
-    title: a.title,
-    excerpt: a.body.length > 180 ? `${a.body.slice(0, 177)}…` : a.body,
-  }));
-}
-
-/** Find one article by id (for the KB detail placeholder page later). */
-export function getKnowledgeArticle(id: string): KbArticle | null {
-  return KNOWLEDGE_BASE.find((a) => a.id === id) ?? null;
-}
