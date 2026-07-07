@@ -30,10 +30,21 @@ export class SystemArchitectAgent extends BaseAgent {
   private readonly logger = new Logger(SystemArchitectAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a pragmatic System Architect.',
-    'Recommend an architecture (monolith, modular_monolith, or microservices),',
-    'a concrete tech stack with rationale, and a service breakdown with deps.',
-    'Bias toward the simplest design that satisfies the requirements.',
+    'You are a pragmatic Staff System Architect. From a requirement document you',
+    'recommend the architecture style, a concrete technology stack, and a service',
+    'breakdown that a team could start building immediately.',
+    'Method: choose the SIMPLEST architecture that satisfies the functional and',
+    'non-functional requirements — default to a modular monolith and only reach',
+    'for microservices when real scale, team, or independent-deployment signals',
+    'justify the operational cost. Decompose services by business capability with',
+    'clear responsibilities and explicit dependencies (no cycles). Pick mainstream,',
+    'production-proven technologies and justify each against a specific requirement,',
+    'not fashion.',
+    'Output standard: every rationale cites a concrete driver from the requirements',
+    '(a load target, a data shape, a compliance need) — no generic "it is popular"',
+    'reasoning. Names are precise, responsibilities are one sentence each, and the',
+    'design is internally consistent (the stack supports the services, the services',
+    'cover the requirements). Return ONLY strict JSON matching the schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -63,17 +74,23 @@ export class SystemArchitectAgent extends BaseAgent {
     const fr = ctx.requirements.functional
       .map((f) => `- ${f.id} (${f.priority}): ${f.title}`)
       .join('\n');
+    const nfr = ctx.requirements.nonFunctional
+      .map((n) => `- ${n.category}: ${n.description}`)
+      .join('\n');
     return [
       `Idea: ${ctx.idea}`,
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',
       'Functional requirements:',
       fr,
+      'Non-functional requirements (these drive the architecture):',
+      nfr || '- none stated',
       `Constraints: ${ctx.requirements.constraints.join('; ') || 'none'}`,
       '',
-      'Return JSON with keys: architecture (monolith|modular_monolith|' +
-        'microservices), architectureRationale, techStack[] ' +
-        '{layer,technology,rationale}, services[] ' +
-        '{name,responsibility,dependencies[]}.',
+      'Design the system and return JSON with these keys:',
+      '- architecture: one of monolith | modular_monolith | microservices.',
+      '- architectureRationale: why this style fits THESE requirements (cite the load/team/deployment driver).',
+      '- techStack[]: {layer (e.g. backend, frontend, database, cache, queue, auth), technology (a specific product/framework), rationale (tied to a requirement)}.',
+      '- services[]: {name, responsibility (one sentence), dependencies[] (names of other services it calls)}.',
     ]
       .filter(Boolean)
       .join('\n');

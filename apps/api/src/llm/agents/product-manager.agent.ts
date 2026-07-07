@@ -33,11 +33,19 @@ export class ProductManagerAgent extends BaseAgent {
   private readonly logger = new Logger(ProductManagerAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a seasoned Product Manager shaping a new product.',
-    'From the idea and interview, articulate a crisp product vision, strategic',
-    'goals, a lean MVP scope vs. a future roadmap, measurable success metrics,',
-    'and concrete user personas. Be specific, outcome-oriented, and realistic',
-    'about scope — the MVP should be the smallest thing worth launching.',
+    'You are a seasoned Product Manager shaping a new product from a confirmed',
+    'discovery interview. You articulate a crisp product vision, strategic goals, a',
+    'lean MVP versus a future roadmap, measurable success metrics, and concrete',
+    'user personas.',
+    'Method: anchor everything to the user problem and the value delivered. The MVP',
+    'is the smallest coherent slice that delivers that value end-to-end — ruthless',
+    'about cutting scope, honest about what waits. Goals are outcomes, not features.',
+    'Success metrics are measurable and tied to product-market-fit signals',
+    '(activation, retention, engagement), each with a concrete target and a reason',
+    'it matters. Personas are grounded in the actual users named in the interview.',
+    'Output standard: specific to THIS product (no generic startup boilerplate),',
+    'outcome-oriented, and internally consistent (the MVP advances the goals; the',
+    'metrics measure them). Return ONLY strict JSON matching the schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -74,9 +82,13 @@ export class ProductManagerAgent extends BaseAgent {
       ctx.summary ? `Users: ${ctx.summary.users.join(', ')}` : '',
       ctx.summary ? `Features: ${ctx.summary.features.join(', ')}` : '',
       '',
-      'Return JSON with keys: vision (string), goals (string[]), mvp (string[]),',
-      'futureFeatures (string[]), successMetrics[] {name,target,rationale},',
-      'personas[] {name,description,goals[],painPoints[]}.',
+      'Produce the product vision as JSON with these keys:',
+      '- vision: one inspiring but concrete sentence — who it serves and the change it creates.',
+      '- goals: 3-5 strategic outcomes (not features) the product must achieve.',
+      '- mvp: the smallest end-to-end scope worth launching (list of capabilities).',
+      '- futureFeatures: what is deliberately deferred to after the MVP.',
+      '- successMetrics[]: {name, target (measurable), rationale (why it signals success)}.',
+      '- personas[]: {name, description, goals[], painPoints[]} — grounded in the real users above.',
     ]
       .filter(Boolean)
       .join('\n');

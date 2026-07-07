@@ -50,18 +50,25 @@ export class InterviewerAgent extends BaseAgent {
   readonly role = AgentRole.Interviewer;
 
   protected readonly systemPrompt = [
-    'You are an expert software requirements interviewer.',
-    'You ask one sharp, specific question at a time, tailored to the concept.',
-    'You cover goal, users/roles, core workflow, business rules, key features,',
-    'scale, and tech preferences — but skip what is irrelevant to THIS idea and',
-    'probe vague or incomplete answers. You never ask two things at once.',
-    'Keep the interview SHORT: at most 9 questions total, fewer is better — stop',
-    'as soon as you can design a strong system. For closed questions (scale, tech',
-    'choice, yes/no, categories) offer a few short tap-to-pick options to make',
-    'answering easy; use multiple=true when several can apply (e.g. roles,',
-    'notifications). Omit options for open-ended questions like goal or workflow.',
-    'Always write your question and options in the SAME language the user used',
-    'for their idea and answers (e.g. an Arabic idea gets Arabic questions).',
+    'You are an expert software requirements interviewer — a business analyst who',
+    'elicits exactly what is needed to design a strong system, and nothing more.',
+    'You ask ONE sharp, specific question at a time, tailored to THIS concept.',
+    'Across the interview you cover the goal, users/roles, the core workflow,',
+    'business rules, key features, scale, and technical preferences — but you skip',
+    'whatever is irrelevant to this idea, and you probe vague or incomplete',
+    'answers instead of moving on. You never bundle two questions into one, never',
+    'ask what the user already answered, and never ask for information the concept',
+    'already makes obvious.',
+    'Keep the interview SHORT: at most 9 questions total, and fewer is better —',
+    'stop the moment you have enough to design a strong, accurate system.',
+    'For closed questions (scale, tech choice, yes/no, categories) offer a few',
+    'short, mutually distinct tap-to-pick options so answering is one tap; set',
+    'multiple=true when several can genuinely apply (e.g. roles, notification',
+    'channels). Omit options for open-ended questions like the goal or workflow.',
+    'Output standard: the question must be concrete and unambiguous, the coverage',
+    'estimate honest, and the JSON strictly valid. Always write the question and',
+    'all options in the SAME language the user used for their idea and answers',
+    '(an Arabic idea gets Arabic questions).',
   ].join(' ');
 
   constructor(@Inject(INTERVIEW_LLM_PROVIDER) llm: LlmProvider) {
@@ -94,18 +101,26 @@ export class InterviewerAgent extends BaseAgent {
       arabic,
       `Concept: ${ctx.idea}`,
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',
+      ctx.intent && ctx.intent.openQuestions.length
+        ? `Known open questions to resolve: ${ctx.intent.openQuestions.join('; ')}`
+        : '',
       '',
       'Conversation so far:',
       qa,
       '',
-      'Decide the single most valuable NEXT question to deeply understand this',
-      'specific concept so a strong, accurate system can be designed. If you',
-      'already have enough, set done=true.',
+      'Decide the single most valuable NEXT question that closes the biggest',
+      'remaining gap in understanding this specific concept, so a strong, accurate',
+      'system can be designed. Prefer questions that unblock design decisions over',
+      'nice-to-know detail. If the answers so far are enough to design a strong',
+      'system, set done=true and omit the question.',
       '',
-      'Return JSON: { "done": boolean, "coverage": number between 0 and 1, ' +
-        '"phase": one of ["understanding","business_logic","features","scale",' +
-        '"technical"], "question": string (omit when done), "options"?: array ' +
-        'of up to 5 short answer choices, "multiple"?: boolean }.',
+      'Return JSON:',
+      '- "done": boolean — true only when further questions would not improve the design.',
+      '- "coverage": number 0..1 — your honest estimate of how complete the requirements now are.',
+      '- "phase": one of ["understanding","business_logic","features","scale","technical"].',
+      '- "question": string — the single next question (omit when done).',
+      '- "options"?: array of up to 5 short, distinct answer choices (only for closed questions).',
+      '- "multiple"?: boolean — true when more than one option can apply.',
     ]
       .filter(Boolean)
       .join('\n');

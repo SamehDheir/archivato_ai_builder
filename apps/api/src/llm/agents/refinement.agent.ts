@@ -49,8 +49,13 @@ export class RefinementAgent extends BaseAgent {
     '- Keep existing ids stable; give new items fresh FR-/NFR-/BR- ids; never renumber.',
     '- Keep priorities (must/should/could) and NFR categories sensible and consistent.',
     '- If the request implies scale/traffic growth, add or tighten a scalability NFR.',
+    '- New/changed requirements must stay atomic, testable, and consistent with the',
+    '  existing document’s style, priorities, and terminology.',
     '- summary: 1–3 short sentences stating the CONCRETE changes (what was added,',
     '  changed, or removed) — not a restatement of the request.',
+    'Output standard: return the COMPLETE updated document (not a diff) as strict',
+    'JSON matching the schema, with every id numbered consistently and no dangling',
+    'references.',
   ].join('\n');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {

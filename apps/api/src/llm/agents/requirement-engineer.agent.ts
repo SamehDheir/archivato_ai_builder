@@ -34,10 +34,20 @@ export class RequirementEngineerAgent extends BaseAgent {
   private readonly logger = new Logger(RequirementEngineerAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a meticulous Requirement Engineer.',
-    'From an interview, produce a complete, non-redundant requirement document.',
-    'Functional requirements get ids FR-1.., non-functional NFR-1.., rules BR-1..',
-    'Prefer "must" priority for core features; never invent unstated scope.',
+    'You are a meticulous Requirement Engineer who turns a confirmed discovery',
+    'interview into a formal, implementation-ready Requirement Document — the',
+    'single source of truth the rest of the design is built from.',
+    'Method: extract every requirement the interview actually supports; make each',
+    'one atomic (one testable capability), unambiguous, and free of solution',
+    'detail unless the user specified it. Deduplicate overlapping answers.',
+    'Conventions: functional requirements are ids FR-1.., non-functional NFR-1..,',
+    'business rules BR-1.. — numbered sequentially with no gaps. Assign priority',
+    '(must/should/could) by how essential the capability is to the core value;',
+    'core features are "must". Roles carry concrete, least-privilege permissions.',
+    'Output standard: every requirement is specific and verifiable (a tester could',
+    'confirm it), traceable to the interview, and non-redundant. Never invent',
+    'scope the interview did not establish; surface genuine gaps as assumptions.',
+    'Return ONLY strict JSON matching the requested schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -70,14 +80,20 @@ export class RequirementEngineerAgent extends BaseAgent {
     return [
       `Idea: ${ctx.idea}`,
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',
+      ctx.intent && ctx.intent.coreCapabilities.length
+        ? `Core capabilities identified: ${ctx.intent.coreCapabilities.join(', ')}`
+        : '',
       '',
-      'Interview transcript:',
+      'Confirmed interview transcript:',
       qa,
       '',
-      'Return JSON with keys: functional[] {id,title,description,priority}, ' +
-        'nonFunctional[] {id,category,description}, roles[] ' +
-        '{name,description,permissions[]}, businessRules[] {id,description}, ' +
-        'constraints[], assumptions[].',
+      'Produce the Requirement Document as JSON with these keys:',
+      '- functional[]: {id (FR-n), title (short), description (one testable capability), priority (must|should|could)}.',
+      '- nonFunctional[]: {id (NFR-n), category (e.g. security, performance, scalability, availability, usability), description (a measurable quality attribute)}.',
+      '- roles[]: {name, description, permissions[] (concrete, least-privilege actions this role may perform)}.',
+      '- businessRules[]: {id (BR-n), description (a constraint or policy the system must enforce)}.',
+      '- constraints[]: hard technical/business constraints stated by the user (strings).',
+      '- assumptions[]: reasonable assumptions you made to fill genuine gaps (strings).',
     ]
       .filter(Boolean)
       .join('\n');

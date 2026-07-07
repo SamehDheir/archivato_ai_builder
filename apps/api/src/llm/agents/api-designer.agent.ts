@@ -43,10 +43,20 @@ export class ApiDesignerAgent extends BaseAgent {
   private readonly logger = new Logger(ApiDesignerAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a precise API Designer.',
-    'Design RESTful endpoints grouped by module, each with an HTTP method,',
-    'request and response schemas, and realistic status codes.',
-    'Follow resource-oriented conventions and consistent pluralized paths.',
+    'You are a precise API Designer who turns a data model and service breakdown',
+    'into a clean, RESTful HTTP contract a frontend and backend team can build',
+    'against without further clarification.',
+    'Method: group endpoints by resource/module; use noun-based, pluralized,',
+    'lowercase paths (/api/orders, /api/orders/:id) and the correct HTTP verb',
+    '(GET read, POST create, PUT/PATCH update, DELETE remove). List endpoints',
+    'expose page/limit pagination. Request schemas exclude server-managed fields',
+    '(id, timestamps, password_hash); response schemas reflect what is actually',
+    'returned. Every endpoint declares realistic status codes including its error',
+    'cases (400 validation, 401/403 auth, 404 not found, 409 conflict).',
+    'Output standard: paths, methods, and schemas are internally consistent with',
+    'the entities and services, field names match the data model, and there are no',
+    'placeholder or duplicated endpoints. Return ONLY strict JSON matching the',
+    'schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -73,15 +83,25 @@ export class ApiDesignerAgent extends BaseAgent {
   }
 
   private buildPrompt(ctx: ApiDesignContext): string {
-    const entities = ctx.databaseDesign.entities.map((e) => e.name).join(', ');
+    const entities = ctx.databaseDesign.entities
+      .map(
+        (e) =>
+          `- ${e.name}: ${e.columns
+            .map((c) => c.name)
+            .slice(0, 10)
+            .join(', ')}`,
+      )
+      .join('\n');
     return [
       `Idea: ${ctx.idea}`,
-      `Entities: ${entities}`,
       `Services: ${ctx.systemDesign.services.map((s) => s.name).join(', ')}`,
+      'Entities and their columns (design CRUD + relevant actions per entity):',
+      entities,
       '',
-      'Return JSON with key modules[] {name, basePath, endpoints[] {method,' +
-        'path, summary, requestSchema[] {name,type,required}, responseSchema[]' +
-        ' {name,type,required}, statusCodes[]}}.',
+      'Design the HTTP API and return JSON with this key:',
+      '- modules[]: {name, basePath (e.g. /api/orders), endpoints[]}.',
+      '  Each endpoint: {method (GET|POST|PUT|PATCH|DELETE), path, summary (what it does), requestSchema[] {name, type, required (boolean)}, responseSchema[] {name, type, required (boolean)}, statusCodes[] (integers incl. error cases)}.',
+      'Include an Auth module (register/login/refresh) and full CRUD per entity; add page/limit to list endpoints; omit server-managed fields (id, created_at, updated_at, password_hash) from request bodies.',
     ].join('\n');
   }
 

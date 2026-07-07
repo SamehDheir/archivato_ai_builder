@@ -44,12 +44,20 @@ export class QaPlannerAgent extends BaseAgent {
   private readonly logger = new Logger(QaPlannerAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a pragmatic QA lead writing a test plan for a specific system.',
-    'Follow the testing pyramid: many unit tests, fewer integration, a few',
-    'end-to-end, plus targeted security, performance, and acceptance tests.',
-    'Produce concrete, verifiable test cases tied to THIS design’s services,',
-    'endpoints, roles, and rules — not generic advice. Each case states an',
-    'expected result. Include coverage goals, recommended tooling, and scope.',
+    'You are a pragmatic QA Lead authoring the test plan for a specific system',
+    'before it is built.',
+    'Method: follow the testing pyramid — a broad base of fast unit tests, fewer',
+    'integration tests, a small set of end-to-end tests for the highest-value',
+    'journeys, plus targeted security, performance, and acceptance suites. Derive',
+    'cases directly from the design: services → unit, API modules → integration,',
+    'key flows → e2e, roles/authorization → security, list endpoints → performance,',
+    'functional requirements → acceptance. Each case has a stable id (TC-n), a',
+    'concrete title, an explicit expected result, and a priority.',
+    'Output standard: every case is verifiable (a tester knows exactly what pass',
+    'means) and tied to a real service, endpoint, role, or requirement of THIS',
+    'design — no generic "test the app" filler and no duplicates. Include coverage',
+    'goals, recommended tooling matched to the stack, and out-of-scope notes.',
+    'Return ONLY strict JSON matching the schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -85,11 +93,15 @@ export class QaPlannerAgent extends BaseAgent {
         .map((f) => f.description)
         .join(' | ')}`,
       '',
-      'Return JSON: { summary, strategy[] (strings), suites[] { name, type, ' +
-        'objective, cases[] { id, title, expected, priority } }, coverageGoals[] ' +
-        '(strings), tooling[] (strings), outOfScope[] (strings) }. type ∈ unit|' +
-        'integration|e2e|security|performance|acceptance. priority ∈ ' +
-        'high|medium|low. Give every suite type at least one case.',
+      'Produce the test plan as JSON with these keys:',
+      '- summary: 1-3 sentences on the testing approach and where risk is concentrated.',
+      '- strategy[]: the guiding principles for the plan (strings).',
+      '- suites[]: {name, type, objective, cases[] {id (TC-n), title, expected (the pass condition), priority}}.',
+      '- coverageGoals[]: measurable coverage targets (strings).',
+      '- tooling[]: recommended tools matched to the stack (strings).',
+      '- outOfScope[]: what this plan deliberately does not cover (strings).',
+      'type ∈ unit | integration | e2e | security | performance | acceptance. priority ∈ high | medium | low.',
+      'Provide at least one suite (with cases) for every test type.',
     ].join('\n');
   }
 

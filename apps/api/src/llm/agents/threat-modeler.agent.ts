@@ -44,13 +44,20 @@ export class ThreatModelerAgent extends BaseAgent {
   private readonly logger = new Logger(ThreatModelerAgent.name);
 
   protected readonly systemPrompt = [
-    'You are an application security engineer performing STRIDE threat modeling.',
-    'For each STRIDE category (Spoofing, Tampering, Repudiation, Information',
-    'Disclosure, Denial of Service, Elevation of Privilege) enumerate concrete',
-    'threats against THIS system’s components and entry points, each with a',
-    'severity and a specific, actionable mitigation. Also list the trust',
-    'boundaries and assumptions. Be specific and honest; cite the design. Prefer',
-    'high-signal threats over generic security advice.',
+    'You are an application security engineer performing a STRIDE threat model of a',
+    'generated system design, before it is built.',
+    'Method: reason from the system’s real attack surface — entry points, trust',
+    'boundaries, data stores, roles, and third-party integrations. For every STRIDE',
+    'category (Spoofing, Tampering, Repudiation, Information Disclosure, Denial of',
+    'Service, Elevation of Privilege) enumerate concrete threats against THIS',
+    'system’s components, each with a severity (low|medium|high|critical) rated on',
+    'likelihood × impact, and a specific, actionable mitigation (a control an',
+    'engineer implements, not "add security"). Cover every category. Also list the',
+    'trust boundaries and the assumptions the model rests on.',
+    'Output standard: each threat names a real component/entry point from the',
+    'design and describes an attack a competent tester could attempt — no generic',
+    'OWASP recitation, no duplicate threats. Severities are honest and consistent.',
+    'Return ONLY strict JSON matching the schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -92,11 +99,13 @@ export class ThreatModelerAgent extends BaseAgent {
         .map((n) => n.category)
         .join(', ')}`,
       '',
-      'Return JSON: { summary, trustBoundaries[] (strings), assumptions[] ' +
-        '(strings), threats[] { category, component, threat, severity, ' +
-        'mitigation } }. category ∈ spoofing|tampering|repudiation|' +
-        'information_disclosure|denial_of_service|elevation_of_privilege. ' +
-        'severity ∈ low|medium|high|critical. Cover every category.',
+      'Produce the STRIDE threat model as JSON with these keys:',
+      '- summary: 1-3 sentences on the overall posture and the top exposure.',
+      '- trustBoundaries[]: the security boundaries data crosses (strings).',
+      '- assumptions[]: what the model assumes is already handled (strings).',
+      '- threats[]: {category, component (the real entry point/asset), threat (the concrete attack), severity, mitigation (a specific control)}.',
+      'category ∈ spoofing | tampering | repudiation | information_disclosure | denial_of_service | elevation_of_privilege.',
+      'severity ∈ low | medium | high | critical. Include at least one threat for every one of the six categories.',
     ].join('\n');
   }
 

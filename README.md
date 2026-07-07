@@ -680,6 +680,32 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   shows for customers only (staff navigate via the sidebar). i18n'd (EN + AR,
   RTL-safe).
 
+### ✅ Slice — Agent quality upgrade (prompts, outputs & provider hardening)
+- **All 14 AI agents** (product analyst, interviewer, requirement engineer,
+  system architect, database designer, API designer, reviewer, product manager,
+  roadmap planner, refiner, threat modeler, QA planner, architect explainer,
+  support assistant) were re-authored to a single professional standard: each
+  **system prompt** now defines a senior role, an explicit method, and a precise
+  **output standard** (specific to *this* system, actionable, correct
+  terminology, no invented scope, complete and internally consistent, strict
+  JSON only), and each **input prompt** passes richer, structured upstream
+  context with field-level guidance. The artifact **schemas are unchanged**, so
+  every view, export, and version snapshot keeps working.
+- **Provider hardening.** The JSON extractor is now a string/escape-aware
+  **balanced-brace scan** with trailing-comma repair (resilient to fences,
+  surrounding prose, and truncated output). The **Claude** provider only sends
+  sampling params (`temperature`) to models that still accept them — so setting
+  `ANTHROPIC_MODEL` to a newer model (Opus 4.7/4.8, Sonnet 5) no longer 400s
+  every call — and marks the stable system prompt for **prompt caching**. The
+  **Groq** provider (the default free real-AI path) uses native
+  **`response_format: json_object`** so structured output is guaranteed, not
+  coaxed.
+- **The deterministic fallbacks stay** — they are a resilience layer (offline
+  mock mode + tests), not "mock data." To get real AI everywhere, set a provider
+  key (a free `GROQ_API_KEY`, with `LLM_PROVIDER` unset, flips the whole
+  pipeline) and restart the API; the boot log confirms `Agent LLM provider:
+  groq`. Full suite green (43 suites, 280 tests).
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 

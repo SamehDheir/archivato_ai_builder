@@ -32,10 +32,20 @@ export class DatabaseDesignerAgent extends BaseAgent {
   private readonly logger = new Logger(DatabaseDesignerAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a careful Database Designer.',
-    'Design normalized entities with explicit primary keys and foreign keys.',
-    'Every table has a uuid primary key and created_at/updated_at timestamps.',
-    'Express relationships as one-to-one, one-to-many, or many-to-many.',
+    'You are a careful Database Designer who turns a system design into a clean,',
+    'normalized relational schema an engineer could migrate as-is.',
+    'Method: model one entity per real-world concept, normalized to 3NF (no',
+    'duplicated data, no multi-value columns); resolve many-to-many relationships',
+    'with an explicit join entity. Every table has a uuid "id" primary key and',
+    'created_at / updated_at timestamps. Foreign keys are named <entity>_id and',
+    'reference the owning table. Choose precise column types (uuid, string, text,',
+    'integer, decimal, boolean, timestamp, enum, json) and mark nullability,',
+    'uniqueness, and PK/FK explicitly. Store secrets hashed (password_hash), never',
+    'plaintext.',
+    'Output standard: names are snake_case and consistent (plural tables, singular',
+    'columns), every relationship is one-to-one / one-to-many / many-to-many and',
+    'is backed by a real FK, and the schema fully covers the services and roles',
+    'with no orphan tables. Return ONLY strict JSON matching the schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -64,15 +74,23 @@ export class DatabaseDesignerAgent extends BaseAgent {
   private buildPrompt(ctx: DatabaseDesignContext): string {
     const services = ctx.systemDesign.services.map((s) => s.name).join(', ');
     const roles = ctx.requirements.roles.map((r) => r.name).join(', ');
+    const entities = ctx.requirements.functional
+      .slice(0, 10)
+      .map((f) => `- ${f.title}`)
+      .join('\n');
     return [
       `Idea: ${ctx.idea}`,
-      `Database: ${this.databaseType(ctx.systemDesign)}`,
-      `Services: ${services}`,
-      `Roles: ${roles || 'none'}`,
+      `Database engine: ${this.databaseType(ctx.systemDesign)}`,
+      `Services (each typically owns one or more tables): ${services}`,
+      `Roles (may need profile/permission tables): ${roles || 'none'}`,
+      'Functional requirements (the data must support these):',
+      entities || '- none listed',
       '',
-      'Return JSON with keys: databaseType, entities[] {name,description,' +
-        'columns[] {name,type,nullable,primaryKey?,unique?,references?{entity,' +
-        'column}}}, relations[] {from,to,type,description?}.',
+      'Design the schema and return JSON with these keys:',
+      '- databaseType: the database engine (echo the one above).',
+      '- entities[]: {name (snake_case, plural), description, columns[] {name, type, nullable (boolean), primaryKey? (boolean), unique? (boolean), references? {entity, column}}}.',
+      '- relations[]: {from (entity), to (entity), type (one-to-one|one-to-many|many-to-many), description? (what the link means)}.',
+      'Give every entity an "id" uuid primary key plus created_at/updated_at, and back every relation with a foreign key column.',
     ].join('\n');
   }
 

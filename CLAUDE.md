@@ -277,6 +277,21 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   interface and use `completeJson<T>()` (strips fences, throws
   `LlmJsonParseError`). **Every agent has a deterministic fallback**, so bad/no
   model output still yields a valid artifact (mock mode + tests stay offline).
+- **Agent prompt quality + provider hardening.** All 14 agents share one prompt
+  standard: a senior-role **system prompt** (role → method → an explicit *output
+  standard* clause: specific to THIS system, actionable, precise terminology, no
+  invented scope, complete/consistent, strict-JSON-only) plus a structured
+  **input prompt** with field-level guidance. Output *schemas* are unchanged
+  (backward-compatible with views/exports). Provider layer: `json.util.ts` uses a
+  string/escape-aware **balanced-brace scan** + trailing-comma repair (robust vs.
+  fence/prose/partial output); `ClaudeLlmProvider` only sends `temperature` to
+  models that still accept it (Opus 4.7/4.8, Sonnet 5, Fable/Mythos 5 **400** on
+  sampling params — so bumping `ANTHROPIC_MODEL` never breaks every call) and
+  marks the stable system prompt with `cache_control` (prompt caching);
+  `GroqLlmProvider.completeJson` uses Groq's native **`response_format:
+  json_object`** for guaranteed JSON (the structured-output path for the default
+  real-AI provider). The deterministic fallbacks are a **resilience layer, not
+  mock data** — they only run when no LLM is configured or the model fails.
 - **Provider selection** (`llm.module.ts`): `LLM_PROVIDER=mock|claude|groq`
   forces it for all agents; else `GROQ_API_KEY` present → groq for everything;
   else mock. `INTERVIEW_LLM_PROVIDER` overrides only the interview. Model via
@@ -677,6 +692,12 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
 - **`.env` `LLM_PROVIDER` must stay UNSET** to let `GROQ_API_KEY` flip the
   pipeline (an explicit `mock` forces mock). `apps/api/.env` is gitignored — the
   user pastes real keys there; confirm via the startup `LLM provider:` log.
+- **"Templated / mock-looking artifacts" = the pipeline is on the mock provider,
+  not a bug in the agents.** It means no real provider resolved (no key, or
+  `LLM_PROVIDER=mock`, or `dev:api` started before the key was added), so every
+  agent falls to its deterministic build. Fix = set `GROQ_API_KEY` (free) with
+  `LLM_PROVIDER` unset and **restart `dev:api`**; the boot log must read
+  `Agent LLM provider: groq`. The fallbacks are resilience, not the problem.
 - **Windows:** stop `dev:api` before `prisma migrate/generate` (engine-DLL lock
   → EPERM).
 - **Don't `next build` while `next dev` is running** (overwrites `.next` → dev

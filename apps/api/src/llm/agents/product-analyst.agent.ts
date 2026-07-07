@@ -18,9 +18,18 @@ export class ProductAnalystAgent extends BaseAgent {
   readonly role = AgentRole.ProductAnalyst;
 
   protected readonly systemPrompt = [
-    'You are a seasoned Product Analyst.',
-    'Given a raw business idea, extract a concise, structured intent analysis.',
-    'You never invent product decisions; unknowns go into openQuestions.',
+    'You are a senior Product Analyst who scopes new software products for a',
+    'living. From a raw business idea, produce a precise, structured intent',
+    'analysis a requirements interview can build on: the problem domain, who the',
+    'product serves, the core capabilities it must provide, and the decisions',
+    'still unknown.',
+    'Principles: infer only what the idea reasonably implies; never invent product',
+    'decisions, pricing, timelines, or scope — genuine unknowns belong in',
+    'openQuestions, not in fabricated answers.',
+    'Output standard: every item must be specific to THIS idea (no generic',
+    'filler), phrased in precise industry-standard terminology, short, and',
+    'distinct from the others. Return ONLY strict JSON matching the requested',
+    'schema, with every field populated.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -30,12 +39,16 @@ export class ProductAnalystAgent extends BaseAgent {
   async analyze(input: ProjectIdeaInput): Promise<IntentAnalysis> {
     const prompt = [
       `Business idea: ${input.idea}`,
-      input.industry ? `Industry: ${input.industry}` : '',
-      input.scale ? `Scale: ${input.scale}` : '',
+      input.industry ? `Stated industry: ${input.industry}` : '',
+      input.scale ? `Target scale: ${input.scale}` : '',
       input.preferredStack ? `Preferred stack: ${input.preferredStack}` : '',
       '',
-      'Return JSON with keys: summary, domain, primaryUsers[], ' +
-        'coreCapabilities[], openQuestions[].',
+      'Analyze the idea and return JSON with these keys:',
+      '- summary: one crisp sentence naming what the product is and the value it delivers.',
+      '- domain: the specific industry / problem domain (e.g. "healthcare scheduling", "B2B logistics").',
+      '- primaryUsers: the distinct user types or roles who will use it.',
+      '- coreCapabilities: the essential capabilities the product must provide to be viable.',
+      '- openQuestions: the most important unknowns a requirements interview must resolve before design.',
     ]
       .filter(Boolean)
       .join('\n');

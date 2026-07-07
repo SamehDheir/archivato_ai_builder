@@ -45,12 +45,21 @@ export class ClaudeLlmProvider implements LlmProvider {
     options?: LlmCompleteOptions,
   ): Promise<string> {
     const { system, conversation } = splitSystem(messages, options?.system);
+    const model = options?.model ?? this.defaultModel;
 
     const response = await this.client.messages.create({
-      model: options?.model ?? this.defaultModel,
+      model,
       max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
-      temperature: options?.temperature,
-      system: system || undefined,
+      // Newer Claude models (Opus 4.7/4.8, Sonnet 5, Fable/Mythos 5) REJECT
+      // sampling params with a 400 — only send temperature to models that still
+      // accept it, so bumping ANTHROPIC_MODEL never breaks every agent call.
+      ...(options?.temperature !== undefined && modelAcceptsSampling(model)
+        ? { temperature: options.temperature }
+        : {}),
+      // Cache the (stable, per-agent) system prompt. Harmless no-op below the
+      // model's minimum cacheable size; a win when an agent is called repeatedly
+      // in a session (e.g. the adaptive interview) or the prompt is large.
+      system: cacheableSystem(system),
       messages: conversation.map((m) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
@@ -82,6 +91,27 @@ export class ClaudeLlmProvider implements LlmProvider {
     });
     return parseJsonFromLlm<T>(raw);
   }
+}
+
+/**
+ * Whether a model still accepts the `temperature`/`top_p`/`top_k` sampling
+ * params. Opus 4.7/4.8, Sonnet 5, and Fable/Mythos 5 removed them (a 400 if
+ * sent); everything Sonnet 4.6 / Opus 4.6 and older keeps them.
+ */
+function modelAcceptsSampling(model: string): boolean {
+  return !/(opus-4-[78]|sonnet-5|fable-5|mythos-5|mythos-preview)/i.test(model);
+}
+
+/**
+ * Render the system prompt as a single cache-marked text block so the stable
+ * prefix can be served from Anthropic's prompt cache on repeated calls. Returns
+ * `undefined` when there is no system prompt.
+ */
+function cacheableSystem(
+  system: string,
+): Anthropic.TextBlockParam[] | undefined {
+  if (!system) return undefined;
+  return [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
 }
 
 /**

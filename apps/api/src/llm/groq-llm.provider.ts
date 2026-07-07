@@ -39,12 +39,28 @@ export class GroqLlmProvider implements LlmProvider {
     messages: LlmMessage[],
     options?: LlmCompleteOptions,
   ): Promise<string> {
-    const payload = {
+    return this.send(messages, options, false);
+  }
+
+  /**
+   * Shared request path. `jsonMode` turns on Groq's native JSON output
+   * (`response_format: json_object`), which constrains the model to emit a
+   * single valid JSON object — the structured-output guarantee for the default
+   * real-AI provider. (Groq requires the word "json" somewhere in the prompt for
+   * this mode; the `completeJson` nudge below satisfies that.)
+   */
+  private async send(
+    messages: LlmMessage[],
+    options: LlmCompleteOptions | undefined,
+    jsonMode: boolean,
+  ): Promise<string> {
+    const payload: Record<string, unknown> = {
       model: options?.model ?? this.defaultModel,
       max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
       temperature: options?.temperature ?? 0.7,
       messages: this.buildMessages(messages, options?.system),
     };
+    if (jsonMode) payload.response_format = { type: 'json_object' };
 
     const res = await fetch(GROQ_URL, {
       method: 'POST',
@@ -80,10 +96,7 @@ export class GroqLlmProvider implements LlmProvider {
       },
     ];
     // Default to deterministic JSON, but let callers override the temperature.
-    const raw = await this.complete(jsonMessages, {
-      temperature: 0,
-      ...options,
-    });
+    const raw = await this.send(jsonMessages, { temperature: 0, ...options }, true);
     return parseJsonFromLlm<T>(raw);
   }
 

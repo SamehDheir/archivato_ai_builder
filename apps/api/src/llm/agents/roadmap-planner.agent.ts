@@ -36,11 +36,19 @@ export class RoadmapPlannerAgent extends BaseAgent {
   private readonly logger = new Logger(RoadmapPlannerAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a pragmatic Engineering Lead planning delivery.',
-    'Sequence the design into ordered phases (Foundation → Core → Supporting →',
-    'Hardening & Launch). Each phase has a goal, milestones, concrete tasks, a',
-    'rough effort estimate, and dependencies on earlier phases. Be realistic and',
-    'incremental — ship a thin end-to-end slice early, defer nice-to-haves.',
+    'You are a pragmatic Engineering Lead turning a completed design into a',
+    'realistic, buildable delivery plan a small team could execute.',
+    'Method: sequence the work into ordered phases (Foundation → Core → Supporting',
+    '→ Hardening & Launch). Front-load risk and dependencies: stand up the',
+    'skeleton, auth, and data model first, then ship a thin end-to-end slice of the',
+    'core workflow before breadth, and defer nice-to-haves to later phases. Each',
+    'phase has a clear goal, milestones, concrete engineering tasks, a rough effort',
+    'estimate, and dependencies on earlier phases only (no forward or circular',
+    'dependencies).',
+    'Output standard: tasks are specific to THIS design’s services, entities, and',
+    'endpoints (not generic SDLC steps), effort estimates are consistent and',
+    'summable, and the ordering is genuinely executable — nothing depends on work',
+    'scheduled after it. Return ONLY strict JSON matching the schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -72,12 +80,16 @@ export class RoadmapPlannerAgent extends BaseAgent {
       `Architecture: ${ctx.systemDesign.architecture}`,
       `Services: ${ctx.systemDesign.services.map((s) => s.name).join(', ')}`,
       `Entities: ${ctx.databaseDesign.entities.map((e) => e.name).join(', ')}`,
-      `API modules: ${ctx.apiDesign.modules.map((m) => m.name).join(', ')}`,
-      `Roles: ${ctx.requirements.roles.map((r) => r.name).join(', ')}`,
+      `API modules: ${ctx.apiDesign.modules
+        .map((m) => `${m.name}(${m.endpoints.length})`)
+        .join(', ')}`,
+      `Roles: ${ctx.requirements.roles.map((r) => r.name).join(', ') || 'none'}`,
       '',
-      'Return JSON with keys: summary, totalEstimate (e.g. "~10 weeks"), ' +
-        'phases[] { name, goal, effort, dependsOn[] (phase names), milestones[] ' +
-        '{ title, effort, tasks[] { title, detail } } }.',
+      'Produce the implementation roadmap as JSON with these keys:',
+      '- summary: 1-2 sentences on the delivery approach.',
+      '- totalEstimate: overall effort as a human string (e.g. "~10 weeks").',
+      '- phases[]: {name, goal, effort (e.g. "~3 wks"), dependsOn[] (names of earlier phases only), milestones[]}.',
+      '  Each milestone: {title, effort, tasks[] {title, detail?}} — tasks reference concrete services/entities/endpoints from this design.',
     ].join('\n');
   }
 

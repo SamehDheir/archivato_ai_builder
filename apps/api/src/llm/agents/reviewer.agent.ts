@@ -37,12 +37,22 @@ export class ReviewerAgent extends BaseAgent {
   private readonly logger = new Logger(ReviewerAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a rigorous Principal Engineer performing an architecture review.',
-    'Assess the design across four dimensions — security, scalability,',
-    'performance, and cost — each with a 0-100 sub-score and specific findings,',
-    'then give an overall 0-100 score, the missing requirements, and concrete',
-    'suggestions. Be specific and honest; cite the design artifacts. Prefer',
-    'high-signal findings over generic advice.',
+    'You are a rigorous Principal Engineer running a design review before build.',
+    'Assess the generated design across four dimensions — security, scalability,',
+    'performance, and cost — giving each a calibrated 0-100 sub-score plus',
+    'specific findings, then an overall 0-100 score, the missing requirements, and',
+    'concrete suggestions.',
+    'Method: judge against real engineering standards (OWASP, least privilege,',
+    'defense in depth; horizontal scalability and statelessness; pagination,',
+    'caching, and N+1 avoidance; right-sizing and idle cost). Score honestly — a',
+    'design with an unauthenticated admin path is not an 85. Each finding names the',
+    'affected component, explains the concrete risk, and states severity',
+    '(low|medium|high|critical); reserve critical/high for issues that would cause',
+    'a breach, outage, or data loss.',
+    'Output standard: every finding is specific to THIS design and actionable (a',
+    'team could fix exactly what you name) — no generic checklist advice, no',
+    'praise padding. Sub-scores must be consistent with the findings. Return ONLY',
+    'strict JSON matching the schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -71,22 +81,34 @@ export class ReviewerAgent extends BaseAgent {
   }
 
   private buildPrompt(ctx: ReviewContext): string {
+    const techStack = ctx.systemDesign.techStack
+      .map((t) => `${t.layer}:${t.technology}`)
+      .join(', ');
+    const roles = ctx.requirements.roles
+      .map((r) => `${r.name}[${r.permissions.length} perms]`)
+      .join(', ');
     return [
       `Idea: ${ctx.idea}`,
       `Architecture: ${ctx.systemDesign.architecture}`,
+      `Tech stack: ${techStack}`,
       `Services: ${ctx.systemDesign.services.map((s) => s.name).join(', ')}`,
       `Entities: ${ctx.databaseDesign.entities.map((e) => e.name).join(', ')}`,
-      `API modules: ${ctx.apiDesign.modules.map((m) => m.name).join(', ')}`,
+      `Relations: ${ctx.databaseDesign.relations.length}`,
+      `API modules: ${ctx.apiDesign.modules
+        .map((m) => `${m.name}(${m.endpoints.length})`)
+        .join(', ')}`,
+      `Roles: ${roles || 'none'}`,
       `Non-functional reqs: ${ctx.requirements.nonFunctional
         .map((n) => n.category)
-        .join(', ')}`,
+        .join(', ') || 'none stated'}`,
       '',
-      'Return JSON with keys: overallScore (0-100), scores {security,' +
-        'scalability,performance,cost} (each 0-100), summary, securityIssues[] ' +
-        '{title,detail,severity}, scalabilityIssues[] {title,detail,severity}, ' +
-        'performanceRisks[] {title,detail,severity}, costOptimizations[] ' +
-        '{title,detail,severity}, missingFeatures[] (strings), recommendations[] ' +
-        '(strings). severity ∈ low|medium|high|critical.',
+      'Review the design and return JSON with these keys:',
+      '- overallScore: 0-100, consistent with the sub-scores below.',
+      '- scores: {security, scalability, performance, cost} — each 0-100.',
+      '- summary: 1-3 sentences on the overall health and the top risk.',
+      '- securityIssues[], scalabilityIssues[], performanceRisks[], costOptimizations[]: each {title, detail (the concrete risk + where), severity (low|medium|high|critical)}.',
+      '- missingFeatures[]: requirements or capabilities absent from the design (strings).',
+      '- recommendations[]: prioritized, concrete next actions (strings).',
     ].join('\n');
   }
 

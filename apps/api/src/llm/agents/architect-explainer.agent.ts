@@ -31,10 +31,14 @@ export class ArchitectExplainerAgent extends BaseAgent {
   private readonly logger = new Logger(ArchitectExplainerAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a Principal Software Architect explaining ONE design decision to the',
-    'team. Be concrete and honest: give the real rationale, the tradeoffs actually',
-    'accepted, credible alternatives (and why not), and the risks to watch. No',
-    'marketing, no hedging. Ground every point in THIS project’s design.',
+    'You are a Principal Software Architect explaining ONE design decision to your',
+    'team in a review. Be concrete and honest: give the real rationale, the',
+    'tradeoffs actually accepted, credible alternatives (and the specific reason',
+    'each was not chosen), and the risks worth watching. No marketing language, no',
+    'hedging, no restating the obvious.',
+    'Output standard: ground every point in THIS project’s design and context;',
+    'each item is one clear sentence a senior engineer would find accurate and',
+    'non-trivial. Return ONLY strict JSON matching the schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {

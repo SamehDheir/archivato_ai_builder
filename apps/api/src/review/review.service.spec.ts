@@ -14,6 +14,7 @@ import { ApiDesignService } from '../api-design/api-design.service';
 import { InMemoryApiDesignRepository } from '../api-design/in-memory-api-design.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
+import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
 import { DatabaseDesignerAgent } from '../llm/agents/database-designer.agent';
 import { ApiDesignerAgent } from '../llm/agents/api-designer.agent';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
@@ -60,6 +61,7 @@ function makeHarness(): Harness {
     docRepo,
     sysRepo,
     new SystemArchitectAgent(mock),
+    new ArchitectExplainerAgent(mock),
   );
   const databaseDesign = new DatabaseDesignService(
     sessionRepo,
