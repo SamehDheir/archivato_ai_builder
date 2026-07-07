@@ -1,11 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
-  ArrowLeft,
   Plus,
   Trash2,
   Shield,
@@ -714,15 +712,8 @@ export default function RolesPage() {
   if (!user) return null;
 
   return (
-    <div className="mx-auto max-w-4xl px-5 py-8">
-      <Link
-        href="/admin"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" /> {t('roles.back')}
-      </Link>
-
-      <div className="mt-3 flex items-center gap-2">
+    <div>
+      <div className="flex items-center gap-2">
         <Shield className="h-5 w-5 text-primary" />
         <h1 className="text-xl font-bold">{t('roles.title')}</h1>
       </div>

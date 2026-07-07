@@ -8,9 +8,8 @@ import {
   Loader2,
   LifeBuoy,
   Settings as SettingsIcon,
-  ShieldCheck,
 } from 'lucide-react';
-import { hasPermission, isStaffUser, type AuthUser } from '@archivato/shared';
+import { isStaffUser, type AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -145,26 +144,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         </span>
         <LanguageToggle />
         <ThemeToggle />
-        {/* Support link: customers → their support; support staff → the console;
-            other staff (e.g. Billing Admin) are not customers, so no link. */}
-        {(!isStaffUser(user.permissions) ||
-          hasPermission(user.permissions, 'support:read_all')) && (
+        {/* Support: customers reach their Support Center from the header. Staff
+            navigate their consoles (support, admin, billing…) via the admin
+            sidebar instead, so no header links are shown for them. */}
+        {!isStaffUser(user.permissions) && (
           <Button asChild variant="ghost" size="sm" aria-label={t('header.support')}>
-            <Link
-              href={
-                hasPermission(user.permissions, 'support:read_all')
-                  ? '/support/admin'
-                  : '/support'
-              }
-            >
+            <Link href="/support">
               <LifeBuoy className="h-4 w-4" />
-            </Link>
-          </Button>
-        )}
-        {user.role === 'admin' && (
-          <Button asChild variant="ghost" size="sm" aria-label={t('header.admin')}>
-            <Link href="/admin">
-              <ShieldCheck className="h-4 w-4" />
             </Link>
           </Button>
         )}

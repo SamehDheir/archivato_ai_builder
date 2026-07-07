@@ -5,14 +5,12 @@ import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  CreditCard,
   FolderOpen,
   LayoutGrid,
   LifeBuoy,
   Plus,
   Search,
   Settings,
-  Shield,
   ShieldCheck,
 } from 'lucide-react';
 import type {
@@ -58,6 +56,8 @@ import { ProjectStages, type StreamState, type TabKey } from '@/components/proje
 import { streamStage, reduceStreamEvent, emptyStreamView } from '@/lib/stream';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CommandPalette, type CommandGroup } from '@/components/shared/command-palette';
+import { AdminShell } from '@/components/admin/AdminShell';
+import { AdminOverview } from '@/components/admin/AdminOverview';
 
 /** localStorage key for the active session id, scoped PER USER. */
 const sessionKey = (userId: string) => `archivato.sessionId:${userId}`;
@@ -77,99 +77,6 @@ function saveFile(content: string, filename: string, mime: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-}
-
-/**
- * The dashboard home for **staff** accounts (anyone holding a permission). Shows
- * a card per console the user's roles grant — the union of their permissions, so
- * a support agent sees only Support, while a super admin sees them all. Replaces
- * the project creator, which staff can't use.
- */
-function StaffHome({ permissions }: { permissions: Permission[] }) {
-  const { t } = useTranslation('dashboard');
-  const canAnalytics = hasPermission(permissions, 'admin:analytics');
-  const cards = [
-    {
-      key: 'support',
-      show: hasPermission(permissions, 'support:read_all'),
-      icon: LifeBuoy,
-      title: t('staff.support.title'),
-      body: t('staff.support.body'),
-      href: '/support/admin',
-      cta: t('staff.support.open'),
-    },
-    {
-      key: 'analytics',
-      show: canAnalytics,
-      icon: ShieldCheck,
-      title: t('staff.analytics.title'),
-      body: t('staff.analytics.body'),
-      href: '/admin',
-      cta: t('staff.analytics.open'),
-    },
-    {
-      key: 'roles',
-      show: hasPermission(permissions, 'admin:roles:manage'),
-      icon: Shield,
-      title: t('staff.roles.title'),
-      body: t('staff.roles.body'),
-      href: '/admin/roles',
-      cta: t('staff.roles.open'),
-    },
-    {
-      key: 'billing',
-      show: hasPermission(permissions, 'billing:manage'),
-      icon: CreditCard,
-      title: t('staff.billing.title'),
-      body: t('staff.billing.body'),
-      href: '/admin/billing',
-      cta: t('staff.billing.open'),
-    },
-  ].filter((c) => c.show);
-
-  return (
-    <div>
-      <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-        <h2 className="font-semibold">{t('staff.heading')}</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">{t('staff.subtitle')}</p>
-      </div>
-      {cards.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('staff.empty')}</p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {cards.map(({ key, icon: Icon, title, body, href, cta }) => {
-            const content = (
-              <>
-                <Icon className="h-6 w-6 text-primary" />
-                <h3 className="mt-2 font-semibold">{title}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-                <span
-                  className={`mt-3 inline-block text-sm font-medium ${
-                    href ? 'text-primary' : 'text-muted-foreground'
-                  }`}
-                >
-                  {cta}
-                </span>
-              </>
-            );
-            return href ? (
-              <Link
-                key={key}
-                href={href}
-                className="rounded-lg border border-border p-4 transition-colors hover:border-primary/40"
-              >
-                {content}
-              </Link>
-            ) : (
-              <div key={key} className="rounded-lg border border-border p-4">
-                {content}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export default function Home() {
@@ -643,6 +550,17 @@ export default function Home() {
     );
   }
 
+  // Staff accounts (any permission) are console operators — they can't create
+  // projects. Give them the unified admin sidebar shell + a console overview
+  // instead of the project dashboard.
+  if (isStaffUser(permissions)) {
+    return (
+      <AdminShell>
+        <AdminOverview permissions={permissions} />
+      </AdminShell>
+    );
+  }
+
   // Breadcrumb trail: Projects / ‹project name› / ‹current stage›.
   let crumbs: Crumb[] = [];
   if (state) {
@@ -807,9 +725,7 @@ export default function Home() {
             {t('appSubtitle')}
           </p>
 
-          {isStaff ? (
-            <StaffHome permissions={permissions} />
-          ) : (
+          {(
             <>
               {sub && (
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">

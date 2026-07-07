@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
-  ArrowLeft,
   CreditCard,
   Eye,
   FolderKanban,
@@ -71,7 +70,7 @@ export function AdminDashboard() {
 
   if (loading || !stats) {
     return (
-      <div className="mx-auto max-w-6xl px-5 py-8">
+      <div>
         <Skeleton className="h-8 w-56" />
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -86,13 +85,7 @@ export function AdminDashboard() {
   const o = stats.overview;
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8">
-      <Link
-        href="/dashboard"
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" /> {t('back')}
-      </Link>
+    <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-6 w-6 text-primary" />

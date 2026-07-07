@@ -1,11 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
-  ArrowLeft,
   CreditCard,
   TrendingUp,
   Users,
@@ -263,15 +261,8 @@ export default function BillingAdminPage() {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8">
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" /> {t('admin.back')}
-      </Link>
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <CreditCard className="h-5 w-5 text-primary" />
           <h1 className="text-xl font-bold">{t('admin.title')}</h1>

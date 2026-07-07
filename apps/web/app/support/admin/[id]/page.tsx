@@ -2,11 +2,11 @@
 
 import { useParams } from 'next/navigation';
 import { hasPermission } from '@archivato/shared';
-import { SupportNav } from '@/components/support/SupportNav';
 import { TicketDetail } from '@/components/support/TicketDetail';
 import { usePageAccess, requirePermission } from '@/lib/use-page-access';
 
-/** Staff ticket detail — guards on `support:read_all` (staff without it → dashboard). */
+/** Staff ticket detail — guards on `support:read_all` (staff without it → dashboard).
+ *  Sidebar chrome comes from the AdminShell in app/support/admin/layout.tsx. */
 export default function AdminTicketPage() {
   const params = useParams<{ id: string }>();
   const user = usePageAccess(requirePermission('support:read_all', '/support'));
@@ -24,13 +24,5 @@ export default function AdminTicketPage() {
     copilot: hasPermission(user.permissions, 'support:copilot'),
   };
 
-  return (
-    <div className="mx-auto max-w-5xl px-5 py-8">
-      <SupportNav
-        canManageSupport
-        canManageKb={hasPermission(user.permissions, 'support:kb:manage')}
-      />
-      <TicketDetail ticketId={params.id} admin caps={caps} />
-    </div>
-  );
+  return <TicketDetail ticketId={params.id} admin caps={caps} />;
 }
