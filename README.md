@@ -663,6 +663,23 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   body), plus a **Manage KB** console (`/support/admin/kb`) to create/edit/publish/
   delete. i18n'd (EN + AR).
 
+### ✅ Slice — Unified admin console (permission-aware sidebar)
+- Every staff/admin area now shares one professional shell: a persistent
+  **left sidebar** (below the app header) that lists **only the consoles the
+  viewer's roles grant** — Overview, Support (Tickets · Knowledge Base),
+  Platform (Analytics · Roles), Billing — grouped and with an active-state
+  highlight. A single `admin-nav` config drives both the sidebar and the staff
+  landing, so a support agent sees only Support while a super admin sees
+  everything; the sidebar re-resolves on tab focus (a revoked permission's item
+  disappears without a reload).
+- The shell (`AdminShell`) is applied via **route-group layouts** for `/admin/*`
+  and `/support/admin/*`, and the staff **`/dashboard`** now shows a redesigned
+  **console overview** (a card per reachable console) inside it — replacing the
+  old card grid. Regular users' project dashboard is unchanged. The top **navbar
+  was decluttered**: the redundant Admin quick-link is gone and the Support link
+  shows for customers only (staff navigate via the sidebar). i18n'd (EN + AR,
+  RTL-safe).
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 

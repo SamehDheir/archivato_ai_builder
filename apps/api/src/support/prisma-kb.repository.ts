@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import type { KbArticle as PrismaKbArticle } from '@prisma/client';
 import type {
   CreateKbArticleInput,
@@ -29,20 +30,30 @@ export class PrismaKbRepository implements KbRepository {
   }
 
   async update(id: string, patch: UpdateKbArticleInput): Promise<KbArticle | null> {
-    // Guard against updating a missing row (Prisma would throw).
-    const exists = await this.prisma.kbArticle.findUnique({ where: { id } });
-    if (!exists) return null;
-    const row = await this.prisma.kbArticle.update({
-      where: { id },
-      data: {
-        title: patch.title,
-        body: patch.body,
-        category: patch.category,
-        keywords: patch.keywords,
-        published: patch.published,
-      },
-    });
-    return this.toDomain(row);
+    // Update directly (atomic); a missing row (incl. a concurrent delete) yields
+    // Prisma's P2025 — map it to `null` so the service returns a clean 404
+    // instead of a 500. `undefined` fields are ignored by Prisma (partial patch).
+    try {
+      const row = await this.prisma.kbArticle.update({
+        where: { id },
+        data: {
+          title: patch.title,
+          body: patch.body,
+          category: patch.category,
+          keywords: patch.keywords,
+          published: patch.published,
+        },
+      });
+      return this.toDomain(row);
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
+        return null;
+      }
+      throw err;
+    }
   }
 
   async delete(id: string): Promise<boolean> {

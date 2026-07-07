@@ -418,11 +418,31 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   hold *any* permission (`isStaffUser(permissions)` in `@archivato/shared` — a
   plain `user` holds none). Staff **cannot create projects**: `InterviewController.start`
   403s any staff (generalizing the old `role==='admin'` block to support/billing
-  agents too). The web dashboard (`/dashboard`) renders a **`StaffHome`** for staff
-  instead of the project creator — a card per console their permissions grant
-  (Support → `/support/admin`, Analytics → `/admin`, Roles → `/admin/roles`,
-  Billing), so the view is the **union** of their roles (a support agent sees only
-  Support; a super admin sees all). i18n'd (`dashboard.staff.*`, EN+AR).
+  agents too). Staff get a **unified admin console** instead of the project
+  creator (see the AdminShell bullet below); regular users keep the project
+  dashboard.
+- **Admin console shell (`AdminShell` + permission-aware sidebar).** All staff
+  consoles share one professional chrome: a persistent **left sidebar** (below
+  the global `AuthGate` header) listing only the consoles the viewer's
+  permissions grant — the **union** of their roles. Single source of truth is
+  `components/admin/admin-nav.ts` (`ADMIN_NAV` groups General/Support/Platform/
+  Billing; each item gated by a `Permission`, `null` = any staff; `visibleNav()`
+  filters, `activeNavKey()` picks the longest-prefix match). `AdminShell`
+  (client) self-fetches `/auth/me` for the nav and **re-resolves on focus**
+  (permission-revalidation convention), with a mobile drawer. It's applied via
+  **route-group layouts** — `app/admin/layout.tsx` (wraps `/admin`, `/admin/roles`,
+  `/admin/billing`) and `app/support/admin/layout.tsx` (wraps `/support/admin`,
+  `…/kb`, `…/[id]`) — so those pages return **bare content** (the shell provides
+  the `max-w-6xl` container; their old per-page `mx-auto` wrappers + back-links +
+  the staff `SupportNav` were removed). The staff **`/dashboard`** early-returns
+  `<AdminShell><AdminOverview/></AdminShell>` — a welcome + a card per reachable
+  console (built from the same nav). i18n `admin.nav.*` / `admin.overview.*`
+  (EN+AR). Because the sidebar now handles staff navigation, the **`AuthGate`
+  header dropped its Admin quick-link and shows the Support link to customers
+  only** (staff use the sidebar). The customer `SupportNav` is unchanged (customer
+  support pages aren't under `/support/admin`). Server-side guards remain the real
+  boundary; the shell is navigation/UX only (pages still self-guard via
+  `usePageAccess`).
 - **Super-admin provisions staff (no self-registration).** `AuthService.provisionStaff`
   creates an account directly: it **bypasses the one-account-per-device gate**,
   marks it **pre-verified**, generates a **strong random password** (`password-generator.ts`,
@@ -566,12 +586,12 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   admin/staff consoles; `customerOnly` gates the **customer** support area — staff
   are operators, not customers, so a support agent is sent to `/support/admin` and
   any other staff (e.g. a Billing Admin) to `/dashboard`. Applied across
-  `/support/*` (customer + admin). The header **support link** in `AuthGate` follows
-  the same rule: shown to customers (→ `/support`) and support staff (→ `/support/admin`),
-  hidden for non-support staff.
+  `/support/*` (customer + admin). The header **support link** in `AuthGate` is now
+  shown to **customers only** (→ `/support`); staff navigate via the AdminShell
+  sidebar.
 - **Permission revalidation on focus.** Permissions resolve fresh server-side, but
-  the client caches the last `/auth/me` in component state. So the **dashboard**
-  (StaffHome consoles) and **AuthGate** (header support/admin links) re-fetch
+  the client caches the last `/auth/me` in component state. So the **`AdminShell`
+  sidebar** and **AuthGate** header re-fetch
   `/auth/me` on `focus` / `visibilitychange` / `pageshow[persisted]` (bfcache) and
   update `permissions`/`user` — a just-revoked permission's console/link disappears
   (and a granted one appears) on tab-return without a hard reload. Console *pages*

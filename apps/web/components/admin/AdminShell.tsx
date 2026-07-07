@@ -69,8 +69,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="mx-auto flex w-full max-w-[90rem] gap-0">
-      {/* Desktop sidebar */}
-      <aside className="sticky top-[57px] hidden h-[calc(100vh-57px)] w-60 shrink-0 flex-col overflow-y-auto border-e border-border bg-muted/20 lg:flex">
+      {/* Desktop sidebar — sticky under the app header. The offset tracks the
+          header's real height via --app-header-h (set by AuthGate), so it never
+          overlaps a taller header / the email-verify banner. */}
+      <aside className="sticky top-[var(--app-header-h)] hidden h-[calc(100vh-var(--app-header-h))] w-60 shrink-0 flex-col overflow-y-auto border-e border-border bg-muted/20 lg:flex">
         {nav}
       </aside>
 
@@ -100,7 +102,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             onClick={() => setMobileOpen(false)}
             aria-hidden
           />
-          <aside className="absolute inset-y-0 start-0 flex w-64 flex-col overflow-y-auto border-e border-border bg-background shadow-xl animate-in slide-in-from-left">
+          <aside className="absolute inset-y-0 start-0 flex w-64 flex-col overflow-y-auto border-e border-border bg-background shadow-xl animate-in ltr:slide-in-from-left rtl:slide-in-from-right">
             <div className="flex items-center justify-between px-4 py-3">
               <span className="flex items-center gap-2 font-semibold">
                 <PanelsTopLeft className="h-4 w-4 text-primary" />

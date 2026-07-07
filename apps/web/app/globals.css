@@ -10,6 +10,11 @@
  */
 @layer base {
   :root {
+    /* Height of the sticky app header. AuthGate measures the real header and
+       overwrites this at runtime; the default covers SSR / first paint so the
+       admin sidebar's sticky offset never depends on a magic pixel value. */
+    --app-header-h: 57px;
+
     --background: 220 24% 98%;
     --foreground: 224 24% 12%;
 

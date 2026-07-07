@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +46,24 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useTranslation('common');
+  const headerRef = useRef<HTMLElement | null>(null);
+
+  // Publish the real header height as --app-header-h so sticky consumers (the
+  // admin sidebar) never depend on a hard-coded pixel value or overlap a taller
+  // header. The CSS default covers SSR / first paint.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const set = () =>
+      document.documentElement.style.setProperty(
+        '--app-header-h',
+        `${el.offsetHeight}px`,
+      );
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [user]);
 
   const isPublic =
     PUBLIC_EXACT.includes(pathname ?? '') ||
@@ -125,7 +143,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur">
+      <header
+        ref={headerRef}
+        className="sticky top-0 z-40 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur"
+      >
         {/* Home button: back to the dashboard (the app's home once signed in). */}
         <Link
           href="/dashboard"
