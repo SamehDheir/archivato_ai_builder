@@ -10,12 +10,17 @@ import { SupportAssistantAgent } from '../llm/agents/support-assistant.agent';
 import { MockLlmProvider } from '../llm/mock-llm.provider';
 import { RoleService } from '../roles/role.service';
 import { InMemoryRoleRepository } from '../roles/in-memory-role.repository';
+import { NotificationsService } from '../notifications/notifications.service';
+import { InMemoryNotificationRepository } from '../notifications/in-memory-notification.repository';
 import type { BillingService } from '../billing/billing.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { MailService } from '../auth/mail.service';
+import type { ConfigService } from '@nestjs/config';
 
 interface Harness {
   support: SupportService;
   ai: SupportAiService;
+  inApp: NotificationsService;
   customer: AuthUser;
   other: AuthUser;
   admin: AuthUser;
@@ -27,7 +32,21 @@ async function makeHarness(): Promise<Harness> {
   const repo = new InMemorySupportRepository();
   const users = new InMemoryUserRepository();
   const sessions = new InMemoryInterviewSessionRepository();
-  const notifications = new SupportNotificationsService();
+  // Real in-app notifications (in-memory) + stubbed mailer/config so the wiring
+  // runs without a DB or SMTP.
+  const inApp = new NotificationsService(new InMemoryNotificationRepository());
+  const mail = {
+    sendNotificationEmail: async () => undefined,
+  } as unknown as MailService;
+  const config = {
+    get: (_key: string, fallback?: unknown) => fallback,
+  } as unknown as ConfigService;
+  const notifications = new SupportNotificationsService(
+    users,
+    mail,
+    inApp,
+    config,
+  );
   const agent = new SupportAssistantAgent(new MockLlmProvider());
 
   // Minimal stubs for the dependencies the Support flow only touches lightly.
@@ -100,6 +119,7 @@ async function makeHarness(): Promise<Harness> {
   return {
     support,
     ai,
+    inApp,
     customer: await mk('cust@example.com', 'user'),
     other: await mk('other@example.com', 'user'),
     admin: await mk('admin@example.com', 'admin'),
@@ -125,6 +145,18 @@ describe('SupportService', () => {
     expect(detail.messages[0].authorType).toBe('customer');
     expect(detail.events.some((e) => e.type === 'ticket_created')).toBe(true);
     expect(detail.customer.email).toBe('cust@example.com');
+  });
+
+  it('notifies the ticket owner in-app when the ticket is created', async () => {
+    const h = await makeHarness();
+    await h.support.createTicket(h.customer, NEW_TICKET);
+
+    const page = await h.inApp.page(h.customer.id);
+    expect(page.unread).toBe(1);
+    expect(page.items[0].type).toBe('ticket_created');
+    expect(page.items[0].link).toContain('/support/tickets/');
+    // The other customer got nothing (no broadcast).
+    expect((await h.inApp.page(h.other.id)).unread).toBe(0);
   });
 
   it('hides tickets from other customers (404, no leak) but not from admins', async () => {

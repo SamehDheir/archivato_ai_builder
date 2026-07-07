@@ -80,6 +80,6 @@ import { PrismaDeviceRegistrationRepository } from './prisma-device-registration
     },
   ],
   // Export so later modules (ownership enforcement) can reuse the guard/strategy.
-  exports: [USER_REPOSITORY, AuthService, AdminGuard, PermissionGuard],
+  exports: [USER_REPOSITORY, AuthService, AdminGuard, PermissionGuard, MailService],
 })
 export class AuthModule {}

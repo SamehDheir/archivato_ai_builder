@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { InterviewModule } from '../interview/interview.module';
 import { BillingModule } from '../billing/billing.module';
 import { RolesModule } from '../roles/roles.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { SupportController } from './support.controller';
 import { SupportAdminController } from './support-admin.controller';
 import { SupportService } from './support.service';
@@ -20,7 +21,7 @@ import { PrismaSupportRepository } from './prisma-support.repository';
  * global, so the SupportAssistantAgent is provided here directly.
  */
 @Module({
-  imports: [AuthModule, InterviewModule, BillingModule, RolesModule],
+  imports: [AuthModule, InterviewModule, BillingModule, RolesModule, NotificationsModule],
   controllers: [SupportController, SupportAdminController],
   providers: [
     SupportService,

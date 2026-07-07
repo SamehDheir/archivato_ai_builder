@@ -12,6 +12,11 @@
     "unverified": "unverified",
     "emailNotVerified": "Email not verified"
   },
+  "notifications": {
+    "title": "Notifications",
+    "markAll": "Mark all read",
+    "empty": "You're all caught up."
+  },
   "loading": {
     "workspace": "Loading your workspace…",
     "redirecting": "Redirecting…",

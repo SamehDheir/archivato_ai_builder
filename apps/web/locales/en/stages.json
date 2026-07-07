@@ -216,7 +216,10 @@
     "noDbDescription": "Generate the database design first (Database tab), then arrange its entities and draw relations here."
   },
   "refine": {
+    "agentName": "AI Architect",
     "intro": "Ask for a change and the requirements, architecture, database, and APIs update together.",
+    "tryThese": "Try one of these, or describe your own change:",
+    "hint": "Enter to send · Shift+Enter for a new line",
     "redesigning": "Redesigning…",
     "placeholder": "e.g. Add notifications, or make it scalable to 5M users…",
     "send": "Send",

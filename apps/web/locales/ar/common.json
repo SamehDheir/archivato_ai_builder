@@ -12,6 +12,11 @@
     "unverified": "غير مُوثَّق",
     "emailNotVerified": "لم يتم توثيق البريد الإلكتروني"
   },
+  "notifications": {
+    "title": "الإشعارات",
+    "markAll": "تعليم الكل كمقروء",
+    "empty": "لا توجد إشعارات جديدة."
+  },
   "loading": {
     "workspace": "جارٍ تحميل مساحة عملك…",
     "redirecting": "جارٍ إعادة التوجيه…",

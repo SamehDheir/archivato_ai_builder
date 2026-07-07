@@ -100,6 +100,26 @@ export class MailService {
     await this.send({ to, subject, text, html }, `reset code: ${code}`);
   }
 
+  /**
+   * Generic transactional email used by the Support Center notifications: a
+   * plain templated body plus an optional absolute link to open the ticket.
+   * The body may contain user-controlled text (a ticket subject), so it's
+   * HTML-escaped before it goes into the HTML part. Callers wrap this
+   * best-effort — a mail failure must never break the underlying action.
+   */
+  async sendNotificationEmail(
+    to: string,
+    subject: string,
+    body: string,
+    link?: string,
+  ): Promise<void> {
+    const text = link ? `${body}\n\nOpen it here: ${link}` : body;
+    const html =
+      `<p>${escapeHtml(body)}</p>` +
+      (link ? `<p><a href="${escapeHtml(link)}">Open in Archivato</a></p>` : '');
+    await this.send({ to, subject, text, html }, link ?? subject);
+  }
+
   private async send(
     message: { to: string; subject: string; text: string; html: string },
     link: string,
@@ -225,6 +245,16 @@ function isMailProvider(value: string): value is MailProvider {
     value === 'preview' ||
     value === 'log'
   );
+}
+
+/** Escape user-controlled text before interpolating it into email HTML. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /** Only pass auth when a username is configured (some relays are open/local). */

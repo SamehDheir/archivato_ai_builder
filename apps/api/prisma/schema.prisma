@@ -45,6 +45,8 @@ model User {
   // Support Center: tickets the user opened + tickets assigned to them (admins).
   supportTickets      SupportTicket[]          @relation("SupportTicketOwner")
   assignedTickets     SupportTicket[]          @relation("SupportTicketAssignee")
+  // In-app notifications (bell/inbox).
+  notifications       Notification[]
 
   @@map("users")
 }
@@ -70,6 +72,24 @@ model Subscription {
   updatedAt            DateTime  @updatedAt
 
   @@map("subscriptions")
+}
+
+// In-app notifications (bell/inbox). One row per recipient per event; content is
+// server-authored. `link` is a relative in-app path to open on click. Cascades
+// on user delete.
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // 'ticket_created' | 'ticket_reply' | 'ticket_status' | 'ticket_assigned' | 'ticket_alert'
+  title     String
+  body      String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@map("notifications")
 }
 
 // One-account-per-device enforcement (anti-spam). On local registration the

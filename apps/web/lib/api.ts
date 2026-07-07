@@ -14,6 +14,7 @@ import type {
   InterviewState,
   JobStatus,
   LoginInput,
+  NotificationsPage,
   PipelineStageName,
   ProjectIdeaInput,
   ProjectDiagrams,
@@ -506,6 +507,19 @@ export const authApi = {
     `${API_URL}/auth/oauth/${provider}/start${
       fingerprint ? `?fingerprint=${encodeURIComponent(fingerprint)}` : ''
     }`,
+};
+
+export const notificationsApi = {
+  /** Recent notifications + unread count (drives the bell). */
+  list: () => request<NotificationsPage>('/notifications'),
+
+  /** Mark all read; returns the refreshed page. */
+  markAll: () =>
+    request<NotificationsPage>('/notifications/read-all', { method: 'POST' }),
+
+  /** Mark one notification read. */
+  markRead: (id: string) =>
+    request<void>(`/notifications/${id}/read`, { method: 'PATCH' }),
 };
 
 export const billingApi = {

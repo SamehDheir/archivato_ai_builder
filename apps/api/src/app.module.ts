@@ -23,6 +23,7 @@ import { ScaffoldModule } from './scaffold/scaffold.module';
 import { ChatModule } from './chat/chat.module';
 import { JobsModule } from './jobs/jobs.module';
 import { StreamModule } from './stream/stream.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { VersionsModule } from './versions/versions.module';
 import { DiagramsModule } from './diagrams/diagrams.module';
 import { BillingModule } from './billing/billing.module';
@@ -79,6 +80,7 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     // Async pipeline generation (BullMQ/Redis): enqueue + poll job status.
     JobsModule,
     StreamModule,
+    NotificationsModule,
     // Slice 12: project version history (snapshot on every modification).
     VersionsModule,
     // Architecture diagrams (Mermaid, deterministic from the design artifacts).

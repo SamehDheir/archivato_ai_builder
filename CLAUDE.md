@@ -94,7 +94,8 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
   `export`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
-  `billing`, `analytics`, `admin`, `support`, `roles`, `waitlist`).
+  `billing`, `analytics`, `admin`, `support`, `notifications`, `roles`,
+  `waitlist`).
   Modules export their repository token + service for downstream use.
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
@@ -426,10 +427,28 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   inline for AI log analysis); binary files (image/pdf/zip) are metadata-only (no
   bytes served). Mime allowlist + 5 MB cap enforced by DTO. The mapper exposes
   only an `isText` flag to the client, never `textContent`.
-- **Support notifications = placeholder.** `SupportNotificationsService`
-  centralizes every in-app/email/AI-smart-alert point and just logs today
-  (best-effort — never breaks a ticket action); wire a real channel later without
-  touching callers. **Web:** `/support/*` routes (`SupportNav` sub-nav:
+- **Notifications (`notifications`) — in-app bell + email, wired.**
+  `SupportNotificationsService` centralizes every ticket event and now delivers
+  **two real channels** to the **involved party** (no staff broadcast): an
+  **in-app** notification (bell/inbox) via `NotificationsService`, and an
+  **email** via the shared `MailService`. Both are **best-effort** (the ticket
+  write already committed; a notify/mail failure only logs). Recipients: new
+  ticket / status change → owner; reply → the *other* side (admin reply → owner,
+  customer reply → assignee); assignment → assignee; AI smart-alert → assignee
+  (skipped if unassigned). Emails HTML-escape the (user-controlled) ticket subject
+  and carry an absolute `WEB_ORIGIN` deep-link; in-app links are relative
+  (`/support/tickets/:id` for the customer, `/support/admin/tickets/:id` for
+  staff). The **`notifications` module** is a normal repo-pattern store
+  (`notifications` table, in-memory + Prisma) exposing owner-scoped
+  `GET /notifications` (items + unread count), `POST /notifications/read-all`,
+  `PATCH /notifications/:id/read`; `NotificationsService.notify()` swallows its own
+  failures so callers never need try/catch. **`MailService` gained a public
+  `sendNotificationEmail(to,subject,body,link?)`** and is now exported from
+  AuthModule. **Web:** a header **`NotificationBell`** (unread badge + dropdown,
+  polls every 60s + on focus, mark-one/all-read, locale-aware relative time,
+  RTL-safe) in `AuthGate`; `notificationsApi` in `lib/api`; chrome i18n'd
+  (`common.notifications.*`, EN+AR) while the notification title/body stay
+  server-side English (like other system output). **Web:** `/support/*` routes (`SupportNav` sub-nav:
   Dashboard · New · Knowledge Base · Admin), a `LifeBuoy` header link, the create
   form with the deflection panel on top, `TicketDetail` (conversation + timeline +
   AI sidebar + admin controls, driven by an `admin` prop), and the admin panel

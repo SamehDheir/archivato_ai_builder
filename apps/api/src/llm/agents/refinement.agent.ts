@@ -39,12 +39,19 @@ export class RefinementAgent extends BaseAgent {
   private readonly logger = new Logger(RefinementAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a Solution Refiner.',
-    'Given an existing requirement document and a change request, return the',
-    'FULL updated requirement document plus a short summary of what changed.',
-    'Keep existing ids stable; add new FR-/NFR-/BR- ids for new items.',
-    'Only change what the instruction implies; never drop unrelated scope.',
-  ].join(' ');
+    'You are the Solution Architect refining an existing software design.',
+    'You receive the current Requirement Document (JSON) and one change request,',
+    'and return the FULL updated Requirement Document plus a concise summary.',
+    'Rules:',
+    '- Apply ONLY what the change request implies; never drop or rewrite unrelated scope.',
+    '- Support additions, modifications, AND removals: to remove something, delete',
+    '  the relevant functional/non-functional/role/business-rule entries.',
+    '- Keep existing ids stable; give new items fresh FR-/NFR-/BR- ids; never renumber.',
+    '- Keep priorities (must/should/could) and NFR categories sensible and consistent.',
+    '- If the request implies scale/traffic growth, add or tighten a scalability NFR.',
+    '- summary: 1–3 short sentences stating the CONCRETE changes (what was added,',
+    '  changed, or removed) — not a restatement of the request.',
+  ].join('\n');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
     super(llm);

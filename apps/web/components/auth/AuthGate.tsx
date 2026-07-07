@@ -18,6 +18,7 @@ import { AuthForm } from '@/components/auth/AuthForm';
 import { ThemeToggle } from '@/components/shared/theme';
 import { LanguageToggle } from '@/components/shared/i18n';
 import { Logo } from '@/components/shared/Logo';
+import { NotificationBell } from '@/components/shared/NotificationBell';
 
 /** Always-public routes, matched by prefix (rendered regardless of auth state). */
 const PUBLIC_PREFIXES = ['/verify'];
@@ -167,6 +168,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             </Link>
           </Button>
         )}
+        <NotificationBell />
         <Button asChild variant="ghost" size="sm" aria-label={t('header.settings')}>
           <Link href="/settings">
             <SettingsIcon className="h-4 w-4" />

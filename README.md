@@ -574,6 +574,22 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   badge; **settings** shows an "Annual" badge; and the billing-admin **MRR
   normalizes** annual subscriptions to their monthly-equivalent revenue.
 
+### ✅ Slice — Notifications wired (in-app bell + email)
+- The Support Center's notification hooks are no longer a stub: every ticket event
+  now delivers **two real channels** to the **involved party** — an **in-app
+  notification** (a new header **bell** with an unread badge + dropdown) and an
+  **email** via the existing `MailService`. Recipients are scoped (no staff
+  broadcast): a new ticket / status change confirms to the customer; a reply
+  notifies the *other* side; an assignment notifies the assignee; an AI
+  smart-alert goes to the assignee. Everything is **best-effort** — a
+  notification or mail failure never breaks the ticket action.
+- New **`notifications`** module (repo pattern + `notifications` table):
+  owner-scoped `GET /api/notifications` (items + unread count),
+  `POST /api/notifications/read-all`, `PATCH /api/notifications/:id/read`. The web
+  bell polls every 60s (and on tab focus), marks read, and deep-links to the
+  ticket. Emails HTML-escape the user-supplied subject and carry an absolute
+  deep-link; `MailService` gained a public `sendNotificationEmail`.
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
 
@@ -634,6 +650,9 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/scaffold/github/connect/start`| Begin the Connect-with-GitHub OAuth popup |
 | GET    | `/api/scaffold/github/connect/callback`| OAuth callback (stores the connection)  |
 | DELETE | `/api/scaffold/github/connection`| Disconnect the stored GitHub connection      |
+| GET    | `/api/notifications`       | My notifications + unread count (bell)       |
+| POST   | `/api/notifications/read-all`| Mark all my notifications read             |
+| PATCH  | `/api/notifications/:id/read`| Mark one notification read                 |
 | POST   | `/api/analytics/track`     | Anonymous pageview beacon (no auth)          |
 | GET    | `/api/admin/stats`         | Admin: KPIs + 30-day trends (admin only)     |
 | GET    | `/api/admin/traffic`       | Admin: traffic detail (admin only)           |
