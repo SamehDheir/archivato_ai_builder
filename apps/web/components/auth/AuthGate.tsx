@@ -4,21 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import {
-  Loader2,
-  LifeBuoy,
-  Settings as SettingsIcon,
-} from 'lucide-react';
+import { Loader2, LifeBuoy } from 'lucide-react';
 import { isStaffUser, type AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { ThemeToggle } from '@/components/shared/theme';
-import { LanguageToggle } from '@/components/shared/i18n';
+import { LanguageMenu } from '@/components/shared/LanguageMenu';
 import { Logo } from '@/components/shared/Logo';
 import { NotificationBell } from '@/components/shared/NotificationBell';
-import { UserAvatar } from '@/components/shared/UserAvatar';
+import { AccountMenu } from '@/components/shared/AccountMenu';
 
 /** Always-public routes, matched by prefix (rendered regardless of auth state). */
 const PUBLIC_PREFIXES = ['/verify'];
@@ -134,7 +129,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <>
         <div className="fixed end-4 top-4 z-50 flex items-center gap-1">
-          <LanguageToggle />
+          <LanguageMenu />
           <ThemeToggle />
         </div>
         <AuthForm onSuccess={setUser} />
@@ -146,7 +141,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     <>
       <header
         ref={headerRef}
-        className="sticky top-0 z-40 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur"
+        className="sticky top-0 z-40 flex items-center gap-2 border-b border-border bg-background/80 px-5 py-3 backdrop-blur"
       >
         {/* Home button: back to the dashboard (the app's home once signed in). */}
         <Link
@@ -156,44 +151,25 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         >
           <Logo />
         </Link>
-        <div className="ms-auto flex items-center gap-2 text-sm text-muted-foreground">
-          <Link
-            href="/settings"
-            aria-label={t('header.settings')}
-            className="rounded-full ring-offset-background transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <UserAvatar name={user.displayName} src={user.avatarUrl} size={28} />
-          </Link>
-          <span className="hidden sm:inline" dir="auto">
-            {user.displayName}
-          </span>
-          {!user.emailVerified && (
-            <Badge variant="warning" title={t('header.emailNotVerified')}>
-              {t('header.unverified')}
-            </Badge>
+
+        <div className="ms-auto flex items-center gap-1">
+          <LanguageMenu />
+          <ThemeToggle />
+          {/* Support: customers reach their Support Center from the header. Staff
+              navigate their consoles (support, admin, billing…) via the admin
+              sidebar instead, so no header links are shown for them. */}
+          {!isStaffUser(user.permissions) && (
+            <Button asChild variant="ghost" size="sm" aria-label={t('header.support')}>
+              <Link href="/support">
+                <LifeBuoy className="h-4 w-4" />
+              </Link>
+            </Button>
           )}
+          <NotificationBell />
+          {/* Divider between utility controls and the account menu. */}
+          <span className="mx-1.5 hidden h-6 w-px bg-border sm:block" aria-hidden />
+          <AccountMenu user={user} onLogout={handleLogout} />
         </div>
-        <LanguageToggle />
-        <ThemeToggle />
-        {/* Support: customers reach their Support Center from the header. Staff
-            navigate their consoles (support, admin, billing…) via the admin
-            sidebar instead, so no header links are shown for them. */}
-        {!isStaffUser(user.permissions) && (
-          <Button asChild variant="ghost" size="sm" aria-label={t('header.support')}>
-            <Link href="/support">
-              <LifeBuoy className="h-4 w-4" />
-            </Link>
-          </Button>
-        )}
-        <NotificationBell />
-        <Button asChild variant="ghost" size="sm" aria-label={t('header.settings')}>
-          <Link href="/settings">
-            <SettingsIcon className="h-4 w-4" />
-          </Link>
-        </Button>
-        <Button variant="secondary" size="sm" onClick={handleLogout}>
-          {t('header.signOut')}
-        </Button>
       </header>
 
       {!user.emailVerified && <VerifyBanner email={user.email} />}

@@ -12,7 +12,7 @@ export const defaultLocale: Locale = 'en';
 /** Human labels for the switcher (each shown in its own script). */
 export const LOCALE_LABEL: Record<Locale, string> = {
   en: 'English',
-  ar: 'العربية',
+  ar: 'Arabic',
 };
 
 /** Right-to-left locales. */

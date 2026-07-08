@@ -359,9 +359,24 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   `UserAvatar` (`components/shared/UserAvatar.tsx`) renders the image or an
   **initials fallback** on a stable name-derived hue (`initialsFromName()` in
   `@archivato/shared`, unicode-safe/tested; falls back to initials on `<img>`
-  error too) — used in the `AuthGate` header (→ links to /settings), the settings
+  error too) — used in the `AuthGate` header **account menu**, the settings
   **Profile** card (upload/change/remove), and the admin users table. i18n
   `settings.profile.{addPhoto,changePhoto,removePhoto,photoHint,…}` (EN+AR).
+- **Header account menu (`AccountMenu`).** The signed-in `AuthGate` navbar groups
+  the utility controls (language, theme, customer Support link, `NotificationBell`)
+  and ends with an **avatar dropdown** (`components/shared/AccountMenu.tsx`) — the
+  identity header (avatar + name + email + an unverified badge) over **Settings**
+  and **Sign out** menu items. It replaces the old inline name + gear + sign-out
+  buttons, and follows the `NotificationBell` dropdown pattern (relative wrapper +
+  outside-click/Escape close, `end-0` for RTL). i18n `header.account` (EN+AR).
+- **Language dropdown (`LanguageMenu`).** The app chrome's language switcher is a
+  **flag dropdown** (`components/shared/LanguageMenu.tsx`): the trigger shows only
+  the current locale's **inline-SVG flag** (no text — and SVG, not emoji, because
+  flag emoji don't render on Windows browsers), and the menu lists each locale as
+  flag + name with a check on the active one. Same dropdown mechanics as
+  `AccountMenu`. Used in the `AuthGate` header + guest controls; the compact
+  text `LanguageToggle` (in `i18n.tsx`) stays for the **marketing/legal** surfaces
+  (`LandingNavActions`, `LegalDocument`).
 - **SuperAdmin + analytics.** `User.role` (`'user'|'admin'`, shared
   `AccountRole` — distinct from the requirement-doc `UserRole`). The primary
   bootstrap is a **seeded account**: `SuperAdminSeeder` (`onModuleInit`, AuthModule)
