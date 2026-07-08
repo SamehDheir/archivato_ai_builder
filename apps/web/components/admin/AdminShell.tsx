@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { Menu, X, PanelsTopLeft } from 'lucide-react';
-import type { AuthUser, Permission } from '@archivato/shared';
+import type { AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -59,8 +59,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setMobileOpen(false);
   }, [pathname]);
 
-  const permissions: Permission[] = user?.permissions ?? [];
-  const groups = useMemo(() => visibleNav(permissions), [permissions]);
+  const groups = useMemo(
+    () => visibleNav(user?.permissions ?? []),
+    [user?.permissions],
+  );
   const activeKey = activeNavKey(pathname);
 
   const nav = (

@@ -143,7 +143,9 @@ Open <http://localhost:3000> and walk through the requirements interview.
 
 ### Test & Build
 ```bash
-npm run test:api   # Jest unit tests
+npm run test:api   # API Jest unit tests (node)
+npm run test:web   # Web Jest tests (jsdom + React Testing Library)
+npm run lint:web   # Web ESLint (eslint-config-next)
 npm run build      # builds shared → api → web
 ```
 
@@ -753,8 +755,21 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   handles the image/initials switch (and falls back to initials if an image fails
   to load). i18n'd (EN + AR); unit-tested (`initialsFromName`, OAuth capture).
 
+### ✅ Slice — Frontend test + lint harness (`apps/web`)
+- Closed a real coverage gap: the backend had ~300 Jest tests but the **web app
+  had no test runner and no working ESLint** (`next lint` was uninitialized). Added
+  a **Jest + React Testing Library** setup through **`next/jest`** (jsdom, SWC
+  transform, CSS/asset mocks, tsconfig-alias mapping) with the first component
+  tests (`UserAvatar`, `AccountMenu`), run via `npm run test:web`.
+- Wired **ESLint** via **`eslint-config-next`** (`next/core-web-vitals`) so
+  `npm run lint:web` runs non-interactively and passes clean (also fixed a stale
+  `react-hooks/exhaustive-deps` case in `AdminShell`). Colocated `*.test.tsx`
+  convention (vs the API's `*.spec.ts`); i18n-dependent chrome mocks
+  `useTranslation`.
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff.
+- Broaden web test coverage (more components + a happy-path flow).
 
 ---
 

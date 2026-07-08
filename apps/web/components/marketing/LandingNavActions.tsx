@@ -7,7 +7,7 @@ import { ArrowRight, LayoutDashboard } from 'lucide-react';
 import { authApi, getAuthHint } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/shared/theme';
-import { LanguageToggle } from '@/components/shared/i18n';
+import { LanguageMenu } from '@/components/shared/LanguageMenu';
 
 /**
  * The landing nav's right-side actions — the one auth-aware island on the
@@ -40,7 +40,7 @@ export function LandingNavActions() {
 
   return (
     <div className="ms-auto flex items-center gap-2">
-      <LanguageToggle />
+      <LanguageMenu />
       <ThemeToggle />
       {authed === true && (
         <Button asChild size="sm">

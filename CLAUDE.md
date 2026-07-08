@@ -33,12 +33,14 @@ npm run dev:web            # Next.js on :3000
 
 # Build (shared → api → web) / test
 npm run build
-npm run test:api
-npm run test --workspace @archivato/api -- <file>   # single test
+npm run test:api                                     # api Jest (node)
+npm run test --workspace @archivato/api -- <file>    # single api test
+npm run test:web                                     # web Jest (jsdom + Testing Library)
+npm run test --workspace @archivato/web -- <file>    # single web test
 
 # Lint
 npm run lint --workspace @archivato/api    # eslint src/**/*.ts
-npm run lint --workspace @archivato/web    # next lint
+npm run lint --workspace @archivato/web    # next lint (eslint-config-next)
 
 # Prisma (from apps/api)
 npm run prisma:migrate --workspace @archivato/api    # migrate dev
@@ -374,9 +376,9 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   the current locale's **inline-SVG flag** (no text — and SVG, not emoji, because
   flag emoji don't render on Windows browsers), and the menu lists each locale as
   flag + name with a check on the active one. Same dropdown mechanics as
-  `AccountMenu`. Used in the `AuthGate` header + guest controls; the compact
-  text `LanguageToggle` (in `i18n.tsx`) stays for the **marketing/legal** surfaces
-  (`LandingNavActions`, `LegalDocument`).
+  `AccountMenu`. Used in the `AuthGate` header + guest controls **and the landing
+  nav** (`LandingNavActions`); the compact text `LanguageToggle` (in `i18n.tsx`)
+  now only remains on the **legal** pages (`LegalDocument`).
 - **SuperAdmin + analytics.** `User.role` (`'user'|'admin'`, shared
   `AccountRole` — distinct from the requirement-doc `UserRole`). The primary
   bootstrap is a **seeded account**: `SuperAdminSeeder` (`onModuleInit`, AuthModule)
@@ -591,7 +593,19 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
 
 ## Frontend Notes
 
-- **i18n (English + Arabic, toggle-based, RTL).** `react-i18next` with statically
+- **Web testing + lint (`apps/web`).** The frontend now has its own **Jest**
+  setup via **`next/jest`** (`jest.config.js` → SWC transform, CSS/asset mocks,
+  jsdom) + **React Testing Library** (`jest.setup.ts` loads `@testing-library/
+  jest-dom`). Tests are colocated as `*.test.tsx` (distinct from the api's
+  `*.spec.ts`); `moduleNameMapper` mirrors the tsconfig aliases (`@/*` +
+  `@archivato/shared` → its **source**). Run with `npm run test:web`
+  (`test`/`test:watch` in the web workspace). Prefer testing behavior/roles over
+  markup; mock `react-i18next`'s `useTranslation` to an identity `t` for chrome
+  components. **ESLint** is wired via **`eslint-config-next`** (`.eslintrc.json`
+  extends `next/core-web-vitals`; `react-hooks/exhaustive-deps` set to `warn`) —
+  `npm run lint --workspace @archivato/web` must stay clean. (Both were previously
+  uninstalled — `next lint` prompted for interactive setup and there was no web
+  test runner.) `react-i18next` with statically
   **bundled** JSON resources (`locales/{en,ar}/<namespace>.json`, registered in
   `lib/i18n/resources.ts` — namespaces: common, auth, marketing, dashboard,
   billing, interview, project, stages, settings, admin, support, legal). No locale routing: the
