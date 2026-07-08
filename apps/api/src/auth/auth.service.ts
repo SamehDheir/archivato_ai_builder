@@ -186,6 +186,21 @@ export class AuthService {
   }
 
   /**
+   * Set (a base64 data URI) or clear (`null`) the signed-in user's profile
+   * picture. The payload is validated/size-capped by the DTO before it reaches
+   * here; clearing falls the UI back to the initials avatar.
+   */
+  async updateAvatar(
+    userId: string,
+    avatarUrl: string | null,
+  ): Promise<AuthUser> {
+    const user = await this.users.findById(userId);
+    if (!user) throw new UnauthorizedException();
+    const saved = await this.users.save({ ...user, avatarUrl });
+    return this.buildAuthUser(saved);
+  }
+
+  /**
    * Change (or, for OAuth-only accounts, set) the password. When the account
    * already has a password, the correct current one is required. Success
    * revokes all existing sessions and issues a fresh one, so other devices are

@@ -72,6 +72,55 @@ describe('OAuthService', () => {
     expect(user.passwordHash).toBeNull();
   });
 
+  it('captures the provider avatar as the initial profile picture', async () => {
+    mockFetch([
+      { access_token: 'tok' },
+      {
+        email: 'pic@example.com',
+        name: 'Pic User',
+        verified_email: true,
+        picture: 'https://lh3.googleusercontent.com/a/pic',
+      },
+    ]);
+    const user = await service.loginWithCode('google', 'code');
+    expect(user.avatarUrl).toBe('https://lh3.googleusercontent.com/a/pic');
+  });
+
+  it('backfills an avatar onto a picture-less existing account, but never clobbers one', async () => {
+    // Existing account with no picture yet.
+    const existing = await users.create({
+      email: 'me@example.com',
+      passwordHash: 'hash',
+      displayName: 'Me',
+      providers: ['password'],
+    });
+    mockFetch([
+      { access_token: 'tok' },
+      {
+        email: 'me@example.com',
+        name: 'Me',
+        verified_email: true,
+        picture: 'https://provider/first.png',
+      },
+    ]);
+    const linked = await service.loginWithCode('google', 'code');
+    expect(linked.id).toBe(existing.id);
+    expect(linked.avatarUrl).toBe('https://provider/first.png');
+
+    // A later sign-in must NOT overwrite the picture we already have.
+    mockFetch([
+      { access_token: 'tok' },
+      {
+        email: 'me@example.com',
+        name: 'Me',
+        verified_email: true,
+        picture: 'https://provider/second.png',
+      },
+    ]);
+    const again = await service.loginWithCode('google', 'code');
+    expect(again.avatarUrl).toBe('https://provider/first.png');
+  });
+
   it('device-gates a NEW OAuth account (one account per device)', async () => {
     mockFetch([
       { access_token: 'tok' },

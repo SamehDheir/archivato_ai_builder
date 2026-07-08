@@ -203,6 +203,7 @@ export class AdminService {
       id: r.id,
       email: r.email,
       displayName: r.displayName,
+      avatarUrl: r.avatarUrl,
       role: r.role as AccountRole,
       roles: roleKeys[i],
       emailVerified: r.emailVerified,

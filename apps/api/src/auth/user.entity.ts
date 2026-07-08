@@ -9,6 +9,11 @@ export interface User {
   email: string;
   passwordHash: string | null;
   displayName: string;
+  /**
+   * Profile picture: a base64 `data:` URI (user upload, stored inline) or an
+   * external URL from an OAuth provider. `null` when unset (UI shows initials).
+   */
+  avatarUrl: string | null;
   emailVerified: boolean;
   /** Access role — `admin` unlocks the superAdmin dashboard. */
   role: AccountRole;

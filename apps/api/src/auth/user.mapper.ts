@@ -21,6 +21,7 @@ export function toAuthUser(user: User, access: AuthAccess): AuthUser {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
     emailVerified: user.emailVerified,
     role: access.roles.includes(SUPER_ADMIN_ROLE_KEY) ? 'admin' : 'user',
     roles: access.roles,

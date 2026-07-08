@@ -18,6 +18,7 @@ export class InMemoryUserRepository implements UserRepository {
       email: input.email.toLowerCase(),
       passwordHash: input.passwordHash,
       displayName: input.displayName,
+      avatarUrl: input.avatarUrl ?? null,
       emailVerified: input.emailVerified ?? false,
       role: 'user',
       providers: input.providers ?? [],

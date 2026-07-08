@@ -472,6 +472,16 @@ export const authApi = {
       body: JSON.stringify(input),
     }),
 
+  /** Set the profile picture (a base64 image data URI, resized client-side). */
+  updateAvatar: (avatarUrl: string) =>
+    request<AuthUser>('/auth/avatar', {
+      method: 'PUT',
+      body: JSON.stringify({ avatarUrl }),
+    }),
+
+  /** Remove the profile picture (the UI falls back to initials). */
+  removeAvatar: () => request<AuthUser>('/auth/avatar', { method: 'DELETE' }),
+
   /** Change/set the password. Stays signed in here; other sessions are revoked. */
   changePassword: (input: ChangePasswordInput) =>
     request<AuthUser>('/auth/change-password', {

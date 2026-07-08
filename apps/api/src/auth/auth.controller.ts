@@ -6,6 +6,7 @@ import {
   HttpCode,
   Patch,
   Post,
+  Put,
   Req,
   Res,
   UseGuards,
@@ -25,6 +26,7 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdateAvatarDto } from './dto/update-avatar.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
@@ -149,6 +151,23 @@ export class AuthController {
     @Body() dto: UpdateProfileDto,
   ): Promise<AuthUser> {
     return this.auth.updateProfile(user.id, dto);
+  }
+
+  /** Set the signed-in user's profile picture (a base64 image data URI). */
+  @Put('avatar')
+  @UseGuards(JwtAuthGuard)
+  updateAvatar(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateAvatarDto,
+  ): Promise<AuthUser> {
+    return this.auth.updateAvatar(user.id, dto.avatarUrl);
+  }
+
+  /** Remove the signed-in user's profile picture (falls back to initials). */
+  @Delete('avatar')
+  @UseGuards(JwtAuthGuard)
+  removeAvatar(@CurrentUser() user: AuthUser): Promise<AuthUser> {
+    return this.auth.updateAvatar(user.id, null);
   }
 
   /**

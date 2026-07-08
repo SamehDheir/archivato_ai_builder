@@ -18,6 +18,7 @@ export class PrismaUserRepository implements UserRepository {
         email: input.email.toLowerCase(),
         passwordHash: input.passwordHash,
         displayName: input.displayName,
+        avatarUrl: input.avatarUrl ?? null,
         emailVerified: input.emailVerified ?? false,
         providers: input.providers ?? [],
       },
@@ -44,6 +45,7 @@ export class PrismaUserRepository implements UserRepository {
         email: user.email.toLowerCase(),
         passwordHash: user.passwordHash,
         displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
         emailVerified: user.emailVerified,
         role: user.role,
         providers: user.providers,
@@ -62,6 +64,7 @@ function toEntity(row: {
   email: string;
   passwordHash: string | null;
   displayName: string;
+  avatarUrl: string | null;
   emailVerified: boolean;
   role: string;
   providers: string[];
@@ -73,6 +76,7 @@ function toEntity(row: {
     email: row.email,
     passwordHash: row.passwordHash,
     displayName: row.displayName,
+    avatarUrl: row.avatarUrl,
     emailVerified: row.emailVerified,
     role: row.role as AccountRole,
     providers: row.providers as AuthProvider[],

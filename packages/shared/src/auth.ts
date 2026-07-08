@@ -8,6 +8,12 @@ export interface AuthUser {
   id: string;
   email: string;
   displayName: string;
+  /**
+   * Profile picture. Either a base64 `data:` URI (a user upload, stored inline —
+   * the app has no object store) or an external https URL captured from an OAuth
+   * provider (Google/GitHub). `null` when unset — the UI falls back to initials.
+   */
+  avatarUrl: string | null;
   /** Whether the email has been verified (Slice 9b). */
   emailVerified: boolean;
   /**
@@ -50,6 +56,32 @@ export interface LoginInput {
 /** Payload for PATCH /auth/profile — edits the signed-in user's profile. */
 export interface UpdateProfileInput {
   displayName: string;
+}
+
+/**
+ * Payload for PUT /auth/avatar — sets the profile picture. `avatarUrl` is a
+ * base64 image `data:` URI produced client-side (resized to a small square).
+ * Removing the picture uses DELETE /auth/avatar, not this payload.
+ */
+export interface UpdateAvatarInput {
+  avatarUrl: string;
+}
+
+/**
+ * Derive up to two uppercase initials from a display name, for the avatar
+ * fallback when no picture is set. Two words → first letter of the first + last;
+ * one word → its first two letters; empty → "?". Unicode-safe (won't split a
+ * surrogate pair). Pure — shared by the web avatar component and tests.
+ */
+export function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = [...parts[0]];
+  if (parts.length === 1) {
+    return first.slice(0, 2).join('').toUpperCase();
+  }
+  const last = [...parts[parts.length - 1]];
+  return (first[0] + last[0]).toUpperCase();
 }
 
 /**

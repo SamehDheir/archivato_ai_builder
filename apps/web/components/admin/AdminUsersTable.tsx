@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/table';
 import { useConfirm } from '@/components/shared/confirm-dialog';
 import { useToast } from '@/components/shared/toast';
+import { UserAvatar } from '@/components/shared/UserAvatar';
 
 const PAGE_SIZE = 20;
 
@@ -149,16 +150,25 @@ export function AdminUsersTable() {
                 return (
                   <TableRow key={u.id}>
                     <TableCell>
-                      <div className="font-medium" dir="auto">
-                        {u.displayName}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span dir="ltr">{u.email}</span>
-                        {!u.emailVerified && (
-                          <Badge variant="warning" className="text-[9px]">
-                            {t('users.unverified')}
-                          </Badge>
-                        )}
+                      <div className="flex items-center gap-2.5">
+                        <UserAvatar
+                          name={u.displayName}
+                          src={u.avatarUrl}
+                          size={32}
+                        />
+                        <div className="min-w-0">
+                          <div className="font-medium" dir="auto">
+                            {u.displayName}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <span dir="ltr">{u.email}</span>
+                            {!u.emailVerified && (
+                              <Badge variant="warning" className="text-[9px]">
+                                {t('users.unverified')}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>

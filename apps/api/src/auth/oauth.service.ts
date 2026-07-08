@@ -32,6 +32,8 @@ interface OAuthProfile {
   displayName: string;
   /** Whether the provider asserts the email is verified (gate for linking). */
   emailVerified: boolean;
+  /** The provider's avatar URL, if any — used as the initial profile picture. */
+  avatarUrl?: string | null;
 }
 
 interface ProviderEndpoints {
@@ -117,12 +119,19 @@ export class OAuthService {
     const existing = await this.users.findByEmail(email);
     if (existing) {
       // Existing account → this is a sign-in / provider link, not a new
-      // account, so the device gate does not apply.
-      if (!existing.providers.includes(provider)) {
+      // account, so the device gate does not apply. Backfill a profile picture
+      // from the provider only when the user doesn't already have one (never
+      // clobber a picture they set themselves).
+      const backfillAvatar =
+        !existing.avatarUrl && profile.avatarUrl ? profile.avatarUrl : undefined;
+      if (!existing.providers.includes(provider) || backfillAvatar) {
         return this.users.save({
           ...existing,
-          providers: [...existing.providers, provider as AuthProvider],
+          providers: existing.providers.includes(provider)
+            ? existing.providers
+            : [...existing.providers, provider as AuthProvider],
           emailVerified: true,
+          avatarUrl: existing.avatarUrl ?? backfillAvatar ?? null,
         });
       }
       return existing;
@@ -146,6 +155,7 @@ export class OAuthService {
       displayName: profile.displayName || email.split('@')[0],
       emailVerified: true, // the provider vouches for the email
       providers: [provider as AuthProvider],
+      avatarUrl: profile.avatarUrl ?? null,
     });
     if (fingerprintHash) {
       // The unique constraint is the real race guard; swallow its violation.
@@ -203,11 +213,13 @@ export class OAuthService {
             email?: string;
             name?: string;
             verified_email?: boolean;
+            picture?: string;
           };
           return {
             email: u.email ?? '',
             displayName: u.name ?? '',
             emailVerified: u.verified_email === true,
+            avatarUrl: u.picture ?? null,
           };
         },
       };
@@ -228,7 +240,11 @@ export class OAuthService {
           fetch('https://api.github.com/user/emails', { headers }),
         ]);
         if (!userRes.ok) throw new Error('github profile fetch failed');
-        const u = (await userRes.json()) as { name?: string; login?: string };
+        const u = (await userRes.json()) as {
+          name?: string;
+          login?: string;
+          avatar_url?: string;
+        };
         let email = '';
         if (emailRes.ok) {
           const emails = (await emailRes.json()) as {
@@ -246,6 +262,7 @@ export class OAuthService {
           email,
           displayName: u.name ?? u.login ?? '',
           emailVerified: email !== '',
+          avatarUrl: u.avatar_url ?? null,
         };
       },
     };

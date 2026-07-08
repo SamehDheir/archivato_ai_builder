@@ -11,6 +11,8 @@ export interface CreateUserInput {
   displayName: string;
   emailVerified?: boolean;
   providers?: AuthProvider[];
+  /** Optional initial profile picture (e.g. captured from an OAuth provider). */
+  avatarUrl?: string | null;
 }
 
 /**

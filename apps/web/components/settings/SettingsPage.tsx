@@ -1,12 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Check, ShieldCheck, Trash2, Zap } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Loader2,
+  ShieldCheck,
+  Trash2,
+  Zap,
+} from 'lucide-react';
 import { PLANS, type AuthUser, type SubscriptionView } from '@archivato/shared';
 import { authApi, billingApi, interviewApi } from '@/lib/api';
+import { fileToAvatarDataUri } from '@/lib/avatar';
+import { UserAvatar } from '@/components/shared/UserAvatar';
 import { useFormat } from '@/lib/i18n/format';
 import { Button } from '@/components/ui/button';
 import {
@@ -106,8 +115,52 @@ function ProfileSection({
   const [displayName, setDisplayName] = useState(user.displayName);
   const [saving, setSaving] = useState(false);
   const [resending, setResending] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const dirty = displayName.trim() !== user.displayName && displayName.trim().length > 0;
+
+  async function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file after a failure
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: t('profile.photoInvalid'), variant: 'error' });
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const dataUri = await fileToAvatarDataUri(file);
+      const updated = await authApi.updateAvatar(dataUri);
+      onUpdated(updated);
+      toast({ title: t('profile.photoUpdated'), variant: 'success' });
+    } catch (err) {
+      toast({
+        title: t('profile.photoFailed'),
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'error',
+      });
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function removePhoto() {
+    setPhotoBusy(true);
+    try {
+      const updated = await authApi.removeAvatar();
+      onUpdated(updated);
+      toast({ title: t('profile.photoRemoved'), variant: 'success' });
+    } catch (err) {
+      toast({
+        title: t('profile.photoFailed'),
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'error',
+      });
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -145,6 +198,45 @@ function ProfileSection({
         <CardDescription>{t('profile.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="flex items-center gap-4">
+          <UserAvatar name={user.displayName} src={user.avatarUrl} size={64} />
+          <div className="space-y-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onPickPhoto}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={photoBusy}
+                onClick={() => fileRef.current?.click()}
+              >
+                {photoBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {user.avatarUrl
+                  ? t('profile.changePhoto')
+                  : t('profile.addPhoto')}
+              </Button>
+              {user.avatarUrl && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={photoBusy}
+                  onClick={removePhoto}
+                >
+                  {t('profile.removePhoto')}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t('profile.photoHint')}
+            </p>
+          </div>
+        </div>
+
         <div className="space-y-1.5">
           <Label htmlFor="displayName">{t('profile.displayName')}</Label>
           <div className="flex gap-2">

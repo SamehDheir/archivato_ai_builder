@@ -738,6 +738,21 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   **Download all** button plus **SQL schema** / **Postman** downloads in the
   Export panel. i18n'd (EN + AR). Unit-tested builders + integration/zip tests.
 
+### ✅ Slice — Profile pictures (avatar + initials fallback)
+- Users can now set a **profile picture**. When none is set, a stable, colored
+  **initials avatar** (derived from the display name) is shown everywhere the user
+  appears — the header, the settings Profile card, and the admin users table.
+- **Upload** is inline with no object store: the browser **center-crops + resizes
+  the image to a 256px square JPEG** (kept tiny so the JSON body stays under the
+  API's default limit) and stores it as a base64 `data:` URI on a new nullable
+  `avatarUrl` column. Set via `PUT /api/auth/avatar` (validated data URI, size
+  cap), remove via `DELETE /api/auth/avatar` — both owner-scoped.
+- **OAuth sign-in captures the provider avatar** (Google `picture` / GitHub
+  `avatar_url`) as the initial picture, backfilling a picture-less account but
+  never overwriting one the user set themselves. A reusable `UserAvatar` component
+  handles the image/initials switch (and falls back to initials if an image fails
+  to load). i18n'd (EN + AR); unit-tested (`initialsFromName`, OAuth capture).
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff.
 
@@ -755,6 +770,8 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | POST   | `/api/auth/resend-verification`| Re-send the verification email (guarded) |
 | GET    | `/api/auth/me`             | Current user (requires a valid access cookie)|
 | PATCH  | `/api/auth/profile`        | Update the signed-in user's display name     |
+| PUT    | `/api/auth/avatar`         | Set the profile picture (base64 image data URI) |
+| DELETE | `/api/auth/avatar`         | Remove the profile picture (falls back to initials) |
 | POST   | `/api/auth/change-password`| Change/set password; revokes other sessions  |
 | DELETE | `/api/auth/me`             | Permanently delete the account (cascades)    |
 | GET    | `/api/interview`           | List the signed-in user's projects           |

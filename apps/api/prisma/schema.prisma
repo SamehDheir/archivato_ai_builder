@@ -22,6 +22,9 @@ model User {
   // Null for accounts created purely via OAuth (Slice 9c).
   passwordHash  String?
   displayName   String
+  // Profile picture: a base64 data: URI (user upload, stored inline — no object
+  // store) or an external URL captured from an OAuth provider. Null → initials.
+  avatarUrl     String?
   emailVerified Boolean  @default(false)
   // Access role. 'admin' unlocks the superAdmin dashboard; bootstrapped from the
   // ADMIN_EMAILS env allowlist on login. Everyone else is a normal 'user'.

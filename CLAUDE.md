@@ -343,6 +343,25 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   all other sessions and re-issues cookies for the current device), theme
   toggle, and a danger-zone **delete account** (`DELETE /auth/me`, cascades all
   projects). `UserRepository.delete` added across impls.
+- **Profile picture (avatar).** A nullable `avatarUrl` on the user holds **either**
+  a base64 image `data:` URI (user upload — stored **inline**, no object store,
+  matching the support-attachment convention) **or** an external provider URL. Set
+  via `PUT /auth/avatar` (`UpdateAvatarDto`: `@Matches` a `data:image/(png|jpe?g|
+  webp|gif);base64,…` URI, `@MaxLength(100_000)` so the JSON body stays under
+  Express's ~100 KB default parse limit — no body-limit change needed), cleared via
+  `DELETE /auth/avatar`; both owner-scoped (`JwtAuthGuard`, act on `user.id`) and
+  return the updated `AuthUser`. The client (`lib/avatar.ts` `fileToAvatarDataUri`)
+  **center-crops + resizes to a 256px square JPEG** and steps quality down until
+  the encoded string fits, so real uploads are tiny. **OAuth captures the provider
+  avatar** (`OAuthProfile.avatarUrl` ← Google `picture` / GitHub `avatar_url`):
+  set on account creation and **backfilled onto a picture-less existing account,
+  but never clobbering** a picture the user set. Web: reusable
+  `UserAvatar` (`components/shared/UserAvatar.tsx`) renders the image or an
+  **initials fallback** on a stable name-derived hue (`initialsFromName()` in
+  `@archivato/shared`, unicode-safe/tested; falls back to initials on `<img>`
+  error too) — used in the `AuthGate` header (→ links to /settings), the settings
+  **Profile** card (upload/change/remove), and the admin users table. i18n
+  `settings.profile.{addPhoto,changePhoto,removePhoto,photoHint,…}` (EN+AR).
 - **SuperAdmin + analytics.** `User.role` (`'user'|'admin'`, shared
   `AccountRole` — distinct from the requirement-doc `UserRole`). The primary
   bootstrap is a **seeded account**: `SuperAdminSeeder` (`onModuleInit`, AuthModule)

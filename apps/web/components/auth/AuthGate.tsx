@@ -18,6 +18,7 @@ import { ThemeToggle } from '@/components/shared/theme';
 import { LanguageToggle } from '@/components/shared/i18n';
 import { Logo } from '@/components/shared/Logo';
 import { NotificationBell } from '@/components/shared/NotificationBell';
+import { UserAvatar } from '@/components/shared/UserAvatar';
 
 /** Always-public routes, matched by prefix (rendered regardless of auth state). */
 const PUBLIC_PREFIXES = ['/verify'];
@@ -155,14 +156,23 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         >
           <Logo />
         </Link>
-        <span className="ms-auto flex items-center gap-2 text-sm text-muted-foreground">
-          {user.displayName}
+        <div className="ms-auto flex items-center gap-2 text-sm text-muted-foreground">
+          <Link
+            href="/settings"
+            aria-label={t('header.settings')}
+            className="rounded-full ring-offset-background transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <UserAvatar name={user.displayName} src={user.avatarUrl} size={28} />
+          </Link>
+          <span className="hidden sm:inline" dir="auto">
+            {user.displayName}
+          </span>
           {!user.emailVerified && (
             <Badge variant="warning" title={t('header.emailNotVerified')}>
               {t('header.unverified')}
             </Badge>
           )}
-        </span>
+        </div>
         <LanguageToggle />
         <ThemeToggle />
         {/* Support: customers reach their Support Center from the header. Staff

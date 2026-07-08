@@ -76,6 +76,8 @@ export interface AdminUserRow {
   id: string;
   email: string;
   displayName: string;
+  /** Profile picture (data URI or provider URL), or null → initials fallback. */
+  avatarUrl: string | null;
   role: AccountRole;
   /** RBAC role keys assigned to the user (for the roles column + editor). */
   roles: string[];
