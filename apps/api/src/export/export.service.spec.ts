@@ -1,4 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import JSZip from 'jszip';
 import { ExportService } from './export.service';
 import { InterviewService } from '../interview/interview.service';
 import { InMemoryInterviewSessionRepository } from '../interview/in-memory-interview-session.repository';
@@ -167,6 +168,53 @@ describe('ExportService', () => {
     expect(Object.keys(paths).some((p) => p.includes('{id}'))).toBe(true);
     expect(Object.keys(paths).some((p) => p.includes(':'))).toBe(false);
     expect(paths['/api/users']).toBeDefined();
+  });
+
+  it('serializes the OpenAPI document as YAML', async () => {
+    const h = makeHarness();
+    const sessionId = await fullPipeline(h);
+    const yaml = await h.service.openapiYaml(sessionId);
+
+    expect(yaml.startsWith('openapi: 3.0.3\n')).toBe(true);
+    expect(yaml).toContain('info:');
+    expect(yaml).toContain('paths:');
+    // id-scoped paths become quoted keys ("/api/users/{id}":).
+    expect(yaml).toContain('{id}"');
+    expect(yaml).toContain('application/json:');
+  });
+
+  it('exports SQL DDL and a Postman collection from the pipeline', async () => {
+    const h = makeHarness();
+    const sessionId = await fullPipeline(h);
+
+    const sql = await h.service.sqlDdl(sessionId);
+    expect(sql).toContain('CREATE TABLE "users"');
+    expect(sql).toContain('PRIMARY KEY');
+
+    const col = await h.service.postman(sessionId);
+    expect(col.info).toBeDefined();
+    expect(Array.isArray(col.item)).toBe(true);
+  });
+
+  it('bundles every format into a single zip', async () => {
+    const h = makeHarness();
+    const sessionId = await fullPipeline(h);
+
+    const buf = await h.service.bundleZip(sessionId);
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.slice(0, 2).toString('latin1')).toBe('PK'); // ZIP magic
+
+    const zip = await JSZip.loadAsync(buf);
+    for (const f of [
+      'README.md',
+      'bundle.json',
+      'openapi.yaml',
+      'schema.sql',
+      'postman_collection.json',
+      'structure.json',
+    ]) {
+      expect(zip.file(f)).toBeTruthy();
+    }
   });
 
   it('serves a schema-derived mock response for a designed endpoint', async () => {

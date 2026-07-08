@@ -728,6 +728,31 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   print-window with the inline vector SVG). No backend — everything derives from
   the already-loaded design + the DOM SVG. Draw.io/Mermaid are string builds;
   SVG/PNG/PDF read `container.querySelector('svg')` at click time.
+- **OpenAPI export = JSON + YAML.** `ExportService.openapi()` builds the OpenAPI
+  3.0 object (`openapi.builder.ts`); `openapiYaml()` serializes the same object
+  with the pure `toYaml()` in `@archivato/shared` (`yaml.ts`, runtime-free/
+  unit-tested — block style, quotes keys/strings only when ambiguous, so numeric
+  status-code keys and `{id}` path keys come out quoted). Route
+  `GET /export/:id/openapi.yaml` (`application/yaml`) sits behind the same
+  `JwtAuthGuard + SessionOwnerGuard + ProGuard` as the rest of export; the `.yaml`
+  literal segment doesn't collide with the `@All(':id/mock/*')` catch-all. Web:
+  the Export panel has split **OpenAPI (JSON)** / **OpenAPI (YAML)** buttons
+  (`export.openapiJson`/`openapiYaml`, EN+AR). Don't add a YAML dependency —
+  `toYaml` is intentionally hand-rolled for the JSON-value subset.
+- **Export also offers SQL / Postman / a "Download all" zip.** Two more pure
+  builders in `@archivato/shared`: `buildSqlDdl(databaseDesign)` (`sql.ts` —
+  runnable **PostgreSQL** DDL; FKs are `ALTER TABLE … ADD CONSTRAINT` *after* all
+  `CREATE TABLE`s so table order never matters; unknown column types fall back to
+  TEXT) and `buildPostmanCollection(idea, apiDesign)` (`postman.ts` — Collection
+  v2.1, folder per module, `{{baseUrl}}` var, `:id` path vars + query params +
+  schema-derived JSON bodies via `exampleValue`). Routes: `GET
+  /export/:id/schema.sql` (`application/sql`), `/postman` (JSON), and
+  `/all.zip` — the zip is built server-side with **`jszip`** (already a dep; same
+  pattern as scaffold) from a **single `bundle()` fetch**, packing README.md +
+  bundle.json + openapi.json/yaml + schema.sql + postman_collection.json +
+  structure.json. Web `ExportView` adds a prominent **Download all** button
+  (`saveBlob` for the Blob) + **SQL schema** / **Postman** buttons
+  (`export.all`/`sql`/`postman`, EN+AR).
 
 ## Rules
 

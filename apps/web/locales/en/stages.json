@@ -15,14 +15,22 @@
       "category": "Category",
       "rule": "Rule"
     },
-    "priority": { "must": "must", "should": "should", "could": "could" }
+    "priority": {
+      "must": "must",
+      "should": "should",
+      "could": "could"
+    }
   },
   "system": {
     "generated": "Generated {{date}}",
     "architecture": "Architecture",
     "techStack": "Tech stack",
     "services": "Services",
-    "col": { "layer": "Layer", "technology": "Technology", "why": "Why" },
+    "col": {
+      "layer": "Layer",
+      "technology": "Technology",
+      "why": "Why"
+    },
     "dependsOn": "depends on:",
     "arch": {
       "monolith": "Monolith",
@@ -73,7 +81,12 @@
     "generated": "Generated {{date}}",
     "download": "Download review",
     "overall": "overall",
-    "score": { "security": "Security", "scalability": "Scalability", "performance": "Performance", "cost": "Cost" },
+    "score": {
+      "security": "Security",
+      "scalability": "Scalability",
+      "performance": "Performance",
+      "cost": "Cost"
+    },
     "critical": "Critical issues ({{count}})",
     "securityIssues": "Security issues",
     "scalabilityProblems": "Scalability problems",
@@ -81,7 +94,12 @@
     "costOptimization": "Cost optimization",
     "missingRequirements": "Missing requirements",
     "suggestions": "Suggestions",
-    "severity": { "low": "low", "medium": "medium", "high": "high", "critical": "critical" },
+    "severity": {
+      "low": "low",
+      "medium": "medium",
+      "high": "high",
+      "critical": "critical"
+    },
     "empty": {
       "security": "No security issues flagged.",
       "scalability": "No scalability problems flagged.",
@@ -105,7 +123,9 @@
     "cheapest": "cheapest",
     "perMonth": "/mo",
     "usersLabel": "{{n}} users",
-    "col": { "provider": "Provider" },
+    "col": {
+      "provider": "Provider"
+    },
     "workload": {
       "services": "Services",
       "entities": "Entities",
@@ -131,9 +151,14 @@
     "jsonBundle": "JSON bundle",
     "markdown": "Markdown",
     "openapi": "OpenAPI",
+    "openapiJson": "OpenAPI (JSON)",
+    "openapiYaml": "OpenAPI (YAML)",
     "structure": "Project structure",
     "pdf": "Print / Save as PDF",
-    "preparing": "Preparing…"
+    "preparing": "Preparing…",
+    "all": "Download all (.zip)",
+    "sql": "SQL schema",
+    "postman": "Postman"
   },
   "scaffold": {
     "title": "Generate code",

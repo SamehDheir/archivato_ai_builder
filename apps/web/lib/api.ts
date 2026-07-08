@@ -813,8 +813,15 @@ export const exportApi = {
     requestText(`/export/${sessionId}/markdown`),
   openapi: (sessionId: string) =>
     request<Record<string, unknown>>(`/export/${sessionId}/openapi`),
+  openapiYaml: (sessionId: string) =>
+    requestText(`/export/${sessionId}/openapi.yaml`),
   structure: (sessionId: string) =>
     request<ProjectStructure>(`/export/${sessionId}/structure`),
+  sql: (sessionId: string) => requestText(`/export/${sessionId}/schema.sql`),
+  postman: (sessionId: string) =>
+    request<Record<string, unknown>>(`/export/${sessionId}/postman`),
+  /** Every format bundled into one .zip Blob. */
+  all: (sessionId: string) => requestBlob(`/export/${sessionId}/all.zip`),
 };
 
 export const scaffoldApi = {

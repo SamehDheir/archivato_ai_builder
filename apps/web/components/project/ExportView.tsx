@@ -7,9 +7,8 @@ import { exportApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ScaffoldView } from './ScaffoldView';
 
-/** Triggers a client-side file download for a string payload. */
-function download(filename: string, content: string, mime: string) {
-  const blob = new Blob([content], { type: mime });
+/** Triggers a browser download for an in-memory Blob. */
+function saveBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -18,6 +17,11 @@ function download(filename: string, content: string, mime: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/** Triggers a client-side file download for a string payload. */
+function download(filename: string, content: string, mime: string) {
+  saveBlob(filename, new Blob([content], { type: mime }));
 }
 
 /** Opens the Markdown in a print window so the user can "Save as PDF". */
@@ -64,6 +68,18 @@ export function ExportView({ sessionId }: { sessionId: string }) {
       <p className="text-sm text-muted-foreground">{t('export.intro')}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
+          disabled={!!busy}
+          onClick={() =>
+            run('all', async () => {
+              const blob = await exportApi.all(sessionId);
+              saveBlob(`archivato-${sessionId}.zip`, blob);
+            })
+          }
+        >
+          <Download /> {label('all', t('export.all'))}
+        </Button>
+
+        <Button
           variant="secondary"
           disabled={!!busy}
           onClick={() =>
@@ -107,7 +123,24 @@ export function ExportView({ sessionId }: { sessionId: string }) {
             })
           }
         >
-          <Download /> {label('openapi', t('export.openapi'))}
+          <Download /> {label('openapi', t('export.openapiJson'))}
+        </Button>
+
+        <Button
+          variant="secondary"
+          disabled={!!busy}
+          onClick={() =>
+            run('openapi-yaml', async () => {
+              const yaml = await exportApi.openapiYaml(sessionId);
+              download(
+                `archivato-${sessionId}-openapi.yaml`,
+                yaml,
+                'application/yaml',
+              );
+            })
+          }
+        >
+          <Download /> {label('openapi-yaml', t('export.openapiYaml'))}
         </Button>
 
         <Button
@@ -125,6 +158,36 @@ export function ExportView({ sessionId }: { sessionId: string }) {
           }
         >
           <Download /> {label('structure', t('export.structure'))}
+        </Button>
+
+        <Button
+          variant="secondary"
+          disabled={!!busy}
+          onClick={() =>
+            run('sql', async () => {
+              const sql = await exportApi.sql(sessionId);
+              download(`archivato-${sessionId}-schema.sql`, sql, 'application/sql');
+            })
+          }
+        >
+          <Download /> {label('sql', t('export.sql'))}
+        </Button>
+
+        <Button
+          variant="secondary"
+          disabled={!!busy}
+          onClick={() =>
+            run('postman', async () => {
+              const col = await exportApi.postman(sessionId);
+              download(
+                `archivato-${sessionId}-postman.json`,
+                JSON.stringify(col, null, 2),
+                'application/json',
+              );
+            })
+          }
+        >
+          <Download /> {label('postman', t('export.postman'))}
         </Button>
 
         <Button

@@ -42,12 +42,48 @@ export class ExportController {
     return this.exporter.openapi(sessionId);
   }
 
+  /** The same OpenAPI 3.0 specification serialized as YAML. */
+  @Get(':sessionId/openapi.yaml')
+  @Header('Content-Type', 'application/yaml; charset=utf-8')
+  openapiYaml(@Param('sessionId') sessionId: string): Promise<string> {
+    return this.exporter.openapiYaml(sessionId);
+  }
+
   /** GitHub-ready project structure manifest. */
   @Get(':sessionId/structure')
   structure(
     @Param('sessionId') sessionId: string,
   ): Promise<ProjectStructure> {
     return this.exporter.structure(sessionId);
+  }
+
+  /** Database design as a runnable PostgreSQL DDL script. */
+  @Get(':sessionId/schema.sql')
+  @Header('Content-Type', 'application/sql; charset=utf-8')
+  sql(@Param('sessionId') sessionId: string): Promise<string> {
+    return this.exporter.sqlDdl(sessionId);
+  }
+
+  /** API design as an importable Postman collection (v2.1). */
+  @Get(':sessionId/postman')
+  postman(
+    @Param('sessionId') sessionId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.exporter.postman(sessionId);
+  }
+
+  /** Every export format bundled into a single downloadable `.zip`. */
+  @Get(':sessionId/all.zip')
+  async all(
+    @Param('sessionId') sessionId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const buffer = await this.exporter.bundleZip(sessionId);
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="archivato-${sessionId}.zip"`,
+    });
+    res.send(buffer);
   }
 
   /**

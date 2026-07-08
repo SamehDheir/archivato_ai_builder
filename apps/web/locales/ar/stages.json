@@ -15,14 +15,22 @@
       "category": "الفئة",
       "rule": "القاعدة"
     },
-    "priority": { "must": "إلزامي", "should": "مُستحسن", "could": "ممكن" }
+    "priority": {
+      "must": "إلزامي",
+      "should": "مُستحسن",
+      "could": "ممكن"
+    }
   },
   "system": {
     "generated": "تم التوليد {{date}}",
     "architecture": "البنية",
     "techStack": "الحزمة التقنية",
     "services": "الخدمات",
-    "col": { "layer": "الطبقة", "technology": "التقنية", "why": "السبب" },
+    "col": {
+      "layer": "الطبقة",
+      "technology": "التقنية",
+      "why": "السبب"
+    },
     "dependsOn": "يعتمد على:",
     "arch": {
       "monolith": "أحادي",
@@ -73,7 +81,12 @@
     "generated": "تم التوليد {{date}}",
     "download": "تنزيل المراجعة",
     "overall": "إجمالي",
-    "score": { "security": "الأمان", "scalability": "قابلية التوسّع", "performance": "الأداء", "cost": "التكلفة" },
+    "score": {
+      "security": "الأمان",
+      "scalability": "قابلية التوسّع",
+      "performance": "الأداء",
+      "cost": "التكلفة"
+    },
     "critical": "المشكلات الحرجة ({{count}})",
     "securityIssues": "مشكلات الأمان",
     "scalabilityProblems": "مشكلات قابلية التوسّع",
@@ -81,7 +94,12 @@
     "costOptimization": "تحسين التكلفة",
     "missingRequirements": "المتطلبات الناقصة",
     "suggestions": "الاقتراحات",
-    "severity": { "low": "منخفضة", "medium": "متوسطة", "high": "عالية", "critical": "حرجة" },
+    "severity": {
+      "low": "منخفضة",
+      "medium": "متوسطة",
+      "high": "عالية",
+      "critical": "حرجة"
+    },
     "empty": {
       "security": "لم يتم رصد مشكلات أمان.",
       "scalability": "لم يتم رصد مشكلات في قابلية التوسّع.",
@@ -105,7 +123,9 @@
     "cheapest": "الأرخص",
     "perMonth": "/شهر",
     "usersLabel": "{{n}} مستخدم",
-    "col": { "provider": "المزوّد" },
+    "col": {
+      "provider": "المزوّد"
+    },
     "workload": {
       "services": "الخدمات",
       "entities": "الكيانات",
@@ -131,9 +151,14 @@
     "jsonBundle": "حزمة JSON",
     "markdown": "Markdown",
     "openapi": "OpenAPI",
+    "openapiJson": "OpenAPI (JSON)",
+    "openapiYaml": "OpenAPI (YAML)",
     "structure": "هيكل المشروع",
     "pdf": "طباعة / حفظ كـPDF",
-    "preparing": "جارٍ التحضير…"
+    "preparing": "جارٍ التحضير…",
+    "all": "تنزيل الكل (‎.zip)",
+    "sql": "مخطط SQL",
+    "postman": "Postman"
   },
   "scaffold": {
     "title": "توليد الكود المصدري",

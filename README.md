@@ -267,9 +267,11 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   dependency.
 - Gate enforced: requires the design pipeline through the API design (review is
   included if present).
-- REST API (`/export/:sessionId/{json,markdown,openapi,structure}`).
+- REST API (`/export/:sessionId/{json,markdown,openapi,openapi.yaml,structure}`).
+  The OpenAPI spec is offered as **JSON and YAML** (same document; YAML via a
+  pure, dependency-free `toYaml()` serializer in `@archivato/shared`).
 - **Frontend**: an Export panel after the review with one-click downloads for
-  each format plus "Print / Save as PDF".
+  each format (OpenAPI JSON + YAML) plus "Print / Save as PDF".
 
 ### ✅ Slice 9a — Auth core (Register / Login / Refresh) + UI
 - Local **register / login** with bcrypt-hashed passwords, **rotating refresh
@@ -706,8 +708,38 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   pipeline) and restart the API; the boot log confirms `Agent LLM provider:
   groq`. Full suite green (43 suites, 280 tests).
 
+### ✅ Slice — YAML OpenAPI export
+- The generated **OpenAPI 3.0** spec can now be downloaded as **YAML** as well as
+  JSON — the same document, serialized by a pure, dependency-free `toYaml()` in
+  `@archivato/shared` (no new package; block-style, quotes keys/strings only when
+  ambiguous, correct for the numeric status-code and `{id}` path keys). New route
+  `GET /api/export/:sessionId/openapi.yaml` (`application/yaml`), Pro-gated and
+  owner-scoped like the rest of export. The Export panel splits the OpenAPI
+  download into **JSON** and **YAML** buttons. i18n'd (EN + AR). Unit-tested
+  (serializer edge cases) + an integration test on the real spec.
+
+### ✅ Slice — Richer export formats (SQL, Postman, "Download all")
+- The Export tab now covers the whole delivery workflow, not just documents. Three
+  developer-facing formats were added, all from **pure, dependency-free builders**
+  in `@archivato/shared`:
+  - **SQL DDL** (`schema.sql`) — the database design as runnable PostgreSQL:
+    quoted identifiers, mapped column types, primary keys inline, and foreign keys
+    emitted as `ALTER TABLE … ADD CONSTRAINT` after all tables so it runs in any
+    order. `GET /api/export/:id/schema.sql`.
+  - **Postman collection** (v2.1) — the API design as an importable collection
+    (folder per module, `{{baseUrl}}` variable, `:id` path vars, query params, and
+    schema-derived JSON bodies on writes) for Postman/Insomnia.
+    `GET /api/export/:id/postman`.
+  - **Download all** (`.zip`) — one click bundles README.md + bundle.json +
+    openapi.json/yaml + schema.sql + postman_collection.json + structure.json
+    (server-side via the existing `jszip` dep; the pipeline is fetched once).
+    `GET /api/export/:id/all.zip`.
+- All Pro-gated + owner-scoped like the rest of export. Web: a prominent
+  **Download all** button plus **SQL schema** / **Postman** downloads in the
+  Export panel. i18n'd (EN + AR). Unit-tested builders + integration/zip tests.
+
 ### ⏳ Upcoming
-- A dedicated worker process + BullMQ retries/backoff; YAML OpenAPI export.
+- A dedicated worker process + BullMQ retries/backoff.
 
 ---
 
@@ -763,6 +795,10 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | GET    | `/api/export/:sessionId/json`| Full artifact bundle (JSON)                 |
 | GET    | `/api/export/:sessionId/markdown`| Markdown report                         |
 | GET    | `/api/export/:sessionId/openapi`| OpenAPI 3.0 spec (JSON)                   |
+| GET    | `/api/export/:sessionId/openapi.yaml`| OpenAPI 3.0 spec (YAML)              |
+| GET    | `/api/export/:sessionId/schema.sql`| PostgreSQL DDL for the database design  |
+| GET    | `/api/export/:sessionId/postman`| Postman collection (v2.1) of the API     |
+| GET    | `/api/export/:sessionId/all.zip`| All formats bundled into one .zip        |
 | GET    | `/api/export/:sessionId/structure`| GitHub project structure manifest       |
 | GET    | `/api/scaffold/:sessionId` | Scaffold file manifest (Pro)                 |
 | GET    | `/api/scaffold/:sessionId/zip`| Download the generated backend as a .zip (Pro)|

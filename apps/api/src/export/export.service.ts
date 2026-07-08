@@ -4,9 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import JSZip from 'jszip';
 import {
+  buildPostmanCollection,
+  buildSqlDdl,
   matchApiEndpoint,
   mockResponse,
+  toYaml,
   type ExportBundle,
   type MockResponse,
   type ProjectStructure,
@@ -100,9 +104,58 @@ export class ExportService {
     return buildOpenApi(b.idea.idea, b.apiDesign, b.databaseDesign);
   }
 
+  /** The same OpenAPI 3.0 spec serialized as YAML (dependency-free). */
+  async openapiYaml(sessionId: string): Promise<string> {
+    return toYaml(await this.openapi(sessionId));
+  }
+
+  /** The database design as a runnable PostgreSQL DDL script. */
+  async sqlDdl(sessionId: string): Promise<string> {
+    const b = await this.bundle(sessionId);
+    return buildSqlDdl(b.databaseDesign);
+  }
+
+  /** The API design as an importable Postman collection (v2.1). */
+  async postman(sessionId: string): Promise<Record<string, unknown>> {
+    const b = await this.bundle(sessionId);
+    return buildPostmanCollection(b.idea.idea, b.apiDesign);
+  }
+
   async structure(sessionId: string): Promise<ProjectStructure> {
     const b = await this.bundle(sessionId);
     return buildProjectStructure(sessionId, b.idea.idea, b.systemDesign);
+  }
+
+  /**
+   * "Download all" — every export format bundled into a single `.zip`. Fetches
+   * the pipeline once and derives each artifact from it (no repeated DB reads).
+   */
+  async bundleZip(sessionId: string): Promise<Buffer> {
+    const b = await this.bundle(sessionId);
+    const openapi = buildOpenApi(b.idea.idea, b.apiDesign, b.databaseDesign);
+    const files: Record<string, string> = {
+      'README.md': buildMarkdown(b),
+      'bundle.json': JSON.stringify(b, null, 2),
+      'openapi.json': JSON.stringify(openapi, null, 2),
+      'openapi.yaml': toYaml(openapi),
+      'schema.sql': buildSqlDdl(b.databaseDesign),
+      'postman_collection.json': JSON.stringify(
+        buildPostmanCollection(b.idea.idea, b.apiDesign),
+        null,
+        2,
+      ),
+      'structure.json': JSON.stringify(
+        buildProjectStructure(sessionId, b.idea.idea, b.systemDesign),
+        null,
+        2,
+      ),
+    };
+
+    const archive = new JSZip();
+    for (const [path, content] of Object.entries(files)) {
+      archive.file(path, content);
+    }
+    return archive.generateAsync({ type: 'nodebuffer' });
   }
 
   /**
