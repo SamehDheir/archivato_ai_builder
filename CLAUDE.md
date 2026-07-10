@@ -294,10 +294,24 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   json_object`** for guaranteed JSON (the structured-output path for the default
   real-AI provider). The deterministic fallbacks are a **resilience layer, not
   mock data** — they only run when no LLM is configured or the model fails.
-- **Provider selection** (`llm.module.ts`): `LLM_PROVIDER=mock|claude|groq`
+- **Provider selection** (`llm.module.ts`): `LLM_PROVIDER=mock|claude|groq|azure`
   forces it for all agents; else `GROQ_API_KEY` present → groq for everything;
-  else mock. `INTERVIEW_LLM_PROVIDER` overrides only the interview. Model via
+  else `AZURE_OPENAI_API_KEY` present → azure; else mock. **Groq keeps priority
+  over Azure** so the documented "paste a free Groq key" behaviour is unchanged —
+  force with `LLM_PROVIDER=azure` when both keys exist.
+  `INTERVIEW_LLM_PROVIDER` overrides only the interview. Model via
   `ANTHROPIC_MODEL` (default `claude-sonnet-4-6`; `claude-opus-4-8` available).
+- **Azure OpenAI (`AzureOpenAiLlmProvider`).** OpenAI-shape chat completions, so it
+  mirrors `GroqLlmProvider` (incl. native `response_format: json_object` in
+  `completeJson`), with three Azure specifics: the model is chosen by the
+  **deployment name in the URL** (an `options.model` maps onto that segment, not a
+  body field), auth is an **`api-key` header** (not Bearer), and the request needs
+  an **`api-version`** query param. Env: `AZURE_OPENAI_API_KEY` +
+  `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_DEPLOYMENT` (all required, constructor
+  throws otherwise) and `AZURE_OPENAI_API_VERSION` (default `2024-10-21`, a GA
+  version with JSON mode). Native `fetch`, no SDK. Targets chat deployments
+  (gpt-4o/4.1/35-turbo) — the o-series reasoning models reject `temperature` and
+  want `max_completion_tokens`.
 - **Interview shape.** Kept **short: ≤ 9 questions** (`MAX_ADAPTIVE_QUESTIONS`,
   and `QUESTION_PLAN` is 9 long so the 90% gate closes by Q9). Questions may carry
   `options` + `multiple` on `InterviewQuestion` — the web renders tap-to-pick

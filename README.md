@@ -24,7 +24,7 @@ System Design → DB Design → API Design → Review → Export
 | Shared types | `@archivato/shared` (`packages/shared`)            |
 | Database     | PostgreSQL + Prisma (all data persisted)           |
 | Queue        | BullMQ + Redis (async pipeline generation)         |
-| AI           | Anthropic Claude via a swappable `LlmProvider`     |
+| AI           | Swappable `LlmProvider`: mock · Claude · Groq · Azure OpenAI |
 | Auth         | JWT access + rotating refresh tokens (httpOnly cookies) |
 | Frontend UI  | Tailwind CSS + shadcn/ui (dark theme)              |
 | Monorepo     | npm workspaces (`apps/*` + `packages/*`)           |
@@ -94,6 +94,15 @@ To force a specific provider for everything instead, set `LLM_PROVIDER`:
 LLM_PROVIDER=claude
 ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_MODEL=claude-sonnet-4-6   # claude-opus-4-8 is more capable
+```
+**Azure OpenAI** is also supported (handy if you have Microsoft-for-Startups
+credits). The model is chosen by the **deployment name**, not a model id:
+```env
+LLM_PROVIDER=azure                  # optional: Groq wins if both keys are set
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_ENDPOINT=https://<your-resource>.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_API_VERSION=2024-10-21 # optional (GA version with JSON mode)
 ```
 Every agent keeps a deterministic fallback, so malformed model output still
 produces a valid artifact. The API logs which provider it resolved on startup
@@ -766,6 +775,19 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   `react-hooks/exhaustive-deps` case in `AdminShell`). Colocated `*.test.tsx`
   convention (vs the API's `*.spec.ts`); i18n-dependent chrome mocks
   `useTranslation`.
+
+### ✅ Slice — Azure OpenAI provider
+- Added **`AzureOpenAiLlmProvider`** behind the existing `LlmProvider` seam, so
+  the whole pipeline (interview + all 14 agents) can run on **Azure OpenAI** — no
+  agent code changed. Enable with `LLM_PROVIDER=azure`, or just set
+  `AZURE_OPENAI_API_KEY` (Groq keeps priority when both keys are present).
+- Shape-compatible with OpenAI, so it mirrors the Groq provider (native
+  `response_format: json_object` for guaranteed structured output), with the three
+  Azure specifics handled: the model comes from the **deployment name in the URL**
+  (an explicit `model` option maps onto that segment), auth is an **`api-key`
+  header** rather than a Bearer token, and requests carry an **`api-version`**.
+  Native `fetch`, no SDK. Unit-tested (URL/auth/JSON-mode/error paths + provider
+  resolution precedence).
 
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff.
