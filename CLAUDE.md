@@ -133,6 +133,16 @@ The **web** Dockerfile needs none of (2)/(3): `apps/web/tsconfig.json` is standa
 `extends`) and maps `@archivato/shared` to its **source**, so Next never reads the root
 tsconfig and never needs shared's `dist`.
 
+**Render and Vercel want OPPOSITE roots — don't copy one's setting to the other.**
+- **Render (Docker):** build context = **repo root** (the Dockerfile copies the whole
+  workspace). Root Directory must be **empty**.
+- **Vercel (Next):** Root Directory = **`apps/web`**. Vercel's framework detection reads
+  the `package.json` *in the Root Directory* and needs `next` in it — the repo root is a
+  **workspace root** and has no `next`, so pointing Vercel at the root fails the build with
+  `Error: No Next.js version detected`. Vercel still auto-detects the npm workspace and
+  installs from the root lockfile, and **`vercel.json` therefore lives at
+  `apps/web/vercel.json`** (Vercel reads it from the Root Directory, not the repo root).
+
 ## Architecture
 
 - **Modular monolith.** Each pipeline stage is its own Nest module

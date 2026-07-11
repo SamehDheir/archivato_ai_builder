@@ -2,9 +2,17 @@
 #
 # Topology this assumes:
 #   API   → Render   (this file)
-#   Web   → Vercel   (see vercel.json)
+#   Web   → Vercel   (see apps/web/vercel.json)
 #   DB    → Supabase (Postgres: DATABASE_URL = pooler, DIRECT_URL = direct)
 #   Redis → Upstash  (REDIS_URL = rediss://…)
+#
+# NOTE the asymmetry with Vercel — the two platforms want OPPOSITE roots:
+#   Render (Docker) → build context = REPO ROOT   (the Dockerfile copies the workspace)
+#   Vercel (Next)   → Root Directory = apps/web   (it needs a package.json containing
+#                     `next`; the repo root is a workspace root and has none, so
+#                     pointing Vercel at the root fails with "No Next.js version
+#                     detected"). Vercel auto-detects the npm workspace and still
+#                     installs from the root lockfile.
 #
 # THE BUILD-CONTEXT TRAP (this is what breaks a hand-made Render service):
 # `apps/api/Dockerfile` is a MONOREPO Dockerfile — it copies `package-lock.json`,
