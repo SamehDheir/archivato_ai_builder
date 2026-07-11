@@ -90,6 +90,25 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
 `docker-compose.prod.yml` (db+redis+api+web with healthchecks), `scripts/backup-db.sh`
 (pg_dump + retention), all documented in **`DEPLOY.md`**.
 
+**Managed deploy (Render + Vercel + Supabase + Upstash).** A **`render.yaml`** blueprint
+(API) + **`vercel.json`** (web, builds `@archivato/shared` before Next). Three code
+seams make it work: (1) **`common/redis.config.ts`** — one `redisConnectionOptions()`
+shared by BullMQ and the health probe; a managed **`REDIS_URL`** (`rediss://` ⇒ TLS +
+credentials) **wins over** `REDIS_HOST`/`REDIS_PORT` (a bare host/port can't
+authenticate to Upstash/Render KV), with host/port kept as the zero-config local
+fallback. (2) **`schema.prisma` gained `directUrl`** — Supabase runs the app on the
+**transaction pooler** (6543, `?pgbouncer=true&connection_limit=1`) but pgBouncer can't
+run DDL, so `prisma migrate` needs the **direct** 5432 URL; `DIRECT_URL` is therefore
+**required** (locally just copy `DATABASE_URL`). (3) `next.config.js` only sets
+`output:'standalone'` **off Vercel** (`process.env.VERCEL`) — that mode is for the Docker
+image. Two traps, both documented in DEPLOY.md: `*.vercel.app` + `*.onrender.com` are
+**different sites**, so the auth cookies are third-party (`COOKIE_SAMESITE=none`+Secure,
+which **Safari/Brave block** → move to a custom domain like `example.com` +
+`api.example.com` to get `lax` back); and Render's **free instance sleeps** (~50s cold
+start). Render also needs `TRUST_PROXY=true` (else one rate-limit bucket) and
+`GEOIP_FALLBACK=false` (geoip-lite's ~150 MB DB won't fit in 512 MB, and Render sets no
+country header — put Cloudflare in front to restore `CF-IPCountry`).
+
 ## Architecture
 
 - **Modular monolith.** Each pipeline stage is its own Nest module

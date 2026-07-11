@@ -14,6 +14,7 @@ import { JobsController } from './jobs.controller';
 import { JobsService } from './jobs.service';
 import { PipelineProcessor } from './pipeline.processor';
 import { PIPELINE_QUEUE } from './pipeline.constants';
+import { redisConnectionOptions } from '../common/redis.config';
 
 /**
  * Async pipeline generation (BullMQ on Redis). Imports every stage module so the
@@ -26,10 +27,9 @@ import { PIPELINE_QUEUE } from './pipeline.constants';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        connection: {
-          host: config.get<string>('REDIS_HOST', 'localhost'),
-          port: Number(config.get('REDIS_PORT') ?? 6379),
-        },
+        // Honours a managed `REDIS_URL` (credentials + TLS) and falls back to
+        // host/port for local docker-compose — see `common/redis.config.ts`.
+        connection: redisConnectionOptions(config),
       }),
     }),
     BullModule.registerQueue({ name: PIPELINE_QUEUE }),

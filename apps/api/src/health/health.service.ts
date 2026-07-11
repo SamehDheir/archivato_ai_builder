@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
+import { redisConnectionOptions } from '../common/redis.config';
 
 /** Health of a single upstream dependency. */
 export interface DependencyHealth {
@@ -63,8 +64,9 @@ export class HealthService {
   private async checkRedis(): Promise<DependencyHealth> {
     const start = Date.now();
     const client = new Redis({
-      host: this.config.get<string>('REDIS_HOST', 'localhost'),
-      port: Number(this.config.get('REDIS_PORT') ?? 6379),
+      // Same resolution as BullMQ (managed REDIS_URL, else host/port), so the
+      // probe can never report a different Redis than the one the jobs use.
+      ...redisConnectionOptions(this.config),
       lazyConnect: true,
       maxRetriesPerRequest: 1,
       connectTimeout: 2000,

@@ -9,9 +9,19 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// `url` is the RUNTIME connection; `directUrl` is used by `prisma migrate` and
+// `db push` only.
+//
+// They differ on Supabase (and any pgBouncer setup): the app must talk to the
+// **transaction pooler** (port 6543) because a serverless/free dyno opens many
+// short-lived connections, but pgBouncer in transaction mode cannot run DDL or
+// advisory locks — so migrations must go straight to the **direct** connection
+// (port 5432). Locally both point at the same Postgres, so `DIRECT_URL` simply
+// falls back to `DATABASE_URL` if unset.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // --- Authentication (Slice 9) -------------------------------------------------
