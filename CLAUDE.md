@@ -109,6 +109,30 @@ start). Render also needs `TRUST_PROXY=true` (else one rate-limit bucket) and
 `GEOIP_FALLBACK=false` (geoip-lite's ~150 MB DB won't fit in 512 MB, and Render sets no
 country header — put Cloudflare in front to restore `CF-IPCountry`).
 
+**Docker build gotchas (all three bit us on Render — don't regress them).**
+1. **Build context must be the repo root.** `apps/api/Dockerfile` is a *monorepo*
+   Dockerfile (it copies `package-lock.json`, `packages/shared/`, `apps/api/`), so
+   `render.yaml` pins **`dockerContext: .`** + `dockerfilePath: ./apps/api/Dockerfile`.
+   A hand-made Render service with **Root Directory = `apps/api`** scopes the context to
+   that folder and every COPY dies with `"/package-lock.json": not found`. Same rule on
+   Vercel: keep Root Directory at the repo root and let `vercel.json` drive the build.
+2. **`COPY tsconfig.base.json ./` is mandatory.** `packages/shared/tsconfig.json` and
+   `apps/api/tsconfig.json` both `extends "../../tsconfig.base.json"`, and that root file
+   is what sets **`target: ES2022`**. Omit it and `tsc` can't read it, silently falls back
+   to the **ES5** default, and the build dies on one `TS5083: Cannot read file
+   '/app/tsconfig.base.json'` followed by ~8 *misleading* `TS2802: … can only be iterated
+   through when using '--downlevelIteration'`. The TS2802s are a **symptom** — never
+   "fix" them by editing the source or adding `downlevelIteration`.
+3. **`npm ci --omit=optional`.** `geoip-lite` is the only optional dep and it's a
+   **154 MB** MaxMind DB fetched in a postinstall — it dominates build time and image
+   size and can't fit a 512 MB instance anyway. `common/geo.ts` lazily `require`s it in a
+   try/catch, so omitting it degrades cleanly to header-only geo (same as
+   `GEOIP_FALLBACK=false`).
+
+The **web** Dockerfile needs none of (2)/(3): `apps/web/tsconfig.json` is standalone (no
+`extends`) and maps `@archivato/shared` to its **source**, so Next never reads the root
+tsconfig and never needs shared's `dist`.
+
 ## Architecture
 
 - **Modular monolith.** Each pipeline stage is its own Nest module
