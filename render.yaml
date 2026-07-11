@@ -1,0 +1,116 @@
+# Render Blueprint — the Archivato API (NestJS).
+#
+# Topology this assumes:
+#   API   → Render   (this file)
+#   Web   → Vercel   (see vercel.json)
+#   DB    → Supabase (Postgres: DATABASE_URL = pooler, DIRECT_URL = direct)
+#   Redis → Upstash  (REDIS_URL = rediss://…)
+#
+# THE BUILD-CONTEXT TRAP (this is what breaks a hand-made Render service):
+# `apps/api/Dockerfile` is a MONOREPO Dockerfile — it copies `package-lock.json`,
+# `packages/shared/` and `apps/api/` — so its build context MUST be the repo root.
+# If Render's "Root Directory" is set to `apps/api`, the context is that folder and
+# every COPY fails with:
+#     "/package-lock.json": not found
+#     "/packages/shared": not found
+# Hence: dockerContext `.` (repo root) + dockerfilePath pointing INTO the repo.
+#
+# Secrets are `sync: false` → Render prompts for them instead of storing them in git.
+
+services:
+  - type: web
+    name: archivato-api
+    runtime: docker
+    plan: free
+    # Keep this in the SAME region as your Supabase project — every request makes
+    # several DB round-trips, so a cross-region hop is felt on every page load.
+    region: frankfurt
+
+    # Build context = repo root (NOT apps/api). This is the fix.
+    dockerContext: .
+    dockerfilePath: ./apps/api/Dockerfile
+
+    # Root-level liveness probe (it is excluded from the global /api prefix).
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # --- Datastores (Supabase + Upstash) -------------------------------------
+      # Supabase TRANSACTION POOLER, port 6543. The query params are REQUIRED:
+      # pgBouncer cannot use prepared statements, and a free dyno must not hold a
+      # large pool open.
+      #   postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1
+      - key: DATABASE_URL
+        sync: false
+
+      # Supabase DIRECT connection, port 5432. Used by `prisma migrate deploy`,
+      # which the image runs on start — pgBouncer cannot execute DDL, so without
+      # this the container boots and immediately dies on the migration.
+      #   postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres
+      - key: DIRECT_URL
+        sync: false
+
+      # Upstash. The `rediss://` scheme (two s's) means TLS and is required — a
+      # bare host/port cannot authenticate to a managed Redis.
+      #   rediss://default:<password>@<name>.upstash.io:6379
+      - key: REDIS_URL
+        sync: false
+
+      # --- Auth / cookies ------------------------------------------------------
+      # Generated once by Render and kept stable across deploys. (Boot-time env
+      # validation rejects a missing, short, or well-known dev secret.)
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+
+      # The Vercel URL. Drives BOTH CORS and the absolute links in outbound email.
+      # e.g. https://archivato.vercel.app
+      - key: WEB_ORIGIN
+        sync: false
+
+      # *.onrender.com and *.vercel.app are DIFFERENT SITES, so the auth cookies
+      # are third-party and only work as SameSite=None + Secure. (Boot validation
+      # refuses SameSite=None without Secure.)
+      #
+      # NOTE: Safari and Brave BLOCK third-party cookies by default — login can
+      # silently fail there. The permanent fix is a custom domain (example.com +
+      # api.example.com), which makes them same-site so `lax` works again.
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: COOKIE_SECURE
+        value: 'true'
+
+      # --- Platform ------------------------------------------------------------
+      # Render terminates TLS at a proxy. Without this, `req.ip` is the proxy's IP,
+      # so every request shares ONE rate-limit bucket.
+      - key: TRUST_PROXY
+        value: 'true'
+
+      # geoip-lite loads a ~150 MB database into memory — that will not fit in a
+      # free instance's 512 MB. Render injects no country header either, so visitor
+      # country is simply not collected. To get it back, put Cloudflare in front of
+      # the API (free): it sets CF-IPCountry, which TRUST_PROXY makes the app trust,
+      # and no geoip database is ever loaded.
+      - key: GEOIP_FALLBACK
+        value: 'false'
+
+      # --- AI provider ---------------------------------------------------------
+      # Leave LLM_PROVIDER UNSET so the presence of the key selects the provider.
+      # An explicit `mock` would force the deterministic fallbacks.
+      - key: GROQ_API_KEY
+        sync: false
+
+      # --- Mail ----------------------------------------------------------------
+      # Resend (HTTP API) rather than SMTP — outbound SMTP ports are commonly
+      # blocked on these platforms. MAIL_FROM must be a Resend-verified domain.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+
+      # --- Seeded super-admin (created on boot, pre-verified) -------------------
+      - key: SUPER_ADMIN_EMAIL
+        sync: false
+      - key: SUPER_ADMIN_PASSWORD
+        sync: false
