@@ -743,15 +743,57 @@ tsconfig and never needs shared's `dist`.
   Raw brand SVGs (favicon/icon/full/mono) sit in `apps/web/public/` — keep
   `app/icon.svg` and `LogoMark` visually in sync. A `currentColor` SVG loaded via
   `<img>` does **not** inherit the page color (renders black), so theme-adaptive
-  logos must be inlined, not `<img>`-referenced.
+  logos must be inlined, not `<img>`-referenced. The mark's geometry is
+  deliberately **coarse** (2 thick strokes + 3 nodes, no sub-4px detail): the same
+  shape is the 16px browser-tab favicon, and finer detail turns to mush there.
+- **Site metadata / SEO (`lib/site.ts` + app file conventions).** `lib/site.ts` is
+  the single source of truth for the machine-facing identity (origin, name,
+  tagline, description, pipeline, brand colors, public routes) — consumed by the
+  root `metadata`, the share card, the manifest, robots, and the sitemap. It is
+  **not i18n'd**: crawlers and link unfurlers read it before any locale is known
+  (locale lives in a client cookie), so it follows the same English-server-side
+  convention as the rest of the machine-facing output. Everything else is wired by
+  **file convention**, not by a `metadata.icons` key (see the Gotcha):
+  `app/icon.svg` (favicon), `app/apple-icon.tsx` (180px PNG — Safari ignores an SVG
+  touch icon, so it's redrawn through `ImageResponse`), `app/{opengraph,twitter}-image.tsx`
+  (the 1200×630 share card, rendered by the shared `lib/og.tsx`), `app/manifest.ts`,
+  `app/robots.ts` (auth-gated routes disallowed), `app/sitemap.ts`. **JSON-LD**
+  (`SoftwareApplication` + `FAQPage`) is emitted from `app/page.tsx` — the *server*
+  component — because `LandingPage` is a client component whose copy i18next
+  resolves at runtime and so would never reach a crawler; its FAQ entries must stay
+  in sync with `locales/en/marketing.json`.
 - **Landing** (`components/marketing/`): a conversion-oriented public marketing
-  page (`LandingPage`) structured as **Hero → Problem → Solution → Pricing → FAQ →
-  Waitlist → Footer**. The Hero keeps the looping, auto-playing `IdeaToProductDemo`
-  reel (client-only, respects `prefers-reduced-motion`) — treated as the page's
-  "video". Pricing reads plan numbers from `PLANS` (single source of truth) with
-  copy/features from i18n; FAQ is a client accordion; the **Waitlist** posts to the
-  real backend (`waitlistApi.join` → `POST /waitlist`) with a success/duplicate/
-  invalid state machine. Fully i18n'd (`marketing` namespace, EN + AR, RTL-safe).
+  page (`LandingPage`) structured as **Hero → Problem → Solution → What you get →
+  Pricing → FAQ → Waitlist → Footer**. The Hero keeps the looping, auto-playing
+  `IdeaToProductDemo` reel (client-only, respects `prefers-reduced-motion`) —
+  treated as the page's "video" — and its **primary CTA is the product**
+  (`/register`), not the waitlist: the app is live, so sending a ready visitor to
+  an email form is the page's biggest leak. The waitlist keeps its own section for
+  visitors who aren't ready. **"What you get"** (`DELIVERABLES`) is the page's real
+  proof — a grid of the 12 artifacts with the Free/Pro cutline marked (mirroring
+  `ProGuard`); without it the threat model, QA plan, cost estimate, diagrams, and
+  scaffold are invisible to a visitor, since the Solution section only *describes*
+  the output. Hero stats are **product facts, not social proof** (there are no
+  honest customer numbers yet). Pricing reads plan numbers from `PLANS` (single
+  source of truth) with copy/features from i18n; FAQ is a client accordion; the
+  **Waitlist** posts to the real backend (`waitlistApi.join` → `POST /waitlist`)
+  with a success/duplicate/invalid state machine. Fully i18n'd (`marketing`
+  namespace, EN + AR, RTL-safe).
+- **Landing chrome — sticky header + back-to-top.** The nav lives in its own
+  `LandingHeader` (client) rather than inline in `LandingPage`, so per-scroll state
+  only re-renders the bar. It is `sticky top-0 z-40` and **scroll-aware**: flush and
+  near-transparent over the hero, then on `scrollY > 8` it takes a solid backdrop +
+  border + shadow and tightens its padding, so it reads as a real toolbar instead of
+  a strip overlapping the content. The **active section** is highlighted via an
+  `IntersectionObserver` (not scroll math); `rootMargin: '-72px 0px -60% 0px'`
+  discounts the header height and keeps exactly one link lit. `BackToTop` is a
+  fixed, logical-positioned (`end-6` → RTL-safe) button that fades in past 600px;
+  it stays mounted and animates opacity so it fades rather than pops, and is
+  `tabIndex={-1}` + `aria-hidden` while invisible so a keyboard user can't focus an
+  invisible control. **Anchor scrolling:** `html { scroll-behavior: smooth }` in
+  `globals.css` is gated on `prefers-reduced-motion: no-preference`, and every
+  anchored `<section>` carries **`scroll-mt-20`** — without it a sticky header
+  covers the heading you just jumped to. i18n `nav.backToTop` (EN+AR).
   Nav/footer anchor to the section ids. Presentational except the waitlist form.
   The footer has a **Legal** column linking `/privacy` + `/terms`.
 - **Legal pages + cookie consent.** Public `/privacy` and `/terms` routes (added
@@ -860,6 +902,22 @@ tsconfig and never needs shared's `dist`.
 
 ## Gotchas (read before you trip on them)
 
+- **Never add an `icons` key to the root `metadata`.** Declaring `metadata.icons`
+  **overrides the file-based icon conventions wholesale** — it does not merge with
+  them. A lone `icons: { apple: '/logo-icon.svg' }` silently suppressed the
+  `<link rel="icon">` that `app/icon.svg` would have emitted, so production shipped
+  with **no favicon at all** and the tab fell back to the browser's default globe.
+  Let `app/icon.svg` + `app/apple-icon.tsx` speak for themselves.
+- **Satori (`next/og`) is not a browser — its CSS parser is far narrower, and it
+  fails hard.** An unsupported value doesn't degrade; the edge route dies and curl
+  reports `Empty reply from server` (no 500, no stack). Two rules for `lib/og.tsx`:
+  radial gradients must use the **`circle|ellipse at <pos>`** form (the
+  explicit-size `radial-gradient(1000px 620px at 12% 0%, …)` variant kills the
+  render), and every element with **more than one child needs `display: flex`**.
+  Only the bundled font ships, in **one weight**, so build hierarchy from size /
+  color / letter-spacing — a `fontWeight: 700` renders as regular. Verify a change
+  by actually fetching `/opengraph-image` and **looking at the PNG**; a byte count
+  alone won't catch an invisible indigo-on-indigo logo.
 - **`.env` `LLM_PROVIDER` must stay UNSET** to let `GROQ_API_KEY` flip the
   pipeline (an explicit `mock` forces mock). `apps/api/.env` is gitignored — the
   user pastes real keys there; confirm via the startup `LLM provider:` log.
