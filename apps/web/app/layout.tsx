@@ -1,10 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { AuthGate } from '@/components/auth/AuthGate';
-import { ToastProvider } from '@/components/shared/toast';
 import { ThemeProvider } from '@/components/shared/theme';
-import { ConfirmProvider } from '@/components/shared/confirm-dialog';
-import { UpgradeProvider } from '@/components/billing/upgrade-dialog';
 import { LocaleProvider } from '@/components/shared/i18n';
 import { PageviewTracker } from '@/components/shared/pageview-tracker';
 import { CookieConsent } from '@/components/shared/cookie-consent';
@@ -94,15 +90,12 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen antialiased">
         <PageviewTracker />
+        {/* Only theme + locale are global. The app's providers (toast, confirm,
+            upgrade) and AuthGate live in the `(app)` route group's layout, so the
+            public marketing and legal pages never download or hydrate them. */}
         <ThemeProvider>
           <LocaleProvider>
-            <ToastProvider>
-              <ConfirmProvider>
-                <UpgradeProvider>
-                  <AuthGate>{children}</AuthGate>
-                </UpgradeProvider>
-              </ConfirmProvider>
-            </ToastProvider>
+            {children}
             <CookieConsent />
           </LocaleProvider>
         </ThemeProvider>

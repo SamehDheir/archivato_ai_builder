@@ -394,6 +394,7 @@ export function LandingPage() {
       {/* Nav — sticky, scroll-aware, with the active section highlighted */}
       <LandingHeader />
 
+      <main>
       {/* Hero — keeps the looping build video */}
       <section
         aria-labelledby="hero-title"
@@ -703,6 +704,7 @@ export function LandingPage() {
           </div>
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="border-t border-border/60">

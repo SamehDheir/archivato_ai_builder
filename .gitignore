@@ -12,8 +12,10 @@ build/
 .env.local
 .env.*.local
 
-# next.js
+# next.js (`.next-*` = throwaway NEXT_DIST_DIR measurement builds)
 .next/
+.next-*/
+.swc/
 out/
 
 # prisma

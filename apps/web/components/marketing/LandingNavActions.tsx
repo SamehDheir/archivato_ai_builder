@@ -15,19 +15,36 @@ import { LanguageMenu } from '@/components/shared/LanguageMenu';
  *
  * Signed-in visitors see a single "Dashboard" button (instead of the signed-out
  * Sign in / Start building CTAs); they are NOT redirected, so they can browse
- * the marketing page freely. To avoid a flash of the wrong controls we seed from
- * the cached auth hint on mount (instant, no flicker), then confirm with a real
- * `/auth/me` check. This is the deliberate exception to "public routes skip the
- * auth round-trip"; it never blocks the page render for signed-out visitors.
+ * the marketing page freely.
+ *
+ * **An anonymous visitor makes no API call at all.** We only hit `/auth/me` when
+ * the cached hint says the user was signed in on this device. Firing it
+ * unconditionally meant every first-time visitor triggered a `401`, which the
+ * browser logs to the console — costing a Lighthouse Best-Practices point — and
+ * cost a round-trip to a possibly-cold API for a result we could already predict.
+ *
+ * Trusting the hint is safe *here* because this choice is cosmetic — which pair
+ * of buttons to paint. It is not an authorization decision: every protected route
+ * still re-checks with the server via AuthGate, and every API is gated server-side.
+ * Worst case (cookie present but localStorage cleared) a signed-in user sees the
+ * signed-out CTAs on the marketing page; following either one lands them in the
+ * app, where AuthGate corrects the state.
  */
 export function LandingNavActions() {
   const { t } = useTranslation('marketing');
   const [authed, setAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Optimistically render from the last-known state so returning visitors get
-    // the right button on the first frame; then verify against the server.
-    setAuthed(getAuthHint());
+    const hint = getAuthHint();
+    if (hint !== true) {
+      // Never signed in on this device (or known signed out) — paint the guest
+      // CTAs and skip the network entirely.
+      setAuthed(false);
+      return;
+    }
+    // Optimistically render the signed-in button on the first frame (no flicker),
+    // then confirm against the server in case the session has since expired.
+    setAuthed(true);
     let active = true;
     authApi
       .me()

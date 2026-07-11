@@ -695,17 +695,52 @@ tsconfig and never needs shared's `dist`.
   (agent prompts/artifacts) stays server-side/English for now — this slice is UI
   chrome only, except the interview, whose questions already adapt to the idea's
   language (`apps/api/src/interview/language.ts`).
-- **Structure:** `app/` holds routes only — `layout.tsx`, `page.tsx` (public
-  marketing **landing** at `/`), and route dirs `dashboard/`, `login/`,
-  `register/`, `verify/`, `settings/`. Feature components live in
+- **Structure:** `app/` holds routes only. The **root** level is the lean public
+  surface — `layout.tsx`, `page.tsx` (marketing **landing** at `/`), `privacy/`,
+  `terms/`, and the metadata files (`icon.svg`, `apple-icon.tsx`,
+  `opengraph-image.tsx`, `manifest.ts`, `robots.ts`, `sitemap.ts`). Everything
+  authenticated lives in the **`(app)` route group** — `dashboard/`, `login/`,
+  `register/`, `verify/`, `settings/`, `admin/`, `support/` (URLs unchanged;
+  route groups don't affect paths). Feature components live in
   `components/<domain>/` (`auth`, `interview`, `design`, `review`, `product`,
   `roadmap`, `project`, `settings`, `shared`, `marketing`) alongside
   `components/ui/`. Import via the `@/*` alias
   (→ web root), e.g. `@/components/project/ProjectStages`, `@/lib/api`.
-- **Auth gating:** `AuthGate` (in the layout) wraps everything. `/` and
-  `/verify` are public (`PUBLIC_EXACT` / `PUBLIC_PREFIXES`); `/login`+`/register`
-  are guest-only (signed-in users bounce to `/dashboard`); every other route
-  shows the `AuthForm` when signed out. The app itself lives at `/dashboard`.
+- **The `(app)`/root layout split is a performance boundary — keep it.** The root
+  layout carries only Theme + Locale providers (+ PageviewTracker/CookieConsent);
+  **`app/(app)/layout.tsx`** carries Toast → Confirm → Upgrade → `AuthGate`. With
+  all of that in the root layout, the landing page downloaded and hydrated the
+  entire authenticated app (auth form, account menu, notification bell, billing
+  dialog) — the bulk of its unused JS and blocking time (Lighthouse Perf 57 on
+  the deployed site). Never import app-only providers, `AuthGate`, or `lib/api`'s
+  authed helpers from the root layout or any marketing/legal page. New authed
+  routes go **inside `(app)/`**; new public pages stay outside and must not pull
+  app chrome.
+- **i18n bundles are code-split — three tiers** (`lib/i18n/`): `resources.ts` =
+  **eager EN, public namespaces only** (common/auth/marketing/legal — SSR needs
+  them synchronously); `resources.app.ts` = EN for the authed app
+  (dashboard/billing/interview/project/stages/settings/admin/support), loaded by
+  `loadAppNamespaces()` which **`AuthGate` awaits in parallel with `/auth/me`**
+  (loading screen holds until both settle, so app pages never flash raw keys);
+  `resources.ar.ts` = **all Arabic**, loaded by `loadLocale('ar')` before
+  `changeLanguage` (`<html dir/lang>` flips immediately; the text switch waits for
+  the chunk). Both loaders swallow failures → `fallbackLng`/keys, never a crash.
+  **Only `client.ts` may import the `.app`/`.ar` files, and only dynamically** — a
+  static import anywhere folds ~240 KB of JSON back into every visitor's bundle.
+  A new namespace goes in `namespaces` + the tier it belongs to (public → eager,
+  app-only → `resources.app.ts`), and its AR file into `resources.ar.ts`.
+- **Auth gating:** `AuthGate` (in the **`(app)` layout**) wraps the authed app.
+  `/` and `/verify` are public (`PUBLIC_EXACT` / `PUBLIC_PREFIXES`);
+  `/login`+`/register` are guest-only (signed-in users bounce to `/dashboard`);
+  every other route shows the `AuthForm` when signed out. The app itself lives at
+  `/dashboard`. Each AuthGate branch renders its own **`<main>` landmark** (the
+  signed-in shell has a sibling `<header>`, so a root-layout `<main>` would nest
+  landmarks); the landing page and `LegalDocument` carry their own. **The landing
+  nav (`LandingNavActions`) makes no API call for anonymous visitors** — it only
+  confirms `/auth/me` when the cached auth hint says "was signed in". The
+  unconditional call meant every first-time visitor logged a 401 to the console
+  (a Lighthouse Best-Practices point). The hint is cosmetic (which buttons to
+  paint), not authorization — AuthGate and the server still gate everything.
 - **Per-page access guard** (`lib/use-page-access.ts`). `usePageAccess(redirectFor)`
   fetches `/auth/me`, asks `redirectFor(me)` for a target, and `router.replace`s
   there (returning `null` meanwhile so nothing sensitive renders/flashes). This is
@@ -930,7 +965,16 @@ tsconfig and never needs shared's `dist`.
 - **Windows:** stop `dev:api` before `prisma migrate/generate` (engine-DLL lock
   → EPERM).
 - **Don't `next build` while `next dev` is running** (overwrites `.next` → dev
-  500s). If it happens: `rm -rf apps/web/.next` and restart dev.
+  500s). If it happens: `rm -rf apps/web/.next` and restart dev. To build/measure
+  **without** stopping dev, use the knobs in `next.config.js`:
+  `NEXT_DIST_DIR=.next-perf` (separate output dir, `.next-*/` is gitignored) +
+  `NEXT_SKIP_STANDALONE=1` (skips the standalone copy step, which trips over
+  Windows file locks from AV scanning; standalone only matters for Docker).
+  Two side effects to know: `next build` **auto-rewrites `apps/web/tsconfig.json`**
+  (reformats + adds `<distDir>/types` to `include`) — revert that, don't commit
+  it; and local Lighthouse runs on this machine swing ±20 points between
+  identical runs (dev server + AV load), so compare **medians of 3+, or the
+  unthrottled desktop preset**, never a single throttled run.
 - **Next only wires Tailwind/PostCSS at startup** — restart `next dev` after
   changing `tailwind.config.ts`/`postcss.config.js` or adding a new dep.
 - **After editing `packages/shared`**, rebuild it

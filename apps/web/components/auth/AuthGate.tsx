@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Loader2, LifeBuoy } from 'lucide-react';
 import { isStaffUser, type AuthUser } from '@archivato/shared';
 import { authApi } from '@/lib/api';
+import { loadAppNamespaces } from '@/lib/i18n/client';
 import { Button } from '@/components/ui/button';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { ThemeToggle } from '@/components/shared/theme';
@@ -24,10 +25,10 @@ const GUEST_ONLY_PATHS = ['/login', '/register'];
 
 function LoadingScreen({ label }: { label: string }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-3 text-muted-foreground">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-3 text-muted-foreground">
       <Loader2 className="h-6 w-6 animate-spin" />
       <p className="text-sm">{label}</p>
-    </div>
+    </main>
   );
 }
 
@@ -73,10 +74,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       setChecking(false);
       return;
     }
-    authApi
-      .me()
-      .then(setUser)
-      .finally(() => setChecking(false));
+    // The app's i18n namespaces are code-split out of the eager bundle (see
+    // lib/i18n/resources.app.ts); load them in parallel with the auth check and
+    // hold the loading screen until BOTH settle, so no app page can render with
+    // its namespace missing (raw i18n keys). The loader resolves on failure, so
+    // this can't wedge the gate.
+    Promise.allSettled([
+      authApi.me().then(setUser),
+      loadAppNamespaces(),
+    ]).finally(() => setChecking(false));
   }, [isPublic]);
 
   // Keep the header's role-based links (support / admin) in sync when the tab
@@ -112,8 +118,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setUser(null);
   }
 
+  // Each branch below carries its own `<main>` landmark: the signed-in shell
+  // renders a `<header>` as a sibling, so a single `<main>` in the root layout
+  // would nest the banner landmark inside it.
   if (isPublic) {
-    return <>{children}</>;
+    return <main>{children}</main>;
   }
 
   if (checking) {
@@ -122,7 +131,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (isGuestOnly) {
     if (user) return <LoadingScreen label={t('loading.redirecting')} />;
-    return <>{children}</>;
+    return <main>{children}</main>;
   }
 
   if (!user) {
@@ -132,7 +141,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           <LanguageMenu />
           <ThemeToggle />
         </div>
-        <AuthForm onSuccess={setUser} />
+        <main>
+          <AuthForm onSuccess={setUser} />
+        </main>
       </>
     );
   }
@@ -174,7 +185,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
       {!user.emailVerified && <VerifyBanner email={user.email} />}
 
-      {children}
+      <main>{children}</main>
     </>
   );
 }
