@@ -4,6 +4,7 @@ import {
   CreditCard,
   LayoutDashboard,
   LifeBuoy,
+  Mails,
   Shield,
   type LucideIcon,
 } from 'lucide-react';
@@ -83,6 +84,14 @@ export const ADMIN_NAV: readonly AdminNavGroup[] = [
         href: '/admin/roles',
         labelKey: 'roles',
         icon: Shield,
+        permission: 'admin:roles:manage',
+      },
+      {
+        key: 'waitlist',
+        href: '/admin/waitlist',
+        labelKey: 'waitlist',
+        icon: Mails,
+        // Super-admin only (same gate as Roles) — a marketing/growth list.
         permission: 'admin:roles:manage',
       },
     ],

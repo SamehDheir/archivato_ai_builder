@@ -22,6 +22,7 @@ export class PrismaAnalyticsEventRepository
         referrer: input.referrer ?? null,
         visitorId: input.visitorId ?? null,
         userId: input.userId ?? null,
+        country: input.country ?? null,
         // Only set the Json column when we actually have metadata.
         meta: (input.meta as object) ?? undefined,
       },
@@ -44,6 +45,7 @@ export class PrismaAnalyticsEventRepository
       referrer: r.referrer,
       visitorId: r.visitorId,
       userId: r.userId,
+      country: r.country,
       meta: (r.meta as Record<string, unknown> | null) ?? null,
       createdAt: r.createdAt,
     }));

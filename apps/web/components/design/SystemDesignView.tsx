@@ -22,7 +22,18 @@ import {
   ExplainButton,
 } from '@/components/design/ExplainDecision';
 
-export function SystemDesignView({ design }: { design: SystemDesign }) {
+export function SystemDesignView({
+  design,
+  interactive = true,
+}: {
+  design: SystemDesign;
+  /**
+   * Whether the "Explain this decision" buttons are shown. They call the API by
+   * `design.sessionId`, so the read-only Example project (a static fixture with
+   * no real session) passes `false` to hide them.
+   */
+  interactive?: boolean;
+}) {
   const { t } = useTranslation('stages');
   // The decision the "Explain" modal is currently showing (null = closed).
   const [explaining, setExplaining] = useState<DecisionRef | null>(null);
@@ -60,9 +71,11 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
               defaultValue: design.architecture,
             })}
           </Badge>
-          <ExplainButton
-            onClick={() => setExplaining({ kind: 'architecture', key: '' })}
-          />
+          {interactive && (
+            <ExplainButton
+              onClick={() => setExplaining({ kind: 'architecture', key: '' })}
+            />
+          )}
         </div>
         <p className="mt-1.5 text-sm text-muted-foreground" dir="auto">
           {design.architectureRationale}
@@ -88,11 +101,13 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
                   {tech.rationale}
                 </TableCell>
                 <TableCell className="text-end">
-                  <ExplainButton
-                    onClick={() =>
-                      setExplaining({ kind: 'tech', key: tech.layer })
-                    }
-                  />
+                  {interactive && (
+                    <ExplainButton
+                      onClick={() =>
+                        setExplaining({ kind: 'tech', key: tech.layer })
+                      }
+                    />
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -107,11 +122,13 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-semibold" dir="auto">{s.name}</div>
-                  <ExplainButton
-                    onClick={() =>
-                      setExplaining({ kind: 'service', key: s.name })
-                    }
-                  />
+                  {interactive && (
+                    <ExplainButton
+                      onClick={() =>
+                        setExplaining({ kind: 'service', key: s.name })
+                      }
+                    />
+                  )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground" dir="auto">
                   {s.responsibility}
@@ -132,7 +149,7 @@ export function SystemDesignView({ design }: { design: SystemDesign }) {
         </div>
       </Section>
 
-      {explaining && (
+      {interactive && explaining && (
         <DecisionExplainModal
           sessionId={design.sessionId}
           decision={explaining}

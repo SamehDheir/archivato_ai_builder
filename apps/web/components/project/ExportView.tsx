@@ -4,25 +4,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, Printer } from 'lucide-react';
 import { exportApi } from '@/lib/api';
+import { saveBlob, saveFile as download } from '@/lib/download';
 import { Button } from '@/components/ui/button';
 import { ScaffoldView } from './ScaffoldView';
-
-/** Triggers a browser download for an in-memory Blob. */
-function saveBlob(filename: string, blob: Blob) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-/** Triggers a client-side file download for a string payload. */
-function download(filename: string, content: string, mime: string) {
-  saveBlob(filename, new Blob([content], { type: mime }));
-}
 
 /** Opens the Markdown in a print window so the user can "Save as PDF". */
 function printAsPdf(markdown: string) {

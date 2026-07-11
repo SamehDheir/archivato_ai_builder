@@ -30,6 +30,14 @@ export const INTERVIEW_PHASE_ORDER: readonly InterviewPhase[] = [
 /** Requirement completeness required before the interview can be confirmed. */
 export const COMPLETENESS_THRESHOLD = 0.9;
 
+/**
+ * Hard cap on interview questions — the adaptive loop never asks more than this
+ * (the plan closes the completeness gate by here). Single source of truth for
+ * the API's `MAX_ADAPTIVE_QUESTIONS` and the web's "Question N of up to M"
+ * progress hint so a first-timer can see the interview is short.
+ */
+export const INTERVIEW_MAX_QUESTIONS = 9;
+
 export type InterviewStatus =
   /** Still asking questions. */
   | 'collecting'

@@ -127,11 +127,13 @@ export interface SetUserRolesInput {
   roleIds: string[];
 }
 
-/** Traffic detail: daily series + top pages/referrers. */
+/** Traffic detail: daily series + top pages/referrers/countries. */
 export interface AdminTraffic {
   pageviews: TimePoint[];
   uniqueVisitors: TimePoint[];
   topPages: { path: string; count: number }[];
   topReferrers: { referrer: string; count: number }[];
+  /** Top visitor countries (ISO-3166-1 alpha-2) by pageviews. */
+  topCountries: { country: string; count: number }[];
   totals: { pageviews: number; uniqueVisitors: number };
 }

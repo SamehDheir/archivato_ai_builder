@@ -66,11 +66,68 @@
     "scaleLabel": "Scale (optional)",
     "start": "Start interview",
     "starting": "Starting…",
+    "ideaTooShort": "Add a bit more detail (a sentence or so) to begin.",
     "completeness": "Completeness",
     "updated": "Updated {{date}}",
     "delete": "Delete project",
     "gridView": "Grid view",
     "listView": "List view"
+  },
+  "starters": {
+    "heading": "Not sure where to start? Pick an example — you can edit it before starting:",
+    "items": {
+      "booking": {
+        "label": "Home-services booking app",
+        "idea": "A booking app for home-cleaning and handyman services, where customers pick a service, schedule a time slot, pay online, and rate the provider afterwards.",
+        "industry": "home services"
+      },
+      "marketplace": {
+        "label": "Marketplace for handmade goods",
+        "idea": "An online marketplace for independent makers to sell handmade goods, with seller storefronts, product listings, a shopping cart, checkout, and order tracking.",
+        "industry": "e-commerce"
+      },
+      "saas": {
+        "label": "Team analytics SaaS",
+        "idea": "A SaaS dashboard that lets teams connect their data sources, build charts, and share live analytics dashboards, with workspaces, roles, and subscription billing.",
+        "industry": "SaaS / productivity"
+      },
+      "internal": {
+        "label": "Internal inventory tool",
+        "idea": "An internal operations tool for a warehouse to track inventory, purchase orders, and stock levels across locations, with barcode lookups and low-stock alerts.",
+        "industry": "operations"
+      },
+      "mobile": {
+        "label": "Fitness app backend",
+        "idea": "A mobile backend for a fitness app that stores workouts and progress, syncs across devices, sends reminders, and lets users follow coaches and share achievements.",
+        "industry": "health & fitness"
+      }
+    }
+  },
+  "example": {
+    "banner": {
+      "eyebrow": "See it first",
+      "title": "Explore a finished example",
+      "body": "Browse everything the AI produces — vision, requirements, architecture, database, API, review, roadmap, cost, security, and QA plan — before you build your own.",
+      "action": "Explore example"
+    },
+    "badge": "Example",
+    "intro": "This is a read-only sample so you can see what Archivato produces. Every tab below is the output of a different AI agent. It doesn't count against your plan. When you're ready, start your own — it takes a short interview.",
+    "startOwn": "Start your own project",
+    "close": "Back to projects",
+    "name": "HomeHelper — on-demand home-services booking",
+    "tab": {
+      "summary": "Interview",
+      "vision": "Vision",
+      "requirements": "Requirements",
+      "system": "Architecture",
+      "database": "Database",
+      "api": "API",
+      "review": "Review",
+      "roadmap": "Roadmap",
+      "cost": "Cost",
+      "threat": "Security",
+      "qa": "QA Plan"
+    }
   },
   "status": {
     "collecting": "Interviewing",

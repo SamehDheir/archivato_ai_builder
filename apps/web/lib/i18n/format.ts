@@ -21,6 +21,8 @@ export interface Formatters {
   dateTime: (value: string | number | Date) => string;
   /** Plain integer/decimal with locale grouping. */
   number: (value: number) => string;
+  /** ISO-3166-1 alpha-2 country code → localized name (falls back to the code). */
+  country: (code: string) => string;
 }
 
 /** Locale-aware `Intl` formatters bound to the active UI locale. */
@@ -34,10 +36,21 @@ export function useFormat(): Formatters {
       timeStyle: 'short',
     });
     const n = new Intl.NumberFormat(tag);
+    // Keep region names in the active locale's script (not forced to Latin).
+    const regions = new Intl.DisplayNames(locale === 'ar' ? 'ar' : 'en', {
+      type: 'region',
+    });
     return {
       date: (v) => d.format(new Date(v)),
       dateTime: (v) => dt.format(new Date(v)),
       number: (v) => n.format(v),
+      country: (code) => {
+        try {
+          return regions.of(code.toUpperCase()) ?? code;
+        } catch {
+          return code;
+        }
+      },
     };
   }, [locale]);
 }

@@ -11,6 +11,8 @@ export interface CreateAnalyticsEventInput {
   referrer?: string | null;
   visitorId?: string | null;
   userId?: string | null;
+  /** ISO-3166-1 alpha-2 country derived from the request, or null. */
+  country?: string | null;
   meta?: Record<string, unknown> | null;
 }
 

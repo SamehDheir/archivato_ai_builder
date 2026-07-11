@@ -117,3 +117,17 @@ docker build -f apps/web/Dockerfile \
 Provision a managed Postgres + Redis, set the same env vars on the API service,
 and use `/health/ready` as the health check. SMTP ports are often blocked on
 these platforms — use Resend (`RESEND_API_KEY`) rather than SMTP.
+
+**Lean API image (visitor geolocation).** Country resolution prefers a CDN/edge
+header (Cloudflare `CF-IPCountry`, Vercel `x-vercel-ip-country`, …); the offline
+`geoip-lite` database (~150 MB) is only a fallback and is an **optional
+dependency**. If you serve the API behind such a CDN, build without it to keep the
+image small — the app degrades to header-only automatically:
+
+```bash
+# in apps/api/Dockerfile's install step (or your CI), skip optional deps:
+npm ci --omit=optional
+```
+
+Keep it (the default) if you need country resolution on a host that doesn't inject
+a geo header. `GEOIP_FALLBACK=false` also forces header-only at runtime.

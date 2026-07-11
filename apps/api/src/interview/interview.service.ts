@@ -10,6 +10,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import {
   COMPLETENESS_THRESHOLD,
+  INTERVIEW_MAX_QUESTIONS,
   INTERVIEW_PHASE_ORDER,
   InterviewPhase,
   type InterviewExchange,
@@ -36,7 +37,7 @@ import { detectLanguage } from './language';
  * Keep the interview short — never more than 9 questions total (fewer is fine).
  */
 const MIN_ADAPTIVE_QUESTIONS = 3;
-const MAX_ADAPTIVE_QUESTIONS = 9;
+const MAX_ADAPTIVE_QUESTIONS = INTERVIEW_MAX_QUESTIONS;
 
 /** One turn's decision: the next question (or done) plus a coverage estimate. */
 interface InterviewDecision {

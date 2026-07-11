@@ -161,6 +161,9 @@ export class AdminService {
       topReferrers: topBy(pageviews, (e) => normalizeReferrer(e.referrer))
         .slice(0, 10)
         .map((r) => ({ referrer: r.path, count: r.count })),
+      topCountries: topBy(pageviews, (e) => e.country)
+        .slice(0, 10)
+        .map((r) => ({ country: r.path, count: r.count })),
       totals: {
         pageviews: pageviews.length,
         uniqueVisitors: new Set(

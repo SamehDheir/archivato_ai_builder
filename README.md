@@ -789,6 +789,59 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   Native `fetch`, no SDK. Unit-tested (URL/auth/JSON-mode/error paths + provider
   resolution precedence).
 
+### ✅ Slice — Waitlist admin view
+- Realized the waitlist service's "future admin view": a read-only, **Super-Admin
+  only** console at **`/admin/waitlist`** listing everyone who joined from the
+  landing page — a total KPI, debounced email/source search, a paginated
+  newest-first table (email · locale · source · joined), and a one-click **CSV
+  export**. Sits in the AdminShell sidebar under Platform.
+- Backend: `GET /api/waitlist/admin?q=&page=&pageSize=` (`WaitlistService.list` →
+  a client-safe `WaitlistEntryView` page, page size capped at 200), gated by
+  `admin:roles:manage` (the app's super-admin gate). Repository gained a filtered
+  `list()` across the in-memory + Prisma impls. Unit-tested (ordering, pagination,
+  case-insensitive search, input clamping).
+
+### ✅ Slice — Visitor country (waitlist + analytics geolocation)
+- The waitlist admin table and the analytics dashboard now show **where visitors
+  are from**: a **Country** column (+ CSV field) on `/admin/waitlist`, and a **Top
+  countries (30d)** breakdown on `/admin`. Country is resolved server-side at
+  signup (`POST /waitlist`) and on the pageview beacon (`POST /analytics/track`);
+  only the 2-letter code is stored, never the IP.
+- Resolution is **hybrid + cheapest-first** (`common/geo.ts`): a CDN/edge country
+  header (Cloudflare `CF-IPCountry`, Vercel `x-vercel-ip-country`, …), then an
+  **offline `geoip-lite`** lookup on the client IP. `geoip-lite` is an **optional
+  dependency, lazy-loaded** — behind a CDN the header wins and the ~150 MB DB never
+  loads, and a lean production image can drop it entirely (`npm ci --omit=optional`,
+  see DEPLOY.md) and fall back to header-only. `GEOIP_FALLBACK=false` forces
+  header-only. Unit-tested (header precedence, code normalization, graceful null).
+  i18n'd EN + AR (country names localized via `Intl.DisplayNames`).
+
+### ✅ Slice — Activation & onboarding (sign-up → first artifact)
+- Attacks the drop-off between sign-up and the first generated artifact (from a
+  ux-consultant pass on the flow):
+  - **Starter-idea chips** — 5 concrete, tappable example ideas above the idea box
+    (`StarterIdeas` in `ProjectsDashboard`, data in `lib/starter-ideas.ts`). Tapping
+    **prefills** idea+industry+scale (still editable) so a first-timer never faces a
+    blank textarea. Chosen over an abstract "SaaS/marketplace" template gallery,
+    which would just relocate the blank-page problem. A soft hint replaces the silent
+    10-char gate.
+  - **Read-only Example project** — a persistent banner opens `ExampleProjectView`, a
+    tabbed read-only tour of a **finished sample** ("HomeHelper" booking app) rendered
+    from a static fixture (`lib/example-project.ts`) through the real artifact views.
+    It previews **every AI agent** — Interview, Vision, Requirements, Architecture,
+    Database, API, Review, Roadmap, Cost, Security (STRIDE), QA Plan — in the same tab
+    order as a real project. The cost figures are **derived from the example design**
+    by the same deterministic `estimateCosts()` the real stage uses, so they can't
+    drift from the fixture. **No backend, no session, no quota impact** — it shows the
+    payoff before the interview. `SystemDesignView` gained an `interactive` flag to hide
+    the API-backed "Explain" buttons in the demo.
+  - **Quick wins** — the interview counter now reads **"Question N of up to M"**
+    (`INTERVIEW_MAX_QUESTIONS`, single source for the API cap); the quota/upsell
+    banner is **hidden until the user owns ≥1 project**; and **confirming the
+    interview auto-generates Requirements** (no redundant Generate click).
+- i18n EN + AR (`dashboard.starters.*` / `dashboard.example.*` / `interview.questionN`);
+  Example fixtures covered by a render smoke test.
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff.
 - Broaden web test coverage (more components + a happy-path flow).
@@ -878,6 +931,7 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 | PUT    | `/api/admin/roles/user/:id`| Replace a user's whole role set              |
 | POST   | `/api/admin/roles/provision-user`| Provision a staff account (generated password, returned once)|
 | POST   | `/api/waitlist`            | Public: join the marketing waitlist (idempotent)|
+| GET    | `/api/waitlist/admin`      | Super-admin: filtered/paginated waitlist signups (`admin:roles:manage`)|
 | GET    | `/api/billing/admin`       | Billing-admin: KPIs + filtered/paginated subscriptions (`billing:manage`)|
 | GET    | `/api/billing/admin/trends`| Billing-admin: 30-day new-Pro vs churn series                |
 | GET    | `/api/billing/admin/subscriptions/:id`| Billing-admin: one customer's detail + event history|

@@ -22,6 +22,7 @@
           "Content you create — the business ideas, interview answers, and design artifacts you generate, plus any support tickets and attachments you submit.",
           "Anti-spam data — a one-way hash of a browser fingerprint, used only to limit one free account per device. We cannot reverse it to identify your device.",
           "Usage & analytics — pages viewed, referring site, and an anonymous visitor ID cookie. These are collected only after you consent to analytics cookies.",
+          "Approximate location — a coarse country (for example \"DE\") derived from your IP address when you join the waitlist or, with analytics consent, when you browse. We keep only the country code and do not store your IP address.",
           "Payment data — handled entirely by our payment provider (a Merchant of Record). We do not see or store your full card details."
         ]
       },

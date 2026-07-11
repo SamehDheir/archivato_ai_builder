@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import {
   FolderOpen,
@@ -54,10 +55,24 @@ import { ProjectWizard } from '@/components/project/ProjectWizard';
 import { InterviewPanel } from '@/components/interview/InterviewPanel';
 import { ProjectStages, type StreamState, type TabKey } from '@/components/project/ProjectStages';
 import { streamStage, reduceStreamEvent, emptyStreamView } from '@/lib/stream';
+import { saveFile } from '@/lib/download';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CommandPalette, type CommandGroup } from '@/components/shared/command-palette';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { AdminOverview } from '@/components/admin/AdminOverview';
+
+/**
+ * The read-only Example tour carries a ~1k-line artifact fixture plus five extra
+ * artifact views, and most users never open it — so keep it out of the
+ * dashboard's initial bundle and fetch it only when they ask for it.
+ */
+const ExampleProjectView = dynamic(
+  () =>
+    import('@/components/project/ExampleProjectView').then(
+      (m) => m.ExampleProjectView,
+    ),
+  { ssr: false },
+);
 
 /** localStorage key for the active session id, scoped PER USER. */
 const sessionKey = (userId: string) => `archivato.sessionId:${userId}`;
@@ -66,18 +81,6 @@ const LEGACY_SESSION_KEY = 'archivato.sessionId';
 /** localStorage key remembering the last stage tab viewed per project (Smart Resume). */
 const lastTabKey = (userId: string, sessionId: string) =>
   `archivato.lastTab:${userId}:${sessionId}`;
-
-/** Trigger a client-side file download for a string payload. */
-function saveFile(content: string, filename: string, mime: string) {
-  const url = URL.createObjectURL(new Blob([content], { type: mime }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
 
 export default function Home() {
   const toast = useToast();
@@ -98,6 +101,8 @@ export default function Home() {
   const [sub, setSub] = useState<SubscriptionView | null>(null);
   // True while the "New project" form is open on the projects dashboard.
   const [creating, setCreating] = useState(false);
+  // True while the read-only Example project tour is open (replaces the hub).
+  const [viewingExample, setViewingExample] = useState(false);
 
   // New-project form fields.
   const [idea, setIdea] = useState('');
@@ -309,19 +314,19 @@ export default function Home() {
     const base = `archivato-${sessionId}`;
     try {
       if (format === 'markdown') {
-        saveFile(await exportApi.markdown(sessionId), `${base}.md`, 'text/markdown');
+        saveFile(`${base}.md`, await exportApi.markdown(sessionId), 'text/markdown');
       } else if (format === 'openapi') {
         const spec = await exportApi.openapi(sessionId);
         saveFile(
-          JSON.stringify(spec, null, 2),
           `${base}-openapi.json`,
+          JSON.stringify(spec, null, 2),
           'application/json',
         );
       } else {
         const bundle = await exportApi.json(sessionId);
         saveFile(
-          JSON.stringify(bundle, null, 2),
           `${base}.json`,
+          JSON.stringify(bundle, null, 2),
           'application/json',
         );
       }
@@ -398,7 +403,16 @@ export default function Home() {
   async function handleConfirm() {
     if (!state) return;
     const next = await run(() => interviewApi.confirm(state.sessionId));
-    if (next) setState(next);
+    if (!next) return;
+    setState(next);
+    // The user already confirmed the requirements — don't make them click
+    // "Generate" on an empty Requirements tab. Kick off the first artifact
+    // immediately (the sessionId is stable through the interview, so the
+    // still-stale `state` closure in generateStage points at the same session).
+    if (next.status === 'confirmed' && !doc) {
+      setStageTab('requirements');
+      void generateStage<RequirementDocument>('requirements', setDoc);
+    }
   }
 
   // After saving edits to an artifact: update it in view. A manual save also
@@ -456,6 +470,12 @@ export default function Home() {
     if (userId && typeof window !== 'undefined') {
       localStorage.removeItem(sessionKey(userId));
     }
+    // Leave the read-only Example tour too. Without this, anything that routes
+    // through reset() (the Projects breadcrumb, the ⌘K "New project" / "Back to
+    // projects" commands) would clear the session but leave `viewingExample`
+    // set, so the example kept rendering and the view the user actually asked
+    // for never appeared.
+    setViewingExample(false);
     setState(null);
     setDoc(null);
     setDesign(null);
@@ -705,7 +725,17 @@ export default function Home() {
         onClose={() => setPaletteOpen(false)}
         groups={paletteGroups}
       />
-      {!state && (
+      {!state && viewingExample && (
+        <ExampleProjectView
+          onClose={() => setViewingExample(false)}
+          onStartOwn={() => {
+            setViewingExample(false);
+            setCreating(true);
+          }}
+        />
+      )}
+
+      {!state && !viewingExample && (
         <>
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-2xl font-bold">{t('appTitle')}</h1>
@@ -727,7 +757,9 @@ export default function Home() {
 
           {(
             <>
-              {sub && (
+              {/* Don't sell before any value is earned: the quota/upsell banner
+                  appears only once the user owns at least one project. */}
+              {sub && projects.length > 0 && (
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
                   <span>
                     <span className="font-semibold capitalize">
@@ -780,6 +812,7 @@ export default function Home() {
                 onDelete={handleDeleteProject}
                 onRename={handleRenameProject}
                 onExport={handleExportProject}
+                onOpenExample={() => setViewingExample(true)}
               />
             </>
           )}

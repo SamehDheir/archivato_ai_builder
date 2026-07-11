@@ -155,8 +155,10 @@
   "mrrFrom_other": "from {{count}} Pro subscribers.",
   "topPages": "Top pages (30d)",
   "topReferrers": "Top referrers (30d)",
+  "topCountries": "Top countries (30d)",
   "noPageviews": "No pageviews yet.",
   "noReferrers": "No referrers yet.",
+  "noCountries": "No country data yet.",
   "noData": "No data yet.",
   "users": {
     "title": "Users",
@@ -202,6 +204,7 @@
     "kb": "Knowledge Base",
     "analytics": "Analytics",
     "roles": "Roles & Permissions",
+    "waitlist": "Waitlist",
     "billing": "Billing",
     "group": {
       "general": "General",
@@ -220,7 +223,32 @@
       "kb": "Create, edit, publish, and organize Knowledge Base articles.",
       "analytics": "Traffic, signups, KPIs, trends, and user management.",
       "roles": "Create roles, grant permissions, and provision staff accounts.",
+      "waitlist": "Review everyone who joined the launch waitlist.",
       "billing": "Subscriptions, revenue KPIs, and manual Pro grants."
+    }
+  },
+  "waitlist": {
+    "title": "Waitlist",
+    "subtitle": "People who signed up from the landing page, newest first.",
+    "kpi": "On the waitlist",
+    "search": "Search email or source",
+    "exportCsv": "Export CSV",
+    "count": "{{n}} signups",
+    "empty": "No signups yet.",
+    "none": "—",
+    "loadFailed": "Could not load the waitlist",
+    "exportFailed": "Could not export the waitlist",
+    "col": {
+      "email": "Email",
+      "country": "Country",
+      "locale": "Locale",
+      "source": "Source",
+      "joined": "Joined"
+    },
+    "page": {
+      "prev": "Previous",
+      "next": "Next",
+      "of": "Page {{page}} of {{pages}}"
     }
   }
 }

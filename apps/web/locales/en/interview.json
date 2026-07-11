@@ -2,7 +2,7 @@
   "conversation": "Conversation",
   "interviewer": "Interviewer",
   "you": "You",
-  "questionN": "Question {{n}}",
+  "questionN": "Question {{n}} of up to {{max}}",
   "qShort": "Q{{n}}",
   "pickMulti": "Pick any that apply — add detail below if you like.",
   "pickOne": "Pick one — or add detail below.",

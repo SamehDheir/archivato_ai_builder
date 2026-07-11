@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { TrackEventDto } from './dto/track-event.dto';
+import { resolveCountryFromRequest } from '../common/geo';
 
 /** Anonymous visitor cookie (1-year, httpOnly) — scopes unique-visitor counts. */
 const VISITOR_COOKIE = 'archivato_vid';
@@ -38,6 +39,7 @@ export class AnalyticsController {
       path: dto.path.slice(0, 1024),
       referrer: dto.referrer ? dto.referrer.slice(0, 1024) : null,
       visitorId,
+      country: resolveCountryFromRequest(req),
     });
   }
 

@@ -5,5 +5,7 @@ export interface WaitlistEntry {
   email: string;
   locale: string | null;
   source: string | null;
+  /** ISO-3166-1 alpha-2 country derived from the signup request, or null. */
+  country: string | null;
   createdAt: Date;
 }

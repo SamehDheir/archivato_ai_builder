@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowRight,
+  Compass,
   Download,
   LayoutGrid,
   List,
@@ -14,6 +15,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { InterviewStatus, ProjectScale, ProjectSummary } from '@archivato/shared';
+import { STARTER_IDEAS } from '@/lib/starter-ideas';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -92,6 +94,7 @@ export function ProjectsDashboard({
   onDelete,
   onRename,
   onExport,
+  onOpenExample,
 }: {
   projects: ProjectSummary[];
   creating: boolean;
@@ -109,6 +112,8 @@ export function ProjectsDashboard({
   onDelete: (sessionId: string) => void;
   onRename: (sessionId: string, title: string) => void;
   onExport: (sessionId: string, format: ExportFormat) => void;
+  /** Open the read-only Example project (a finished sample, no quota impact). */
+  onOpenExample: () => void;
 }) {
   const { t } = useTranslation('dashboard');
   const showForm = creating || projects.length === 0;
@@ -153,6 +158,8 @@ export function ProjectsDashboard({
         </div>
       </div>
 
+      <ExampleBanner onOpen={onOpenExample} />
+
       {showForm ? (
         <Card>
           <CardHeader>
@@ -168,6 +175,13 @@ export function ProjectsDashboard({
           </CardHeader>
           <CardContent>
             <form className="space-y-3" onSubmit={onStart}>
+              <StarterIdeas
+                onPick={(next) => {
+                  setIdea(next.idea);
+                  setIndustry(next.industry);
+                  setScale(next.scale);
+                }}
+              />
               <div className="space-y-1.5">
                 <Label htmlFor="idea">{t('projects.ideaLabel')}</Label>
                 <Textarea
@@ -212,6 +226,11 @@ export function ProjectsDashboard({
               <Button type="submit" disabled={busy || idea.trim().length < 10}>
                 {busy ? t('projects.starting') : t('projects.start')}
               </Button>
+              {idea.trim().length > 0 && idea.trim().length < 10 && (
+                <p className="text-xs text-muted-foreground">
+                  {t('projects.ideaTooShort')}
+                </p>
+              )}
               {error && <p className="text-sm text-destructive">{error}</p>}
             </form>
           </CardContent>
@@ -242,6 +261,77 @@ export function ProjectsDashboard({
         </>
       )}
     </div>
+  );
+}
+
+/** A resolved starter idea (label + prefill values) the user can tap to fill the form. */
+interface PickedStarter {
+  idea: string;
+  industry: string;
+  scale: ProjectScale;
+}
+
+/**
+ * Tappable concrete starter ideas above the idea box. Each fills the idea +
+ * industry + scale (all still editable) so a first-time user never stares at a
+ * blank textarea — the highest-leverage fix for sign-up→first-artifact drop-off.
+ */
+function StarterIdeas({ onPick }: { onPick: (starter: PickedStarter) => void }) {
+  const { t } = useTranslation('dashboard');
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">{t('starters.heading')}</p>
+      <div className="flex flex-wrap gap-2">
+        {STARTER_IDEAS.map(({ id, scale }) => (
+          <button
+            key={id}
+            type="button"
+            dir="auto"
+            onClick={() =>
+              onPick({
+                idea: t(`starters.items.${id}.idea`),
+                industry: t(`starters.items.${id}.industry`),
+                scale,
+              })
+            }
+            className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            {t(`starters.items.${id}.label`)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A persistent entry point to the read-only Example project — a finished,
+ * AI-generated design the user can explore before investing in the interview.
+ * Sells the payoff up front and kills the empty-account feeling; it never
+ * touches the backend or the plan quota.
+ */
+function ExampleBanner({ onOpen }: { onOpen: () => void }) {
+  const { t } = useTranslation('dashboard');
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 p-4 text-start transition-colors hover:border-primary/50 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
+      <Compass className="h-6 w-6 shrink-0 text-primary" />
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+          {t('example.banner.eyebrow')}
+        </div>
+        <div className="text-sm font-medium">{t('example.banner.title')}</div>
+        <div className="text-xs text-muted-foreground">{t('example.banner.body')}</div>
+      </div>
+      <span className="hidden shrink-0 items-center gap-1 text-sm font-medium text-primary sm:flex">
+        {t('example.banner.action')}
+        <ArrowRight className="h-4 w-4 rtl:-scale-x-100" />
+      </span>
+    </button>
   );
 }
 

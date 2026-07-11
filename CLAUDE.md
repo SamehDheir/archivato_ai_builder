@@ -718,7 +718,30 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   `{ok:true, alreadyJoined:true}` (never leaks prior signup; a unique-constraint
   race is swallowed to the same result). Repo pattern (interface + in-memory +
   Prisma `waitlist_entries`, unique email). Stores optional `locale`/`source`.
-  `JoinWaitlistDto` validates the email. Exported service for a future admin view.
+  `JoinWaitlistDto` validates the email. **Admin view:** a read-only
+  `WaitlistAdminController` (`GET /waitlist/admin?q=&page=&pageSize=`, newest-first,
+  email/source search, page ≤ 200) → `WaitlistAdminPage`, gated **Super-Admin only**
+  via `admin:roles:manage` (same gate as the Roles console; WaitlistModule imports
+  AuthModule for the guards). `WaitlistService.list()` maps entries to a client-safe
+  `WaitlistEntryView`. Web: an `/admin/waitlist` page (KPI + debounced search +
+  client-side CSV export + paginated table incl. a **Country** column) under the
+  AdminShell route-group; a **Waitlist** item in the Platform nav group (i18n
+  `admin.waitlist.*` / `nav.waitlist`, EN+AR).
+- **Visitor geolocation (`common/geo.ts`).** `resolveCountryFromRequest(req)` derives
+  a visitor's ISO-3166-1 **alpha-2 country**, hybrid + cheapest-first: a **CDN/edge
+  country header** (`cf-ipcountry` / `x-vercel-ip-country` / `x-country-code` /
+  `x-geo-country`) then an **offline `geoip-lite`** lookup on `req.ip`. `geoip-lite`
+  is an **`optionalDependency` loaded via a lazy `require`** (try/catch) — behind a
+  CDN the header short-circuits so the ~150 MB DB never loads, and a prod image
+  built with `npm ci --omit=optional` degrades to header-only (no crash).
+  `GEOIP_FALLBACK=false` force-disables the fallback. Placeholder edge codes
+  (`XX`/`T1`/`EU`/…) normalize to null; the resolver never throws. Captured
+  server-side on the **waitlist signup** (`POST /waitlist`) and the **pageview
+  beacon** (`POST /analytics/track`) — only the country code is stored, never the
+  IP. `AdminService.getTraffic` adds a **`topCountries`** breakdown (pageviews by
+  country) shown in the analytics dashboard; the web `useFormat().country(code)`
+  maps codes → localized names. Pure helpers (`normalizeCountry`,
+  `countryFromHeaders`) are unit-tested.
 - **Projects hub** (`ProjectsDashboard`): the post-login project list, presentational
   (all state/handlers come from `app/dashboard/page.tsx`). **Grid/list toggle**
   (persisted `archivato.projectsView`). Each project has an optional **`title`**
@@ -731,6 +754,39 @@ workspace; web uses Next **`output:'standalone'`** + `outputFileTracingRoot`),
   project is saved (`archivato.lastTab:<uid>:<sid>` in `goToStage`) and restored in
   `openProject` (ProjectStages re-guards availability); a **Continue banner** resumes
   the most-recent project on that tab.
+- **Activation / onboarding (sign-up → first artifact).** Three fixes attack the
+  drop-off between sign-up and the first generated artifact (informed by a
+  ux-consultant pass): (1) **Starter-idea chips** — `StarterIdeas` in
+  `ProjectsDashboard` renders 5 concrete, tappable example ideas above the idea box
+  (`lib/starter-ideas.ts` holds ids + scale; label/idea/industry are i18n
+  `dashboard.starters.*`). Tapping **prefills** idea+industry+scale (still editable)
+  so a first-timer never faces a blank textarea — chosen over an *abstract* template
+  gallery ("SaaS/marketplace") which just moves the blank-page problem. Plus a soft
+  `ideaTooShort` hint on the 10-char gate. (2) **Read-only Example project** — a
+  persistent `ExampleBanner` opens `ExampleProjectView`, a tabbed **read-only tour**
+  rendered from a **static fixture** (`lib/example-project.ts`, "HomeHelper" booking
+  app) through the same artifact `*View` components. It previews **every agent**, in
+  the same tab order + icons as the real `ProjectStages`: Interview summary, Vision,
+  Requirements, Architecture, Database, API, Review, Roadmap, Cost, Security (STRIDE),
+  QA Plan. **Diagrams/Canvas/Export are deliberately absent** — they render from a live
+  session (`DiagramsView` fetches by `sessionId`), and the example is backend-free by
+  design. The **cost estimate is not hand-written**: `EXAMPLE_COST_ESTIMATE` derives it
+  from the example designs via the same pure `estimateCosts()` the real stage uses
+  (same workload inputs as `CostEstimateService.generate()`), so the numbers can never
+  drift from the fixtures they describe. **No backend call, no session, no quota
+  impact** — it sells the payoff before the interview. `SystemDesignView` gained an
+  `interactive` prop (default true; the example passes `false`) to hide the "Explain
+  this decision" buttons, which would otherwise call the API on a non-existent
+  session. Dashboard owns `viewingExample` state. In `ExampleProjectView.test.tsx`,
+  `useLocale` is mocked (not `LocaleProvider`-wrapped) because `react-i18next` is
+  already mocked out — the Vision + Cost views call `useFormat()`, which throws
+  outside the provider. (3) **Quick wins** — the interview
+  counter shows **"Question N of up to M"** (`INTERVIEW_MAX_QUESTIONS` in
+  `@archivato/shared`, now the single source for the API's `MAX_ADAPTIVE_QUESTIONS`);
+  the quota/upsell banner is **hidden on a zero-project account** (don't sell before
+  any value is earned); and **confirming the interview auto-generates Requirements**
+  (no redundant Generate click on an empty tab). i18n `dashboard.starters.*` /
+  `dashboard.example.*` / `interview.questionN` (EN+AR).
 - Confirmed project view = `ProjectStages` (tabbed, one stage per tab, downstream
   tabs disabled until prereqs exist). `app/dashboard/page.tsx` is the slim
   orchestrator. Above it, `ProjectWizard` is the single stage stepper (Interview →

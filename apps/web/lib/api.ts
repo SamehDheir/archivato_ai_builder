@@ -48,6 +48,7 @@ import type {
   ProvisionedUser,
   WaitlistSignupInput,
   WaitlistSignupResult,
+  WaitlistAdminPage,
   BillingAdminData,
   BillingAdminFilter,
   BillingSubscriptionDetail,
@@ -613,6 +614,19 @@ export const billingAdminApi = {
       `/billing/admin/subscriptions/${userId}/revoke`,
       { method: 'POST' },
     ),
+};
+
+/** Marketing waitlist admin list (requires `admin:analytics`). */
+export const waitlistAdminApi = {
+  /** A filtered, paginated, newest-first page of signups. */
+  list: (params: { q?: string; page?: number; pageSize?: number } = {}) => {
+    const p = new URLSearchParams();
+    if (params.page) p.set('page', String(params.page));
+    if (params.pageSize) p.set('pageSize', String(params.pageSize));
+    if (params.q) p.set('q', params.q);
+    const qs = p.toString();
+    return request<WaitlistAdminPage>(`/waitlist/admin${qs ? `?${qs}` : ''}`);
+  },
 };
 
 export const adminApi = {

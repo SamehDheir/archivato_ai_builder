@@ -22,6 +22,7 @@ import {
   type TimePoint,
 } from '@archivato/shared';
 import { adminApi, authApi, ApiError } from '@/lib/api';
+import { useFormat } from '@/lib/i18n/format';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AdminUsersTable } from '@/components/admin/AdminUsersTable';
@@ -34,6 +35,7 @@ import { AdminUsersTable } from '@/components/admin/AdminUsersTable';
 export function AdminDashboard() {
   const router = useRouter();
   const { t } = useTranslation('admin');
+  const fmt = useFormat();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [traffic, setTraffic] = useState<AdminTraffic | null>(null);
   const [canManageRoles, setCanManageRoles] = useState(false);
@@ -228,6 +230,18 @@ export function AdminDashboard() {
                   count: r.count,
                 }))}
                 empty={t('noReferrers')}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <h3 className="mb-3 text-sm font-semibold">{t('topCountries')}</h3>
+              <BarList
+                items={(traffic.topCountries ?? []).map((c) => ({
+                  label: fmt.country(c.country),
+                  count: c.count,
+                }))}
+                empty={t('noCountries')}
               />
             </CardContent>
           </Card>

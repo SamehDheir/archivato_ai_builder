@@ -17,3 +17,24 @@ export interface WaitlistSignupResult {
   ok: true;
   alreadyJoined: boolean;
 }
+
+/** A waitlist signup as exposed to the admin console (client-safe view). */
+export interface WaitlistEntryView {
+  id: string;
+  email: string;
+  locale: string | null;
+  source: string | null;
+  /** ISO-3166-1 alpha-2 country derived from the signup request, or null. */
+  country: string | null;
+  /** ISO timestamp of signup. */
+  createdAt: string;
+}
+
+/**
+ * One page of waitlist signups for the admin list. `total` is the count matching
+ * the current `q` filter (drives pagination + the displayed count), newest first.
+ */
+export interface WaitlistAdminPage {
+  entries: WaitlistEntryView[];
+  total: number;
+}

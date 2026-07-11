@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
-import type { InterviewState } from "@archivato/shared";
+import { INTERVIEW_MAX_QUESTIONS, type InterviewState } from "@archivato/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -136,7 +136,10 @@ export function InterviewPanel({
                   {question.phase}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  {t("questionN", { n: state.history.length + 1 })}
+                  {t("questionN", {
+                    n: state.history.length + 1,
+                    max: INTERVIEW_MAX_QUESTIONS,
+                  })}
                 </span>
               </div>
               <h3 dir="auto" className="text-base font-semibold leading-snug">

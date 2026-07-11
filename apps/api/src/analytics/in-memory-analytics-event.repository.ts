@@ -22,6 +22,7 @@ export class InMemoryAnalyticsEventRepository
       referrer: input.referrer ?? null,
       visitorId: input.visitorId ?? null,
       userId: input.userId ?? null,
+      country: input.country ?? null,
       meta: input.meta ?? null,
       createdAt: new Date(),
     });

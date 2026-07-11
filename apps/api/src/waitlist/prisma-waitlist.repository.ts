@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { WaitlistEntry } from './waitlist.entity';
 import type {
   CreateWaitlistEntryInput,
+  ListWaitlistParams,
   WaitlistRepository,
 } from './waitlist.repository';
 
@@ -21,11 +22,37 @@ export class PrismaWaitlistRepository implements WaitlistRepository {
         email: input.email,
         locale: input.locale ?? null,
         source: input.source ?? null,
+        country: input.country ?? null,
       },
     });
   }
 
   async count(): Promise<number> {
     return this.prisma.waitlistEntry.count();
+  }
+
+  async list({
+    q,
+    skip,
+    take,
+  }: ListWaitlistParams): Promise<{ entries: WaitlistEntry[]; total: number }> {
+    const where = q
+      ? {
+          OR: [
+            { email: { contains: q, mode: 'insensitive' as const } },
+            { source: { contains: q, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
+    const [entries, total] = await this.prisma.$transaction([
+      this.prisma.waitlistEntry.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.waitlistEntry.count({ where }),
+    ]);
+    return { entries, total };
   }
 }

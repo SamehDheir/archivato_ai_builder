@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import { renderEmailHtml } from './email-template';
 
 /**
  * How outbound mail is delivered. Resolved once on boot (mirrors the
@@ -78,23 +79,33 @@ export class MailService {
 
   async sendVerificationEmail(to: string, verifyUrl: string): Promise<void> {
     const subject = 'Verify your Archivato email';
-    const text = `Welcome to Archivato!\n\nConfirm your email by opening this link:\n${verifyUrl}\n\nThis link expires in 24 hours.`;
-    const html =
-      `<p>Welcome to Archivato!</p>` +
-      `<p>Confirm your email by clicking the link below:</p>` +
-      `<p><a href="${verifyUrl}">Verify my email</a></p>` +
-      `<p>This link expires in 24 hours.</p>`;
+    const text = `Welcome to Archivato!\n\nConfirm your email by opening this link:\n${verifyUrl}\n\nThis link expires in 24 hours. If you didn't create an account, you can ignore this email.`;
+    const html = renderEmailHtml({
+      previewText: 'Confirm your email to start using Archivato.',
+      heading: 'Verify your email',
+      paragraphs: [
+        'Welcome to Archivato — let’s confirm this is you.',
+        'Click the button below to verify your email address and activate your account.',
+      ],
+      button: { label: 'Verify my email', url: verifyUrl },
+      footnote:
+        'This link expires in 24 hours. If you didn’t create an Archivato account, you can safely ignore this email.',
+    });
 
     await this.send({ to, subject, text, html }, verifyUrl);
   }
 
   async sendPasswordResetOtp(to: string, code: string): Promise<void> {
     const subject = 'Your Archivato password reset code';
-    const text = `Your password reset code is ${code}.\n\nIt expires in 10 minutes. If you didn't request this, you can ignore this email.`;
-    const html =
-      `<p>Your Archivato password reset code is:</p>` +
-      `<p style="font-size:24px;font-weight:bold;letter-spacing:3px">${code}</p>` +
-      `<p>It expires in 10 minutes. If you didn't request this, you can ignore this email.</p>`;
+    const text = `Your Archivato password reset code is ${code}.\n\nIt expires in 10 minutes. If you didn't request this, you can ignore this email.`;
+    const html = renderEmailHtml({
+      previewText: 'Your Archivato password reset code.',
+      heading: 'Reset your password',
+      paragraphs: ['Use the code below to reset your Archivato password:'],
+      code,
+      footnote:
+        'This code expires in 10 minutes. If you didn’t request a password reset, you can safely ignore this email.',
+    });
 
     // Pass the code as the "link" so the dev/console fallback still shows it.
     await this.send({ to, subject, text, html }, `reset code: ${code}`);
@@ -114,9 +125,12 @@ export class MailService {
     link?: string,
   ): Promise<void> {
     const text = link ? `${body}\n\nOpen it here: ${link}` : body;
-    const html =
-      `<p>${escapeHtml(body)}</p>` +
-      (link ? `<p><a href="${escapeHtml(link)}">Open in Archivato</a></p>` : '');
+    const html = renderEmailHtml({
+      previewText: subject,
+      heading: subject,
+      paragraphs: [body],
+      button: link ? { label: 'Open in Archivato', url: link } : undefined,
+    });
     await this.send({ to, subject, text, html }, link ?? subject);
   }
 
@@ -245,16 +259,6 @@ function isMailProvider(value: string): value is MailProvider {
     value === 'preview' ||
     value === 'log'
   );
-}
-
-/** Escape user-controlled text before interpolating it into email HTML. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 /** Only pass auth when a username is configured (some relays are open/local). */
