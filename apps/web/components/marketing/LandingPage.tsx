@@ -8,16 +8,20 @@ import {
   Check,
   ClipboardCheck,
   Clock,
+  Code2,
   Coins,
+  Compass,
   Database,
   Download,
   FileText,
+  FlaskConical,
   Loader2,
   Mail,
   MessageSquare,
   Minus,
   Network,
   Plus,
+  Route,
   ShieldCheck,
   Sparkles,
   Webhook,
@@ -35,7 +39,8 @@ import { waitlistApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/shared/Logo';
 import { IdeaToProductDemo } from '@/components/marketing/IdeaToProductDemo';
-import { LandingNavActions } from '@/components/marketing/LandingNavActions';
+import { LandingHeader } from '@/components/marketing/LandingHeader';
+import { BackToTop } from '@/components/marketing/BackToTop';
 
 /** The three problem pain-points (copy resolved from `marketing.problem.items.*`). */
 const PROBLEMS: { key: string; icon: LucideIcon }[] = [
@@ -62,6 +67,34 @@ const PIPELINE: { key: string; icon: LucideIcon }[] = [
   { key: 'review', icon: ClipboardCheck },
   { key: 'export', icon: Download },
 ];
+
+/**
+ * The artifacts the pipeline actually produces, in generation order. This is the
+ * page's real proof — the Solution section only *describes* the output, so
+ * without this grid the threat model, QA plan, cost estimate, diagrams, and
+ * scaffold are invisible to a visitor. `pro` marks the freemium cutline and
+ * mirrors the gate enforced by `ProGuard` on the API.
+ */
+const DELIVERABLES: { key: string; icon: LucideIcon; pro?: boolean }[] = [
+  { key: 'requirements', icon: FileText },
+  { key: 'architecture', icon: Network },
+  { key: 'database', icon: Database },
+  { key: 'diagrams', icon: Workflow },
+  { key: 'vision', icon: Compass },
+  { key: 'api', icon: Webhook, pro: true },
+  { key: 'review', icon: ClipboardCheck, pro: true },
+  { key: 'roadmap', icon: Route, pro: true },
+  { key: 'cost', icon: Coins, pro: true },
+  { key: 'threat', icon: ShieldCheck, pro: true },
+  { key: 'qa', icon: FlaskConical, pro: true },
+  { key: 'scaffold', icon: Code2, pro: true },
+];
+
+/**
+ * Hero proof points (copy from `marketing.hero.stats.*`). Deliberately product
+ * facts, not social proof — there are no customer numbers to honestly claim yet.
+ */
+const HERO_STATS = ['artifacts', 'questions', 'editable'] as const;
 
 /** FAQ items are keyed q1..q6 in the `marketing.faq.items` object. */
 const FAQ_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'] as const;
@@ -358,37 +391,23 @@ export function LandingPage() {
         className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[38rem] w-[38rem] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl"
       />
 
-      {/* Nav */}
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/70 backdrop-blur">
-        <nav className="mx-auto flex max-w-6xl items-center gap-4 px-5 py-3.5 sm:px-6 lg:px-8">
-          <Link href="/">
-            <Logo />
-          </Link>
-          <div className="ms-6 hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <a href="#problem" className="transition-colors hover:text-foreground">
-              {t('nav.problem')}
-            </a>
-            <a href="#solution" className="transition-colors hover:text-foreground">
-              {t('nav.solution')}
-            </a>
-            <a href="#pricing" className="transition-colors hover:text-foreground">
-              {t('nav.pricing')}
-            </a>
-            <a href="#faq" className="transition-colors hover:text-foreground">
-              {t('nav.faq')}
-            </a>
-          </div>
-          <LandingNavActions />
-        </nav>
-      </header>
+      {/* Nav — sticky, scroll-aware, with the active section highlighted */}
+      <LandingHeader />
 
+      <main>
       {/* Hero — keeps the looping build video */}
-      <section className="mx-auto max-w-6xl px-5 pb-10 pt-16 sm:px-6 sm:pb-14 sm:pt-20 lg:px-8 lg:pt-24">
+      <section
+        aria-labelledby="hero-title"
+        className="mx-auto max-w-6xl px-5 pb-10 pt-16 sm:px-6 sm:pb-14 sm:pt-20 lg:px-8 lg:pt-24"
+      >
         <div className="mx-auto max-w-3xl text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
             <Sparkles className="h-3.5 w-3.5" /> {t('hero.badge')}
           </div>
-          <h1 className="mt-5 text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-[3.75rem]">
+          <h1
+            id="hero-title"
+            className="mt-5 text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-[3.75rem]"
+          >
             {t('hero.titleLead')}{' '}
             <span className="bg-gradient-to-r from-primary to-[hsl(var(--success))] bg-clip-text text-transparent">
               {t('hero.titleAccent')}
@@ -397,16 +416,45 @@ export function LandingPage() {
           <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground sm:text-lg">
             {t('hero.body')}
           </p>
+
+          {/* The product is live, so the primary action is the product itself —
+              the waitlist stays available below for visitors who aren't ready. */}
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button asChild size="lg">
-              <a href="#waitlist">
-                {t('hero.joinWaitlist')}{' '}
+              <Link href="/register">
+                {t('hero.start')}{' '}
                 <ArrowRight className="h-4 w-4 rtl:-scale-x-100" />
-              </a>
+              </Link>
             </Button>
             <Button asChild size="lg" variant="outline">
-              <Link href="/dashboard">{t('hero.start')}</Link>
+              <a href="#deliverables">{t('hero.seeDemo')}</a>
             </Button>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">{t('hero.noCard')}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t('hero.notReady')}{' '}
+            <a
+              href="#waitlist"
+              className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
+            >
+              {t('hero.joinWaitlist')}
+            </a>
+          </p>
+
+          <div className="mx-auto mt-10 grid max-w-xl grid-cols-3 gap-4">
+            {HERO_STATS.map((k) => (
+              <div key={k} className="flex flex-col items-center">
+                <span
+                  dir="ltr"
+                  className="text-2xl font-bold tracking-tight text-primary sm:text-3xl"
+                >
+                  {t(`hero.stats.${k}.value`)}
+                </span>
+                <span className="mt-1 text-center text-xs leading-snug text-muted-foreground">
+                  {t(`hero.stats.${k}.label`)}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -420,10 +468,17 @@ export function LandingPage() {
       </section>
 
       {/* The Problem */}
-      <section id="problem" className="border-y border-border/60 bg-muted/30">
+      <section
+        id="problem"
+        aria-labelledby="problem-title"
+        className="scroll-mt-20 border-y border-border/60 bg-muted/30"
+      >
         <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
           <Kicker>{t('problem.kicker')}</Kicker>
-          <h2 className="max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl">
+          <h2
+            id="problem-title"
+            className="max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl"
+          >
             {t('problem.title')}
           </h2>
           <p className="mt-3 max-w-2xl text-muted-foreground">{t('problem.body')}</p>
@@ -450,9 +505,16 @@ export function LandingPage() {
       </section>
 
       {/* The Solution */}
-      <section id="solution" className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+      <section
+        id="solution"
+        aria-labelledby="solution-title"
+        className="mx-auto max-w-6xl scroll-mt-20 px-5 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24"
+      >
         <Kicker>{t('solution.kicker')}</Kicker>
-        <h2 className="max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl">
+        <h2
+          id="solution-title"
+          className="max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl"
+        >
           {t('solution.title')}
         </h2>
         <p className="mt-3 max-w-2xl text-muted-foreground">{t('solution.body')}</p>
@@ -497,8 +559,59 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* What you get — the artifacts themselves */}
+      <section
+        id="deliverables"
+        aria-labelledby="deliverables-title"
+        className="scroll-mt-20 border-y border-border/60 bg-muted/30"
+      >
+        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+          <Kicker>{t('deliverables.kicker')}</Kicker>
+          <h2
+            id="deliverables-title"
+            className="max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl"
+          >
+            {t('deliverables.title')}
+          </h2>
+          <p className="mt-3 max-w-2xl text-muted-foreground">
+            {t('deliverables.body')}
+          </p>
+
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {DELIVERABLES.map(({ key, icon: Icon, pro }) => (
+              <div
+                key={key}
+                className="flex flex-col rounded-2xl border border-border bg-card p-6 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                      pro
+                        ? 'bg-primary/15 text-primary'
+                        : 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]',
+                    )}
+                  >
+                    {pro ? t('deliverables.pro') : t('deliverables.free')}
+                  </span>
+                </div>
+                <h3 className="mt-4 font-semibold">
+                  {t(`deliverables.items.${key}.title`)}
+                </h3>
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  {t(`deliverables.items.${key}.body`)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Pricing */}
-      <section id="pricing" className="border-y border-border/60 bg-muted/30">
+      <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-20">
         <div className="mx-auto max-w-5xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
           <div className="text-center">
             <Kicker>
@@ -506,7 +619,10 @@ export function LandingPage() {
                 {t('pricing.kicker')}
               </span>
             </Kicker>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            <h2
+              id="pricing-title"
+              className="text-3xl font-bold tracking-tight sm:text-4xl"
+            >
               {t('pricing.title')}
             </h2>
             <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
@@ -525,12 +641,16 @@ export function LandingPage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="mx-auto max-w-3xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+      <section
+        id="faq"
+        aria-labelledby="faq-title"
+        className="mx-auto max-w-3xl scroll-mt-20 px-5 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24"
+      >
         <div className="text-center">
           <Kicker>
             <span className="mx-auto flex items-center gap-2">{t('faq.kicker')}</span>
           </Kicker>
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          <h2 id="faq-title" className="text-3xl font-bold tracking-tight sm:text-4xl">
             {t('faq.title')}
           </h2>
         </div>
@@ -548,7 +668,11 @@ export function LandingPage() {
       </section>
 
       {/* Waitlist */}
-      <section id="waitlist" className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+      <section
+        id="waitlist"
+        aria-labelledby="waitlist-title"
+        className="mx-auto max-w-6xl scroll-mt-20 px-5 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24"
+      >
         <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-8 text-center sm:p-14">
           <div
             aria-hidden
@@ -566,7 +690,10 @@ export function LandingPage() {
           <p className="font-mono text-xs uppercase tracking-[0.25em] text-primary">
             {t('waitlist.kicker')}
           </p>
-          <h2 className="mx-auto mt-5 max-w-2xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
+          <h2
+            id="waitlist-title"
+            className="mx-auto mt-5 max-w-2xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl"
+          >
             {t('waitlist.title')}
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
@@ -577,6 +704,7 @@ export function LandingPage() {
           </div>
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="border-t border-border/60">
@@ -588,10 +716,10 @@ export function LandingPage() {
                 {t('footer.tagline')}
               </p>
               <Button asChild size="sm" className="mt-4">
-                <a href="#waitlist">
+                <Link href="/register">
                   {t('footer.start')}{' '}
                   <ArrowRight className="h-4 w-4 rtl:-scale-x-100" />
-                </a>
+                </Link>
               </Button>
             </div>
             <FooterCol
@@ -599,6 +727,7 @@ export function LandingPage() {
               links={[
                 [t('footer.links.problem'), '#problem'],
                 [t('footer.links.solution'), '#solution'],
+                [t('footer.links.deliverables'), '#deliverables'],
                 [t('footer.links.pricing'), '#pricing'],
                 [t('footer.links.faq'), '#faq'],
               ]}
@@ -625,6 +754,9 @@ export function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Floating scroll-to-top, appears after the first screen */}
+      <BackToTop />
     </div>
   );
 }

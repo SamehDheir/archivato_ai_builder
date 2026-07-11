@@ -1,28 +1,20 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { AuthGate } from '@/components/auth/AuthGate';
-import { ToastProvider } from '@/components/shared/toast';
 import { ThemeProvider } from '@/components/shared/theme';
-import { ConfirmProvider } from '@/components/shared/confirm-dialog';
-import { UpgradeProvider } from '@/components/billing/upgrade-dialog';
 import { LocaleProvider } from '@/components/shared/i18n';
 import { PageviewTracker } from '@/components/shared/pageview-tracker';
 import { CookieConsent } from '@/components/shared/cookie-consent';
-
-// Public origin used to resolve absolute URLs for OpenGraph/Twitter cards.
-// Override in prod via NEXT_PUBLIC_SITE_URL; falls back to local dev.
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
-
-const title = 'Archivato AI Builder';
-const description =
-  'Turn a business idea into a complete software system design — interview, ' +
-  'requirements, architecture, database, API, a scored AI review, and a build ' +
-  'roadmap. Not a chatbot; an AI software architecture generator.';
+import {
+  siteDescription as description,
+  siteName as title,
+  siteTagline,
+  siteUrl,
+} from '@/lib/site';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: title,
+    default: `${title} — ${siteTagline}`,
     template: '%s · Archivato AI Builder',
   },
   description,
@@ -37,22 +29,35 @@ export const metadata: Metadata = {
     'AI SaaS',
   ],
   authors: [{ name: 'Archivato' }],
+  creator: 'Archivato',
+  publisher: 'Archivato',
+  category: 'technology',
+  alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
     url: siteUrl,
     siteName: title,
-    title,
+    locale: 'en_US',
+    alternateLocale: ['ar'],
+    title: `${title} — ${siteTagline}`,
     description,
   },
   twitter: {
     card: 'summary_large_image',
-    title,
+    title: `${title} — ${siteTagline}`,
     description,
   },
-  // The browser favicon comes from the app/icon.svg file convention; only the
-  // Apple touch icon (no file convention here) needs declaring.
-  icons: { apple: '/logo-icon.svg' },
-  robots: { index: true, follow: true },
+  // NOTE: do NOT add an `icons` key here. Declaring it overrides the file-based
+  // icon conventions wholesale — an `icons: { apple }` alone silently suppressed
+  // the `<link rel="icon">` from app/icon.svg, so the tab fell back to the
+  // browser's default globe. The favicon (app/icon.svg), the touch icon
+  // (app/apple-icon.tsx), the share card (app/{opengraph,twitter}-image.tsx) and
+  // the manifest (app/manifest.ts) are all wired by convention instead.
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, 'max-image-preview': 'large' },
+  },
 };
 
 export const viewport: Viewport = {
@@ -85,15 +90,12 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen antialiased">
         <PageviewTracker />
+        {/* Only theme + locale are global. The app's providers (toast, confirm,
+            upgrade) and AuthGate live in the `(app)` route group's layout, so the
+            public marketing and legal pages never download or hydrate them. */}
         <ThemeProvider>
           <LocaleProvider>
-            <ToastProvider>
-              <ConfirmProvider>
-                <UpgradeProvider>
-                  <AuthGate>{children}</AuthGate>
-                </UpgradeProvider>
-              </ConfirmProvider>
-            </ToastProvider>
+            {children}
             <CookieConsent />
           </LocaleProvider>
         </ThemeProvider>

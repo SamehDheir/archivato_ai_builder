@@ -93,6 +93,15 @@
   * {
     @apply border-border;
   }
+  /* Anchor jumps (the landing nav) glide instead of teleporting. Gated on the
+     motion preference: a forced multi-screen smooth scroll is exactly what
+     `prefers-reduced-motion` is meant to suppress. Sections that anchors target
+     carry `scroll-mt-*` so their heading clears the sticky header. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
   body {
     @apply bg-background text-foreground;
     font-family:

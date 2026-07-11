@@ -695,17 +695,52 @@ tsconfig and never needs shared's `dist`.
   (agent prompts/artifacts) stays server-side/English for now — this slice is UI
   chrome only, except the interview, whose questions already adapt to the idea's
   language (`apps/api/src/interview/language.ts`).
-- **Structure:** `app/` holds routes only — `layout.tsx`, `page.tsx` (public
-  marketing **landing** at `/`), and route dirs `dashboard/`, `login/`,
-  `register/`, `verify/`, `settings/`. Feature components live in
+- **Structure:** `app/` holds routes only. The **root** level is the lean public
+  surface — `layout.tsx`, `page.tsx` (marketing **landing** at `/`), `privacy/`,
+  `terms/`, and the metadata files (`icon.svg`, `apple-icon.tsx`,
+  `opengraph-image.tsx`, `manifest.ts`, `robots.ts`, `sitemap.ts`). Everything
+  authenticated lives in the **`(app)` route group** — `dashboard/`, `login/`,
+  `register/`, `verify/`, `settings/`, `admin/`, `support/` (URLs unchanged;
+  route groups don't affect paths). Feature components live in
   `components/<domain>/` (`auth`, `interview`, `design`, `review`, `product`,
   `roadmap`, `project`, `settings`, `shared`, `marketing`) alongside
   `components/ui/`. Import via the `@/*` alias
   (→ web root), e.g. `@/components/project/ProjectStages`, `@/lib/api`.
-- **Auth gating:** `AuthGate` (in the layout) wraps everything. `/` and
-  `/verify` are public (`PUBLIC_EXACT` / `PUBLIC_PREFIXES`); `/login`+`/register`
-  are guest-only (signed-in users bounce to `/dashboard`); every other route
-  shows the `AuthForm` when signed out. The app itself lives at `/dashboard`.
+- **The `(app)`/root layout split is a performance boundary — keep it.** The root
+  layout carries only Theme + Locale providers (+ PageviewTracker/CookieConsent);
+  **`app/(app)/layout.tsx`** carries Toast → Confirm → Upgrade → `AuthGate`. With
+  all of that in the root layout, the landing page downloaded and hydrated the
+  entire authenticated app (auth form, account menu, notification bell, billing
+  dialog) — the bulk of its unused JS and blocking time (Lighthouse Perf 57 on
+  the deployed site). Never import app-only providers, `AuthGate`, or `lib/api`'s
+  authed helpers from the root layout or any marketing/legal page. New authed
+  routes go **inside `(app)/`**; new public pages stay outside and must not pull
+  app chrome.
+- **i18n bundles are code-split — three tiers** (`lib/i18n/`): `resources.ts` =
+  **eager EN, public namespaces only** (common/auth/marketing/legal — SSR needs
+  them synchronously); `resources.app.ts` = EN for the authed app
+  (dashboard/billing/interview/project/stages/settings/admin/support), loaded by
+  `loadAppNamespaces()` which **`AuthGate` awaits in parallel with `/auth/me`**
+  (loading screen holds until both settle, so app pages never flash raw keys);
+  `resources.ar.ts` = **all Arabic**, loaded by `loadLocale('ar')` before
+  `changeLanguage` (`<html dir/lang>` flips immediately; the text switch waits for
+  the chunk). Both loaders swallow failures → `fallbackLng`/keys, never a crash.
+  **Only `client.ts` may import the `.app`/`.ar` files, and only dynamically** — a
+  static import anywhere folds ~240 KB of JSON back into every visitor's bundle.
+  A new namespace goes in `namespaces` + the tier it belongs to (public → eager,
+  app-only → `resources.app.ts`), and its AR file into `resources.ar.ts`.
+- **Auth gating:** `AuthGate` (in the **`(app)` layout**) wraps the authed app.
+  `/` and `/verify` are public (`PUBLIC_EXACT` / `PUBLIC_PREFIXES`);
+  `/login`+`/register` are guest-only (signed-in users bounce to `/dashboard`);
+  every other route shows the `AuthForm` when signed out. The app itself lives at
+  `/dashboard`. Each AuthGate branch renders its own **`<main>` landmark** (the
+  signed-in shell has a sibling `<header>`, so a root-layout `<main>` would nest
+  landmarks); the landing page and `LegalDocument` carry their own. **The landing
+  nav (`LandingNavActions`) makes no API call for anonymous visitors** — it only
+  confirms `/auth/me` when the cached auth hint says "was signed in". The
+  unconditional call meant every first-time visitor logged a 401 to the console
+  (a Lighthouse Best-Practices point). The hint is cosmetic (which buttons to
+  paint), not authorization — AuthGate and the server still gate everything.
 - **Per-page access guard** (`lib/use-page-access.ts`). `usePageAccess(redirectFor)`
   fetches `/auth/me`, asks `redirectFor(me)` for a target, and `router.replace`s
   there (returning `null` meanwhile so nothing sensitive renders/flashes). This is
@@ -743,15 +778,57 @@ tsconfig and never needs shared's `dist`.
   Raw brand SVGs (favicon/icon/full/mono) sit in `apps/web/public/` — keep
   `app/icon.svg` and `LogoMark` visually in sync. A `currentColor` SVG loaded via
   `<img>` does **not** inherit the page color (renders black), so theme-adaptive
-  logos must be inlined, not `<img>`-referenced.
+  logos must be inlined, not `<img>`-referenced. The mark's geometry is
+  deliberately **coarse** (2 thick strokes + 3 nodes, no sub-4px detail): the same
+  shape is the 16px browser-tab favicon, and finer detail turns to mush there.
+- **Site metadata / SEO (`lib/site.ts` + app file conventions).** `lib/site.ts` is
+  the single source of truth for the machine-facing identity (origin, name,
+  tagline, description, pipeline, brand colors, public routes) — consumed by the
+  root `metadata`, the share card, the manifest, robots, and the sitemap. It is
+  **not i18n'd**: crawlers and link unfurlers read it before any locale is known
+  (locale lives in a client cookie), so it follows the same English-server-side
+  convention as the rest of the machine-facing output. Everything else is wired by
+  **file convention**, not by a `metadata.icons` key (see the Gotcha):
+  `app/icon.svg` (favicon), `app/apple-icon.tsx` (180px PNG — Safari ignores an SVG
+  touch icon, so it's redrawn through `ImageResponse`), `app/{opengraph,twitter}-image.tsx`
+  (the 1200×630 share card, rendered by the shared `lib/og.tsx`), `app/manifest.ts`,
+  `app/robots.ts` (auth-gated routes disallowed), `app/sitemap.ts`. **JSON-LD**
+  (`SoftwareApplication` + `FAQPage`) is emitted from `app/page.tsx` — the *server*
+  component — because `LandingPage` is a client component whose copy i18next
+  resolves at runtime and so would never reach a crawler; its FAQ entries must stay
+  in sync with `locales/en/marketing.json`.
 - **Landing** (`components/marketing/`): a conversion-oriented public marketing
-  page (`LandingPage`) structured as **Hero → Problem → Solution → Pricing → FAQ →
-  Waitlist → Footer**. The Hero keeps the looping, auto-playing `IdeaToProductDemo`
-  reel (client-only, respects `prefers-reduced-motion`) — treated as the page's
-  "video". Pricing reads plan numbers from `PLANS` (single source of truth) with
-  copy/features from i18n; FAQ is a client accordion; the **Waitlist** posts to the
-  real backend (`waitlistApi.join` → `POST /waitlist`) with a success/duplicate/
-  invalid state machine. Fully i18n'd (`marketing` namespace, EN + AR, RTL-safe).
+  page (`LandingPage`) structured as **Hero → Problem → Solution → What you get →
+  Pricing → FAQ → Waitlist → Footer**. The Hero keeps the looping, auto-playing
+  `IdeaToProductDemo` reel (client-only, respects `prefers-reduced-motion`) —
+  treated as the page's "video" — and its **primary CTA is the product**
+  (`/register`), not the waitlist: the app is live, so sending a ready visitor to
+  an email form is the page's biggest leak. The waitlist keeps its own section for
+  visitors who aren't ready. **"What you get"** (`DELIVERABLES`) is the page's real
+  proof — a grid of the 12 artifacts with the Free/Pro cutline marked (mirroring
+  `ProGuard`); without it the threat model, QA plan, cost estimate, diagrams, and
+  scaffold are invisible to a visitor, since the Solution section only *describes*
+  the output. Hero stats are **product facts, not social proof** (there are no
+  honest customer numbers yet). Pricing reads plan numbers from `PLANS` (single
+  source of truth) with copy/features from i18n; FAQ is a client accordion; the
+  **Waitlist** posts to the real backend (`waitlistApi.join` → `POST /waitlist`)
+  with a success/duplicate/invalid state machine. Fully i18n'd (`marketing`
+  namespace, EN + AR, RTL-safe).
+- **Landing chrome — sticky header + back-to-top.** The nav lives in its own
+  `LandingHeader` (client) rather than inline in `LandingPage`, so per-scroll state
+  only re-renders the bar. It is `sticky top-0 z-40` and **scroll-aware**: flush and
+  near-transparent over the hero, then on `scrollY > 8` it takes a solid backdrop +
+  border + shadow and tightens its padding, so it reads as a real toolbar instead of
+  a strip overlapping the content. The **active section** is highlighted via an
+  `IntersectionObserver` (not scroll math); `rootMargin: '-72px 0px -60% 0px'`
+  discounts the header height and keeps exactly one link lit. `BackToTop` is a
+  fixed, logical-positioned (`end-6` → RTL-safe) button that fades in past 600px;
+  it stays mounted and animates opacity so it fades rather than pops, and is
+  `tabIndex={-1}` + `aria-hidden` while invisible so a keyboard user can't focus an
+  invisible control. **Anchor scrolling:** `html { scroll-behavior: smooth }` in
+  `globals.css` is gated on `prefers-reduced-motion: no-preference`, and every
+  anchored `<section>` carries **`scroll-mt-20`** — without it a sticky header
+  covers the heading you just jumped to. i18n `nav.backToTop` (EN+AR).
   Nav/footer anchor to the section ids. Presentational except the waitlist form.
   The footer has a **Legal** column linking `/privacy` + `/terms`.
 - **Legal pages + cookie consent.** Public `/privacy` and `/terms` routes (added
@@ -860,6 +937,22 @@ tsconfig and never needs shared's `dist`.
 
 ## Gotchas (read before you trip on them)
 
+- **Never add an `icons` key to the root `metadata`.** Declaring `metadata.icons`
+  **overrides the file-based icon conventions wholesale** — it does not merge with
+  them. A lone `icons: { apple: '/logo-icon.svg' }` silently suppressed the
+  `<link rel="icon">` that `app/icon.svg` would have emitted, so production shipped
+  with **no favicon at all** and the tab fell back to the browser's default globe.
+  Let `app/icon.svg` + `app/apple-icon.tsx` speak for themselves.
+- **Satori (`next/og`) is not a browser — its CSS parser is far narrower, and it
+  fails hard.** An unsupported value doesn't degrade; the edge route dies and curl
+  reports `Empty reply from server` (no 500, no stack). Two rules for `lib/og.tsx`:
+  radial gradients must use the **`circle|ellipse at <pos>`** form (the
+  explicit-size `radial-gradient(1000px 620px at 12% 0%, …)` variant kills the
+  render), and every element with **more than one child needs `display: flex`**.
+  Only the bundled font ships, in **one weight**, so build hierarchy from size /
+  color / letter-spacing — a `fontWeight: 700` renders as regular. Verify a change
+  by actually fetching `/opengraph-image` and **looking at the PNG**; a byte count
+  alone won't catch an invisible indigo-on-indigo logo.
 - **`.env` `LLM_PROVIDER` must stay UNSET** to let `GROQ_API_KEY` flip the
   pipeline (an explicit `mock` forces mock). `apps/api/.env` is gitignored — the
   user pastes real keys there; confirm via the startup `LLM provider:` log.
@@ -872,7 +965,16 @@ tsconfig and never needs shared's `dist`.
 - **Windows:** stop `dev:api` before `prisma migrate/generate` (engine-DLL lock
   → EPERM).
 - **Don't `next build` while `next dev` is running** (overwrites `.next` → dev
-  500s). If it happens: `rm -rf apps/web/.next` and restart dev.
+  500s). If it happens: `rm -rf apps/web/.next` and restart dev. To build/measure
+  **without** stopping dev, use the knobs in `next.config.js`:
+  `NEXT_DIST_DIR=.next-perf` (separate output dir, `.next-*/` is gitignored) +
+  `NEXT_SKIP_STANDALONE=1` (skips the standalone copy step, which trips over
+  Windows file locks from AV scanning; standalone only matters for Docker).
+  Two side effects to know: `next build` **auto-rewrites `apps/web/tsconfig.json`**
+  (reformats + adds `<distDir>/types` to `include`) — revert that, don't commit
+  it; and local Lighthouse runs on this machine swing ±20 points between
+  identical runs (dev server + AV load), so compare **medians of 3+, or the
+  unthrottled desktop preset**, never a single throttled run.
 - **Next only wires Tailwind/PostCSS at startup** — restart `next dev` after
   changing `tailwind.config.ts`/`postcss.config.js` or adding a new dep.
 - **After editing `packages/shared`**, rebuild it

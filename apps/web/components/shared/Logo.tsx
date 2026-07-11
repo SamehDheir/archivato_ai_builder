@@ -1,10 +1,15 @@
 import { cn } from '@/lib/utils';
 
 /**
- * Archivato logo mark — the brand icon (matches `public/logo-icon.svg` and the
- * `app/icon.svg` favicon): a layout frame whose connected nodes form an "A" in
- * indigo, topped by a cyan apex. Inlined so it stays crisp and paints with no
- * extra request; colors are fixed so it reads on both light and dark surfaces.
+ * Archivato logo mark — the brand icon (matches `public/logo-icon.svg` and, on
+ * an indigo tile, the `app/icon.svg` favicon): an architecture truss whose
+ * connected nodes form an "A", topped by a cyan apex. Inlined so it stays crisp
+ * and paints with no extra request; colors are fixed so it reads on both light
+ * and dark surfaces.
+ *
+ * Geometry is deliberately coarse (few, thick strokes; no sub-4px details) so
+ * the same shape survives the 16px browser tab — the favicon is this mark, and
+ * anything finer turns to mush at that size.
  */
 export function LogoMark({ className }: { className?: string }) {
   return (
@@ -14,18 +19,19 @@ export function LogoMark({ className }: { className?: string }) {
       role="img"
       aria-label="Archivato"
     >
-      <g fill="none" stroke="#6366F1" strokeWidth={2.5} strokeLinecap="round">
-        <line x1={32} y1={13} x2={20} y2={35} />
-        <line x1={32} y1={13} x2={44} y2={35} />
-        <line x1={20} y1={35} x2={14} y2={50} />
-        <line x1={44} y1={35} x2={50} y2={50} />
-        <line x1={20} y1={35} x2={44} y2={35} />
+      <g
+        fill="none"
+        stroke="#6366F1"
+        strokeWidth={4.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M17 50 32 15 47 50" />
+        <path d="M23.3 36h17.4" />
       </g>
-      <rect x={9} y={49} width={9} height={9} rx={2.5} fill="#6366F1" />
-      <rect x={46} y={49} width={9} height={9} rx={2.5} fill="#6366F1" />
-      <circle cx={20} cy={35} r={4} fill="#4338CA" />
-      <circle cx={44} cy={35} r={4} fill="#4338CA" />
-      <circle cx={32} cy={13} r={5} fill="#22D3EE" />
+      <circle cx={17} cy={50} r={4.2} fill="#4338CA" />
+      <circle cx={47} cy={50} r={4.2} fill="#4338CA" />
+      <circle cx={32} cy={15} r={5.6} fill="#22D3EE" />
     </svg>
   );
 }

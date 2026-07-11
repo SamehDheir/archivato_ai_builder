@@ -842,6 +842,35 @@ ships a backend feature **and** its frontend so it can be verified by hand.
 - i18n EN + AR (`dashboard.starters.*` / `dashboard.example.*` / `interview.questionN`);
   Example fixtures covered by a render smoke test.
 
+### ✅ Slice — Landing conversion, site metadata & Lighthouse 100s
+- **Landing page**: hero CTA now leads with the product (**Start building — free**
+  → `/register`) instead of the waitlist (kept as its own section); new
+  **"What you get"** section — a grid of all 12 pipeline artifacts with the
+  Free/Pro cutline marked (threat model, QA plan, cost estimate, diagrams, and
+  scaffold were previously invisible to visitors); hero proof stats (product
+  facts, not invented social proof); scroll-aware sticky **`LandingHeader`**
+  (transparent over the hero → solid on scroll, active-section highlight via
+  IntersectionObserver) + a floating RTL-safe **`BackToTop`** button; smooth
+  anchor scrolling (`prefers-reduced-motion`-gated) with `scroll-mt` so headings
+  clear the sticky bar. Fully i18n'd EN + AR.
+- **Brand icon rebuilt** for 16 px legibility (coarse truss "A" mark — 2 strokes,
+  3 nodes) and synced across `app/icon.svg`, the `public/` brand SVGs, and
+  `LogoMark`. Fixed the production bug where `metadata.icons` **suppressed the
+  favicon entirely** (it overrides Next's file conventions instead of merging).
+- **Metadata/SEO**: generated 1200×630 OG/Twitter card (`lib/og.tsx` — scrapers
+  don't render SVG, so it's a real PNG), `apple-icon.tsx`, `manifest.ts`,
+  `robots.ts`, `sitemap.ts`, canonical URL, and JSON-LD
+  (`SoftwareApplication` + `FAQPage`) emitted from the server component;
+  `lib/site.ts` is the single source of the machine-facing identity.
+- **Lighthouse: 100/100/100/100** (desktop preset, local prod build; was
+  57/98/96/100 deployed). The big lever was a **route-group split** — the authed
+  app's providers + `AuthGate` moved to `app/(app)/layout.tsx`, so the landing
+  no longer downloads/hydrates the app (landing First Load JS **200→157 kB**);
+  **i18n bundles code-split into three tiers** (eager public EN / lazy app EN
+  awaited by AuthGate / lazy AR on locale switch); the landing nav no longer
+  fires `/auth/me` for anonymous visitors (killed the console 401 →
+  Best-Practices 100); `<main>` landmarks (A11y 100).
+
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff.
 - Broaden web test coverage (more components + a happy-path flow).

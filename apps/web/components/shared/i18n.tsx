@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { Languages } from 'lucide-react';
-import i18n from '@/lib/i18n/client';
+import i18n, { loadLocale } from '@/lib/i18n/client';
 import {
   coerceLocale,
   defaultLocale,
@@ -59,11 +59,15 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   const apply = useCallback((next: Locale) => {
     setLocaleState(next);
-    void i18n.changeLanguage(next);
+    // `dir`/`lang` flip immediately (layout must not wait on a chunk); the
+    // translation switch itself waits for the locale's bundle — Arabic is
+    // lazy-loaded as its own chunk, and switching before it registers would
+    // briefly leak English through `fallbackLng`.
     if (typeof document !== 'undefined') {
       document.documentElement.lang = next;
       document.documentElement.dir = dirFor(next);
     }
+    void loadLocale(next).then(() => i18n.changeLanguage(next));
   }, []);
 
   useEffect(() => {

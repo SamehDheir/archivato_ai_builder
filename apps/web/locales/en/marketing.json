@@ -2,20 +2,87 @@
   "nav": {
     "problem": "Problem",
     "solution": "Solution",
+    "deliverables": "What you get",
     "pricing": "Pricing",
     "faq": "FAQ",
     "signIn": "Sign in",
     "startBuilding": "Start building",
-    "dashboard": "Dashboard"
+    "dashboard": "Dashboard",
+    "backToTop": "Back to top"
   },
   "hero": {
     "badge": "AI Software Architecture Generator",
     "titleLead": "Describe your idea.",
     "titleAccent": "Ship a complete system design.",
     "body": "Archivato interviews you about your app, then generates the entire blueprint — requirements, architecture, database, API, a scored review, and a build roadmap. You edit, refine, and export. Not a chatbot; an architecture engine.",
+    "start": "Start building — free",
+    "seeDemo": "See what it builds",
+    "noCard": "Free to start. No credit card.",
+    "notReady": "Not launching yet?",
     "joinWaitlist": "Join the waitlist",
-    "start": "Try it now",
-    "demoCaption": "A looping demo — watch an idea become a complete system design."
+    "demoCaption": "A looping demo — watch an idea become a complete system design.",
+    "stats": {
+      "artifacts": { "value": "12", "label": "design artifacts, generated" },
+      "questions": { "value": "9", "label": "interview questions, at most" },
+      "editable": { "value": "100%", "label": "editable and versioned" }
+    }
+  },
+  "deliverables": {
+    "kicker": "What you get",
+    "title": "Twelve artifacts. Not twelve paragraphs of chat.",
+    "body": "Every stage produces a structured, editable, versioned document — the same set an engineering team would spend weeks assembling by hand.",
+    "free": "Free",
+    "pro": "Pro",
+    "items": {
+      "requirements": {
+        "title": "Requirements",
+        "body": "Functional and non-functional requirements, user roles, and the flows between them — traceable back to your interview answers."
+      },
+      "architecture": {
+        "title": "System architecture",
+        "body": "An architecture pattern, a justified tech stack, and the services that make it up. Ask \"why this?\" on any choice and get the rationale, tradeoffs, and alternatives."
+      },
+      "database": {
+        "title": "Database schema",
+        "body": "Entities, columns, types, and relations — as an ER diagram and as runnable PostgreSQL DDL."
+      },
+      "diagrams": {
+        "title": "Diagrams & canvas",
+        "body": "ER, architecture, and per-endpoint sequence diagrams, plus an interactive canvas. Export to Mermaid, Draw.io, SVG, PNG, or PDF."
+      },
+      "vision": {
+        "title": "Product vision",
+        "body": "The PM's view of your idea: problem, target users, value proposition, and success metrics — ready to put in front of a stakeholder."
+      },
+      "api": {
+        "title": "REST API design",
+        "body": "Endpoints, request and response schemas, and status codes — with an interactive OpenAPI explorer and a Postman collection."
+      },
+      "review": {
+        "title": "AI architect review",
+        "body": "Your design, scored on security, scalability, performance, and cost, with findings per category and a critical-issues callout."
+      },
+      "roadmap": {
+        "title": "Implementation roadmap",
+        "body": "Phases, milestones, and tasks with effort estimates — the plan you actually build against."
+      },
+      "cost": {
+        "title": "Hosting cost estimate",
+        "body": "A projected monthly bill across 8 providers at 100, 1,000, and 10,000 users, with the cheapest option per scale. Calculated, not guessed."
+      },
+      "threat": {
+        "title": "Threat model",
+        "body": "A STRIDE security analysis of your design — every threat with its component, severity, and a concrete mitigation."
+      },
+      "qa": {
+        "title": "Test & QA plan",
+        "body": "A testing strategy with named test cases grouped by type — unit, integration, e2e, security, performance, and acceptance."
+      },
+      "scaffold": {
+        "title": "Code scaffold",
+        "body": "A runnable NestJS + Prisma backend generated from your design — download the ZIP or push it straight to a new GitHub repo."
+      }
+    }
   },
   "problem": {
     "kicker": "The problem",
@@ -150,13 +217,14 @@
   },
   "footer": {
     "tagline": "Turn a business idea into a complete software system design — not a chatbot, an architecture engine.",
-    "start": "Join the waitlist",
+    "start": "Start building",
     "explore": "Explore",
     "account": "Account",
     "legal": "Legal",
     "links": {
       "problem": "Problem",
       "solution": "Solution",
+      "deliverables": "What you get",
       "pricing": "Pricing",
       "faq": "FAQ",
       "signIn": "Sign in",

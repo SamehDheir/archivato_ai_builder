@@ -1,27 +1,7 @@
 import enCommon from '@/locales/en/common.json';
 import enAuth from '@/locales/en/auth.json';
 import enMarketing from '@/locales/en/marketing.json';
-import enDashboard from '@/locales/en/dashboard.json';
-import enBilling from '@/locales/en/billing.json';
-import enInterview from '@/locales/en/interview.json';
-import enProject from '@/locales/en/project.json';
-import enStages from '@/locales/en/stages.json';
-import enSettings from '@/locales/en/settings.json';
-import enAdmin from '@/locales/en/admin.json';
-import enSupport from '@/locales/en/support.json';
 import enLegal from '@/locales/en/legal.json';
-import arCommon from '@/locales/ar/common.json';
-import arAuth from '@/locales/ar/auth.json';
-import arMarketing from '@/locales/ar/marketing.json';
-import arDashboard from '@/locales/ar/dashboard.json';
-import arBilling from '@/locales/ar/billing.json';
-import arInterview from '@/locales/ar/interview.json';
-import arProject from '@/locales/ar/project.json';
-import arStages from '@/locales/ar/stages.json';
-import arSettings from '@/locales/ar/settings.json';
-import arAdmin from '@/locales/ar/admin.json';
-import arSupport from '@/locales/ar/support.json';
-import arLegal from '@/locales/ar/legal.json';
 
 /** Translation namespaces. Add new domains here as later phases land. */
 export const namespaces = [
@@ -40,34 +20,23 @@ export const namespaces = [
 ] as const;
 export const defaultNS = 'common';
 
-/** All bundled translations, keyed by locale then namespace. */
+/**
+ * Statically bundled translations — **English, public surface only** (the
+ * namespaces the landing, legal, and auth pages read). These must be available
+ * synchronously for the first render since EN is the default/SSR locale.
+ *
+ * Everything else loads on demand as its own chunk:
+ *   - `resources.app.ts` — EN for the authenticated app (awaited by AuthGate);
+ *   - `resources.ar.ts`  — all Arabic (awaited by `loadLocale` on switch).
+ *
+ * Bundling all of it eagerly shipped ~240 KB of JSON to every visitor before
+ * the marketing page could become interactive.
+ */
 export const resources = {
   en: {
     common: enCommon,
     auth: enAuth,
     marketing: enMarketing,
-    dashboard: enDashboard,
-    billing: enBilling,
-    interview: enInterview,
-    project: enProject,
-    stages: enStages,
-    settings: enSettings,
-    admin: enAdmin,
-    support: enSupport,
     legal: enLegal,
-  },
-  ar: {
-    common: arCommon,
-    auth: arAuth,
-    marketing: arMarketing,
-    dashboard: arDashboard,
-    billing: arBilling,
-    interview: arInterview,
-    project: arProject,
-    stages: arStages,
-    settings: arSettings,
-    admin: arAdmin,
-    support: arSupport,
-    legal: arLegal,
   },
 } as const;
