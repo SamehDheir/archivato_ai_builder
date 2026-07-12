@@ -684,6 +684,13 @@ export const rolesApi = {
  * Anonymous pageview beacon. Fire-and-forget (never throws) — used on the public
  * landing so admin traffic charts include non-signed-in visitors. `keepalive`
  * lets it complete even if the page is navigating away.
+ *
+ * The hard timeout matters: against a cold Render free instance (~50s wake) an
+ * un-aborted request dangles for the whole wake-up, and any tool waiting for
+ * network-idle (Lighthouse: "the page loaded too slowly to finish") counts the
+ * page as still loading that entire time. A beacon that misses a sleeping
+ * server is data we can afford to lose; a hanging request on the landing page
+ * is not.
  */
 export const analyticsApi = {
   track: (path: string, referrer?: string) => {
@@ -692,6 +699,7 @@ export const analyticsApi = {
         method: 'POST',
         credentials: 'include',
         keepalive: true,
+        signal: AbortSignal.timeout(4000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path, referrer: referrer || undefined }),
       }).catch(() => undefined);
