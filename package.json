@@ -14,7 +14,11 @@
     "lint:web": "npm run lint --workspace @archivato/web",
     "dev:api": "npm run start:dev --workspace @archivato/api",
     "dev:web": "npm run dev --workspace @archivato/web",
+    "test:e2e": "playwright test",
     "build": "npm run build --workspace @archivato/shared && npm run build --workspace @archivato/api && npm run build --workspace @archivato/web"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
   },
   "engines": {
     "node": ">=20"

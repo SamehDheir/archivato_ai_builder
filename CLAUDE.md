@@ -37,6 +37,7 @@ npm run test:api                                     # api Jest (node)
 npm run test --workspace @archivato/api -- <file>    # single api test
 npm run test:web                                     # web Jest (jsdom + Testing Library)
 npm run test --workspace @archivato/web -- <file>    # single web test
+npm run test:e2e                                     # Playwright full-funnel smoke (docker db+redis up, port 3001 free)
 
 # Lint
 npm run lint --workspace @archivato/api    # eslint src/**/*.ts
@@ -934,6 +935,27 @@ tsconfig and never needs shared's `dist`.
   treat the autosave as a restore. Dashboard `handleSaved*` take `{auto}` to stay
   silent (no toast/version bump) on autosave. Canvas saves stay manual. The
   leave guard still applies (`dirty` + `confirmLeave()` + `useConfirm`).
+
+**CI (GitHub Actions) + e2e smoke.** `.github/workflows/ci.yml` runs on push/PR
+to `develop`/`main`: a `checks` job (shared build → prisma generate → lint →
+unit tests → api+web builds) and an `e2e` job (Postgres/Redis service
+containers → `prisma migrate deploy` → production builds → Playwright). The
+**e2e smoke** (`e2e/pipeline.spec.ts`, root `playwright.config.ts`, `npm run
+test:e2e`) drives the full funnel in Chromium — register → interview → confirm →
+system/db design → freemium wall → **mock upgrade in place** → API design →
+JSON-bundle export — entirely offline (deterministic fallbacks + mock billing;
+the CI web build uses `NEXT_SKIP_STANDALONE=1` so `next start` works). Three
+non-obvious rails: (1) the spec **randomizes `navigator.hardwareConcurrency`**
+per run — the device-fingerprint gate hashes stable signals, so an unrandomized
+Chromium 409s on the second registration against a persistent DB; (2) local runs
+spawn the API with **env pinned to the docker-compose DB + `mock`/`log`
+providers** — real env beats `.env` (dotenv never overrides), so a `.env`
+pointing at Supabase/production is never touched; (3) `reuseExistingServer:
+false` for the API — adopting a running `dev:api` would write test users into
+whatever DB its `.env` targets, so a busy port 3001 fails loudly instead.
+Selectors target the **English locale** (SSR default; fresh contexts have no
+stored locale) via accessible roles/labels — renaming a button label may need
+an e2e update.
 
 ## Gotchas (read before you trip on them)
 

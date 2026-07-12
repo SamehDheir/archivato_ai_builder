@@ -1,0 +1,115 @@
+# CI for the monorepo: fast checks (lint + unit tests + builds) and a full
+# end-to-end smoke of the pipeline. Everything runs offline — with no LLM /
+# billing / mail keys the API resolves the mock providers, so agents fall to
+# their deterministic builds and the mock checkout upgrades instantly.
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint · unit tests · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Full install (not --omit=optional): next's platform SWC binaries are
+      # optional deps, so omitting optionals would break the web build. The
+      # geoip-lite postinstall cost is acceptable on GitHub's network.
+      - run: npm ci
+
+      # Shared package first — the api consumes its built dist.
+      - run: npm run build:shared
+      # Prisma client types are required by the api's build and tests.
+      - run: npm run prisma:generate --workspace @archivato/api
+
+      - run: npm run lint --workspace @archivato/api
+      - run: npm run lint --workspace @archivato/web
+
+      - run: npm run test:api
+      - run: npm run test:web
+
+      - run: npm run build --workspace @archivato/api
+      - run: npm run build --workspace @archivato/web
+
+  e2e:
+    name: E2E smoke (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/archivato
+      # pgBouncer isn't in play in CI — the direct URL is the same URL.
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/archivato
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      WEB_ORIGIN: http://localhost:3000
+      # Dev-grade secret: NODE_ENV is not "production" here, so the strict
+      # boot-time validation (and Secure-cookie forcing, which would break
+      # plain-http localhost) stays off by design.
+      JWT_ACCESS_SECRET: e2e-ci-only-secret-0123456789abcdef0123456789
+    services:
+      db:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: archivato
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build:shared
+      - run: npm run prisma:generate --workspace @archivato/api
+      - run: npm run prisma:deploy --workspace @archivato/api
+
+      - run: npm run build --workspace @archivato/api
+      # Skip the standalone server copy — `next start` (what the e2e web
+      # server runs) wants a regular build; standalone is Docker-only.
+      - run: npm run build --workspace @archivato/web
+        env:
+          NEXT_SKIP_STANDALONE: '1'
+
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
