@@ -1,5 +1,4 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import type { RequirementDocument } from '@archivato/shared';
 import { SystemDesignService } from './system-design.service';
 import { InMemorySystemDesignRepository } from './in-memory-system-design.repository';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';

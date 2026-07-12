@@ -7,6 +7,7 @@ import { exportApi } from '@/lib/api';
 import { saveBlob, saveFile as download } from '@/lib/download';
 import { Button } from '@/components/ui/button';
 import { ScaffoldView } from './ScaffoldView';
+import { ShareLinkCard } from './ShareLinkCard';
 
 /** Opens the Markdown in a print window so the user can "Save as PDF". */
 function printAsPdf(markdown: string) {
@@ -188,6 +189,7 @@ export function ExportView({ sessionId }: { sessionId: string }) {
       </div>
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
 
+      <ShareLinkCard sessionId={sessionId} />
       <ScaffoldView sessionId={sessionId} />
     </div>
   );

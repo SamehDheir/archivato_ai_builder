@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { redactSharePath } from '@archivato/shared';
 import { analyticsApi } from '@/lib/api';
 import { analyticsAllowed, onConsentChange } from '@/lib/consent';
 
@@ -27,8 +28,11 @@ export function PageviewTracker() {
   useEffect(() => {
     if (!allowed) return;
     if (!pathname || pathname.startsWith('/admin')) return;
+    // A share token is a bearer credential — never beacon it (see
+    // `redactSharePath`). The API redacts again on receipt; both ends share the
+    // one rule so they cannot drift apart.
     analyticsApi.track(
-      pathname,
+      redactSharePath(pathname),
       typeof document !== 'undefined' ? document.referrer : undefined,
     );
   }, [pathname, allowed]);

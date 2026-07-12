@@ -447,5 +447,21 @@
       "endpointPath": "{{label}}: endpoint {{n}} needs a path.",
       "moduleLabel": "Module {{n}}"
     }
+  },
+  "share": {
+    "title": "Share a public link",
+    "intro": "Publish a read-only page of this design that anyone can open — no account needed. The link is unguessable, unlisted, and you can revoke it at any time.",
+    "create": "Create public link",
+    "creating": "Creating…",
+    "created": "Public link created",
+    "copy": "Copy link",
+    "copied": "Copied",
+    "revoke": "Revoke",
+    "revoked": "Public link revoked",
+    "revokeTitle": "Revoke this public link?",
+    "revokeDesc": "The link stops working immediately for everyone you sent it to. Sharing again creates a new link — the old one stays dead.",
+    "revokeConfirm": "Revoke link",
+    "views": "{{n}} views",
+    "failed": "Something went wrong. Try again."
   }
 }

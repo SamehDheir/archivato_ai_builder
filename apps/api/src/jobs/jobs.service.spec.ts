@@ -3,19 +3,29 @@ import type { Queue } from 'bullmq';
 import { JobsService } from './jobs.service';
 import { GENERATE_JOB } from './pipeline.constants';
 
+/** The shape of the fake jobs this queue hands back (a subset of bullmq's Job). */
+interface FakeJob {
+  id: string;
+  data: unknown;
+  progress: number;
+  returnvalue: unknown;
+  failedReason: string | undefined;
+  getState: () => Promise<string>;
+}
+
 /** A minimal fake BullMQ queue backed by an in-memory map. */
 function fakeQueue() {
-  const jobs = new Map<string, any>();
+  const jobs = new Map<string, FakeJob>();
   let seq = 0;
   const queue = {
-    add: jest.fn(async (_name: string, data: any) => {
+    add: jest.fn(async (_name: string, data: unknown) => {
       const id = String(++seq);
-      const job = {
+      const job: FakeJob = {
         id,
         data,
         progress: 0,
-        returnvalue: undefined as unknown,
-        failedReason: undefined as string | undefined,
+        returnvalue: undefined,
+        failedReason: undefined,
         getState: async () => 'waiting',
       };
       jobs.set(id, job);

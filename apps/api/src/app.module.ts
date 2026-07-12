@@ -22,6 +22,7 @@ import { ThreatModelModule } from './threat-model/threat-model.module';
 import { QaPlanModule } from './qa-plan/qa-plan.module';
 import { ExportModule } from './export/export.module';
 import { ScaffoldModule } from './scaffold/scaffold.module';
+import { ShareModule } from './share/share.module';
 import { ChatModule } from './chat/chat.module';
 import { JobsModule } from './jobs/jobs.module';
 import { StreamModule } from './stream/stream.module';
@@ -81,6 +82,8 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     ExportModule,
     // Code scaffolding: runnable NestJS + Prisma backend (ZIP + push to GitHub).
     ScaffoldModule,
+    // Public share links: a read-only page for a completed design.
+    ShareModule,
     // Slice 10: post-generation AI chat (refine the design in natural language).
     ChatModule,
     // Async pipeline generation (BullMQ/Redis): enqueue + poll job status.

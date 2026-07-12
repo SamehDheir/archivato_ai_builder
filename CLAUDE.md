@@ -149,7 +149,7 @@ tsconfig and never needs shared's `dist`.
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
-  `threat-model`, `qa-plan`, `export`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
+  `threat-model`, `qa-plan`, `export`, `share`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
   `billing`, `analytics`, `admin`, `support`, `notifications`, `roles`,
   `waitlist`).
   Modules export their repository token + service for downstream use.
@@ -239,6 +239,52 @@ tsconfig and never needs shared's `dist`.
   from the API origin) → connected state (`login` + Disconnect) → push with no
   token; a **"use a token instead"** toggle keeps the PAT path. i18n'd
   `stages.scaffold.*` (EN+AR).
+- **Public share links (`share`).** A read-only page for a **finished** design that
+  anyone can open with no account — the product's organic loop. One `share_links`
+  row per session (repo pattern; `sessionId` PK, unique `token`, `viewCount`).
+  The token is **32 CSPRNG bytes base64url** and is the link's only credential.
+  Owner routes (`/share/:sessionId`, `JwtAuthGuard + SessionOwnerGuard`): `GET`
+  (link or null), `POST` (mint — **`ProGuard`**), `DELETE` (revoke). **Only minting
+  is Pro-gated** — a downgraded user must still be able to see and kill a link they
+  already published. `create` is **idempotent** (sharing twice never invalidates a
+  link already sent out); **revoke is a hard delete**, so the token dies for good
+  and re-sharing mints a new one (there is no "pause"). The pipeline gate is free:
+  `ShareService` reuses **`ExportService.bundle()`**, which 409s until the API
+  design exists.
+  - **The public payload IS the security boundary.** `GET /shared/:token`
+    (separate `SharePublicController`, so a token can never collide with a session
+    id on the route table) returns strictly `SharedProject` (`@archivato/shared`):
+    the design chain + optional review + the title/idea — **no interview
+    transcript** (the user's own words about their business), no owner, and **not
+    even the session id**. Every artifact is stamped with `sessionId`, so the
+    projection **overwrites it with the token** — an internal id that addresses
+    owner-scoped routes has no business on a public page. A design that later
+    regresses (a version restore drops the API design) 404s rather than surfacing
+    the 409 a stranger couldn't act on.
+  - **The public read is `@SkipThrottle()`** (the Paddle-webhook precedent). The
+    page is **server-rendered**, so every viewer reaches the API from the same
+    Next.js server IP — IP-keyed throttling would put a link's whole audience in
+    one bucket and start 429ing readers exactly when a link takes off. What guards
+    it instead: an unguessable token (nothing to enumerate) + a read-only
+    projection; burst protection belongs at the edge (Cloudflare, per DEPLOY.md).
+  - **Unlisted, not published.** The page is **`noindex`** and `/s/` is disallowed
+    in `robots.ts` — someone's business idea turning up in a Google search for
+    their company would be a nasty surprise. The **per-project OG card**
+    (`shareOgImage()` in `lib/og.tsx` — their title + architecture/services/tables/
+    endpoints) still unfurls in Slack/X/LinkedIn, which is where the loop lives.
+  - **Web.** `app/s/[token]/page.tsx` is a **server component** outside the `(app)`
+    group (no AuthGate, no app providers): it fetches once (`cache`-deduped across
+    `generateMetadata` + body) and passes the payload to `SharedProjectView`, which
+    renders the **same artifact `*View` components** the owner sees (they're pure
+    functions of their artifact — the `ExampleProjectView` proof) and ends in a
+    "Built with Archivato" CTA. It mounts the one provider it actually needs
+    (`ToastProvider`, for ErDiagram's export buttons) and awaits its **own lazy i18n
+    tier** — `loadShareNamespaces()` / `resources.share.ts` = **`stages` + `share`
+    only**, because a cold visitor following a link shouldn't download the dashboard's
+    and admin console's copy. `SystemDesignView` gets `interactive={false}` (Explain
+    calls an owner-scoped API). The **not-found state is server-rendered English**:
+    it must render without the lazy chunk. Owner controls: `ShareLinkCard` in the
+    Export tab (create/copy/views/revoke; 402 → `useUpgrade`).
 - **Streaming generation (`stream`) — the "narration layer".** A live alternative
   to the poll-based `/jobs` path for the 5 pipeline stages. `GET /stream/:sessionId/:stage`
   is a Nest **`@Sse()`** endpoint (owner-guarded by the same `SessionOwnerGuard`,
@@ -698,13 +744,13 @@ tsconfig and never needs shared's `dist`.
   language (`apps/api/src/interview/language.ts`).
 - **Structure:** `app/` holds routes only. The **root** level is the lean public
   surface — `layout.tsx`, `page.tsx` (marketing **landing** at `/`), `privacy/`,
-  `terms/`, and the metadata files (`icon.svg`, `apple-icon.tsx`,
-  `opengraph-image.tsx`, `manifest.ts`, `robots.ts`, `sitemap.ts`). Everything
-  authenticated lives in the **`(app)` route group** — `dashboard/`, `login/`,
-  `register/`, `verify/`, `settings/`, `admin/`, `support/` (URLs unchanged;
-  route groups don't affect paths). Feature components live in
+  `terms/`, `s/[token]/` (the public **share** page), and the metadata files
+  (`icon.svg`, `apple-icon.tsx`, `opengraph-image.tsx`, `manifest.ts`, `robots.ts`,
+  `sitemap.ts`). Everything authenticated lives in the **`(app)` route group** —
+  `dashboard/`, `login/`, `register/`, `verify/`, `settings/`, `admin/`, `support/`
+  (URLs unchanged; route groups don't affect paths). Feature components live in
   `components/<domain>/` (`auth`, `interview`, `design`, `review`, `product`,
-  `roadmap`, `project`, `settings`, `shared`, `marketing`) alongside
+  `roadmap`, `project`, `settings`, `shared`, `share`, `marketing`) alongside
   `components/ui/`. Import via the `@/*` alias
   (→ web root), e.g. `@/components/project/ProjectStages`, `@/lib/api`.
 - **The `(app)`/root layout split is a performance boundary — keep it.** The root
@@ -717,19 +763,23 @@ tsconfig and never needs shared's `dist`.
   authed helpers from the root layout or any marketing/legal page. New authed
   routes go **inside `(app)/`**; new public pages stay outside and must not pull
   app chrome.
-- **i18n bundles are code-split — three tiers** (`lib/i18n/`): `resources.ts` =
+- **i18n bundles are code-split — four tiers** (`lib/i18n/`): `resources.ts` =
   **eager EN, public namespaces only** (common/auth/marketing/legal — SSR needs
   them synchronously); `resources.app.ts` = EN for the authed app
   (dashboard/billing/interview/project/stages/settings/admin/support), loaded by
   `loadAppNamespaces()` which **`AuthGate` awaits in parallel with `/auth/me`**
   (loading screen holds until both settle, so app pages never flash raw keys);
-  `resources.ar.ts` = **all Arabic**, loaded by `loadLocale('ar')` before
-  `changeLanguage` (`<html dir/lang>` flips immediately; the text switch waits for
-  the chunk). Both loaders swallow failures → `fallbackLng`/keys, never a crash.
-  **Only `client.ts` may import the `.app`/`.ar` files, and only dynamically** — a
-  static import anywhere folds ~240 KB of JSON back into every visitor's bundle.
-  A new namespace goes in `namespaces` + the tier it belongs to (public → eager,
-  app-only → `resources.app.ts`), and its AR file into `resources.ar.ts`.
+  `resources.share.ts` = EN for the **public share page** (`stages` + `share`
+  only), loaded by `loadShareNamespaces()` which `SharedProjectView` awaits before
+  its first render — a cold visitor following a share link must not pay for the
+  dashboard's/admin's copy just to read a design; `resources.ar.ts` = **all
+  Arabic**, loaded by `loadLocale('ar')` before `changeLanguage` (`<html dir/lang>`
+  flips immediately; the text switch waits for the chunk). Every loader swallows
+  failures → `fallbackLng`/keys, never a crash. **Only `client.ts` may import the
+  `.app`/`.share`/`.ar` files, and only dynamically** — a static import anywhere
+  folds ~240 KB of JSON back into every visitor's bundle. A new namespace goes in
+  `namespaces` + the tier it belongs to (public → eager, app-only →
+  `resources.app.ts`), and its AR file into `resources.ar.ts`.
 - **Auth gating:** `AuthGate` (in the **`(app)` layout**) wraps the authed app.
   `/` and `/verify` are public (`PUBLIC_EXACT` / `PUBLIC_PREFIXES`);
   `/login`+`/register` are guest-only (signed-in users bounce to `/dashboard`);

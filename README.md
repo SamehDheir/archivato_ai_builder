@@ -62,10 +62,12 @@ chain of structured artifacts — each one grounded in the previous:
 
 Around the pipeline: **chat refinement** (amend requirements, downstream stages
 regenerate consistently), **version history** with diff + restore, **live SSE
-generation console**, full **auth** (email + Google/GitHub OAuth), **billing**
-(Free/Pro via Paddle or an offline mock), a **customer support center** with a
-three-layer AI assistant + knowledge base, **RBAC** for staff consoles,
-**admin analytics**, and a bilingual UI (**English + Arabic, RTL-safe**).
+generation console**, **public share links** (a read-only page of a finished
+design that anyone can open — no account), full **auth** (email + Google/GitHub
+OAuth), **billing** (Free/Pro via Paddle or an offline mock), a **customer
+support center** with a three-layer AI assistant + knowledge base, **RBAC** for
+staff consoles, **admin analytics**, and a bilingual UI (**English + Arabic,
+RTL-safe**).
 
 ## Feature matrix (Free vs Pro)
 
@@ -76,6 +78,7 @@ three-layer AI assistant + knowledge base, **RBAC** for staff consoles,
 | Product Vision | ✅ | ✅ |
 | API design, AI review, roadmap, cost, threat model, QA plan | — | ✅ |
 | Export formats + code scaffold + API docs/mock server | — | ✅ |
+| Public share link for a finished design | — | ✅ |
 
 Billing runs **offline in mock mode by default** (instant upgrade, no charge),
 so the entire funnel is demoable with zero setup; Paddle (Merchant-of-Record)

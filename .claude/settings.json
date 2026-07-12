@@ -50,7 +50,29 @@
       "PowerShell(npm run lint --workspace @archivato/web 2>&1)",
       "PowerShell(npx --prefix \"d:\\\\portoflio\\\\Archivato AI Builder\\\\apps\\\\web\" tsc -p \"d:\\\\portoflio\\\\Archivato AI Builder\\\\apps\\\\web\\\\tsconfig.json\" --noEmit 2>&1)",
       "PowerShell(npm run test:e2e)",
-      "Read(//c/Users/Sameh Dheir/.claude/plans/**)"
+      "Read(//c/Users/Sameh Dheir/.claude/plans/**)",
+      "Bash(npx eslint *)",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./apps/api/package.json'\\).scripts,null,2\\)\\)\")",
+      "Bash(node -e \"const p=require\\('./apps/api/package.json'\\);console.log\\(Object.keys\\({...p.dependencies,...p.devDependencies}\\).filter\\(d=>/eslint|prettier/.test\\(d\\)\\)\\)\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\('root deps:',JSON.stringify\\({...p.dependencies,...p.devDependencies},null,2\\)\\)\")",
+      "Bash(node -e \"console.log\\('eslint',require\\('./node_modules/eslint/package.json'\\).version\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(python -)",
+      "Bash(NEXT_DIST_DIR=.next-perf NEXT_SKIP_STANDALONE=1 npx next build)",
+      "Bash(DATABASE_URL='postgresql://postgres:postgres@localhost:5433/archivato' DIRECT_URL='postgresql://postgres:postgres@localhost:5433/archivato' npx prisma migrate deploy --schema apps/api/prisma/schema.prisma)",
+      "Bash(DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5433/archivato' DIRECT_URL='postgresql://postgres:postgres@127.0.0.1:5433/archivato' npx prisma migrate deploy --schema apps/api/prisma/schema.prisma)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:3001/health/ready)",
+      "Bash(curl -s http://127.0.0.1:3001/health/ready)",
+      "Read(//tmp/**)",
+      "Bash(cd \"d:/portoflio/Archivato AI Builder\" && grep -oE \"Can't reach database server at \\\\`[^\\\\`]*\\\\`\" /tmp/api-boot.log | head -3; echo \"--- port 3001 owner ---\"; netstat -ano | grep \":3001\" | head -3)",
+      "Bash(curl -s -f -o /dev/null http://127.0.0.1:3001/health/ready)",
+      "Bash(pkill -f \"nest start\")",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(echo \"exit=$?\")",
+      "Bash(sed -e 's/\\\\x1b\\\\[[0-9;]*m//g' /tmp/e2e.log)",
+      "Bash(xargs sed -e 's/\\\\x1b\\\\[[0-9;]*m//g')",
+      "Bash(node -e \"const j=require\\('./locales/en/interview.json'\\); console.log\\(JSON.stringify\\({questionN:j.questionN, answer:j.answer, sending:j.sending},null,2\\)\\)\")",
+      "Bash(sed -e 's/\\\\x1b\\\\[[0-9;]*m//g' error-context.md)"
     ]
   }
 }
