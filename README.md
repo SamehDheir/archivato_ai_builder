@@ -869,7 +869,11 @@ ships a backend feature **and** its frontend so it can be verified by hand.
   **i18n bundles code-split into three tiers** (eager public EN / lazy app EN
   awaited by AuthGate / lazy AR on locale switch); the landing nav no longer
   fires `/auth/me` for anonymous visitors (killed the console 401 →
-  Best-Practices 100); `<main>` landmarks (A11y 100).
+  Best-Practices 100); `<main>` landmarks (A11y 100). Deployed-site follow-up:
+  the hero reel's 2.6s autoplay read as a never-settling page (**Speed Index
+  6.8s** → autoplay now arms on first user interaction, 8s fallback), and the
+  pageview beacon got a **4s timeout** so a cold Render API can't hold
+  network-idle open for its ~50s wake.
 
 ### ⏳ Upcoming
 - A dedicated worker process + BullMQ retries/backoff.

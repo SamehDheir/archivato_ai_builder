@@ -937,6 +937,18 @@ tsconfig and never needs shared's `dist`.
 
 ## Gotchas (read before you trip on them)
 
+- **Nothing on the landing page may auto-animate large regions or hold a network
+  request open during initial load.** Two real incidents: the hero demo reel
+  auto-advanced every 2.6s, so Lighthouse's filmstrip saw a big panel repainting
+  deep into the trace → **Speed Index 6.8s on an otherwise sub-second page**
+  (~10 Perf points) — autoplay is now **armed by the first user interaction**
+  (8s passive fallback, reduced-motion never arms; real visitors notice no
+  difference). And the pageview beacon, fired with stored cookie-consent against
+  a **cold Render free instance**, dangled for the ~50s wake-up and held
+  network-idle open (Lighthouse: "page loaded too slowly to finish") — it now
+  carries a **4s `AbortSignal.timeout`**. Apply the same rules to anything new
+  on `/`: animations must be interaction- or viewport-gated, and any beacon
+  needs a timeout.
 - **Never add an `icons` key to the root `metadata`.** Declaring `metadata.icons`
   **overrides the file-based icon conventions wholesale** — it does not merge with
   them. A lone `icons: { apple: '/logo-icon.svg' }` silently suppressed the
