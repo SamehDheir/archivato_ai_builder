@@ -102,6 +102,12 @@
       scroll-behavior: smooth;
     }
   }
+  /* The cookie banner is server-rendered into the first paint; the pre-paint
+     consent script in layout.tsx adds .consent-done for visitors who already
+     chose, so they never see it flash before React unmounts it. */
+  .consent-done [data-cookie-consent] {
+    display: none;
+  }
   body {
     @apply bg-background text-foreground;
     font-family:

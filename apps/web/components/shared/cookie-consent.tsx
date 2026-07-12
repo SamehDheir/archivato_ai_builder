@@ -10,12 +10,20 @@ import { getConsent, setConsent, type ConsentValue } from '@/lib/consent';
  * Bottom-anchored cookie-consent banner. Shown until the visitor makes a choice;
  * governs the analytics beacon only (essential cookies always run). Renders on
  * every page (it sits outside AuthGate), and is i18n'd + RTL-safe.
+ *
+ * Render strategy: the banner is **part of the server HTML** (initial state
+ * visible), so for a new visitor it belongs to the very first paint. Mounting it
+ * only after hydration made it pop into view seconds late on a slow network,
+ * which Lighthouse's filmstrip read as the page still visually changing — a
+ * direct Speed Index penalty. Visitors who already chose are handled by the
+ * pre-paint consent script in the root layout: it sets `.consent-done` on
+ * `<html>` before first paint and CSS hides the banner, so they see no flash;
+ * the mount effect then removes it from the DOM for real.
  */
 export function CookieConsent() {
   const { t } = useTranslation('legal');
-  // Start hidden; decide on mount so SSR/first paint never flashes the banner
-  // for a visitor who already chose.
-  const [visible, setVisible] = useState(false);
+  // Matches the SSR output (visible) to keep hydration clean; corrected on mount.
+  const [visible, setVisible] = useState(true);
 
   useEffect(() => {
     setVisible(getConsent() === null);
@@ -33,6 +41,7 @@ export function CookieConsent() {
       role="dialog"
       aria-label={t('consent.privacyLink')}
       dir="auto"
+      data-cookie-consent
       className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-5 py-4 backdrop-blur"
     >
       <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center">

@@ -77,6 +77,12 @@ const themeScript = `(function(){try{var t=localStorage.getItem('archivato.theme
 // LocaleProvider default.
 const localeScript = `(function(){try{var l=localStorage.getItem('archivato.locale');if(!l){var m=document.cookie.match(/archivato_locale=([^;]+)/);l=m&&m[1];}l=(l==='ar')?'ar':'en';var e=document.documentElement;e.lang=l;e.dir=(l==='ar')?'rtl':'ltr';}catch(e){}})();`;
 
+// The cookie-consent banner is server-rendered (part of the first paint — a
+// post-hydration mount popped in seconds late and cost Speed Index). For a
+// visitor who already chose, hide it before first paint via this class + CSS
+// (globals.css `[data-cookie-consent]`); the component unmounts it after.
+const consentScript = `(function(){try{var v=localStorage.getItem('archivato.cookieConsent');if(v==='accepted'||v==='declined')document.documentElement.classList.add('consent-done');}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: {
@@ -87,6 +93,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <script dangerouslySetInnerHTML={{ __html: localeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: consentScript }} />
       </head>
       <body className="min-h-screen antialiased">
         <PageviewTracker />
