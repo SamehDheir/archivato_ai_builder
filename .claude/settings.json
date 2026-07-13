@@ -74,7 +74,10 @@
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\({scripts:p.scripts,devDependencies:p.devDependencies},null,2\\)\\)\")",
       "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\),null,2\\)\\)\")",
       "Bash(set -e)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(curl -s -o /dev/null http://127.0.0.1:3000/)",
+      "Bash(curl -s -o /tmp/og-share.png -w \"http=%{http_code} type=%{content_type} bytes=%{size_download}\\\\n\" http://127.0.0.1:3000/ogprobe/opengraph-image)",
+      "Bash(NEXT_SKIP_STANDALONE=1 npm run build --workspace @archivato/web)"
     ]
   }
 }

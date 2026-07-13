@@ -9,20 +9,33 @@ export class PrismaShareLinkRepository implements ShareLinkRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async createIfAbsent(link: ShareLinkRecord): Promise<ShareLinkRecord> {
-    // An empty `update` makes this "insert, or leave the existing row alone" in a
-    // single statement — so two concurrent mints can't collide on the sessionId
-    // PK, and both callers get back whichever token won.
-    return this.prisma.shareLink.upsert({
-      where: { sessionId: link.sessionId },
-      create: {
-        sessionId: link.sessionId,
-        token: link.token,
-        viewCount: link.viewCount,
-        lastViewedAt: link.lastViewedAt,
-        createdAt: link.createdAt,
-      },
-      update: {},
-    });
+    try {
+      return await this.prisma.shareLink.create({
+        data: {
+          sessionId: link.sessionId,
+          token: link.token,
+          viewCount: link.viewCount,
+          lastViewedAt: link.lastViewedAt,
+          createdAt: link.createdAt,
+        },
+      });
+    } catch (e) {
+      // A concurrent mint won the race and already inserted this session's row
+      // (`sessionId` is the PK). Idempotency is the contract — "sharing twice
+      // never invalidates a link you already sent out" — so the loser hands back
+      // the winner's link instead of failing with a constraint error.
+      //
+      // Deliberately NOT a Prisma `upsert`: an upsert only compiles to a native
+      // `INSERT … ON CONFLICT` under conditions an empty `update` may not meet,
+      // and would otherwise degrade to the same non-atomic read-then-write this
+      // is here to defend against. Let the database's own constraint arbitrate,
+      // then re-read the winner — the same posture as `WaitlistService.join`.
+      const winner = await this.prisma.shareLink.findUnique({
+        where: { sessionId: link.sessionId },
+      });
+      if (winner) return winner;
+      throw e; // a real failure, not a race
+    }
   }
 
   async findBySessionId(sessionId: string): Promise<ShareLinkRecord | null> {

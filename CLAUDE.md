@@ -260,6 +260,18 @@ tsconfig and never needs shared's `dist`.
     owner-scoped routes has no business on a public page. A design that later
     regresses (a version restore drops the API design) 404s rather than surfacing
     the 409 a stranger couldn't act on.
+  - **The token is a bearer credential — never write it down.** It is the whole
+    security boundary, so it must not land in any store with a *different* access
+    model than the link itself. Two sinks would have leaked it and both are now
+    scrubbed through one shared `redactSharePath()` (`share.ts`, covers `/s/<t>`
+    **and** `/api/shared/<t>`): the **pageview beacon** (the admin "Top pages" panel
+    renders paths verbatim to anyone holding `admin:analytics` — a role with *no*
+    project access, who could then just open the link), redacted client-side **and
+    again server-side** because that beacon is public and unauthenticated; and the
+    **`AllExceptionsFilter` log line**, which would otherwise ship a live token to
+    the log pipeline/Sentry on any 5xx. Any new sink that records a URL must call
+    it too. `/share/:sessionId` (the *owner's* route) is deliberately NOT redacted —
+    a session id is not a credential.
   - **The public read is `@SkipThrottle()`** (the Paddle-webhook precedent). The
     page is **server-rendered**, so every viewer reaches the API from the same
     Next.js server IP — IP-keyed throttling would put a link's whole audience in

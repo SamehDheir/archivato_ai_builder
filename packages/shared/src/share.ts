@@ -49,29 +49,47 @@ export function sharePath(token: string): string {
   return `/s/${token}`;
 }
 
-/** The share route with its token still in place. */
-const SHARE_PATH = /^\/s\/[^/?#]+/;
+/**
+ * Every route whose path parameter IS the credential — the web page and the API
+ * read that backs it (with or without the `/api` global prefix). The token runs
+ * to the first `/`, `?`, or `#`, so a query string survives redaction intact.
+ */
+const SHARE_TOKEN_ROUTES: RegExp[] = [
+  /^(\/s\/)[^/?#]+/, //            web page:  /s/<token>
+  /^((?:\/api)?\/shared\/)[^/?#]+/, // API read: /api/shared/<token>
+];
 
-/** What a redacted share path collapses to (a route, not an instance). */
-export const SHARE_ROUTE = '/s/[token]';
+/** What a redacted token collapses to (a route, not an instance). */
+export const SHARE_TOKEN_PLACEHOLDER = '[token]';
 
 /**
  * Strip the token out of a share path before anything records it.
  *
  * A share token is a **bearer credential** — `GET /shared/:token` is
  * unauthenticated, so whoever holds it reads the design. It must therefore never
- * reach the analytics store, whose access model is completely different: the admin
- * "Top pages" panel renders paths verbatim to anyone holding `admin:analytics`, a
- * role that grants no project access at all. Analytics wants the route anyway; the
- * per-link counter already lives on the share row (`viewCount`).
+ * be written down anywhere with a different access model than the link itself:
  *
- * This lives in `shared` because **both ends must agree**: the web beacon redacts
- * before sending, and the API redacts again on receipt (the beacon is public and
- * unauthenticated, so its body is attacker-chosen). Two private copies of the rule
- * could drift — and the leak they'd re-open is silent.
+ *   - **analytics** — the admin "Top pages" panel renders paths verbatim to anyone
+ *     holding `admin:analytics`, a role that grants no project access at all;
+ *   - **error logs / Sentry** — a 5xx on the public read would otherwise put a live
+ *     credential into the log pipeline and a third-party service.
+ *
+ * Analytics wants the route anyway; the per-link counter already lives on the
+ * share row (`viewCount`).
+ *
+ * This lives in `shared` because **every sink must agree**: the web beacon redacts
+ * before sending, the API redacts again on receipt (that route is public and
+ * unauthenticated, so its body is attacker-chosen), and the exception filter
+ * redacts before logging. Private copies of the rule would drift — and the leak
+ * they'd re-open is silent.
  */
 export function redactSharePath(path: string): string {
-  return path.replace(SHARE_PATH, SHARE_ROUTE);
+  for (const route of SHARE_TOKEN_ROUTES) {
+    if (route.test(path)) {
+      return path.replace(route, `$1${SHARE_TOKEN_PLACEHOLDER}`);
+    }
+  }
+  return path;
 }
 
 /**
@@ -82,8 +100,9 @@ export function redactSharePath(path: string): string {
 export function redactShareReferrer(referrer: string): string {
   try {
     const url = new URL(referrer);
-    if (!SHARE_PATH.test(url.pathname)) return referrer;
-    url.pathname = redactSharePath(url.pathname);
+    const redacted = redactSharePath(url.pathname);
+    if (redacted === url.pathname) return referrer; // not a share URL
+    url.pathname = redacted;
     url.search = '';
     url.hash = '';
     return url.toString();

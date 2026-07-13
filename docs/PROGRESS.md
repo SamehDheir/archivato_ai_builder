@@ -769,6 +769,25 @@ it is the authoritative history of what was built and why.
   console's copy). i18n EN + AR. Covered by 9 API unit tests (idempotent mint,
   revoke kills the token for good, the payload carries no session id/owner, a
   regressed design 404s rather than 409s).
+- **The token is treated as a bearer credential and scrubbed from every log.** A
+  security pass caught it leaking into two sinks with a *weaker* access model than
+  the link itself: the **pageview beacon** (the admin "Top pages" panel renders
+  paths verbatim to anyone holding `admin:analytics` — a role with no project
+  access, who could then simply open the link) and the **global exception filter's
+  log line** (a 5xx on the public read would ship a live token to the log
+  pipeline/Sentry). One shared `redactSharePath()` now collapses `/s/<token>` and
+  `/api/shared/<token>` to a route at all three sites (beacon client-side, beacon
+  server-side — it's a public unauthenticated endpoint — and the filter), with
+  tests asserting the token never survives.
+- **Two correctness fixes from the code-review pass.** The share page's SSR fetch
+  had no timeout and no error handling, so a cold API (Render free tier wakes in
+  ~50s) would have rendered a **500** on the one page whose entire job is
+  converting a stranger; it now bounds the fetch and distinguishes *revoked*
+  ("this link isn't available") from *unreachable* ("try again in a moment") —
+  telling a visitor a good link is dead is the worse failure. And minting was a
+  find-then-insert, which broke its own idempotency contract under a double-submit
+  (both callers insert → PK violation → 500); the database constraint now arbitrates
+  and the loser returns the winner's link.
 
 ### 🔧 Fix — the API's ESLint was never configured
 - `npm run lint --workspace @archivato/api` had **no config file and no eslint
