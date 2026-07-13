@@ -121,8 +121,8 @@ activates with a key.
 | AI | Swappable `LlmProvider` (mock / Claude / Groq / Azure OpenAI) |
 | Payments | Paddle (MoR) behind `BillingProvider` (offline mock default) |
 | Auth | JWT + rotating refresh (httpOnly cookies), Google/GitHub OAuth |
-| Testing | Jest (api, node) · Jest + Testing Library (web, jsdom) · Playwright (e2e) |
-| CI | GitHub Actions (lint, unit tests, builds, e2e smoke) |
+| Testing | Jest (api, node) · Jest + Testing Library (web, jsdom) |
+| CI | GitHub Actions (lint, unit tests, builds) |
 | Monorepo | npm workspaces (`apps/*` + `packages/*`) |
 
 ## Repository layout
@@ -135,8 +135,7 @@ archivato-ai-builder/
 │  ├─ api/                # NestJS backend — one module per pipeline stage +
 │  │                      # auth, billing, support, admin, analytics, roles…
 │  └─ web/                # Next.js frontend — landing, dashboard, admin consoles
-├─ e2e/                   # Playwright full-funnel smoke test
-├─ .github/workflows/     # CI (lint · unit tests · builds · e2e)
+├─ .github/workflows/     # CI (lint · unit tests · builds)
 ├─ docs/                  # PROGRESS.md (slice log) · API.md (route reference)
 ├─ CLAUDE.md              # engineering memory: conventions, decisions, gotchas
 └─ DEPLOY.md              # self-hosted (Docker) + managed (Render/Vercel) guides
@@ -192,22 +191,17 @@ The API logs the resolved providers on startup
 ```bash
 npm run test:api   # API unit tests (Jest, node, DB-free via in-memory repos)
 npm run test:web   # Web tests (Jest + React Testing Library, jsdom)
-npm run test:e2e   # Playwright full-funnel smoke (Chromium)
 npm run lint:web   # ESLint (eslint-config-next); api: npm run lint -w @archivato/api
 npm run build      # shared → api → web
 ```
 
-The **e2e smoke** drives the real product: register → adaptive interview →
-confirm → system/database design → freemium wall → **mock-checkout upgrade in
-place** → API design → JSON export. It is fully offline (deterministic agents +
-mock billing). Prereqs: `docker compose up -d db redis`,
-`npx playwright install chromium` once, and **port 3001 free** — the runner
-starts its own API pinned to the local docker DB and refuses to adopt a running
-`dev:api` (whose `.env` could point at a remote database).
+Every unit test runs **offline**: the API's repositories have in-memory
+implementations (no database) and the agents fall back to their deterministic
+builders (no LLM key), so the whole suite is hermetic.
 
 **CI** (`.github/workflows/ci.yml`) runs on every push/PR to `develop`/`main`:
-a `checks` job (lint · unit tests · production builds) and an `e2e` job
-(Postgres + Redis service containers → migrations → Playwright).
+one `checks` job — build shared → prisma generate → lint api + web → unit tests
+api + web → production builds api + web.
 
 ## Deployment
 
