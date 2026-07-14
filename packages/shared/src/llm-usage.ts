@@ -12,7 +12,6 @@
  * in a tool whose whole job is margin protection.
  */
 
-import type { AgentRole } from './agents';
 import type { TimePoint } from './admin';
 
 /**
@@ -32,12 +31,13 @@ export interface LlmUsage {
   cacheWritePromptTokens: number;
 }
 
-export const EMPTY_LLM_USAGE: LlmUsage = {
+/** Frozen: it's handed out as a shared fallback, so a mutation would poison it. */
+export const EMPTY_LLM_USAGE: Readonly<LlmUsage> = Object.freeze({
   promptTokens: 0,
   completionTokens: 0,
   cachedPromptTokens: 0,
   cacheWritePromptTokens: 0,
-};
+});
 
 /** Total tokens billed for a call (prompt + completion). */
 export function totalTokens(usage: LlmUsage): number {
@@ -97,7 +97,11 @@ export function normalizeUsageStage(value: string | undefined | null): LlmUsageS
 export interface ModelPricing {
   inputPerMTok: number;
   outputPerMTok: number;
-  /** Multiplier on prompt tokens served from cache. Anthropic: ~0.1x. */
+  /**
+   * Multiplier on prompt tokens served from the provider's cache. Defaults to
+   * Anthropic's 0.1x — the **OpenAI-family entries must override it to 0.5x**,
+   * which is what Azure/OpenAI actually discount a cached input token by.
+   */
   cacheReadMultiplier?: number;
   /** Multiplier on prompt tokens written to cache. Anthropic: 1.25x (5m TTL). */
   cacheWriteMultiplier?: number;
@@ -106,10 +110,11 @@ export interface ModelPricing {
 const DEFAULT_CACHE_READ_MULTIPLIER = 0.1;
 const DEFAULT_CACHE_WRITE_MULTIPLIER = 1.25;
 
+/** OpenAI/Azure discount a cached input token by half, not by 90%. */
+const OPENAI_CACHE_READ_MULTIPLIER = 0.5;
+
 /**
- * Per-model list prices (USD / 1M tokens). Keys are matched exactly first, then
- * by longest prefix, so a dated snapshot id (`claude-sonnet-4-6-20250101`) prices
- * off its base model.
+ * Per-model list prices (USD / 1M tokens).
  *
  * These are **published list prices, not a billing feed** — they drift. When a
  * provider changes prices, edit this table; an unlisted model records tokens with
@@ -126,7 +131,8 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = {
   'claude-sonnet-4-6': { inputPerMTok: 3, outputPerMTok: 15 },
   'claude-haiku-4-5': { inputPerMTok: 1, outputPerMTok: 5 },
 
-  // Groq (groq.com/pricing) — the default real-AI provider.
+  // Groq (groq.com/pricing) — the default real-AI provider. Groq reports no
+  // cached prompt tokens, so the cache multipliers never apply.
   'llama-3.3-70b-versatile': { inputPerMTok: 0.59, outputPerMTok: 0.79 },
   'llama-3.1-8b-instant': { inputPerMTok: 0.05, outputPerMTok: 0.08 },
   'openai/gpt-oss-120b': { inputPerMTok: 0.15, outputPerMTok: 0.75 },
@@ -134,27 +140,57 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = {
 
   // Azure OpenAI (azure.microsoft.com/pricing) — keyed by MODEL, not deployment
   // name, so `AzureOpenAiLlmProvider` reports the model it resolved.
-  'gpt-4o': { inputPerMTok: 2.5, outputPerMTok: 10 },
-  'gpt-4o-mini': { inputPerMTok: 0.15, outputPerMTok: 0.6 },
-  'gpt-4.1': { inputPerMTok: 2, outputPerMTok: 8 },
-  'gpt-4.1-mini': { inputPerMTok: 0.4, outputPerMTok: 1.6 },
+  'gpt-4o': {
+    inputPerMTok: 2.5,
+    outputPerMTok: 10,
+    cacheReadMultiplier: OPENAI_CACHE_READ_MULTIPLIER,
+  },
+  'gpt-4o-mini': {
+    inputPerMTok: 0.15,
+    outputPerMTok: 0.6,
+    cacheReadMultiplier: OPENAI_CACHE_READ_MULTIPLIER,
+  },
+  'gpt-4.1': {
+    inputPerMTok: 2,
+    outputPerMTok: 8,
+    cacheReadMultiplier: OPENAI_CACHE_READ_MULTIPLIER,
+  },
+  'gpt-4.1-mini': {
+    inputPerMTok: 0.4,
+    outputPerMTok: 1.6,
+    cacheReadMultiplier: OPENAI_CACHE_READ_MULTIPLIER,
+  },
   'gpt-35-turbo': { inputPerMTok: 0.5, outputPerMTok: 1.5 },
 };
 
-/** The catalog entry for a model id, or `null` when we have no price for it. */
+/** A dated snapshot of a base model: `-20250101` or `-2025-01-01`. */
+const SNAPSHOT_SUFFIX = /-(\d{8}|\d{4}-\d{2}-\d{2})$/;
+
+/**
+ * The catalog entry for a model id, or `null` when we have no price for it.
+ *
+ * Matching is **exact**, with one narrow relaxation: a dated snapshot id prices
+ * off its base model. It deliberately does NOT prefix-match in general — that
+ * would silently price `gpt-4o-realtime-preview` (a pricier model) off `gpt-4o`,
+ * and a *confidently wrong* number is worse than an honest `null`, which the
+ * report surfaces as an unpriced call.
+ */
 export function pricingFor(model: string): ModelPricing | null {
   const key = model.trim().toLowerCase();
   if (!key) return null;
-  const exact = MODEL_PRICING[key];
+
+  const exact = lookup(key);
   if (exact) return exact;
 
-  let best: { len: number; pricing: ModelPricing } | null = null;
-  for (const [candidate, pricing] of Object.entries(MODEL_PRICING)) {
-    if (key.startsWith(candidate) && (!best || candidate.length > best.len)) {
-      best = { len: candidate.length, pricing };
-    }
-  }
-  return best?.pricing ?? null;
+  const base = key.replace(SNAPSHOT_SUFFIX, '');
+  return base === key ? null : lookup(base);
+}
+
+/** Own-property lookup: a plain object literal would resolve `constructor`. */
+function lookup(key: string): ModelPricing | null {
+  return Object.prototype.hasOwnProperty.call(MODEL_PRICING, key)
+    ? MODEL_PRICING[key]
+    : null;
 }
 
 /**
@@ -188,6 +224,12 @@ export function estimateLlmCostUsd(model: string, usage: LlmUsage): number | nul
 /** Aggregated usage over a window. */
 export interface LlmUsageTotals {
   calls: number;
+  /**
+   * Calls that actually consumed tokens. Excludes mock calls and calls that died
+   * before the model responded — the denominator for a meaningful cost-per-call
+   * (dividing by `calls` would dilute it with free calls).
+   */
+  billedCalls: number;
   /** Calls where the provider request threw (timeout, 4xx/5xx, parse error). */
   failedCalls: number;
   promptTokens: number;
@@ -209,6 +251,12 @@ export interface LlmUsageBreakdown {
   calls: number;
   totalTokens: number;
   costUsd: number;
+  /**
+   * Calls in this row whose model had no catalog price. Non-zero means `costUsd`
+   * is a floor for this row — without it a row for an unlisted model would render
+   * a confident `$0.00`, which is the one thing this design refuses to do.
+   */
+  unpricedCalls: number;
 }
 
 /** `GET /admin/llm-usage` — LLM spend over the last 30 days. */
@@ -224,21 +272,4 @@ export interface AdminLlmUsage {
   byAgent: LlmUsageBreakdown[];
   /** Heaviest spenders — the abuse-detection view. */
   topUsers: LlmUsageBreakdown[];
-}
-
-/** A recorded LLM call, as the admin API returns it (no prompt content, ever). */
-export interface LlmUsageRecordView {
-  id: string;
-  provider: string;
-  model: string;
-  agent: AgentRole | null;
-  stage: LlmUsageStage;
-  userId: string | null;
-  sessionId: string | null;
-  promptTokens: number;
-  completionTokens: number;
-  costUsd: number | null;
-  ok: boolean;
-  durationMs: number;
-  createdAt: string;
 }

@@ -2,13 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  AlertTriangle,
-  Coins,
-  Cpu,
-  Gauge,
-  TriangleAlert,
-} from 'lucide-react';
+import { AlertTriangle, Coins, Cpu, Gauge, type LucideIcon } from 'lucide-react';
 import type { AdminLlmUsage, LlmUsageBreakdown } from '@archivato/shared';
 import { adminApi } from '@/lib/api';
 import { useFormat } from '@/lib/i18n/format';
@@ -50,7 +44,10 @@ export function LlmUsagePanel() {
   if (!usage) return null;
 
   const { last30d, last7d } = usage;
-  const avgCost = last30d.calls > 0 ? last30d.costUsd / last30d.calls : 0;
+  // Average over calls that actually consumed tokens — dividing by every call
+  // would dilute it with mock calls and calls that died before a response.
+  const avgCost =
+    last30d.billedCalls > 0 ? last30d.costUsd / last30d.billedCalls : 0;
 
   return (
     <section className="mt-4">
@@ -78,10 +75,10 @@ export function LlmUsagePanel() {
           icon={Gauge}
           label={t('llm.avgCall')}
           value={fmt.usd(avgCost)}
-          sub={t('llm.tokens7d', { n: fmt.number(last7d.totalTokens) })}
+          sub={t('llm.billedCalls', { n: fmt.number(last30d.billedCalls) })}
         />
         <Tile
-          icon={TriangleAlert}
+          icon={AlertTriangle}
           label={t('llm.failed')}
           value={fmt.number(last30d.failedCalls)}
           sub={t('llm.failedHint')}
@@ -138,7 +135,7 @@ function Tile({
   sub,
   accent,
 }: {
-  icon: typeof Coins;
+  icon: LucideIcon;
   label: string;
   value: string;
   sub?: string;
@@ -174,6 +171,7 @@ function SpendList({
   label: (row: LlmUsageBreakdown) => string;
   mono?: boolean;
 }) {
+  const { t } = useTranslation('admin');
   const fmt = useFormat();
   return (
     <Card>
@@ -183,31 +181,50 @@ function SpendList({
           <p className="text-sm text-muted-foreground">{empty}</p>
         ) : (
           <ul className="space-y-1.5">
-            {rows.map((row) => (
-              <li
-                key={row.key}
-                className="flex items-center justify-between gap-3 text-xs"
-              >
-                <span
-                  className={`truncate ${mono ? 'font-mono' : ''}`}
-                  title={label(row)}
-                  dir={mono ? 'ltr' : undefined}
+            {rows.map((row) => {
+              // Every call in the row ran on an unpriced model ⇒ we know the
+              // tokens but not the money. Say "unknown", never "$0.00".
+              const unknownCost = row.unpricedCalls === row.calls;
+              const partial = row.unpricedCalls > 0 && !unknownCost;
+              return (
+                <li
+                  key={row.key}
+                  className="flex items-center justify-between gap-3 text-xs"
                 >
-                  {label(row)}
-                </span>
-                <span
-                  className="flex shrink-0 items-center gap-3 tabular-nums"
-                  dir="ltr"
-                >
-                  <span className="text-muted-foreground">
-                    {fmt.number(row.totalTokens)}
+                  <span
+                    className={`truncate ${mono ? 'font-mono' : ''}`}
+                    title={label(row)}
+                    dir={mono ? 'ltr' : undefined}
+                  >
+                    {label(row)}
                   </span>
-                  <span className="w-16 text-end font-semibold">
-                    {fmt.usd(row.costUsd)}
+                  <span
+                    className="flex shrink-0 items-center gap-3 tabular-nums"
+                    dir="ltr"
+                  >
+                    <span className="text-muted-foreground">
+                      {fmt.number(row.totalTokens)}
+                    </span>
+                    <span
+                      className="w-16 text-end font-semibold"
+                      title={
+                        row.unpricedCalls > 0
+                          ? t('llm.unpricedRow', {
+                              n: fmt.number(row.unpricedCalls),
+                            })
+                          : undefined
+                      }
+                    >
+                      {unknownCost ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        `${fmt.usd(row.costUsd)}${partial ? '*' : ''}`
+                      )}
+                    </span>
                   </span>
-                </span>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </CardContent>

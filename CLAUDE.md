@@ -413,12 +413,19 @@ tsconfig and never needs shared's `dist`.
   `admin:analytics` (no project access) can safely report on it.
   - **Cost is deterministic — no billing API, no LLM.** `estimateLlmCostUsd()` in
     `@archivato/shared` (`llm-usage.ts`, runtime-free/tested) prices a call off a
-    per-model catalog (`MODEL_PRICING`, list prices, longest-prefix match so a dated
-    snapshot id prices off its base model), applying the cache-read (0.1×) and
-    cache-write (1.25×) multipliers. **An unlisted model returns `null`, not 0** —
-    it records tokens with a null cost and the admin totals surface it as
-    `unpricedCalls`, because a blank $0.00 next to real traffic is worse than
-    useless in a tool whose whole job is margin protection. Prices drift: **edit
+    per-model catalog (`MODEL_PRICING`, published list prices). Matching is
+    **exact**, with one narrow relaxation — a **dated snapshot** id
+    (`…-20250101`) prices off its base model. It deliberately does **not**
+    prefix-match in general: that would price `gpt-4o-realtime-preview` (pricier)
+    off `gpt-4o`, and a *confidently wrong* number is worse than an honest
+    unknown. Cache multipliers are **per-model, not universal** — Anthropic
+    discounts a cached input token 0.1× (and surcharges a cache write 1.25×) but
+    **OpenAI/Azure discount it only 0.5×**, so the `gpt-*` entries override it;
+    getting that wrong understates Azure spend ~5×. **An unlisted model returns
+    `null`, not 0** — tokens are recorded with a null cost and both the totals AND
+    **each breakdown row** carry `unpricedCalls`, so a row can render "—" instead
+    of a confident `$0.00` (a blank $0.00 next to real traffic is worse than
+    useless in a tool whose whole job is margin protection). Prices drift: **edit
     the table** when a provider changes them.
   - **Capture seam = a decorator, not 4 edits.** `UsageTrackingLlmProvider` wraps
     whichever provider `LlmModule` resolved, so agents are untouched and there is
@@ -455,9 +462,16 @@ tsconfig and never needs shared's `dist`.
     user. The heaviest-spender rows are labelled with an **email only for a caller
     who also holds `admin:users:read`** — spend is an analytics question, "which
     email spent it" is a user-directory one, and an analytics-only role must not be
-    handed the email list as a side effect. Web: `LlmUsagePanel` on `/admin`
-    (i18n `admin.llm.*`, EN+AR) + `useFormat().usd()` (sub-cent precision below $1 —
-    rounding a fraction-of-a-cent call to `$0.00` would make spend read as free).
+    handed the email list as a side effect. Cost-per-call divides by
+    **`billedCalls`** (calls that actually consumed tokens), not by `calls` —
+    mock/failed calls in the denominator would halve the apparent unit cost. Web:
+    `LlmUsagePanel` on `/admin` (i18n `admin.llm.*`, EN+AR) + `useFormat().usd()`
+    (sub-cent precision below $1 — rounding a fraction-of-a-cent call to `$0.00`
+    would make spend read as free).
+  - **Known limit:** `report()` aggregates 30 days of rows **in JS** (the analytics
+    precedent). `llm_usage` grows with paid work, not traffic, so this is the table
+    most likely to need a SQL rollup first — it goes behind the repository
+    interface when it does.
 - **Provider selection** (`llm.module.ts`): `LLM_PROVIDER=mock|claude|groq|azure`
   forces it for all agents; else `GROQ_API_KEY` present → groq for everything;
   else `AZURE_OPENAI_API_KEY` present → azure; else mock. **Groq keeps priority

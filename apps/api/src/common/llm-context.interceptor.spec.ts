@@ -1,5 +1,11 @@
 import type { CallHandler, ExecutionContext } from '@nestjs/common';
-import { defer, firstValueFrom, type Observable } from 'rxjs';
+import {
+  Observable,
+  defer,
+  firstValueFrom,
+  lastValueFrom,
+  toArray,
+} from 'rxjs';
 import type { LlmCallContext } from '../llm/usage/llm-usage.context';
 import { currentLlmContext } from '../llm/usage/llm-usage.context';
 import { LlmContextInterceptor } from './llm-context.interceptor';
@@ -72,5 +78,70 @@ describe('LlmContextInterceptor', () => {
 
   it('leaves non-HTTP contexts alone', async () => {
     expect(await run({ path: '/api/interview' }, 'ws')).toBeUndefined();
+  });
+
+  /**
+   * The `@Sse()` stream route hands Nest a long-lived Observable rather than a
+   * promise. The interceptor now sits in front of it, so it has to forward every
+   * emission unchanged AND propagate unsubscribe (a client disconnect must still
+   * stop the generator). This is the riskiest path the interceptor touches.
+   */
+  describe('SSE-shaped handlers (an Observable, not a promise)', () => {
+    it('forwards every event and keeps the context across emissions', async () => {
+      let torn = false;
+      const sseHandler: CallHandler = {
+        handle: () =>
+          new Observable<unknown>((subscriber) => {
+            // Emit asynchronously, the way a streaming generator does.
+            void (async () => {
+              await Promise.resolve();
+              subscriber.next({ event: 1, ctx: currentLlmContext()?.stage });
+              await Promise.resolve();
+              subscriber.next({ event: 2, ctx: currentLlmContext()?.stage });
+              subscriber.complete();
+            })();
+            return () => {
+              torn = true;
+            };
+          }),
+      };
+
+      const events = await lastValueFrom(
+        new LlmContextInterceptor()
+          .intercept(
+            contextFor({
+              user: { id: 'u1' },
+              params: { sessionId: 's1', stage: 'review' },
+              path: '/api/stream/s1/review',
+            }),
+            sseHandler,
+          )
+          .pipe(toArray()),
+      );
+
+      expect(events).toEqual([
+        { event: 1, ctx: 'review' },
+        { event: 2, ctx: 'review' },
+      ]);
+      expect(torn).toBe(true);
+    });
+
+    it('propagates unsubscribe so a client disconnect stops the stream', () => {
+      let torn = false;
+      const neverEnding: CallHandler = {
+        handle: () =>
+          new Observable<unknown>(() => () => {
+            torn = true;
+          }),
+      };
+
+      const sub = new LlmContextInterceptor()
+        .intercept(contextFor({ path: '/api/stream/s1/review' }), neverEnding)
+        .subscribe();
+      expect(torn).toBe(false);
+
+      sub.unsubscribe();
+      expect(torn).toBe(true);
+    });
   });
 });

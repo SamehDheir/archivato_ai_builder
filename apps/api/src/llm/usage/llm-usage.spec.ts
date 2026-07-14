@@ -188,6 +188,7 @@ describe('LlmUsageService.report', () => {
 
     expect(report.last30d).toMatchObject({
       calls: 2,
+      billedCalls: 2,
       failedCalls: 1,
       totalTokens: 1800,
       costUsd: 0.5,
@@ -199,5 +200,74 @@ describe('LlmUsageService.report', () => {
     expect(report.topUsers[0]).toMatchObject({ key: 'u1', calls: 2, costUsd: 0.5 });
     expect(report.costSeries).toHaveLength(30);
     expect(report.costSeries.at(-1)?.value).toBe(0.5);
+  });
+
+  it('flags the unpriced calls PER ROW, so a breakdown never claims $0.00', async () => {
+    const repo = new InMemoryLlmUsageRepository();
+    const service = new LlmUsageService(repo);
+
+    await repo.create({
+      provider: 'groq',
+      model: 'some-unlisted-model',
+      agent: AgentRole.Reviewer,
+      stage: 'review',
+      userId: 'u1',
+      sessionId: 's1',
+      promptTokens: 900,
+      completionTokens: 100,
+      cachedPromptTokens: 0,
+      cacheWritePromptTokens: 0,
+      costUsd: null,
+      ok: true,
+      durationMs: 50,
+    });
+
+    const [row] = (await service.report()).byModel;
+    // calls === unpricedCalls ⇒ the UI renders "—", not a confident $0.00.
+    expect(row).toMatchObject({
+      key: 'groq/some-unlisted-model',
+      calls: 1,
+      unpricedCalls: 1,
+      totalTokens: 1000,
+      costUsd: 0,
+    });
+  });
+
+  it('excludes free calls from `billedCalls` (the cost-per-call denominator)', async () => {
+    const repo = new InMemoryLlmUsageRepository();
+    const service = new LlmUsageService(repo);
+    const base = {
+      provider: 'mock',
+      model: 'mock',
+      agent: null,
+      stage: 'interview' as const,
+      userId: 'u1',
+      sessionId: 's1',
+      cachedPromptTokens: 0,
+      cacheWritePromptTokens: 0,
+      ok: true,
+      durationMs: 1,
+    };
+    // A mock call (no tokens, no charge) and one real, billed call.
+    await repo.create({
+      ...base,
+      promptTokens: 0,
+      completionTokens: 0,
+      costUsd: 0,
+    });
+    await repo.create({
+      ...base,
+      provider: 'groq',
+      model: 'llama-3.3-70b-versatile',
+      promptTokens: 100,
+      completionTokens: 100,
+      costUsd: 1,
+    });
+
+    const { last30d } = await service.report();
+    expect(last30d.calls).toBe(2);
+    // Averaging over `calls` would report $0.50/call and halve the true unit cost.
+    expect(last30d.billedCalls).toBe(1);
+    expect(last30d.costUsd / last30d.billedCalls).toBe(1);
   });
 });

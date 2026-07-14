@@ -53,13 +53,37 @@ describe('LLM pricing (deterministic)', () => {
     expect(estimateLlmCostUsd('mock', usage())).toBeNull();
   });
 
-  it('prices a dated snapshot id off its base model (longest-prefix match)', () => {
+  it('prices a dated snapshot id off its base model', () => {
     expect(pricingFor('claude-sonnet-4-6-20250101')).toEqual(
       pricingFor('claude-sonnet-4-6'),
     );
-    // The longer key wins over a shorter one that also prefixes it.
     expect(pricingFor('gpt-4o-mini')?.inputPerMTok).toBe(0.15);
     expect(pricingFor('gpt-4o')?.inputPerMTok).toBe(2.5);
+  });
+
+  it('refuses to prefix-match a variant onto a cheaper base model', () => {
+    // `gpt-4o-realtime-preview` costs MORE than `gpt-4o`; pricing it off the base
+    // would be confidently wrong, which is worse than an honest "unknown".
+    expect(pricingFor('gpt-4o-realtime-preview')).toBeNull();
+  });
+
+  it('discounts an OpenAI-family cached token by half, not by 90%', () => {
+    // Azure/OpenAI bill a cached input token at ~0.5x, not Anthropic's 0.1x.
+    const cost = estimateLlmCostUsd(
+      'gpt-4o',
+      usage({ promptTokens: 1_000_000, cachedPromptTokens: 1_000_000 }),
+    );
+    expect(cost).toBeCloseTo(1.25, 6); // $2.50 * 0.5
+  });
+
+  it('does not resolve inherited Object properties as models', () => {
+    // A plain object literal would return Object.prototype's member here and
+    // produce a NaN cost that poisons every total downstream.
+    expect(pricingFor('constructor')).toBeNull();
+    expect(pricingFor('toString')).toBeNull();
+    expect(
+      estimateLlmCostUsd('constructor', usage({ promptTokens: 100 })),
+    ).toBeNull();
   });
 
   it('is deterministic and case-insensitive', () => {

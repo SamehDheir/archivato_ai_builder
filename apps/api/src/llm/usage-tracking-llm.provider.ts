@@ -59,11 +59,12 @@ export class UsageTrackingLlmProvider implements LlmProvider {
     const startedAt = Date.now();
     let report: LlmUsageReport | undefined;
 
+    // `onUsage` is this decorator's private channel — nothing else sets it, so it
+    // is overwritten, not chained.
     const instrumented: LlmCompleteOptions = {
       ...options,
       onUsage: (r) => {
         report = r;
-        options?.onUsage?.(r);
       },
     };
 

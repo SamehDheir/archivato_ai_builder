@@ -71,10 +71,25 @@ export class LlmUsageService {
   }
 }
 
+/** Tokens a call consumed. Zero for mock calls and calls that never got a reply. */
+function tokensOf(r: LlmUsageRecord): number {
+  return r.promptTokens + r.completionTokens;
+}
+
+/**
+ * A call we were billed for but cannot price: the model isn't in the catalog. A
+ * mock call (or one that died before a response) has a null-or-zero cost too, but
+ * it genuinely cost nothing — hence the token check.
+ */
+function isUnpriced(r: LlmUsageRecord): boolean {
+  return r.costUsd === null && tokensOf(r) > 0;
+}
+
 /** Totals over a set of calls. Unpriced calls contribute tokens but no cost. */
 function sum(rows: LlmUsageRecord[]): LlmUsageTotals {
   const totals: LlmUsageTotals = {
     calls: rows.length,
+    billedCalls: 0,
     failedCalls: 0,
     promptTokens: 0,
     completionTokens: 0,
@@ -84,21 +99,22 @@ function sum(rows: LlmUsageRecord[]): LlmUsageTotals {
   };
   for (const r of rows) {
     if (!r.ok) totals.failedCalls++;
+    if (tokensOf(r) > 0) totals.billedCalls++;
+    if (isUnpriced(r)) totals.unpricedCalls++;
     totals.promptTokens += r.promptTokens;
     totals.completionTokens += r.completionTokens;
-    if (r.costUsd === null) {
-      // Only count a model we have no price for — a mock/failed call really is $0.
-      if (r.promptTokens + r.completionTokens > 0) totals.unpricedCalls++;
-    } else {
-      totals.costUsd += r.costUsd;
-    }
+    totals.costUsd += r.costUsd ?? 0;
   }
   totals.totalTokens = totals.promptTokens + totals.completionTokens;
   totals.costUsd = round6(totals.costUsd);
   return totals;
 }
 
-/** Group into breakdown rows, heaviest spend first (then by tokens). */
+/**
+ * Group into breakdown rows, heaviest spend first (then by tokens). Each row
+ * carries its own `unpricedCalls` so the UI can mark a row whose cost is a floor
+ * — otherwise an unlisted model would render a confident `$0.00`.
+ */
 function groupBy(
   rows: LlmUsageRecord[],
   key: (r: LlmUsageRecord) => string,
@@ -107,10 +123,17 @@ function groupBy(
   for (const r of rows) {
     const k = key(r);
     if (!k) continue;
-    const entry = map.get(k) ?? { key: k, calls: 0, totalTokens: 0, costUsd: 0 };
+    const entry = map.get(k) ?? {
+      key: k,
+      calls: 0,
+      totalTokens: 0,
+      costUsd: 0,
+      unpricedCalls: 0,
+    };
     entry.calls++;
-    entry.totalTokens += r.promptTokens + r.completionTokens;
+    entry.totalTokens += tokensOf(r);
     entry.costUsd += r.costUsd ?? 0;
+    if (isUnpriced(r)) entry.unpricedCalls++;
     map.set(k, entry);
   }
   return [...map.values()]
