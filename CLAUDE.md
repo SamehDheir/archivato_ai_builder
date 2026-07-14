@@ -15,6 +15,26 @@ interview), **Roadmap** (phased implementation plan from the full design), and
 users). Plus post-generation **chat refine**, **version history**,
 **diagrams/canvas**, **auth**.
 
+## Product positioning (2026 pivot)
+
+Read **[docs/POSITIONING.md](docs/POSITIONING.md)** before any product/copy call —
+it is the source of truth for who we sell to. Summary:
+
+- **Customer:** owner/tech lead of a small MENA software house (3–20 people) that
+  bids on client work — **not** developers learning architecture. That audience
+  doesn't pay; this pivot (July 2026) is the response.
+- **Message:** *turn a client call into a complete scoping package — requirements,
+  architecture, cost, client-ready proposal — in one hour instead of one week.*
+- **Differentiator = the "two-sided document":** one artifact the **client** can
+  read (vision/cost/roadmap) and the **dev team** can use (OpenAPI/SQL/scaffold).
+  So the share page leads with business artifacts and collapses the technical ones.
+- **The share link stays FREE (watermarked for non-Pro)** — it's the growth loop;
+  never re-gate it. Copy shifts from "project" to **client scoping** (EN+AR), and
+  all educational framing comes out.
+- **Order of work: Phase RED first** (landing rebuild · share=free+watermark ·
+  client-facing share page · vocabulary · dashboard client-name/"sent" cards).
+  Prefer small reversible changes that reuse existing infra over new engineering.
+
 ## Tech Stack
 
 - **Backend:** NestJS + TypeScript (`apps/api`)
@@ -148,7 +168,7 @@ tsconfig and never needs shared's `dist`.
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
-  `threat-model`, `qa-plan`, `export`, `share`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
+  `threat-model`, `qa-plan`, `export`, `share`, `projects`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
   `billing`, `analytics`, `admin`, `support`, `notifications`, `roles`,
   `waitlist`).
   Modules export their repository token + service for downstream use.
@@ -395,12 +415,55 @@ tsconfig and never needs shared's `dist`.
     plan that generated it. Losing only the API design is likewise **not** a
     regression any more (a live link keeps working and drops the tab); the 404 case
     is a design that rewinds *below* the database design.
+  - **The shared page is a CLIENT PRESENTATION, not a technical document** (the
+    2026 client-scoping pivot — see [docs/POSITIONING.md](docs/POSITIONING.md)). The
+    reader is the person whose idea it is, deciding whether to sign — they cannot
+    read an ERD, and an OpenAPI table tells them nothing. So `SharedProjectView`
+    is ordered the way a buyer reads: **vision → requirements → cost → roadmap**,
+    with **architecture / database / API / review / threat model / QA plan collapsed
+    below** in a "Technical details" appendix (individual `Collapsible` rows, *not*
+    tabs — a tab strip says "pick one of these", which is the wrong invitation for a
+    client). The header is the **project's own name** + the client's one-line idea
+    + three tiles they actually ask about (features in scope, timeline, running
+    cost). `generateMetadata` follows: `title:{absolute}` = the project name (the
+    root layout's `%s · Archivato` template is bypassed — the proposal is the
+    *owner's* document, not ours), description = a **locale-aware** one-line
+    "Software scoping proposal …" (`PROPOSAL_TAGLINE`, EN+AR — the one machine-facing
+    string that IS localized, because the audience is a person in WhatsApp/email, not
+    a crawler), **not** `"modular monolith · 5 services · 12 tables"`. Two traps: the
+    header must **not** repeat `vision.vision` (ProductVisionView already opens
+    with it — printing it twice one screen apart reads as a copy-paste slip), and
+    the lead is skipped when `title === idea` (an unnamed project's title *is* the
+    idea).
+  - **The watermark is the server's call, from the OWNER's plan** — the growth
+    loop's price on an otherwise-free feature. `SharedProject.watermark` is set in
+    `ShareService.view` via `billing.planFor(session.userId)` →
+    `shouldWatermarkShare(plan)` (free ⇒ watermark, pro ⇒ clean); the page only
+    *renders* the flag (`{project.watermark && <Watermark />}`). **Never a
+    client-side plan check** — the page is public, so anything the browser decides,
+    a browser can skip. Read the plan at *view* time, not mint time, so a downgrade
+    (or a lapsed Pro period) re-watermarks links already out in the world. Use
+    `BillingService.planFor` (**read-only**, never `getOrCreate` — the public read
+    must not write a subscription row for every anonymous visitor); a null/owner-less
+    session is free. `ShareModule` imports `BillingModule` **only** for this read —
+    it is emphatically *not* a `ProGuard` on the mint route.
   - **The public payload IS the security boundary.** `GET /shared/:token`
     (separate `SharePublicController`, so a token can never collide with a session
     id on the route table) returns strictly `SharedProject` (`@archivato/shared`):
-    the design chain + optional review + the title/idea — **no interview
-    transcript** (the user's own words about their business), no owner, and **not
-    even the session id**. Every artifact is stamped with `sessionId`, so the
+    the design chain + the client-facing artifacts (**`vision`, `costEstimate`,
+    `roadmap`** — all optional) + optional review + **`threatModel` / `qaPlan`**
+    (Pro, appendix) + a server-set **`watermark`** boolean + the title/idea — **no
+    interview transcript** (the user's own words about their business), no owner,
+    and **not even the session id**. Widening it to the three client-facing
+    artifacts was deliberate: the vision is *derived from* the interview but **is
+    not** the interview — it's a structured artifact the owner reviewed and chose to
+    send, whereas the raw transcript never leaves the session. They are **additive
+    and never gate** the link (the floor is still the database design), so a free
+    owner's link carries `vision` (a free stage) but `costEstimate: null` /
+    `roadmap: null` / `threatModel: null` / `qaPlan: null` (Pro) and the page drops
+    those sections rather than showing an empty one. `ShareModule` therefore imports
+    `ProductVisionModule` / `CostEstimateModule` / `RoadmapModule` /
+    `ThreatModelModule` / `QaPlanModule` for their repo tokens. Every artifact is stamped with `sessionId`, so the
     projection **overwrites it with the token** — an internal id that addresses
     owner-scoped routes has no business on a public page. A design that later
     regresses below the shareable floor (a version restore rewinds past the
@@ -1168,15 +1231,46 @@ tsconfig and never needs shared's `dist`.
 - **Projects hub** (`ProjectsDashboard`): the post-login project list, presentational
   (all state/handlers come from `app/dashboard/page.tsx`). **Grid/list toggle**
   (persisted `archivato.projectsView`). Each project has an optional **`title`**
-  (session column; `PATCH /interview/:id`, owner-guarded — the idea stays the AI's
-  untouched source; cards show `title || idea`). A per-card **kebab menu**
+  and an optional **`clientName`** (the client a scoping is for — both session
+  columns; `PATCH /interview/:id`, owner-guarded — the idea stays the AI's untouched
+  source; cards show `title || idea`). A per-card **kebab menu**
   (`ProjectMenu`, rendered as a *sibling* of the open-button, never nested):
-  **Rename** (inline input), **Direct Export** (JSON/Markdown/OpenAPI for confirmed
+  **Rename** + **Set/Change client** (both inline inputs sharing one editor),
+  **Direct Export** (JSON/Markdown/OpenAPI for confirmed
   projects — reuses the Pro `exportApi`; a 402 opens the upgrade modal, 409 hints to
   finish the pipeline), **Delete**. **Smart Resume**: the last stage tab viewed per
   project is saved (`archivato.lastTab:<uid>:<sid>` in `goToStage`) and restored in
   `openProject` (ProjectStages re-guards availability); a **Continue banner** resumes
   the most-recent project on that tab.
+- **The dashboard is a DEAL BOARD, not an experiment list** (client-scoping pivot).
+  Cards lead with the **client name** (`ClientLine`), a compact **pipeline rail**
+  (`PipelineRail`, one segment per stage), a **"Sent to client"** badge when a share
+  link exists, and a primary **"Copy client link"** action (`CopyLinkButton`). The
+  empty state teaches the workflow (`dashboard.projects.emptyHelp`: bring the call's
+  answers → run the interview → send the proposal) instead of describing the
+  pipeline. Two things not to undo:
+  1. **The list comes from a NEW read-model, `GET /projects` (`ProjectsModule`),
+     not `GET /interview`.** The card needs two facts the session doesn't hold — how
+     far the pipeline got, and whether a link was sent — so `ProjectsService`
+     projects `ProjectOverview` = `ProjectSummary` + `artifacts` (existence booleans
+     per stage) + `shared` (a share row exists). It imports *downward* (interview +
+     the five design stores + `ShareModule` for the share-link token); the reverse is
+     a cycle, since every design module already imports `InterviewModule`. A read-only
+     composing module — the AdminService read-model precedent, but through the repo
+     interfaces so it unit-tests against the in-memory impls. **Adding a route + a
+     Prisma column means the running `dev:api` must be restarted and the migration
+     applied — a stale server 404s `/projects` and the dashboard silently shows
+     nothing.**
+  2. **Progress + link state are PURE, derived from artifact existence**
+     (`@archivato/shared/projects.ts`): `projectProgress(status, artifacts)` (the
+     artifacts *are* the truth — a version restore can rewind them, so never a stored
+     counter; `interview` is the one step with no artifact, unlocked by `confirmed`)
+     and `clientLinkState(project)` → `locked | ready | sent`. `locked` is the one
+     that matters: the API mints only once the **database design** exists
+     (`canShareProject`), so the button is *disabled with the reason*, not offered as
+     a 409. `CopyLinkButton` calls `shareApi.create` (idempotent — an existing link
+     comes back unchanged, so "first send" and "already sent" are the same call and a
+     link already emailed is never silently rotated).
 - **Activation / onboarding (sign-up → first artifact).** Three fixes attack the
   drop-off between sign-up and the first generated artifact (informed by a
   ux-consultant pass): (1) **Starter-idea chips** — `StarterIdeas` in

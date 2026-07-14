@@ -93,6 +93,23 @@ export class BillingService {
   }
 
   /**
+   * The plan in force for a user — **read-only**: unlike `getOrCreate`, this
+   * never writes a subscription row, and a user without one simply reads as free.
+   *
+   * That matters because the caller is the *public* share page: it runs for every
+   * anonymous visitor to a link, so it must not turn a read into a write (nor
+   * create rows on behalf of a user who isn't even the one browsing). A null
+   * `userId` (a legacy owner-less session) is free — the safe default, since
+   * getting it wrong would silently strip a paying owner's watermark exemption or
+   * hand a free owner an unwatermarked page.
+   */
+  async planFor(userId: string | null): Promise<SubscriptionPlan> {
+    if (!userId) return 'free';
+    const sub = await this.subs.findByUserId(userId);
+    return sub ? this.effectivePlan(sub) : 'free';
+  }
+
+  /**
    * Gate Pro-only generation (the API design and everything after it — review,
    * roadmap, export). 402s for free users so the client can prompt an upgrade.
    */

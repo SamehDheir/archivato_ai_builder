@@ -20,16 +20,16 @@ import type {
   InterviewState,
   Permission,
   PipelineStageName,
+  ProjectOverview,
   ProjectScale,
   ProjectSnapshot,
-  ProjectSummary,
   RefineResult,
   RequirementDocument,
   ReviewReport,
   SubscriptionView,
   SystemDesign,
 } from '@archivato/shared';
-import { hasPermission, isStaffUser } from '@archivato/shared';
+import { hasPermission, isStaffUser, sharePath } from '@archivato/shared';
 import {
   ApiError,
   apiDesignApi,
@@ -38,8 +38,10 @@ import {
   databaseDesignApi,
   exportApi,
   interviewApi,
+  projectsApi,
   requirementsApi,
   reviewApi,
+  shareApi,
   systemDesignApi,
 } from '@/lib/api';
 import { useToast } from '@/components/shared/toast';
@@ -97,17 +99,18 @@ export default function Home() {
   // Staff (support / billing / admin) are console accounts — they can't create
   // or run projects; the dashboard shows their consoles instead of the creator.
   const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [projects, setProjects] = useState<ProjectOverview[]>([]);
   const [sub, setSub] = useState<SubscriptionView | null>(null);
   // True while the "New project" form is open on the projects dashboard.
   const [creating, setCreating] = useState(false);
   // True while the read-only Example project tour is open (replaces the hub).
   const [viewingExample, setViewingExample] = useState(false);
 
-  // New-project form fields.
+  // New-scoping form fields.
   const [idea, setIdea] = useState('');
   const [industry, setIndustry] = useState('');
   const [scale, setScale] = useState<ProjectScale | ''>('');
+  const [clientName, setClientName] = useState('');
 
   // Generated artifacts.
   const [doc, setDoc] = useState<RequirementDocument | null>(null);
@@ -157,7 +160,7 @@ export default function Home() {
         setUserId(me.id);
         setPermissions(me.permissions ?? []);
         const [list, subscription] = await Promise.all([
-          interviewApi.list(),
+          projectsApi.list(),
           billingApi.subscription().catch(() => null),
         ]);
         if (!cancelled) {
@@ -210,7 +213,7 @@ export default function Home() {
   async function refreshProjects() {
     try {
       const [list, subscription] = await Promise.all([
-        interviewApi.list(),
+        projectsApi.list(),
         billingApi.subscription().catch(() => null),
       ]);
       setProjects(list);
@@ -297,7 +300,7 @@ export default function Home() {
   /** Rename a project (set/clear its display name) from a card. */
   async function handleRenameProject(sessionId: string, title: string) {
     try {
-      await interviewApi.rename(sessionId, title);
+      await interviewApi.update(sessionId, { title });
       await refreshProjects();
       toast({ title: t('toast.renamed'), variant: 'success' });
     } catch (e) {
@@ -306,6 +309,55 @@ export default function Home() {
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
+    }
+  }
+
+  /** Set (or clear) the client a scoping is for, from a card. */
+  async function handleSetClient(sessionId: string, name: string) {
+    try {
+      await interviewApi.update(sessionId, { clientName: name });
+      await refreshProjects();
+      toast({ title: t('toast.clientSaved'), variant: 'success' });
+    } catch (e) {
+      toast({
+        title: t('toast.clientFailed'),
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'error',
+      });
+    }
+  }
+
+  /**
+   * Copy the public client link, minting it first if this scoping has never been
+   * shared. `shareApi.create` is idempotent — an existing link comes back
+   * unchanged — so the "already sent" and "first send" paths are the same call,
+   * and a link the owner has already emailed can never be silently rotated.
+   *
+   * The card only enables this once the design is shareable, but the server owns
+   * that gate (409 below the database design); we surface it rather than pretend.
+   */
+  async function handleCopyLink(sessionId: string): Promise<boolean> {
+    try {
+      const link = await shareApi.create(sessionId);
+      await navigator.clipboard.writeText(
+        `${window.location.origin}${sharePath(link.token)}`,
+      );
+      // Refresh so the card flips to "Sent to client" the moment a link exists.
+      void refreshProjects();
+      toast({ title: t('toast.linkCopied'), variant: 'success' });
+      return true;
+    } catch (e) {
+      const incomplete = e instanceof ApiError && e.status === 409;
+      toast({
+        title: incomplete ? t('toast.linkIncomplete') : t('toast.linkFailed'),
+        description: incomplete
+          ? undefined
+          : e instanceof Error
+            ? e.message
+            : String(e),
+        variant: 'error',
+      });
+      return false;
     }
   }
 
@@ -375,6 +427,7 @@ export default function Home() {
         idea,
         industry: industry || undefined,
         scale: scale || undefined,
+        clientName: clientName.trim() || undefined,
       });
       setState(next);
       setCreating(false);
@@ -485,6 +538,7 @@ export default function Home() {
     setIdea('');
     setIndustry('');
     setScale('');
+    setClientName('');
     setError(null);
   }
 
@@ -807,10 +861,14 @@ export default function Home() {
                 setIndustry={setIndustry}
                 scale={scale}
                 setScale={setScale}
+                clientName={clientName}
+                setClientName={setClientName}
                 onStart={handleStart}
                 onOpen={openProject}
                 onDelete={handleDeleteProject}
                 onRename={handleRenameProject}
+                onSetClient={handleSetClient}
+                onCopyLink={handleCopyLink}
                 onExport={handleExportProject}
                 onOpenExample={() => setViewingExample(true)}
               />

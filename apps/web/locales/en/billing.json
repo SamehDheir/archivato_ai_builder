@@ -24,7 +24,8 @@
   "checkoutUnavailableBody": "Paddle is not fully configured on this device yet.",
   "checkoutErrorTitle": "Could not start checkout",
   "features": {
-    "projects": { "lead": "Up to 5 projects", "detail": "Free includes 1" },
+    "projects": { "lead": "Up to 5 client scopings", "detail": "Free includes 1" },
+    "whitelabel": { "lead": "Client link with no Archivato watermark", "detail": "the proposal carries your brand, not ours" },
     "api": { "lead": "REST API design", "detail": "endpoints, request/response schemas & status codes" },
     "review": { "lead": "AI Architect Review", "detail": "scored on security, scalability, performance & cost, with critical-issue callouts" },
     "roadmap": { "lead": "Implementation roadmap", "detail": "phases → milestones → tasks with effort estimates" },

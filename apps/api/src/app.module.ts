@@ -24,6 +24,7 @@ import { QaPlanModule } from './qa-plan/qa-plan.module';
 import { ExportModule } from './export/export.module';
 import { ScaffoldModule } from './scaffold/scaffold.module';
 import { ShareModule } from './share/share.module';
+import { ProjectsModule } from './projects/projects.module';
 import { ChatModule } from './chat/chat.module';
 import { JobsModule } from './jobs/jobs.module';
 import { StreamModule } from './stream/stream.module';
@@ -85,6 +86,8 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     ScaffoldModule,
     // Public share links: a read-only page for a completed design.
     ShareModule,
+    // The dashboard's read model: each scoping's pipeline progress + share state.
+    ProjectsModule,
     // Slice 10: post-generation AI chat (refine the design in natural language).
     ChatModule,
     // Async pipeline generation (BullMQ/Redis): enqueue + poll job status.

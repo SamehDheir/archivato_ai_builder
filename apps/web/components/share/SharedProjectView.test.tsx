@@ -6,10 +6,12 @@ import {
   EXAMPLE_API_DESIGN,
   EXAMPLE_COST_ESTIMATE,
   EXAMPLE_DATABASE_DESIGN,
+  EXAMPLE_QA_PLAN,
   EXAMPLE_REQUIREMENTS,
   EXAMPLE_REVIEW,
   EXAMPLE_ROADMAP,
   EXAMPLE_SYSTEM_DESIGN,
+  EXAMPLE_THREAT_MODEL,
   EXAMPLE_VISION,
 } from '@/lib/example-project';
 
@@ -52,6 +54,10 @@ const project: SharedProject = {
   databaseDesign: EXAMPLE_DATABASE_DESIGN,
   apiDesign: EXAMPLE_API_DESIGN,
   review: EXAMPLE_REVIEW,
+  threatModel: EXAMPLE_THREAT_MODEL,
+  qaPlan: EXAMPLE_QA_PLAN,
+  // The server's call, not the page's — a Pro owner's link arrives with `false`.
+  watermark: true,
 };
 
 describe('SharedProjectView', () => {
@@ -91,13 +97,25 @@ describe('SharedProjectView', () => {
 
   // A closed row says "your developer will want this" and stays out of the way;
   // an open ERD says "you should have understood this before signing".
-  it('keeps the technical detail collapsed until it is asked for', async () => {
+  it('keeps EVERY technical section collapsed until it is asked for', async () => {
     render(<SharedProjectView project={project} />);
     await screen.findByRole('heading', { name: 'HomeHelper', level: 1 });
 
-    const database = screen.getByRole('button', { name: /appendix.database/ });
-    expect(database).toHaveAttribute('aria-expanded', 'false');
+    for (const key of [
+      'appendix.architecture',
+      'appendix.database',
+      'appendix.api',
+      'appendix.review',
+      'appendix.threat',
+      'appendix.qa',
+    ]) {
+      expect(screen.getByRole('button', { name: new RegExp(key) })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    }
 
+    const database = screen.getByRole('button', { name: /appendix.database/ });
     await userEvent.click(database);
     expect(database).toHaveAttribute('aria-expanded', 'true');
   });
@@ -128,6 +146,8 @@ describe('SharedProjectView', () => {
           roadmap: null,
           apiDesign: null,
           review: null,
+          threatModel: null,
+          qaPlan: null,
         }}
       />,
     );
@@ -140,6 +160,8 @@ describe('SharedProjectView', () => {
     expect(screen.queryByText('section.plan.title')).not.toBeInTheDocument();
     expect(screen.queryByText('appendix.api')).not.toBeInTheDocument();
     expect(screen.queryByText('appendix.review')).not.toBeInTheDocument();
+    expect(screen.queryByText('appendix.threat')).not.toBeInTheDocument();
+    expect(screen.queryByText('appendix.qa')).not.toBeInTheDocument();
     // …and the appendix the free tier does have is still there.
     expect(screen.getByText('appendix.database')).toBeInTheDocument();
   });
@@ -158,11 +180,28 @@ describe('SharedProjectView', () => {
 
     const cta = screen.getByRole('link', { name: 'cta.action' });
     expect(cta).toHaveAttribute('href', '/register');
+  });
 
-    // The watermark is what makes a free link market the product.
-    const watermark = screen.getByRole('link', {
-      name: /Built with Archivato/,
+  // The watermark is what a free owner pays with on an otherwise-free feature —
+  // and its absence is most of what Pro sells. The page only *renders* the flag;
+  // the decision is the server's (from the owner's plan), so a page that decided
+  // for itself would be a plan check running on the client's machine.
+  describe('watermark', () => {
+    it('shows it when the server says so (a free owner’s link)', async () => {
+      render(<SharedProjectView project={project} />);
+      await screen.findByRole('heading', { name: 'HomeHelper', level: 1 });
+
+      const watermark = screen.getByRole('link', { name: 'watermark' });
+      expect(watermark).toHaveAttribute('href', 'https://archivato.dev');
     });
-    expect(watermark).toHaveAttribute('href', 'https://archivato.dev');
+
+    it('omits it entirely for a paid owner', async () => {
+      render(<SharedProjectView project={{ ...project, watermark: false }} />);
+      await screen.findByRole('heading', { name: 'HomeHelper', level: 1 });
+
+      expect(screen.queryByRole('link', { name: 'watermark' })).toBeNull();
+      // …but the growth CTA stays: it's the offer, not the branding tax.
+      expect(screen.getByRole('link', { name: 'cta.action' })).toBeInTheDocument();
+    });
   });
 });

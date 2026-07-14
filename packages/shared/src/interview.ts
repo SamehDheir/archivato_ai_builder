@@ -97,6 +97,12 @@ export interface ProjectSummary {
   idea: string;
   /** Optional user-set display name; falls back to `idea` when absent. */
   title?: string;
+  /**
+   * The end client this scoping is for (optional, owner-set). Purely a label for
+   * the owner's own dashboard — it is **not** part of `idea`, so it never reaches
+   * an agent prompt and never crosses onto the public share page.
+   */
+  clientName?: string;
   status: InterviewStatus;
   /** 0..1 requirement completeness (drives a small progress indicator). */
   completeness: number;

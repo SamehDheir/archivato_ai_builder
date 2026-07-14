@@ -31,12 +31,15 @@
     "architecture": "System architecture",
     "database": "Database design",
     "api": "API specification",
-    "review": "Quality review"
+    "review": "Quality review",
+    "threat": "Security analysis",
+    "qa": "Test plan"
   },
   "cta": {
     "title": "Built with Archivato",
     "body": "This entire proposal — the scope, the architecture, the cost and the plan — was generated from a single client conversation. Do the same with yours.",
     "action": "Try it free",
     "secondary": "How it works"
-  }
+  },
+  "watermark": "Built with Archivato — archivato.dev"
 }

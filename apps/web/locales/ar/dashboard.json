@@ -1,14 +1,16 @@
 {
-  "appTitle": "Archivato AI Builder",
-  "appSubtitle": "مولّد بنية البرمجيات بالذكاء الاصطناعي — حوّل فكرة إلى تصميم نظام متكامل.",
+  "appTitle": "مشاريع الـ scoping",
+  "appSubtitle": "حوّل مكالمة العميل لعرض متكامل — عرض احترافي وبنية تقنية وتكلفة وخطة — خلال ساعة.",
   "search": "بحث",
   "continue": {
     "title": "تابِع من حيث توقفت",
     "action": "متابعة"
   },
   "actions": {
-    "menu": "إجراءات المشروع",
+    "menu": "إجراءات الـ scoping",
     "rename": "إعادة تسمية",
+    "setClient": "تحديد العميل",
+    "changeClient": "تغيير العميل",
     "cancel": "إلغاء",
     "save": "حفظ",
     "exportJson": "تصدير JSON",
@@ -48,19 +50,22 @@
   },
   "quota": {
     "plan": "خطة {{plan}}",
-    "used": "{{count}} من {{quota}} مشروع مُستخدَم",
+    "used": "{{count}} من {{quota}} scoping مُستخدَم",
     "upgrade": "الترقية إلى Pro",
     "manage": "إدارة الخطة"
   },
   "projects": {
-    "heading": "المشاريع",
+    "heading": "مشاريع الـ scoping",
     "back": "العودة إلى المشاريع",
-    "new": "مشروع جديد",
-    "startFirst": "ابدأ مشروعك الأول",
-    "newTitle": "مشروع جديد",
-    "formHelp": "صِف فكرتك — يُجري الذكاء الاصطناعي معك مقابلة لتوضيحها، ثم يولّد تصميم النظام الكامل: المتطلبات، والبنية، وقاعدة البيانات، وواجهة API، والمراجعة، والتصدير.",
-    "ideaLabel": "فكرة المشروع",
+    "new": "scoping جديد لعميل",
+    "startFirst": "ابدأ أول scoping لعميلك",
+    "newTitle": "scoping جديد لعميل",
+    "formHelp": "الصق ملاحظات مكالمتك مع العميل — يُجري الذكاء الاصطناعي معك مقابلة لسدّ الفراغات، ثم يولّد حزمة الـ scoping الكاملة: المتطلبات والبنية وقاعدة البيانات وواجهة API والتكلفة والخطة ورابطًا جاهزًا للعميل.",
+    "emptyHelp": "ابدأ أول scoping لعميلك — خد أجوبة عميلك من المكالمة، جاوب المقابلة الذكية، وابعتله عرض احترافي خلال ساعة.",
+    "ideaLabel": "شو بدّه العميل",
     "ideaPlaceholder": "مثال: نظام لإدارة العيادات مع المواعيد والفوترة والأطباء وسجلات المرضى.",
+    "clientLabel": "العميل (اختياري)",
+    "clientPlaceholder": "مثال: عيادات Acme",
     "industryLabel": "المجال (اختياري)",
     "industryPlaceholder": "الرعاية الصحية",
     "scaleLabel": "الحجم (اختياري)",
@@ -69,9 +74,27 @@
     "ideaTooShort": "أضِف مزيدًا من التفاصيل (جملة تقريبًا) للبدء.",
     "completeness": "نسبة الاكتمال",
     "updated": "آخر تحديث {{date}}",
-    "delete": "حذف المشروع",
+    "delete": "حذف الـ scoping",
     "gridView": "عرض شبكي",
     "listView": "عرض قائمة"
+  },
+  "pipeline": {
+    "label": "المسار",
+    "count": "{{done}}/{{total}}",
+    "step": {
+      "interview": "المقابلة",
+      "requirements": "مستند نطاق العمل",
+      "systemDesign": "تصميم النظام",
+      "databaseDesign": "قاعدة البيانات",
+      "apiDesign": "تصميم API",
+      "review": "مراجعة الذكاء الاصطناعي"
+    }
+  },
+  "card": {
+    "sent": "انبعت للعميل",
+    "copyLink": "انسخ رابط العميل",
+    "copied": "تم النسخ",
+    "copyLocked": "أكمِل التصميم (حتى قاعدة البيانات) لتشارك رابطًا مع عميلك."
   },
   "starters": {
     "heading": "لا تدري من أين تبدأ؟ اختر مثالًا — يمكنك تعديله قبل البدء:",
@@ -159,12 +182,12 @@
     "history": "السجل",
     "interview": "المقابلة"
   },
-  "breadcrumb": { "projects": "المشاريع", "project": "مشروع" },
+  "breadcrumb": { "projects": "مشاريع الـ scoping", "project": "scoping" },
   "palette": {
     "actions": "إجراءات",
-    "projects": "المشاريع",
+    "projects": "مشاريع الـ scoping",
     "stages": "المراحل",
-    "newProject": "مشروع جديد",
+    "newProject": "scoping جديد لعميل",
     "backToProjects": "العودة إلى المشاريع",
     "settings": "إعدادات الحساب",
     "admin": "لوحة الإدارة",
@@ -177,25 +200,35 @@
     "close": "للإغلاق"
   },
   "confirm": {
-    "deleteTitle": "حذف هذا المشروع؟",
-    "deleteBody": "سيؤدي هذا إلى حذف المشروع وجميع مُخرَجاته نهائيًا (المتطلبات، والتصاميم، والمراجعة، والسجل). لا يمكن التراجع عن ذلك.",
-    "deleteConfirm": "حذف المشروع",
-    "deleteCancel": "الإبقاء على المشروع",
+    "deleteTitle": "حذف هذا الـ scoping؟",
+    "deleteBody": "سيؤدي هذا إلى حذف الـ scoping وجميع مُخرَجاته نهائيًا (المتطلبات، والتصاميم، والمراجعة، والسجل). لا يمكن التراجع عن ذلك.",
+    "deleteConfirm": "حذف الـ scoping",
+    "deleteCancel": "الإبقاء عليه",
     "leaveTitle": "تجاهل التغييرات غير المحفوظة؟",
     "leaveBody": "لديك تعديلات غير محفوظة في هذه المرحلة. المغادرة الآن ستتجاهلها.",
     "leaveConfirm": "تجاهل التغييرات",
     "leaveCancel": "متابعة التحرير"
   },
   "toast": {
-    "deleted": "تم حذف المشروع",
+    "deleted": "تم حذف الـ scoping",
     "requirementsSaved": "تم حفظ المتطلبات",
     "architectureSaved": "تم حفظ البنية",
     "databaseSaved": "تم حفظ قاعدة البيانات",
     "apiSaved": "تم حفظ تصميم API",
     "refined": "تم تحسين التصميم",
-    "restored": "تمت استعادة المشروع إلى الإصدار المحدد",
+    "restored": "تمت استعادة الـ scoping إلى الإصدار المحدد",
     "generated": "تم توليد {{stage}}",
-    "generateFailed": "تعذّر توليد {{stage}}"
+    "generateFailed": "تعذّر توليد {{stage}}",
+    "renamed": "تمت إعادة التسمية",
+    "renameFailed": "تعذّرت إعادة التسمية",
+    "clientSaved": "تم تحديث العميل",
+    "clientFailed": "تعذّر تحديث العميل",
+    "linkCopied": "تم نسخ رابط العميل",
+    "linkFailed": "تعذّر إنشاء رابط العميل",
+    "linkIncomplete": "أكمِل التصميم (حتى قاعدة البيانات) قبل مشاركة الرابط.",
+    "exportFailed": "تعذّر تصدير الـ scoping",
+    "exportIncomplete": "أكمِل توليد التصميم قبل التصدير.",
+    "exportFeature": "التصدير"
   },
-  "upgradeFeature": { "anotherProject": "بدء مشروع آخر" }
+  "upgradeFeature": { "anotherProject": "بدء scoping آخر" }
 }

@@ -8,6 +8,9 @@ import { ReviewModule } from '../review/review.module';
 import { ProductVisionModule } from '../product-vision/product-vision.module';
 import { CostEstimateModule } from '../cost-estimate/cost-estimate.module';
 import { RoadmapModule } from '../roadmap/roadmap.module';
+import { ThreatModelModule } from '../threat-model/threat-model.module';
+import { QaPlanModule } from '../qa-plan/qa-plan.module';
+import { BillingModule } from '../billing/billing.module';
 import { ShareController } from './share.controller';
 import { SharePublicController } from './share-public.controller';
 import { ShareService } from './share.service';
@@ -20,7 +23,7 @@ import { PrismaShareLinkRepository } from './prisma-share-link.repository';
   // Share used to lean on ExportModule for both the artifacts and the gate, but
   // export's gate is "complete through the API design" — a Pro stage. Sharing is
   // free on every plan, so it owns its own (lower) gate and no longer depends on
-  // export. BillingModule is gone with the ProGuard.
+  // export.
   imports: [
     InterviewModule,
     RequirementsModule,
@@ -28,18 +31,27 @@ import { PrismaShareLinkRepository } from './prisma-share-link.repository';
     DatabaseDesignModule,
     ApiDesignModule,
     ReviewModule,
-    // The client-facing artifacts the shared page now leads with. Read-only, and
-    // never part of the gate: a link is shareable without them (a free owner has
-    // no cost estimate or roadmap), the page just omits those sections.
+    // The client-facing artifacts the shared page now leads with, plus the two
+    // that close the technical appendix. Read-only, and never part of the gate: a
+    // link is shareable without them (a free owner has no cost estimate, roadmap,
+    // threat model or QA plan), the page just omits those sections.
     ProductVisionModule,
     CostEstimateModule,
     RoadmapModule,
+    ThreatModelModule,
+    QaPlanModule,
+    // Billing is back — but ONLY to read the owner's plan for the watermark, and
+    // never to gate the route (there is no `ProGuard` on sharing, deliberately;
+    // see ShareController). A read, not a wall.
+    BillingModule,
   ],
   controllers: [ShareController, SharePublicController],
   providers: [
     ShareService,
     { provide: SHARE_LINK_REPOSITORY, useClass: PrismaShareLinkRepository },
   ],
-  exports: [ShareService],
+  // The repository token is exported so the projects read-model can answer "was
+  // this sent to the client?" without a second HTTP round trip per card.
+  exports: [ShareService, SHARE_LINK_REPOSITORY],
 })
 export class ShareModule {}

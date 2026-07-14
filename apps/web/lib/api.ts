@@ -31,6 +31,7 @@ import type {
   ProductVision,
   ProjectRoadmap,
   CostEstimate,
+  ProjectOverview,
   ProjectSummary,
   ProjectVersionDetail,
   ProjectVersionMeta,
@@ -171,11 +172,21 @@ async function request<T>(
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/**
+ * The dashboard's list: every scoping plus its pipeline progress and whether the
+ * client has been sent a link. `interviewApi.list` still returns the lean
+ * summaries — this is the deal-board view.
+ */
+export const projectsApi = {
+  list: () => request<ProjectOverview[]>('/projects'),
+};
+
 export const interviewApi = {
   /** The signed-in user's projects, most recently updated first. */
   list: () => request<ProjectSummary[]>('/interview'),
 
-  start: (input: ProjectIdeaInput) =>
+  /** Start a scoping. `clientName` is the owner's label — never part of the idea. */
+  start: (input: ProjectIdeaInput & { clientName?: string }) =>
     request<InterviewState>('/interview', {
       method: 'POST',
       body: JSON.stringify(input),
@@ -195,11 +206,17 @@ export const interviewApi = {
   get: (sessionId: string) =>
     request<InterviewState>(`/interview/${sessionId}`),
 
-  /** Set or clear a project's display name (empty string clears it). */
-  rename: (sessionId: string, title: string) =>
+  /**
+   * Patch a project's labels. An omitted field is left alone; an empty string
+   * clears it — so renaming never wipes the client the scoping was created for.
+   */
+  update: (
+    sessionId: string,
+    patch: { title?: string; clientName?: string },
+  ) =>
     request<ProjectSummary>(`/interview/${sessionId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ title }),
+      body: JSON.stringify(patch),
     }),
 
   /** Permanently delete a project and all its artifacts (frees a quota slot). */

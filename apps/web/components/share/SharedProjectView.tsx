@@ -10,8 +10,10 @@ import {
   Compass,
   Database as DatabaseIcon,
   FileText,
+  FlaskConical,
   Network,
   Route,
+  ShieldAlert,
   Sparkles,
   Webhook,
   type LucideIcon,
@@ -33,6 +35,8 @@ import { SystemDesignView } from '@/components/design/SystemDesignView';
 import { DatabaseDesignView } from '@/components/design/DatabaseDesignView';
 import { ApiDesignView } from '@/components/design/ApiDesignView';
 import { ReviewView } from '@/components/review/ReviewView';
+import { ThreatModelView } from '@/components/security/ThreatModelView';
+import { QaPlanView } from '@/components/qa/QaPlanView';
 import { loadShareNamespaces } from '@/lib/i18n/client';
 
 /**
@@ -75,7 +79,8 @@ export function SharedProjectView({ project }: { project: SharedProject }) {
 
 function SharedProjectContent({ project }: { project: SharedProject }) {
   const { t } = useTranslation('share');
-  const { vision, costEstimate, roadmap, apiDesign, review } = project;
+  const { vision, costEstimate, roadmap, apiDesign, review, threatModel, qaPlan } =
+    project;
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8">
@@ -154,10 +159,22 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
             <ReviewView report={review} />
           </Collapsible>
         )}
+
+        {threatModel && (
+          <Collapsible icon={ShieldAlert} title={t('appendix.threat')}>
+            <ThreatModelView model={threatModel} />
+          </Collapsible>
+        )}
+
+        {qaPlan && (
+          <Collapsible icon={FlaskConical} title={t('appendix.qa')}>
+            <QaPlanView plan={qaPlan} />
+          </Collapsible>
+        )}
       </div>
 
       <ShareCta />
-      <Watermark />
+      {project.watermark && <Watermark />}
     </div>
   );
 }
@@ -354,14 +371,19 @@ function ShareCta() {
 /**
  * The free-tier watermark on a client-facing link.
  *
- * **It currently shows on every shared link, and that is a known gap, not a
- * choice.** The paid tier sells "no watermark", which means this has to be
- * conditional on the owner's plan — but the public payload deliberately carries
- * no owner information at all. Hiding it for paying owners needs one boolean on
- * `SharedProject` plus a line in the share projection; when that lands this
- * becomes `{watermark && <Watermark />}` and nothing else here changes.
+ * **Whether it renders is the server's call** (`SharedProject.watermark`, resolved
+ * from the *owner's* plan — see `shouldWatermarkShare`), never a client-side plan
+ * check: the page is public, so anything the browser could decide, a browser could
+ * also skip.
+ *
+ * It is what a free owner pays with, on a feature that is otherwise free — and it
+ * is deliberately small and quiet. This document goes to someone's client while a
+ * deal is being decided; a loud banner across a proposal would cost the owner
+ * credibility, and an owner who feels embarrassed by our link stops sending it,
+ * which is the one behaviour the whole growth loop depends on.
  */
 function Watermark() {
+  const { t } = useTranslation('share');
   return (
     <div className="flex justify-center border-t border-border/60 pt-6">
       <a
@@ -369,9 +391,9 @@ function Watermark() {
         target="_blank"
         rel="noopener noreferrer"
         className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-        dir="ltr"
+        dir="auto"
       >
-        Built with Archivato — archivato.dev
+        {t('watermark')}
       </a>
     </div>
   );

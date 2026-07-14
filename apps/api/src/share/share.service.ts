@@ -12,12 +12,16 @@ import type {
   DatabaseDesign,
   ProductVision,
   ProjectRoadmap,
+  QaPlan,
   RequirementDocument,
   ReviewReport,
   ShareLink,
   SharedProject,
   SystemDesign,
+  ThreatModel,
 } from '@archivato/shared';
+import { shouldWatermarkShare } from '@archivato/shared';
+import { BillingService } from '../billing/billing.service';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -55,6 +59,14 @@ import {
   type ProjectRoadmapRepository,
 } from '../roadmap/roadmap.repository';
 import {
+  THREAT_MODEL_REPOSITORY,
+  type ThreatModelRepository,
+} from '../threat-model/threat-model.repository';
+import {
+  QA_PLAN_REPOSITORY,
+  type QaPlanRepository,
+} from '../qa-plan/qa-plan.repository';
+import {
   SHARE_LINK_REPOSITORY,
   type ShareLinkRepository,
 } from './share-link.repository';
@@ -77,6 +89,8 @@ interface ShareableDesign {
   roadmap: ProjectRoadmap | null;
   apiDesign: ApiDesign | null;
   review: ReviewReport | null;
+  threatModel: ThreatModel | null;
+  qaPlan: QaPlan | null;
 }
 
 @Injectable()
@@ -104,6 +118,15 @@ export class ShareService {
     private readonly estimates: CostEstimateRepository,
     @Inject(PROJECT_ROADMAP_REPOSITORY)
     private readonly roadmaps: ProjectRoadmapRepository,
+    @Inject(THREAT_MODEL_REPOSITORY)
+    private readonly threatModels: ThreatModelRepository,
+    @Inject(QA_PLAN_REPOSITORY)
+    private readonly qaPlans: QaPlanRepository,
+    // Read-only, and NOT a gate: billing is consulted purely to decide whether
+    // the page carries our watermark. Sharing itself must never depend on a plan
+    // (see the controller) — the day this import becomes a `ProGuard` again is
+    // the day the growth loop dies.
+    private readonly billing: BillingService,
   ) {}
 
   /** The owner's current link for a session, or null when nothing is shared. */
@@ -175,6 +198,11 @@ export class ShareService {
       throw new NotFoundException('This share link is not available.');
     }
 
+    // The watermark is the OWNER's plan, resolved here — a link holder is
+    // typically anonymous, and even a signed-in one is the wrong subject: whose
+    // proposal this is decides whose brand is on it. Never a client-supplied flag.
+    const plan = await this.billing.planFor(session.userId);
+
     // Best-effort: a failed counter must never break the page.
     this.links.recordView(token).catch((e: unknown) => {
       this.logger.warn(`Failed to record a share view: ${String(e)}`);
@@ -201,6 +229,11 @@ export class ShareService {
         ? { ...design.apiDesign, sessionId: token }
         : null,
       review: design.review ? { ...design.review, sessionId: token } : null,
+      threatModel: design.threatModel
+        ? { ...design.threatModel, sessionId: token }
+        : null,
+      qaPlan: design.qaPlan ? { ...design.qaPlan, sessionId: token } : null,
+      watermark: shouldWatermarkShare(plan),
     };
   }
 
@@ -227,6 +260,8 @@ export class ShareService {
       vision,
       costEstimate,
       roadmap,
+      threatModel,
+      qaPlan,
     ] = await Promise.all([
       this.requirements.findBySessionId(sessionId),
       this.systemDesigns.findBySessionId(sessionId),
@@ -236,6 +271,8 @@ export class ShareService {
       this.visions.findBySessionId(sessionId),
       this.estimates.findBySessionId(sessionId),
       this.roadmaps.findBySessionId(sessionId),
+      this.threatModels.findBySessionId(sessionId),
+      this.qaPlans.findBySessionId(sessionId),
     ]);
 
     // The gate is unchanged: the design chain through the database design. The
@@ -256,6 +293,8 @@ export class ShareService {
       roadmap: roadmap ?? null,
       apiDesign: apiDesign ?? null,
       review: review ?? null,
+      threatModel: threatModel ?? null,
+      qaPlan: qaPlan ?? null,
     };
   }
 }

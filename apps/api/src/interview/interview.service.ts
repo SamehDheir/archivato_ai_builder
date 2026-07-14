@@ -67,6 +67,7 @@ export class InterviewService {
   async start(
     input: ProjectIdeaInput,
     userId: string | null = null,
+    clientName: string | null = null,
   ): Promise<InterviewState> {
     // Enforce the plan's project-count quota (Free = 1, Pro = 5): a user at
     // their limit must delete a project or upgrade before starting another.
@@ -97,6 +98,7 @@ export class InterviewService {
       userId,
       input,
       title: null,
+      clientName: blankToNull(clientName),
       status: 'collecting',
       intent: await this.analyzeIntent(input),
       history: [],
@@ -156,14 +158,23 @@ export class InterviewService {
   }
 
   /**
-   * Set (or clear) a project's display name (owner-guarded at the controller).
-   * An empty/blank title clears it, so the UI falls back to the idea. Doesn't
-   * touch the idea — that stays the AI's source of truth.
+   * Update a project's owner-facing labels — its display name and/or the client
+   * it's scoped for (owner-guarded at the controller).
+   *
+   * A field left **undefined** is untouched; a **blank** one is cleared (the title
+   * falls back to the idea). That distinction is why this takes a patch object
+   * rather than two positional strings: renaming a project must not wipe the
+   * client it was scoped for. Never touches the idea — the AI's source of truth.
    */
-  async rename(sessionId: string, title: string): Promise<ProjectSummary> {
+  async update(
+    sessionId: string,
+    patch: { title?: string; clientName?: string },
+  ): Promise<ProjectSummary> {
     const session = await this.require(sessionId);
-    const trimmed = title.trim();
-    session.title = trimmed.length ? trimmed : null;
+    if (patch.title !== undefined) session.title = blankToNull(patch.title);
+    if (patch.clientName !== undefined) {
+      session.clientName = blankToNull(patch.clientName);
+    }
     await this.repo.save(session);
     return this.toSummary(session);
   }
@@ -186,6 +197,7 @@ export class InterviewService {
       sessionId: s.id,
       idea: s.input.idea,
       title: s.title ?? undefined,
+      clientName: s.clientName ?? undefined,
       status: s.status,
       completeness: round2(s.coverage),
       updatedAt: s.updatedAt.toISOString(),
@@ -410,6 +422,12 @@ export class InterviewService {
       summary: session.summary,
     };
   }
+}
+
+/** A user-typed label: blank (or absent) means "no value", not an empty string. */
+function blankToNull(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length ? trimmed : null;
 }
 
 function dedupe(values: string[]): string[] {

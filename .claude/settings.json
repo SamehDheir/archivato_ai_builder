@@ -147,7 +147,21 @@
       "Bash(awk '{print \"bytes:\", $5}')",
       "Bash(cp /tmp/og.png \"C:/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/6e6f66e2-7190-45c1-a417-1280982738f4/scratchpad/og.png\" && echo copied)",
       "Bash(curl -s -o /tmp/og2.png -w \"HTTP %{http_code}\\\\n\" http://localhost:3457/opengraph-image)",
-      "Bash(taskkill //F //PID 1932)"
+      "Bash(taskkill //F //PID 1932)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3001/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3001/api/projects)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3001/api/interview)",
+      "Bash(curl -s -o /dev/null -w \"health=%{http_code} \" http://localhost:3001/health)",
+      "Bash(curl -s -o /dev/null -w \"projects=%{http_code} \" http://localhost:3001/api/projects)",
+      "Bash(curl -s -o /dev/null -w \"interview=%{http_code}\\\\n\" http://localhost:3001/api/interview)",
+      "Bash(cd \"d:/portoflio/Archivato AI Builder\" && grep -iE \"ProjectsController|Mapped \\\\{/api/projects\" /tmp/devapi.log | head; echo \"=== any boot errors? ===\"; grep -iE \"error|can't resolve|exception\" /tmp/devapi.log | head)",
+      "Bash(echo \"TSC_EXIT=$?\")",
+      "Bash(grep -n \"Sharing is FREE on every plan\\\\|no longer a subset of export\\\\|Projects hub\\\\|The public read is\\\\|Unlisted, not published\\\\|Web.\\\\*\\\\`app/s/\\\\[token\\\\]\" CLAUDE.md)",
+      "Bash(grep -n \"\\\\`export\\\\`, \\\\`share\\\\`, \\\\`chat\\\\`, \\\\`jobs\\\\`\\\\|export.\\\\`, .\\\\`share\" CLAUDE.md)",
+      "Bash(curl -s -o /dev/null -w \"health=%{http_code} projects=%{http_code}\\\\n\" http://localhost:3001/health -o /dev/null)",
+      "Bash(curl -s -o /dev/null -w \"projects\\(auth-gated\\)=%{http_code}\\\\n\" http://localhost:3001/api/projects)",
+      "Bash(node -e \"const s=require\\('./packages/shared/dist/index.js'\\); console.log\\('shouldWatermarkShare\\(free\\)=', s.shouldWatermarkShare\\('free'\\), '| \\(pro\\)=', s.shouldWatermarkShare\\('pro'\\)\\); const p=s.projectProgress\\('confirmed',{requirements:true,systemDesign:true,databaseDesign:true,apiDesign:false,review:false}\\); console.log\\('progress free-tier:', p.completed+'/'+p.total, 'next='+p.nextStep\\);\")"
     ],
     "additionalDirectories": [
       "\\tmp"

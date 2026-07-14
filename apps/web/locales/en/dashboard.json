@@ -1,14 +1,16 @@
 {
-  "appTitle": "Archivato AI Builder",
-  "appSubtitle": "AI Software Architecture Generator — turn an idea into a full system design.",
+  "appTitle": "Client scopings",
+  "appSubtitle": "Turn a client call into a complete scoping package — proposal, architecture, cost and plan — in an hour.",
   "search": "Search",
   "continue": {
     "title": "Continue where you left off",
     "action": "Continue"
   },
   "actions": {
-    "menu": "Project actions",
+    "menu": "Scoping actions",
     "rename": "Rename",
+    "setClient": "Set client",
+    "changeClient": "Change client",
     "cancel": "Cancel",
     "save": "Save",
     "exportJson": "Export JSON",
@@ -48,19 +50,22 @@
   },
   "quota": {
     "plan": "{{plan}} plan",
-    "used": "{{count}} of {{quota}} projects used",
+    "used": "{{count}} of {{quota}} scopings used",
     "upgrade": "Upgrade to Pro",
     "manage": "Manage plan"
   },
   "projects": {
-    "heading": "Projects",
-    "back": "Back to projects",
-    "new": "New project",
-    "startFirst": "Start your first project",
-    "newTitle": "New project",
-    "formHelp": "Describe your idea — the AI interviews you to clarify it, then generates the full system design: requirements, architecture, database, API, review, and export.",
-    "ideaLabel": "Project idea",
+    "heading": "Your client scopings",
+    "back": "Back to scopings",
+    "new": "New client scoping",
+    "startFirst": "Start your first client scoping",
+    "newTitle": "New client scoping",
+    "formHelp": "Paste the notes from your client call — the AI interviews you to fill the gaps, then generates the full scoping package: requirements, architecture, database, API, cost, roadmap, and a client-ready link.",
+    "emptyHelp": "Start your first client scoping — bring your client's answers from the call, run the AI interview, and send them a polished proposal within the hour.",
+    "ideaLabel": "What the client needs",
     "ideaPlaceholder": "e.g. A clinic management system with appointments, billing, doctors, and patient records.",
+    "clientLabel": "Client (optional)",
+    "clientPlaceholder": "e.g. Acme Clinics",
     "industryLabel": "Industry (optional)",
     "industryPlaceholder": "healthcare",
     "scaleLabel": "Scale (optional)",
@@ -69,9 +74,27 @@
     "ideaTooShort": "Add a bit more detail (a sentence or so) to begin.",
     "completeness": "Completeness",
     "updated": "Updated {{date}}",
-    "delete": "Delete project",
+    "delete": "Delete scoping",
     "gridView": "Grid view",
     "listView": "List view"
+  },
+  "pipeline": {
+    "label": "Pipeline",
+    "count": "{{done}}/{{total}}",
+    "step": {
+      "interview": "Interview",
+      "requirements": "Scoping document",
+      "systemDesign": "System design",
+      "databaseDesign": "Database",
+      "apiDesign": "API design",
+      "review": "AI review"
+    }
+  },
+  "card": {
+    "sent": "Sent to client",
+    "copyLink": "Copy client link",
+    "copied": "Copied",
+    "copyLocked": "Finish the design (through the database) to share a link with your client."
   },
   "starters": {
     "heading": "Not sure where to start? Pick an example — you can edit it before starting:",
@@ -159,13 +182,13 @@
     "history": "History",
     "interview": "Interview"
   },
-  "breadcrumb": { "projects": "Projects", "project": "Project" },
+  "breadcrumb": { "projects": "Scopings", "project": "Scoping" },
   "palette": {
     "actions": "Actions",
-    "projects": "Projects",
+    "projects": "Scopings",
     "stages": "Stages",
-    "newProject": "New project",
-    "backToProjects": "Back to projects",
+    "newProject": "New client scoping",
+    "backToProjects": "Back to scopings",
     "settings": "Account settings",
     "admin": "Admin dashboard",
     "support": "Support console",
@@ -177,30 +200,35 @@
     "close": "close"
   },
   "confirm": {
-    "deleteTitle": "Delete this project?",
-    "deleteBody": "This permanently deletes the project and all of its artifacts (requirements, designs, review, history). This cannot be undone.",
-    "deleteConfirm": "Delete project",
-    "deleteCancel": "Keep project",
+    "deleteTitle": "Delete this scoping?",
+    "deleteBody": "This permanently deletes the scoping and all of its artifacts (requirements, designs, review, history). This cannot be undone.",
+    "deleteConfirm": "Delete scoping",
+    "deleteCancel": "Keep scoping",
     "leaveTitle": "Discard unsaved changes?",
     "leaveBody": "You have unsaved edits on this stage. Leaving now will discard them.",
     "leaveConfirm": "Discard changes",
     "leaveCancel": "Keep editing"
   },
   "toast": {
-    "deleted": "Project deleted",
+    "deleted": "Scoping deleted",
     "requirementsSaved": "Requirements saved",
     "architectureSaved": "Architecture saved",
     "databaseSaved": "Database saved",
     "apiSaved": "API design saved",
     "refined": "Design refined",
-    "restored": "Project restored to selected version",
+    "restored": "Scoping restored to selected version",
     "generated": "{{stage}} generated",
     "generateFailed": "Could not generate {{stage}}",
-    "renamed": "Project renamed",
-    "renameFailed": "Could not rename the project",
-    "exportFailed": "Could not export the project",
+    "renamed": "Scoping renamed",
+    "renameFailed": "Could not rename the scoping",
+    "clientSaved": "Client updated",
+    "clientFailed": "Could not update the client",
+    "linkCopied": "Client link copied",
+    "linkFailed": "Could not create the client link",
+    "linkIncomplete": "Finish the design (through the database) before sharing a link.",
+    "exportFailed": "Could not export the scoping",
     "exportIncomplete": "Finish generating the design before exporting.",
     "exportFeature": "Export"
   },
-  "upgradeFeature": { "anotherProject": "start another project" }
+  "upgradeFeature": { "anotherProject": "start another scoping" }
 }

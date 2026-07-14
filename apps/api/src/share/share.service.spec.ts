@@ -15,6 +15,13 @@ import { InMemoryReviewReportRepository } from '../review/in-memory-review-repor
 import { InMemoryProductVisionRepository } from '../product-vision/in-memory-product-vision.repository';
 import { InMemoryCostEstimateRepository } from '../cost-estimate/in-memory-cost-estimate.repository';
 import { InMemoryProjectRoadmapRepository } from '../roadmap/in-memory-roadmap.repository';
+import { InMemoryThreatModelRepository } from '../threat-model/in-memory-threat-model.repository';
+import { InMemoryQaPlanRepository } from '../qa-plan/in-memory-qa-plan.repository';
+import { BillingService } from '../billing/billing.service';
+import { InMemorySubscriptionRepository } from '../billing/in-memory-subscription.repository';
+import { InMemoryBillingEventRepository } from '../billing/in-memory-billing-event.repository';
+import { MockBillingProvider } from '../billing/mock-billing.provider';
+import { InMemoryUserRepository } from '../auth/in-memory-user.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
@@ -41,6 +48,8 @@ interface Harness {
   visions: InMemoryProductVisionRepository;
   costs: InMemoryCostEstimateRepository;
   roadmaps: InMemoryProjectRoadmapRepository;
+  users: InMemoryUserRepository;
+  billing: BillingService;
   share: ShareService;
 }
 
@@ -89,6 +98,13 @@ function makeHarness(): Harness {
   const visionRepo = new InMemoryProductVisionRepository();
   const costRepo = new InMemoryCostEstimateRepository();
   const roadmapRepo = new InMemoryProjectRoadmapRepository();
+  const userRepo = new InMemoryUserRepository();
+  const billing = new BillingService(
+    new InMemorySubscriptionRepository(),
+    userRepo,
+    new MockBillingProvider(),
+    new InMemoryBillingEventRepository(),
+  );
 
   const share = new ShareService(
     new InMemoryShareLinkRepository(),
@@ -101,6 +117,9 @@ function makeHarness(): Harness {
     visionRepo,
     costRepo,
     roadmapRepo,
+    new InMemoryThreatModelRepository(),
+    new InMemoryQaPlanRepository(),
+    billing,
   );
   return {
     interview,
@@ -114,8 +133,29 @@ function makeHarness(): Harness {
     visions: visionRepo,
     costs: costRepo,
     roadmaps: roadmapRepo,
+    users: userRepo,
+    billing,
     share,
   };
+}
+
+/** Create a real user and hand their session over to them (owner of the link). */
+async function ownedBy(
+  h: Harness,
+  sessionId: string,
+  plan: 'free' | 'pro',
+): Promise<string> {
+  const user = await h.users.create({
+    email: `${plan}-${sessionId}@example.com`,
+    passwordHash: null,
+    displayName: 'Owner',
+    providers: ['password'],
+  });
+  const session = await h.sessions.findById(sessionId);
+  await h.sessions.save({ ...session!, userId: user.id });
+  // The mock billing provider activates Pro immediately (no charge).
+  if (plan === 'pro') await h.billing.startCheckout(user.id);
+  return user.id;
 }
 
 /** Drive the interview to `confirmed` without generating any design. */
@@ -193,6 +233,8 @@ describe('ShareService', () => {
     expect(shared.vision).toBeNull();
     expect(shared.costEstimate).toBeNull();
     expect(shared.roadmap).toBeNull();
+    expect(shared.threatModel).toBeNull();
+    expect(shared.qaPlan).toBeNull();
     // …and the design it does have is still there.
     expect(shared.requirements.functional.length).toBeGreaterThan(0);
   });
@@ -250,6 +292,57 @@ describe('ShareService', () => {
     expect(shared.roadmap?.sessionId).toBe(token);
     expect(shared.costEstimate?.sessionId).toBe(token);
     expect(JSON.stringify(shared)).not.toContain(sessionId);
+  });
+
+  // The watermark is the free tier's price for a link that IS free — and it's the
+  // whole of what Pro sells here, so the decision must be the server's, taken from
+  // the OWNER's plan (a link holder is anonymous; there is no client flag to trust).
+  describe('watermark', () => {
+    it('watermarks a link owned by a free user', async () => {
+      const h = makeHarness();
+      const sessionId = await freePipeline(h);
+      await ownedBy(h, sessionId, 'free');
+
+      const shared = await h.share.view((await h.share.create(sessionId)).token);
+      expect(shared.watermark).toBe(true);
+    });
+
+    it('leaves a Pro owner’s proposal unbranded', async () => {
+      const h = makeHarness();
+      const sessionId = await fullPipeline(h);
+      await ownedBy(h, sessionId, 'pro');
+
+      const shared = await h.share.view((await h.share.create(sessionId)).token);
+      expect(shared.watermark).toBe(false);
+    });
+
+    // Downgrading (or a Pro period simply lapsing) must bring the watermark back on
+    // links that are already out in the world — the plan is read at view time, not
+    // frozen into the link when it was minted.
+    it('re-watermarks an existing link when the owner drops back to Free', async () => {
+      const h = makeHarness();
+      const sessionId = await fullPipeline(h);
+      const userId = await ownedBy(h, sessionId, 'pro');
+      const { token } = await h.share.create(sessionId);
+      await expect(h.share.view(token)).resolves.toMatchObject({
+        watermark: false,
+      });
+
+      await h.billing.adminRevoke(userId, 'admin-1');
+
+      await expect(h.share.view(token)).resolves.toMatchObject({
+        watermark: true,
+      });
+    });
+
+    // A session with no owner (legacy, pre-ownership) must not read as Pro.
+    it('watermarks an owner-less session', async () => {
+      const h = makeHarness();
+      const sessionId = await freePipeline(h);
+
+      const shared = await h.share.view((await h.share.create(sessionId)).token);
+      expect(shared.watermark).toBe(true);
+    });
   });
 
   it('mints an unguessable token and is idempotent', async () => {

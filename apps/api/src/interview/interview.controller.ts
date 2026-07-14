@@ -22,7 +22,7 @@ import { InterviewService } from './interview.service';
 import { SessionOwnerGuard } from './session-owner.guard';
 import { StartInterviewDto } from './dto/start-interview.dto';
 import { SubmitAnswerDto } from './dto/submit-answer.dto';
-import { RenameProjectDto } from './dto/rename-project.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
 
 // Every interview route requires a signed-in user (pipeline is now per-user).
 @UseGuards(JwtAuthGuard)
@@ -51,7 +51,12 @@ export class InterviewController {
         'Staff accounts are for platform operations only and cannot create projects.',
       );
     }
-    return this.interview.start(dto, user.id);
+    // Split the client's name off the idea. Everything left in `input` is what the
+    // agents read and what the public share page echoes back — the client's name
+    // belongs to neither, so it travels as a separate argument rather than riding
+    // along inside `ProjectIdeaInput`.
+    const { clientName, ...input } = dto;
+    return this.interview.start(input, user.id, clientName ?? null);
   }
 
   /** Fetch current session state (owner only). */
@@ -78,14 +83,17 @@ export class InterviewController {
     return this.interview.confirm(id);
   }
 
-  /** Rename a project — set or clear its display name (owner only). */
+  /**
+   * Update a project's labels — its display name and/or the client it's scoped
+   * for (owner only). An omitted field is left alone; a blank one clears it.
+   */
   @UseGuards(SessionOwnerGuard)
   @Patch(':id')
-  rename(
+  update(
     @Param('id') id: string,
-    @Body() dto: RenameProjectDto,
+    @Body() dto: UpdateProjectDto,
   ): Promise<ProjectSummary> {
-    return this.interview.rename(id, dto.title);
+    return this.interview.update(id, dto);
   }
 
   /** Delete a project and all of its artifacts (owner only). Frees a quota slot. */

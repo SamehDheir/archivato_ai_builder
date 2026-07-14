@@ -153,13 +153,45 @@ describe('InterviewService', () => {
     // No title initially → summary omits it (UI falls back to the idea).
     expect((await svc.list('user-1'))[0].title).toBeUndefined();
 
-    const renamed = await svc.rename(sessionId, '  Clinic Platform  ');
+    const renamed = await svc.update(sessionId, { title: '  Clinic Platform  ' });
     expect(renamed.title).toBe('Clinic Platform'); // trimmed
     expect((await svc.list('user-1'))[0].title).toBe('Clinic Platform');
 
     // Blank title clears it.
-    const cleared = await svc.rename(sessionId, '   ');
+    const cleared = await svc.update(sessionId, { title: '   ' });
     expect(cleared.title).toBeUndefined();
+  });
+
+  it('records the client a scoping is for, without touching the idea', async () => {
+    const svc = makeService();
+    await svc.start(IDEA, 'user-1', '  Acme Clinics  ');
+
+    const [project] = await svc.list('user-1');
+    expect(project.clientName).toBe('Acme Clinics'); // trimmed
+    // The client's name is a label for the owner — it must never become part of
+    // the idea, which is what the agents read and what the share page echoes.
+    expect(project.idea).toBe(IDEA.idea);
+    expect(project.idea).not.toContain('Acme');
+  });
+
+  // A patch is partial: renaming a project must not wipe the client it's for
+  // (and vice versa) — only a field that is actually sent gets written.
+  it('patches title and clientName independently', async () => {
+    const svc = makeService();
+    const { sessionId } = await svc.start(IDEA, 'user-1', 'Acme Clinics');
+
+    const renamed = await svc.update(sessionId, { title: 'Clinic OS' });
+    expect(renamed.title).toBe('Clinic OS');
+    expect(renamed.clientName).toBe('Acme Clinics'); // untouched
+
+    const recliented = await svc.update(sessionId, { clientName: 'Beta Health' });
+    expect(recliented.title).toBe('Clinic OS'); // untouched
+    expect(recliented.clientName).toBe('Beta Health');
+
+    // Blank clears just that field.
+    const cleared = await svc.update(sessionId, { clientName: '' });
+    expect(cleared.clientName).toBeUndefined();
+    expect(cleared.title).toBe('Clinic OS');
   });
 
   it('enforces the project-count quota at start (402 past the limit)', async () => {

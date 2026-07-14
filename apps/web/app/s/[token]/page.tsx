@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { cache } from 'react';
 import { fetchSharedProject } from '@/lib/api';
 import { siteName, siteUrl } from '@/lib/site';
+import { LOCALE_COOKIE, coerceLocale, type Locale } from '@/lib/i18n/settings';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/shared/Logo';
 import { SharedProjectView } from '@/components/share/SharedProjectView';
@@ -33,14 +35,30 @@ function truncate(text: string, max: number): string {
   return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
 }
 
+/**
+ * What the link *is*, in the reader's language — the subtitle of every unfurl.
+ *
+ * This one string is localized server-side, against the grain of the usual
+ * "machine-facing metadata stays English" rule, and deliberately: the audience
+ * here is not a crawler but a **person in WhatsApp or email**, and in the MENA
+ * market that person is often reading Arabic. The rest of the metadata (the
+ * title) is the owner's own project name, which needs no translating.
+ */
+const PROPOSAL_TAGLINE: Record<Locale, string> = {
+  en: 'Software scoping proposal — scope, architecture, cost estimate and delivery plan.',
+  ar: 'عرض نطاق عمل برمجي — نطاق العمل، البنية التقنية، تقدير التكلفة، وخطة التنفيذ.',
+};
+
 export async function generateMetadata({
   params,
 }: {
   params: { token: string };
 }): Promise<Metadata> {
   const result = await getShared(params.token);
+  const locale = coerceLocale(cookies().get(LOCALE_COOKIE)?.value);
+
   if (result.status !== 'ok') {
-    return { title: `Shared design — ${siteName}`, robots: NOINDEX };
+    return { title: `Shared proposal — ${siteName}`, robots: NOINDEX };
   }
 
   const { project } = result;
@@ -50,19 +68,22 @@ export async function generateMetadata({
   // they forward the link to a colleague — so it has to read as *their project*,
   // not as our product ("a system design by …") and certainly not as an internal
   // session id.
-  const title = `${truncate(project.title, 70)} — Project proposal`;
+  const title = truncate(project.title, 70);
 
-  // Describe the project, not its architecture. The old description unfurled as
-  // "modular monolith · 5 services · 12 tables · 40 endpoints", which is a fact
-  // about the schema, addressed to nobody who receives this link.
-  const description = truncate(
-    project.vision?.vision ?? project.idea.idea,
-    200,
-  );
+  // Say what the link is, not what the system contains. The description unfurled
+  // as "modular monolith · 5 services · 12 tables · 40 endpoints" once — a fact
+  // about the schema, addressed to nobody who receives this link. A client
+  // forwarding it to a colleague needs "this is the proposal", and the project's
+  // own vision text is one tap away inside.
+  const description = PROPOSAL_TAGLINE[locale];
 
   const url = `${siteUrl}/s/${params.token}`;
   return {
-    title,
+    // `absolute` bypasses the root layout's "%s · Archivato AI Builder" template.
+    // This page is the owner's document, sent to their client while a deal is on
+    // the table — our product name belongs in the (plan-dependent) watermark, not
+    // welded into the title of every proposal they send.
+    title: { absolute: title },
     description,
     robots: NOINDEX,
     alternates: { canonical: url },

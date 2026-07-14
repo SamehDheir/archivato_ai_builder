@@ -98,6 +98,9 @@ export function UpgradeProvider({ children }: { children: React.ReactNode }) {
  */
 const PRO_FEATURES: { key: string; icon: LucideIcon }[] = [
   { key: 'projects', icon: FolderKanban },
+  // The headline of the client-scoping positioning: a proposal that carries the
+  // owner's brand, not ours. Sits right under the project count so it reads first.
+  { key: 'whitelabel', icon: Sparkles },
   { key: 'api', icon: Webhook },
   { key: 'review', icon: ClipboardCheck },
   { key: 'roadmap', icon: Map },

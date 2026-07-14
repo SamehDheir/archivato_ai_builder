@@ -14,10 +14,13 @@ import type { SystemDesign } from './system-design';
 import type { DatabaseDesign } from './database-design';
 import type { ApiDesign } from './api-design';
 import type { ReviewReport } from './review';
+import type { ThreatModel } from './threat-model';
+import type { QaPlan } from './qa-plan';
 import type { ProductVision } from './product-vision';
 import type { CostEstimate } from './cost-estimate';
 import type { ProjectRoadmap } from './roadmap';
 import type { ProjectIdeaInput } from './pipeline';
+import type { SubscriptionPlan } from './billing';
 
 /** The owner's view of a session's share link (null when nothing is shared). */
 export interface ShareLink {
@@ -75,6 +78,33 @@ export interface SharedProject {
   apiDesign: ApiDesign | null;
   /** Present only if the owner ran the AI review (Pro). */
   review: ReviewReport | null;
+  /** Pro-only — the STRIDE security analysis (appendix). */
+  threatModel: ThreatModel | null;
+  /** Pro-only — the test strategy (appendix). */
+  qaPlan: QaPlan | null;
+  /**
+   * Whether the page shows the "Built with Archivato" watermark — **decided by
+   * the server** (see `shouldWatermarkShare`), never by the client. A free owner
+   * pays for the link with an attribution line; a paying owner's proposal carries
+   * their brand alone, which is a large part of what the paid plan sells.
+   */
+  watermark: boolean;
+}
+
+/**
+ * Does a link minted by an owner on `plan` carry the watermark?
+ *
+ * Sharing itself is free on every plan — the public page is the growth loop, so
+ * paywalling it would tax exactly the free users doing our marketing. What the
+ * paid plan buys is the *absence* of our name on a document they hand to their
+ * own client. So: free ⇒ watermark, paid ⇒ clean.
+ *
+ * Pure and plan-driven so there is exactly one rule, testable without a
+ * database, and impossible to spoof from the browser — the API resolves the
+ * owner's plan and stamps the answer into the payload.
+ */
+export function shouldWatermarkShare(plan: SubscriptionPlan): boolean {
+  return plan !== 'pro';
 }
 
 /** Path of the public page for a token (relative; the web app owns the origin). */

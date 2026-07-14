@@ -239,6 +239,10 @@ model InterviewSession {
   idea            String
   /// Optional user-set display name; the UI falls back to `idea` when null.
   title           String?
+  /// The end client this scoping is for (optional, owner-set). A label for the
+  /// owner's dashboard only: it is NOT part of the idea, so it never reaches an
+  /// agent prompt and never crosses onto the public share page.
+  clientName      String?
   industry        String?
   scale           String?
   preferredStack  String?

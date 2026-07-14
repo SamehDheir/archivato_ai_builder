@@ -66,9 +66,11 @@ regenerate consistently — and the derived artifacts that don't, like the roadm
 or cost estimate, are **flagged stale with one-click regenerate** rather than
 quietly describing a design that changed), **version history** with diff +
 restore, **live SSE
-generation console**, **public share links** (a read-only page of the design that
-anyone can open — no account, and free on every plan: it's the organic loop, so
-it is deliberately not paywalled), full **auth** (email + Google/GitHub
+generation console**, **client-facing share links** (a read-only *proposal* page
+ordered for the buyer — vision → requirements → cost → roadmap, with the technical
+detail collapsed below — that anyone can open with no account; free on every plan
+as the organic loop, carrying a "Built with Archivato" watermark below Pro), full
+**auth** (email + Google/GitHub
 OAuth), **billing** (Free/Pro via Paddle or an offline mock), a **customer
 support center** with a three-layer AI assistant + knowledge base, **RBAC** for
 staff consoles, **admin analytics**, and a bilingual UI (**English + Arabic,
@@ -78,10 +80,10 @@ RTL-safe**).
 
 | | Free | Pro ($19/mo or $182/yr) |
 | --- | --- | --- |
-| Projects | 1 | 5 |
+| Client scopings | 1 | 5 |
 | Interview → Requirements → System → Database design | ✅ | ✅ |
 | Product Vision | ✅ | ✅ |
-| Public share link (read-only page of the design so far) | ✅ | ✅ |
+| Client-facing share link (read-only proposal page) | ✅ with watermark | ✅ no watermark |
 | API design, AI review, roadmap, cost, threat model, QA plan | — | ✅ |
 | Export formats + code scaffold + API docs/mock server | — | ✅ |
 
