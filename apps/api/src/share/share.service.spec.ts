@@ -12,6 +12,9 @@ import { InMemoryDatabaseDesignRepository } from '../database-design/in-memory-d
 import { ApiDesignService } from '../api-design/api-design.service';
 import { InMemoryApiDesignRepository } from '../api-design/in-memory-api-design.repository';
 import { InMemoryReviewReportRepository } from '../review/in-memory-review-report.repository';
+import { InMemoryProductVisionRepository } from '../product-vision/in-memory-product-vision.repository';
+import { InMemoryCostEstimateRepository } from '../cost-estimate/in-memory-cost-estimate.repository';
+import { InMemoryProjectRoadmapRepository } from '../roadmap/in-memory-roadmap.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
@@ -35,6 +38,9 @@ interface Harness {
   sessions: InMemoryInterviewSessionRepository;
   apiDesigns: InMemoryApiDesignRepository;
   databaseDesigns: InMemoryDatabaseDesignRepository;
+  visions: InMemoryProductVisionRepository;
+  costs: InMemoryCostEstimateRepository;
+  roadmaps: InMemoryProjectRoadmapRepository;
   share: ShareService;
 }
 
@@ -80,6 +86,10 @@ function makeHarness(): Harness {
     apiRepo,
     new ApiDesignerAgent(mock),
   );
+  const visionRepo = new InMemoryProductVisionRepository();
+  const costRepo = new InMemoryCostEstimateRepository();
+  const roadmapRepo = new InMemoryProjectRoadmapRepository();
+
   const share = new ShareService(
     new InMemoryShareLinkRepository(),
     sessionRepo,
@@ -88,6 +98,9 @@ function makeHarness(): Harness {
     dbRepo,
     apiRepo,
     reviewRepo,
+    visionRepo,
+    costRepo,
+    roadmapRepo,
   );
   return {
     interview,
@@ -98,6 +111,9 @@ function makeHarness(): Harness {
     sessions: sessionRepo,
     apiDesigns: apiRepo,
     databaseDesigns: dbRepo,
+    visions: visionRepo,
+    costs: costRepo,
+    roadmaps: roadmapRepo,
     share,
   };
 }
@@ -161,6 +177,78 @@ describe('ShareService', () => {
     expect(shared.databaseDesign.entities.length).toBeGreaterThan(0);
     expect(shared.apiDesign).toBeNull();
     expect(shared.review).toBeNull();
+    expect(JSON.stringify(shared)).not.toContain(sessionId);
+  });
+
+  // The client-facing artifacts are additive: a link that was shareable before
+  // them must stay shareable without them. The cost estimate and the roadmap are
+  // Pro (they need the full pipeline), so a free owner's link carries neither and
+  // the page simply drops those sections.
+  it('shares a design that has no vision, cost estimate or roadmap', async () => {
+    const h = makeHarness();
+    const sessionId = await freePipeline(h);
+
+    const shared = await h.share.view((await h.share.create(sessionId)).token);
+
+    expect(shared.vision).toBeNull();
+    expect(shared.costEstimate).toBeNull();
+    expect(shared.roadmap).toBeNull();
+    // …and the design it does have is still there.
+    expect(shared.requirements.functional.length).toBeGreaterThan(0);
+  });
+
+  // The page leads with these three — they are what the *client* reads — so they
+  // have to actually cross the public boundary, with the session id stripped like
+  // every other artifact.
+  it('serves the vision, cost estimate and roadmap, stamped with the token', async () => {
+    const h = makeHarness();
+    const sessionId = await fullPipeline(h);
+
+    await h.visions.upsert({
+      sessionId,
+      generatedAt: new Date().toISOString(),
+      vision: 'A booking system for clinics.',
+      goals: ['Cut no-shows'],
+      mvp: ['Booking'],
+      futureFeatures: [],
+      successMetrics: [],
+      personas: [],
+    });
+    await h.roadmaps.upsert({
+      sessionId,
+      generatedAt: new Date().toISOString(),
+      summary: 'Three phases.',
+      totalEstimate: '~10 wks',
+      phases: [],
+    });
+    await h.costs.upsert({
+      sessionId,
+      generatedAt: new Date().toISOString(),
+      workload: {
+        services: 3,
+        entities: 5,
+        endpoints: 12,
+        databaseType: 'PostgreSQL',
+        architecture: 'modular_monolith',
+      },
+      scales: [100, 1000, 10000],
+      providers: [],
+      cheapestByScale: {},
+      recommended: 'render',
+      disclaimer: 'Ballpark.',
+    });
+
+    const shared = await h.share.view((await h.share.create(sessionId)).token);
+    const { token } = shared;
+
+    expect(shared.vision?.vision).toBe('A booking system for clinics.');
+    expect(shared.roadmap?.totalEstimate).toBe('~10 wks');
+    expect(shared.costEstimate?.recommended).toBe('render');
+
+    // The internal session id must not ride out on any of them.
+    expect(shared.vision?.sessionId).toBe(token);
+    expect(shared.roadmap?.sessionId).toBe(token);
+    expect(shared.costEstimate?.sessionId).toBe(token);
     expect(JSON.stringify(shared)).not.toContain(sessionId);
   });
 

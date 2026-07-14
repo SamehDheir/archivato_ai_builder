@@ -8,7 +8,10 @@ import {
 } from '@nestjs/common';
 import type {
   ApiDesign,
+  CostEstimate,
   DatabaseDesign,
+  ProductVision,
+  ProjectRoadmap,
   RequirementDocument,
   ReviewReport,
   ShareLink,
@@ -40,6 +43,18 @@ import {
   type ReviewReportRepository,
 } from '../review/review-report.repository';
 import {
+  PRODUCT_VISION_REPOSITORY,
+  type ProductVisionRepository,
+} from '../product-vision/product-vision.repository';
+import {
+  COST_ESTIMATE_REPOSITORY,
+  type CostEstimateRepository,
+} from '../cost-estimate/cost-estimate.repository';
+import {
+  PROJECT_ROADMAP_REPOSITORY,
+  type ProjectRoadmapRepository,
+} from '../roadmap/roadmap.repository';
+import {
   SHARE_LINK_REPOSITORY,
   type ShareLinkRepository,
 } from './share-link.repository';
@@ -52,7 +67,14 @@ interface ShareableDesign {
   requirements: RequirementDocument;
   systemDesign: SystemDesign;
   databaseDesign: DatabaseDesign;
-  /** Pro-only stages — absent on a design shared from the free tier. */
+  /**
+   * Optional artifacts. `vision` is a free stage (so it's usually there); the
+   * rest are Pro. None of them gate the link — a design is shareable without
+   * them, and the page omits the section rather than rendering an empty one.
+   */
+  vision: ProductVision | null;
+  costEstimate: CostEstimate | null;
+  roadmap: ProjectRoadmap | null;
   apiDesign: ApiDesign | null;
   review: ReviewReport | null;
 }
@@ -76,6 +98,12 @@ export class ShareService {
     private readonly apiDesigns: ApiDesignRepository,
     @Inject(REVIEW_REPORT_REPOSITORY)
     private readonly reviews: ReviewReportRepository,
+    @Inject(PRODUCT_VISION_REPOSITORY)
+    private readonly visions: ProductVisionRepository,
+    @Inject(COST_ESTIMATE_REPOSITORY)
+    private readonly estimates: CostEstimateRepository,
+    @Inject(PROJECT_ROADMAP_REPOSITORY)
+    private readonly roadmaps: ProjectRoadmapRepository,
   ) {}
 
   /** The owner's current link for a session, or null when nothing is shared. */
@@ -161,7 +189,12 @@ export class ShareService {
       title: session.title ?? session.input.idea,
       sharedAt: link.createdAt.toISOString(),
       idea: session.input,
+      vision: design.vision ? { ...design.vision, sessionId: token } : null,
       requirements: { ...design.requirements, sessionId: token },
+      costEstimate: design.costEstimate
+        ? { ...design.costEstimate, sessionId: token }
+        : null,
+      roadmap: design.roadmap ? { ...design.roadmap, sessionId: token } : null,
       systemDesign: { ...design.systemDesign, sessionId: token },
       databaseDesign: { ...design.databaseDesign, sessionId: token },
       apiDesign: design.apiDesign
@@ -185,15 +218,29 @@ export class ShareService {
       throw new NotFoundException(`Interview session ${sessionId} not found.`);
     }
 
-    const [requirements, systemDesign, databaseDesign, apiDesign, review] =
-      await Promise.all([
-        this.requirements.findBySessionId(sessionId),
-        this.systemDesigns.findBySessionId(sessionId),
-        this.databaseDesigns.findBySessionId(sessionId),
-        this.apiDesigns.findBySessionId(sessionId),
-        this.reviews.findBySessionId(sessionId),
-      ]);
+    const [
+      requirements,
+      systemDesign,
+      databaseDesign,
+      apiDesign,
+      review,
+      vision,
+      costEstimate,
+      roadmap,
+    ] = await Promise.all([
+      this.requirements.findBySessionId(sessionId),
+      this.systemDesigns.findBySessionId(sessionId),
+      this.databaseDesigns.findBySessionId(sessionId),
+      this.apiDesigns.findBySessionId(sessionId),
+      this.reviews.findBySessionId(sessionId),
+      this.visions.findBySessionId(sessionId),
+      this.estimates.findBySessionId(sessionId),
+      this.roadmaps.findBySessionId(sessionId),
+    ]);
 
+    // The gate is unchanged: the design chain through the database design. The
+    // client-facing artifacts are additive — never required — so adding them
+    // cannot make a previously shareable design un-shareable.
     if (!requirements || !systemDesign || !databaseDesign) {
       throw new ConflictException(
         'Generate the design through the database design before sharing.',
@@ -204,6 +251,9 @@ export class ShareService {
       requirements,
       systemDesign,
       databaseDesign,
+      vision: vision ?? null,
+      costEstimate: costEstimate ?? null,
+      roadmap: roadmap ?? null,
       apiDesign: apiDesign ?? null,
       review: review ?? null,
     };

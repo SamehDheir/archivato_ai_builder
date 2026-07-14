@@ -23,6 +23,16 @@ const getShared = cache(fetchSharedProject);
  */
 const NOINDEX = { index: false, follow: false } as const;
 
+/**
+ * Keep an unfurl readable. A title falls back to the raw idea text when the owner
+ * never named the project, and an idea can be a paragraph — which would spill out
+ * of every preview card it lands in.
+ */
+function truncate(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -34,21 +44,21 @@ export async function generateMetadata({
   }
 
   const { project } = result;
-  const title = `${project.title} — a system design by ${siteName}`;
-  // The API design is a Pro stage, so a free owner's link carries none. Drop the
-  // clause rather than unfurling "0 endpoints", which would read as a claim about
-  // the design instead of the plan it was generated on.
-  const endpoints = project.apiDesign?.modules.reduce(
-    (n, m) => n + m.endpoints.length,
-    0,
+
+  // The client's own project name, and nothing else. This is the title they see
+  // in the browser tab, in their bookmarks, and in the Slack/WhatsApp unfurl when
+  // they forward the link to a colleague — so it has to read as *their project*,
+  // not as our product ("a system design by …") and certainly not as an internal
+  // session id.
+  const title = `${truncate(project.title, 70)} — Project proposal`;
+
+  // Describe the project, not its architecture. The old description unfurled as
+  // "modular monolith · 5 services · 12 tables · 40 endpoints", which is a fact
+  // about the schema, addressed to nobody who receives this link.
+  const description = truncate(
+    project.vision?.vision ?? project.idea.idea,
+    200,
   );
-  const description =
-    [
-      project.systemDesign.architecture.replace(/_/g, ' '),
-      `${project.systemDesign.services.length} services`,
-      `${project.databaseDesign.entities.length} tables`,
-      ...(endpoints === undefined ? [] : [`${endpoints} endpoints`]),
-    ].join(' · ') + ' — generated from one sentence.';
 
   const url = `${siteUrl}/s/${params.token}`;
   return {

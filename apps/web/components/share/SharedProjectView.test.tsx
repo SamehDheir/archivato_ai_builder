@@ -1,17 +1,35 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { SharedProject } from '@archivato/shared';
 import { SharedProjectView } from './SharedProjectView';
 import {
   EXAMPLE_API_DESIGN,
+  EXAMPLE_COST_ESTIMATE,
   EXAMPLE_DATABASE_DESIGN,
   EXAMPLE_REQUIREMENTS,
   EXAMPLE_REVIEW,
+  EXAMPLE_ROADMAP,
   EXAMPLE_SYSTEM_DESIGN,
+  EXAMPLE_VISION,
 } from '@/lib/example-project';
 
 // Identity `t` so assertions can match on i18n keys + rendered fixture data.
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+// `useFormat` (used by the header + the Vision/Cost views) reads the active
+// locale from LocaleProvider, which we can't mount here because react-i18next is
+// mocked. Stubbing the locale keeps the real `Intl` formatting path under test.
+jest.mock('@/components/shared/i18n', () => ({
+  useLocale: () => ({ locale: 'en', setLocale: () => {} }),
+}));
+
+// The ER diagram (inside the Database appendix) reads the theme to pick its
+// Mermaid palette. The real page gets ThemeProvider from the root layout; here we
+// only need the value, not the provider.
+jest.mock('@/components/shared/theme', () => ({
+  useTheme: () => ({ theme: 'light', toggle: () => {}, setTheme: () => {} }),
 }));
 
 // The real loader dynamic-imports the `stages`/`share` bundles into the i18next
@@ -26,7 +44,10 @@ const project: SharedProject = {
   title: 'HomeHelper',
   sharedAt: '2026-07-12T00:00:00.000Z',
   idea: { idea: 'Book vetted home-services professionals in minutes' },
+  vision: EXAMPLE_VISION,
   requirements: EXAMPLE_REQUIREMENTS,
+  costEstimate: EXAMPLE_COST_ESTIMATE,
+  roadmap: EXAMPLE_ROADMAP,
   systemDesign: EXAMPLE_SYSTEM_DESIGN,
   databaseDesign: EXAMPLE_DATABASE_DESIGN,
   apiDesign: EXAMPLE_API_DESIGN,
@@ -34,7 +55,7 @@ const project: SharedProject = {
 };
 
 describe('SharedProjectView', () => {
-  it('renders the design read-only, with the growth CTA', async () => {
+  it("leads with the client's project name, not our branding", async () => {
     render(<SharedProjectView project={project} />);
 
     // Waits out the i18n-namespace gate (skeleton → content).
@@ -42,54 +63,106 @@ describe('SharedProjectView', () => {
       await screen.findByRole('heading', { name: 'HomeHelper', level: 1 }),
     ).toBeInTheDocument();
     expect(screen.getByText(project.idea.idea)).toBeInTheDocument();
-    expect(screen.getByText('readonly')).toBeInTheDocument();
 
-    // The proof stats are computed from the design, not hard-coded. Read each
-    // one through its own label — the fixture has equal service and table counts,
-    // so matching on the number alone would pass even if they were swapped.
-    const stat = (key: string) =>
-      screen.getByText(key).parentElement?.querySelector('dd')?.textContent;
-    expect(stat('stat.services')).toBe(
-      String(EXAMPLE_SYSTEM_DESIGN.services.length),
-    );
-    expect(stat('stat.tables')).toBe(
-      String(EXAMPLE_DATABASE_DESIGN.entities.length),
-    );
-    expect(stat('stat.endpoints')).toBe(
-      String(
-        EXAMPLE_API_DESIGN.modules.reduce((n, m) => n + m.endpoints.length, 0),
-      ),
-    );
-
-    // The CTA is the whole point of the page: it must reach the signup.
-    expect(screen.getByRole('link', { name: 'cta.action' })).toHaveAttribute(
-      'href',
-      '/register',
-    );
+    // The vision statement belongs to the "What we're building" section — the
+    // header must not print it a second screen earlier.
+    expect(screen.getAllByText(EXAMPLE_VISION.vision)).toHaveLength(1);
   });
 
-  it('hides the review tab when the owner never ran a review', async () => {
-    render(<SharedProjectView project={{ ...project, review: null }} />);
-
+  // The reader is the client, deciding whether to sign. The first thing they meet
+  // must be what we're building and what it costs — not the schema.
+  it('orders the proposal the way a client reads it, appendix last', async () => {
+    render(<SharedProjectView project={project} />);
     await screen.findByRole('heading', { name: 'HomeHelper', level: 1 });
-    expect(screen.getByText('tab.system')).toBeInTheDocument();
-    expect(screen.queryByText('tab.review')).not.toBeInTheDocument();
+
+    const headings = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((h) => h.textContent);
+
+    expect(headings).toEqual([
+      'section.vision.title',
+      'section.scope.title',
+      'section.cost.title',
+      'section.plan.title',
+      'appendix.title',
+      'cta.title',
+    ]);
   });
 
-  // Sharing is free, but the API design and the review are Pro stages — so a link
-  // minted by a free owner carries neither, and the page must still stand up.
-  it('renders a free-tier design with no API design', async () => {
+  // A closed row says "your developer will want this" and stays out of the way;
+  // an open ERD says "you should have understood this before signing".
+  it('keeps the technical detail collapsed until it is asked for', async () => {
+    render(<SharedProjectView project={project} />);
+    await screen.findByRole('heading', { name: 'HomeHelper', level: 1 });
+
+    const database = screen.getByRole('button', { name: /appendix.database/ });
+    expect(database).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(database);
+    expect(database).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('shows the client the three numbers they actually ask about', async () => {
+    render(<SharedProjectView project={project} />);
+    await screen.findByRole('heading', { name: 'HomeHelper', level: 1 });
+
+    const tile = (key: string) =>
+      screen.getByText(key).parentElement?.querySelector('dd')?.textContent;
+
+    expect(tile('headline.scope')).toBe(
+      String(EXAMPLE_REQUIREMENTS.functional.length),
+    );
+    expect(tile('headline.timeline')).toBe(EXAMPLE_ROADMAP.totalEstimate);
+    expect(tile('headline.running')).toMatch(/^\$/);
+  });
+
+  // Sharing is free, but the cost estimate, roadmap, API design and review are Pro
+  // — a link minted by a free owner carries none of them, and the page must still
+  // read as a proposal rather than breaking or showing empty sections.
+  it('renders a free-tier link with no cost, roadmap, API or review', async () => {
     render(
       <SharedProjectView
-        project={{ ...project, apiDesign: null, review: null }}
+        project={{
+          ...project,
+          costEstimate: null,
+          roadmap: null,
+          apiDesign: null,
+          review: null,
+        }}
       />,
     );
 
     await screen.findByRole('heading', { name: 'HomeHelper', level: 1 });
-    expect(screen.getByText('tab.database')).toBeInTheDocument();
-    expect(screen.queryByText('tab.api')).not.toBeInTheDocument();
-    // A "0 endpoints" tile would read as a claim about the design, not the plan.
-    expect(screen.queryByText('stat.endpoints')).not.toBeInTheDocument();
-    expect(screen.getByText('stat.tables')).toBeInTheDocument();
+
+    expect(screen.getByText('section.vision.title')).toBeInTheDocument();
+    expect(screen.getByText('section.scope.title')).toBeInTheDocument();
+    expect(screen.queryByText('section.cost.title')).not.toBeInTheDocument();
+    expect(screen.queryByText('section.plan.title')).not.toBeInTheDocument();
+    expect(screen.queryByText('appendix.api')).not.toBeInTheDocument();
+    expect(screen.queryByText('appendix.review')).not.toBeInTheDocument();
+    // …and the appendix the free tier does have is still there.
+    expect(screen.getByText('appendix.database')).toBeInTheDocument();
+  });
+
+  it('falls back to the idea when the owner never generated a vision', async () => {
+    render(<SharedProjectView project={{ ...project, vision: null }} />);
+
+    await screen.findByRole('heading', { name: 'HomeHelper', level: 1 });
+    expect(screen.getByText(project.idea.idea)).toBeInTheDocument();
+    expect(screen.queryByText('section.vision.title')).not.toBeInTheDocument();
+  });
+
+  it('keeps the growth CTA pointed at signup', async () => {
+    render(<SharedProjectView project={project} />);
+    await screen.findByRole('heading', { name: 'HomeHelper', level: 1 });
+
+    const cta = screen.getByRole('link', { name: 'cta.action' });
+    expect(cta).toHaveAttribute('href', '/register');
+
+    // The watermark is what makes a free link market the product.
+    const watermark = screen.getByRole('link', {
+      name: /Built with Archivato/,
+    });
+    expect(watermark).toHaveAttribute('href', 'https://archivato.dev');
   });
 });

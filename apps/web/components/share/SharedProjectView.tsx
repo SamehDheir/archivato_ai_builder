@@ -4,83 +4,62 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import {
+  ChevronDown,
   ClipboardCheck,
+  Coins,
+  Compass,
   Database as DatabaseIcon,
   FileText,
   Network,
+  Route,
   Sparkles,
   Webhook,
   type LucideIcon,
 } from 'lucide-react';
 import type { SharedProject } from '@archivato/shared';
+import { cn } from '@/lib/utils';
+import { useFormat } from '@/lib/i18n/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToastProvider } from '@/components/shared/toast';
 import { Logo } from '@/components/shared/Logo';
+import { ProductVisionView } from '@/components/product/ProductVisionView';
 import { RequirementDocumentView } from '@/components/design/RequirementDocumentView';
+import { CostView } from '@/components/cost/CostView';
+import { RoadmapView } from '@/components/roadmap/RoadmapView';
 import { SystemDesignView } from '@/components/design/SystemDesignView';
 import { DatabaseDesignView } from '@/components/design/DatabaseDesignView';
 import { ApiDesignView } from '@/components/design/ApiDesignView';
 import { ReviewView } from '@/components/review/ReviewView';
 import { loadShareNamespaces } from '@/lib/i18n/client';
 
-type ShareTab = 'requirements' | 'system' | 'database' | 'api' | 'review';
-
-const TABS: { value: ShareTab; icon: LucideIcon }[] = [
-  { value: 'requirements', icon: FileText },
-  { value: 'system', icon: Network },
-  { value: 'database', icon: DatabaseIcon },
-  { value: 'api', icon: Webhook },
-  { value: 'review', icon: ClipboardCheck },
-];
-
 /**
- * Design facts worth putting above the fold — the "this is real" proof. The
- * endpoint count is dropped rather than shown as 0 when the owner shared from the
- * free tier (no API design): a zero here would read as "this design has no API",
- * which is a claim about the design rather than about the plan that made it.
- */
-function stats(project: SharedProject) {
-  return [
-    {
-      key: 'architecture' as const,
-      value: project.systemDesign.architecture.replace(/_/g, ' '),
-    },
-    { key: 'services' as const, value: project.systemDesign.services.length },
-    { key: 'tables' as const, value: project.databaseDesign.entities.length },
-    ...(project.apiDesign
-      ? [
-          {
-            key: 'endpoints' as const,
-            value: project.apiDesign.modules.reduce(
-              (n, m) => n + m.endpoints.length,
-              0,
-            ),
-          },
-        ]
-      : []),
-  ];
-}
-
-/**
- * The public, read-only page behind a share link. It renders the **same artifact
- * views the owner sees** (the `ExampleProjectView` pattern — the views are pure
- * functions of their artifact, so they need no session), wrapped in a light,
- * unauthenticated chrome that ends in a "Built with Archivato" CTA. That CTA is
- * the point: the reader is a stranger looking at proof of what the product does.
+ * The public, read-only page behind a share link.
  *
- * The page lives outside the `(app)` route group, so none of the app's providers
- * are mounted. It supplies the one it actually needs — `ToastProvider`, for the
- * ER-diagram export buttons — and nothing else: no AuthGate, no billing, no
- * account chrome.
+ * **The reader is the client, not an engineer.** They own the idea, they are
+ * deciding whether to sign, and they cannot read an ERD — an OpenAPI table tells
+ * them nothing about whether to hire you. So the page is a *presentation*, not a
+ * technical document:
+ *
+ *   1. what we're building (vision) → 2. what's included (requirements) →
+ *   3. what it costs to run (estimate) → 4. how long it takes (roadmap)
+ *
+ * …and the schema, the API and the review sit **below, collapsed**, for the
+ * developer the client forwards this to. That ordering is the whole point: the
+ * first screen has to answer "is this the right thing, and can I afford it?",
+ * not "how many tables does it have?".
+ *
+ * It renders the same artifact `*View` components the owner sees (they're pure
+ * functions of their artifact — the `ExampleProjectView` pattern), so nothing is
+ * duplicated. The page lives outside the `(app)` route group and mounts only the
+ * provider it actually needs (`ToastProvider`, for the ER-diagram export buttons).
  */
 export function SharedProjectView({ project }: { project: SharedProject }) {
   // The artifact views read the `stages` namespace, which is not in the eager
   // (public) i18n tier. Hold the first render until it lands so the page never
-  // flashes raw translation keys at someone seeing the product for the first time.
+  // flashes raw translation keys at a client seeing this for the first time.
   const [ready, setReady] = useState(false);
   useEffect(() => {
     void loadShareNamespaces().then(() => setReady(true));
@@ -96,102 +75,86 @@ export function SharedProjectView({ project }: { project: SharedProject }) {
 
 function SharedProjectContent({ project }: { project: SharedProject }) {
   const { t } = useTranslation('share');
-
-  // Both trailing stages are Pro. A free owner's link carries neither, and the
-  // page simply renders the design it does have rather than an empty tab.
-  const has: Record<ShareTab, boolean> = {
-    requirements: true,
-    system: true,
-    database: true,
-    api: !!project.apiDesign,
-    review: !!project.review,
-  };
-  const tiles = stats(project);
+  const { vision, costEstimate, roadmap, apiDesign, review } = project;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-      <header className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" aria-label="Archivato">
-            <Logo />
-          </Link>
-          <Badge variant="secondary">{t('badge')}</Badge>
-        </div>
+    <div className="mx-auto max-w-5xl space-y-8 px-4 py-8">
+      <ProposalHeader project={project} />
 
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold sm:text-3xl" dir="auto">
-            {project.title}
-          </h1>
+      {/* ── The client's four questions, in the order they ask them ─────────── */}
+
+      {vision && (
+        <Section
+          icon={Compass}
+          title={t('section.vision.title')}
+          lead={t('section.vision.lead')}
+        >
+          <ProductVisionView vision={vision} />
+        </Section>
+      )}
+
+      <Section
+        icon={FileText}
+        title={t('section.scope.title')}
+        lead={t('section.scope.lead')}
+      >
+        <RequirementDocumentView doc={project.requirements} />
+      </Section>
+
+      {costEstimate && (
+        <Section
+          icon={Coins}
+          title={t('section.cost.title')}
+          lead={t('section.cost.lead')}
+        >
+          <CostView estimate={costEstimate} />
+        </Section>
+      )}
+
+      {roadmap && (
+        <Section
+          icon={Route}
+          title={t('section.plan.title')}
+          lead={t('section.plan.lead')}
+        >
+          <RoadmapView roadmap={roadmap} />
+        </Section>
+      )}
+
+      {/* ── The appendix: everything the client will forward, not read ──────── */}
+
+      <div className="space-y-3 pt-2">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold" dir="auto">
+            {t('appendix.title')}
+          </h2>
           <p className="text-sm text-muted-foreground" dir="auto">
-            {project.idea.idea}
+            {t('appendix.lead')}
           </p>
         </div>
 
-        <dl
-          className={`grid grid-cols-2 gap-3 ${
-            tiles.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'
-          }`}
-        >
-          {tiles.map(({ key, value }) => (
-            <div key={key} className="rounded-lg border bg-card p-3">
-              <dt className="text-xs text-muted-foreground">
-                {t(`stat.${key}`)}
-              </dt>
-              <dd className="mt-0.5 truncate text-lg font-semibold capitalize">
-                {value}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <Collapsible icon={Network} title={t('appendix.architecture')}>
+          {/* `interactive` off: "Explain this decision" calls an owner-scoped API,
+              which a link holder has no session for. */}
+          <SystemDesignView design={project.systemDesign} interactive={false} />
+        </Collapsible>
 
-        <p className="text-xs text-muted-foreground">{t('readonly')}</p>
-      </header>
+        <Collapsible icon={DatabaseIcon} title={t('appendix.database')}>
+          <DatabaseDesignView design={project.databaseDesign} />
+        </Collapsible>
 
-      <Card>
-        <CardContent className="p-5">
-          <Tabs defaultValue="system">
-            <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto md:flex-wrap md:overflow-visible">
-              {TABS.filter(({ value }) => has[value]).map(
-                ({ value, icon: Icon }) => (
-                  <TabsTrigger
-                    key={value}
-                    value={value}
-                    className="shrink-0 gap-1.5"
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {t(`tab.${value}`)}
-                  </TabsTrigger>
-                ),
-              )}
-            </TabsList>
+        {apiDesign && (
+          <Collapsible icon={Webhook} title={t('appendix.api')}>
+            <ApiDesignView design={apiDesign} />
+          </Collapsible>
+        )}
 
-            <TabsContent value="requirements" className="mt-4">
-              <RequirementDocumentView doc={project.requirements} />
-            </TabsContent>
-            <TabsContent value="system" className="mt-4">
-              {/* `interactive` off: "Explain this decision" calls an owner-scoped
-                  API, which a link holder has no session for. */}
-              <SystemDesignView
-                design={project.systemDesign}
-                interactive={false}
-              />
-            </TabsContent>
-            <TabsContent value="database" className="mt-4">
-              <DatabaseDesignView design={project.databaseDesign} />
-            </TabsContent>
-            {project.apiDesign && (
-              <TabsContent value="api" className="mt-4">
-                <ApiDesignView design={project.apiDesign} />
-              </TabsContent>
-            )}
-            {project.review && (
-              <TabsContent value="review" className="mt-4">
-                <ReviewView report={project.review} />
-              </TabsContent>
-            )}
-          </Tabs>
-        </CardContent>
-      </Card>
+        {review && (
+          <Collapsible icon={ClipboardCheck} title={t('appendix.review')}>
+            <ReviewView report={review} />
+          </Collapsible>
+        )}
+      </div>
 
       <ShareCta />
       <Watermark />
@@ -200,18 +163,203 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
 }
 
 /**
+ * The first screen. The project's own name is the headline — the client should
+ * recognise their project, not read our brand — and the tiles answer the three
+ * questions a buyer actually has: what's in it, what does it cost to run, how
+ * long does it take.
+ */
+function ProposalHeader({ project }: { project: SharedProject }) {
+  const { t } = useTranslation('share');
+  const fmt = useFormat();
+  const { costEstimate, roadmap, requirements } = project;
+
+  const idea = project.idea.idea.trim();
+  const lead = idea && idea !== project.title.trim() ? idea : null;
+
+  // The cheapest monthly figure at the smallest scale — "what does it cost to
+  // keep the lights on", which is the number a client actually reacts to.
+  const monthly = costEstimate
+    ? costEstimate.providers
+        .flatMap((p) => p.costs.map((c) => c.monthlyUsd))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b)[0]
+    : undefined;
+
+  const tiles = [
+    {
+      key: 'scope' as const,
+      value: String(requirements.functional.length),
+    },
+    ...(roadmap
+      ? [{ key: 'timeline' as const, value: roadmap.totalEstimate }]
+      : []),
+    ...(monthly !== undefined
+      ? [{ key: 'running' as const, value: fmt.usd(monthly) }]
+      : []),
+  ];
+
+  return (
+    <header className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link href="/" aria-label="Archivato">
+          <Logo />
+        </Link>
+        <Badge variant="secondary">{t('badge')}</Badge>
+      </div>
+
+      <div className="space-y-3">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl" dir="auto">
+          {project.title}
+        </h1>
+        {/* The client's own one-line framing. NOT the vision statement: that is
+            the first thing the "What we're building" section shows, and printing
+            it twice, one screen apart, reads as a copy-paste slip. Skipped when
+            the owner never named the project, since the title IS the idea then. */}
+        {lead && (
+          <p
+            className="line-clamp-3 max-w-3xl text-base text-muted-foreground"
+            dir="auto"
+          >
+            {lead}
+          </p>
+        )}
+      </div>
+
+      {tiles.length > 0 && (
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {tiles.map(({ key, value }) => (
+            <div key={key} className="rounded-lg border bg-card p-4">
+              <dt className="text-xs text-muted-foreground" dir="auto">
+                {t(`headline.${key}`)}
+              </dt>
+              <dd className="mt-1 truncate text-xl font-semibold" dir="auto">
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      <p className="text-xs text-muted-foreground" dir="auto">
+        {t('readonly')}
+      </p>
+    </header>
+  );
+}
+
+/** A headline section of the proposal: what it is, in the client's language. */
+function Section({
+  icon: Icon,
+  title,
+  lead,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  lead: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="space-y-0.5">
+          <h2 className="text-xl font-semibold tracking-tight" dir="auto">
+            {title}
+          </h2>
+          <p className="text-sm text-muted-foreground" dir="auto">
+            {lead}
+          </p>
+        </div>
+      </div>
+      <Card>
+        <CardContent className="p-5">{children}</CardContent>
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * One appendix artifact, collapsed by default. Deliberately NOT a tab strip: tabs
+ * imply "pick one of these", which is the wrong invitation for a client. A closed
+ * row says "this exists, your developer will want it" and stays out of the way.
+ */
+function Collapsible({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-xl border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-5 py-4 text-start"
+      >
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="font-medium" dir="auto">
+          {title}
+        </span>
+        <ChevronDown
+          className={cn(
+            'ms-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+            open && 'rotate-180',
+          )}
+        />
+      </button>
+      {open && (
+        <div className="border-t border-border/60 p-5">{children}</div>
+      )}
+    </div>
+  );
+}
+
+/** The growth loop: a stranger just saw the output — now offer them the product. */
+function ShareCta() {
+  const { t } = useTranslation('share');
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <Sparkles className="h-4 w-4 text-primary" />
+            {t('cta.title')}
+          </h2>
+          <p className="max-w-2xl text-sm text-muted-foreground" dir="auto">
+            {t('cta.body')}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button asChild variant="secondary">
+            <Link href="/">{t('cta.secondary')}</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/register">{t('cta.action')}</Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * The free-tier watermark on a client-facing link.
  *
  * **It currently shows on every shared link, and that is a known gap, not a
- * choice.** The Team tier sells "no watermark", which means this has to be
- * conditional on the owner's plan — but the public share payload deliberately
- * carries no owner information at all (it is the security boundary: no owner, no
- * session id, nothing but the design). Hiding it for paying owners therefore
- * needs one boolean on `SharedProject` plus a line in the share projection —
- * a change to `packages/shared` and the API, which this task scoped out.
- *
- * When that boolean exists, this becomes `{watermark && <Watermark />}` and
- * nothing else here changes.
+ * choice.** The paid tier sells "no watermark", which means this has to be
+ * conditional on the owner's plan — but the public payload deliberately carries
+ * no owner information at all. Hiding it for paying owners needs one boolean on
+ * `SharedProject` plus a line in the share projection; when that lands this
+ * becomes `{watermark && <Watermark />}` and nothing else here changes.
  */
 function Watermark() {
   return (
@@ -229,37 +377,9 @@ function Watermark() {
   );
 }
 
-/** The growth loop: a stranger just saw the output — now offer them the product. */
-function ShareCta() {
-  const { t } = useTranslation('share');
-  return (
-    <Card className="border-primary/30 bg-primary/5">
-      <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <Sparkles className="h-4 w-4 text-primary" />
-            {t('cta.title')}
-          </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            {t('cta.body')}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button asChild variant="secondary">
-            <Link href="/">{t('cta.secondary')}</Link>
-          </Button>
-          <Button asChild>
-            <Link href="/register">{t('cta.action')}</Link>
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function SharedProjectSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
       <Skeleton className="h-8 w-56" />
       <Skeleton className="h-24 w-full" />
       <Skeleton className="h-96 w-full" />

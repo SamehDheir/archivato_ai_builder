@@ -5,6 +5,9 @@ import { SystemDesignModule } from '../system-design/system-design.module';
 import { DatabaseDesignModule } from '../database-design/database-design.module';
 import { ApiDesignModule } from '../api-design/api-design.module';
 import { ReviewModule } from '../review/review.module';
+import { ProductVisionModule } from '../product-vision/product-vision.module';
+import { CostEstimateModule } from '../cost-estimate/cost-estimate.module';
+import { RoadmapModule } from '../roadmap/roadmap.module';
 import { ShareController } from './share.controller';
 import { SharePublicController } from './share-public.controller';
 import { ShareService } from './share.service';
@@ -25,6 +28,12 @@ import { PrismaShareLinkRepository } from './prisma-share-link.repository';
     DatabaseDesignModule,
     ApiDesignModule,
     ReviewModule,
+    // The client-facing artifacts the shared page now leads with. Read-only, and
+    // never part of the gate: a link is shareable without them (a free owner has
+    // no cost estimate or roadmap), the page just omits those sections.
+    ProductVisionModule,
+    CostEstimateModule,
+    RoadmapModule,
   ],
   controllers: [ShareController, SharePublicController],
   providers: [

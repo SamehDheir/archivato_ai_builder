@@ -14,6 +14,9 @@ import type { SystemDesign } from './system-design';
 import type { DatabaseDesign } from './database-design';
 import type { ApiDesign } from './api-design';
 import type { ReviewReport } from './review';
+import type { ProductVision } from './product-vision';
+import type { CostEstimate } from './cost-estimate';
+import type { ProjectRoadmap } from './roadmap';
 import type { ProjectIdeaInput } from './pipeline';
 
 /** The owner's view of a session's share link (null when nothing is shared). */
@@ -34,6 +37,23 @@ export interface ShareLink {
  * what the Free plan generates, and it is the floor below which a shared page has
  * nothing to show. Everything past it is Pro, so a free owner's link legitimately
  * carries `apiDesign: null` / `review: null` and the page renders what exists.
+ *
+ * **Who actually opens this link.** Not a peer engineer — the *client*: the person
+ * whose idea it is, who is deciding whether to sign. They cannot read an ERD, and
+ * an OpenAPI table tells them nothing about whether to hire you. So the payload
+ * leads with the three artifacts that speak to a buyer — the vision (what we're
+ * building and for whom), the cost to run it, and how long it takes — and the
+ * schema/API/review follow as an appendix. All three are optional:
+ *
+ *   - `vision` needs only the confirmed interview, so a **free** owner has it;
+ *   - `costEstimate` and `roadmap` are Pro (they need the full pipeline), so a
+ *     free owner's link legitimately carries neither and the page simply omits
+ *     those sections rather than showing an empty one.
+ *
+ * Adding these widened the public surface, and that was a deliberate call: the
+ * vision is *derived from* the interview, but it is not the interview — it is a
+ * structured artifact the owner reviewed and chose to send. The raw transcript
+ * (the client's own words, unedited) still never leaves the owner's session.
  */
 export interface SharedProject {
   token: string;
@@ -42,7 +62,13 @@ export interface SharedProject {
   /** When the link was minted. */
   sharedAt: string;
   idea: ProjectIdeaInput;
+  /** The client-facing summary. Free stage, so usually present. */
+  vision: ProductVision | null;
   requirements: RequirementDocument;
+  /** Pro-only — what it costs to run, at three usage scales. */
+  costEstimate: CostEstimate | null;
+  /** Pro-only — the phased delivery plan. */
+  roadmap: ProjectRoadmap | null;
   systemDesign: SystemDesign;
   databaseDesign: DatabaseDesign;
   /** Pro-only stage — null on a design the owner shared from the free tier. */
