@@ -1,12 +1,5 @@
 import { ImageResponse } from 'next/og';
-import {
-  brand,
-  siteDescription,
-  siteName,
-  sitePipeline,
-  siteTagline,
-  siteUrl,
-} from '@/lib/site';
+import { brand, siteName, sitePipeline, siteTagline, siteUrl } from '@/lib/site';
 
 /** Standard OpenGraph/Twitter card dimensions (1.91:1). */
 export const OG_SIZE = { width: 1200, height: 630 };
@@ -250,7 +243,7 @@ export function ogImage() {
               color: brand.cyan,
             }}
           >
-            AI Software Architecture Generator
+            Client scoping for software shops
           </div>
           <div
             style={{
@@ -275,8 +268,8 @@ export function ogImage() {
               color: '#A9AFC4',
             }}
           >
-            {siteDescription.split(' — ')[0]} — every artifact structured,
-            editable, and versioned.
+            Turn a client call into a complete scoping package — requirements,
+            architecture, cost, and a proposal your client can read.
           </div>
         </div>
 

@@ -18,22 +18,21 @@ export const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:300
 export const siteName = 'Archivato AI Builder';
 
 /** The one-line positioning statement. Doubles as the OG card's headline. */
-export const siteTagline = 'Describe your idea. Ship a complete system design.';
+export const siteTagline = 'Client scoping in an hour, not a week.';
 
 export const siteDescription =
-  'Turn a business idea into a complete software system design — interview, ' +
-  'requirements, architecture, database, API, a scored AI review, and a build ' +
-  'roadmap. Not a chatbot; an AI software architecture generator.';
+  'Client scoping for software shops: turn a client call into a complete ' +
+  'scoping package — requirements, system architecture, cost estimate, and a ' +
+  'client-ready proposal — in one hour instead of one week. Win the deal before ' +
+  'your competitor finishes their first meeting.';
 
-/** The pipeline, as shown on the OG card. Mirrors the landing page strip. */
+/** The pipeline, as shown on the OG card. Mirrors the landing page's promise. */
 export const sitePipeline = [
-  'Interview',
+  'Client call',
   'Requirements',
   'Architecture',
-  'Database',
-  'API',
-  'Review',
-  'Export',
+  'Cost estimate',
+  'Proposal',
 ] as const;
 
 /** Brand colors shared by the OG card and the web manifest. */

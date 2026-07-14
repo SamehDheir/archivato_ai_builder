@@ -194,6 +194,37 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
       </Card>
 
       <ShareCta />
+      <Watermark />
+    </div>
+  );
+}
+
+/**
+ * The free-tier watermark on a client-facing link.
+ *
+ * **It currently shows on every shared link, and that is a known gap, not a
+ * choice.** The Team tier sells "no watermark", which means this has to be
+ * conditional on the owner's plan — but the public share payload deliberately
+ * carries no owner information at all (it is the security boundary: no owner, no
+ * session id, nothing but the design). Hiding it for paying owners therefore
+ * needs one boolean on `SharedProject` plus a line in the share projection —
+ * a change to `packages/shared` and the API, which this task scoped out.
+ *
+ * When that boolean exists, this becomes `{watermark && <Watermark />}` and
+ * nothing else here changes.
+ */
+function Watermark() {
+  return (
+    <div className="flex justify-center border-t border-border/60 pt-6">
+      <a
+        href="https://archivato.dev"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+        dir="ltr"
+      >
+        Built with Archivato — archivato.dev
+      </a>
     </div>
   );
 }

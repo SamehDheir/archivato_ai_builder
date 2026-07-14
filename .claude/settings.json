@@ -140,7 +140,17 @@
       "Bash(\"../../node_modules/.bin/prisma\" generate *)",
       "Bash(\"../../node_modules/.bin/tsc\" --noEmit -p tsconfig.json)",
       "Bash(echo \"GENERATED API TSC EXIT: $?\")",
-      "PowerShell(npx tsc --noEmit -p apps/web/tsconfig.json)"
+      "PowerShell(npx tsc --noEmit -p apps/web/tsconfig.json)",
+      "PowerShell(Remove-Item \"apps\\\\api\\\\src\\\\share\\\\__di-check.spec.ts\" -Confirm:$false)",
+      "PowerShell(git restore --staged \"apps/api/src/share/__di-check.spec.ts\")",
+      "Bash(curl -s -o /tmp/og.png -w \"HTTP %{http_code}\\\\n\" http://localhost:3457/opengraph-image)",
+      "Bash(awk '{print \"bytes:\", $5}')",
+      "Bash(cp /tmp/og.png \"C:/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/6e6f66e2-7190-45c1-a417-1280982738f4/scratchpad/og.png\" && echo copied)",
+      "Bash(curl -s -o /tmp/og2.png -w \"HTTP %{http_code}\\\\n\" http://localhost:3457/opengraph-image)",
+      "Bash(taskkill //F //PID 1932)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

@@ -334,9 +334,12 @@ function StageScreen({ index }: { index: number }) {
               ))}
             </div>
           </div>
+          {/* No stack name-dropping in the hero: the buyer here is the shop owner
+              pricing the work, not the engineer who will pick the framework. The
+              stack is still generated — it just isn't the pitch. */}
           <p className="text-sm">
             <span className="text-muted-foreground">Stack: </span>
-            NestJS · PostgreSQL · Redis · BullMQ · Next.js
+            recommended per layer, with the reasoning attached
           </p>
           <Stat>5 modules · 4 integrations · REST + webhooks</Stat>
         </div>

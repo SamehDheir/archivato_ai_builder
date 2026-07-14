@@ -8,13 +8,7 @@ import { Logo } from '@/components/shared/Logo';
 import { LandingNavActions } from '@/components/marketing/LandingNavActions';
 
 /** The in-page sections the nav links to, in document order. */
-const NAV_SECTIONS = [
-  'problem',
-  'solution',
-  'deliverables',
-  'pricing',
-  'faq',
-] as const;
+const NAV_SECTIONS = ['pain', 'how', 'value', 'proof', 'pricing'] as const;
 
 /**
  * The landing page's sticky header.
