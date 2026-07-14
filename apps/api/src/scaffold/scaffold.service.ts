@@ -8,10 +8,12 @@ import {
 } from '@nestjs/common';
 import JSZip from 'jszip';
 import {
-  buildBackendScaffold,
+  buildScaffold,
+  DEFAULT_SCAFFOLD_TARGET,
   type GithubPushResult,
   type ScaffoldFile,
   type ScaffoldManifest,
+  type ScaffoldTarget,
 } from '@archivato/shared';
 import { ExportService } from '../export/export.service';
 import { GithubConnectionService } from './github-connection.service';
@@ -29,31 +31,44 @@ export class ScaffoldService {
   ) {}
 
   /** Build the scaffold file set from the confirmed design bundle. */
-  private async files(sessionId: string): Promise<ScaffoldFile[]> {
+  private async files(
+    sessionId: string,
+    target: ScaffoldTarget,
+  ): Promise<ScaffoldFile[]> {
     // bundle() enforces the "pipeline complete through API design" gate (409).
     const bundle = await this.exporter.bundle(sessionId);
-    return buildBackendScaffold({
-      idea: bundle.idea.idea,
-      systemDesign: bundle.systemDesign,
-      databaseDesign: bundle.databaseDesign,
-      apiDesign: bundle.apiDesign,
-    });
+    return buildScaffold(
+      {
+        idea: bundle.idea.idea,
+        systemDesign: bundle.systemDesign,
+        databaseDesign: bundle.databaseDesign,
+        apiDesign: bundle.apiDesign,
+      },
+      target,
+    );
   }
 
   /** File manifest (paths + contents) — powers the UI file list. */
-  async manifest(sessionId: string): Promise<ScaffoldManifest> {
-    const files = await this.files(sessionId);
+  async manifest(
+    sessionId: string,
+    target: ScaffoldTarget = DEFAULT_SCAFFOLD_TARGET,
+  ): Promise<ScaffoldManifest> {
+    const files = await this.files(sessionId, target);
     return {
       sessionId,
       generatedAt: new Date().toISOString(),
+      target,
       fileCount: files.length,
       files,
     };
   }
 
   /** The scaffold as a .zip archive (Buffer). */
-  async zip(sessionId: string): Promise<Buffer> {
-    const files = await this.files(sessionId);
+  async zip(
+    sessionId: string,
+    target: ScaffoldTarget = DEFAULT_SCAFFOLD_TARGET,
+  ): Promise<Buffer> {
+    const files = await this.files(sessionId, target);
     const archive = new JSZip();
     for (const file of files) archive.file(file.path, file.content);
     return archive.generateAsync({ type: 'nodebuffer' });
@@ -74,7 +89,7 @@ export class ScaffoldService {
     userId: string,
     dto: PushToGithubDto,
   ): Promise<GithubPushResult> {
-    const files = await this.files(sessionId);
+    const files = await this.files(sessionId, dto.target ?? DEFAULT_SCAFFOLD_TARGET);
     const token = dto.token ?? (await this.connection.resolveToken(userId));
     if (!token) {
       throw new BadRequestException(

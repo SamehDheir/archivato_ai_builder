@@ -58,7 +58,7 @@ chain of structured artifacts — each one grounded in the previous:
 | **Threat Model** | STRIDE security analysis with severities + mitigations |
 | **QA Plan** | Test strategy + concrete test cases by type |
 | **Diagrams & Canvas** | Architecture, ER, per-endpoint sequence flows; editable canvas |
-| **Export & Scaffold** | JSON / Markdown / OpenAPI (JSON+YAML) / SQL DDL / Postman / zip — plus a **runnable NestJS + Prisma backend scaffold** (ZIP or one-click push to GitHub) |
+| **Export & Scaffold** | JSON / Markdown / OpenAPI (JSON+YAML) / SQL DDL / Postman / zip — plus a **runnable app scaffold**: a NestJS + Prisma API, a Next.js client (typed API client + CRUD pages), or both as one workspace (ZIP or one-click push to GitHub) |
 
 Around the pipeline: **chat refinement** (amend requirements, downstream stages
 regenerate consistently), **version history** with diff + restore, **live SSE
@@ -104,9 +104,10 @@ activates with a key.
 - **LLM usage metering:** every model call is recorded (tokens, latency, and a
   deterministic cost from a per-model price catalog) and attributed to the user,
   session, pipeline stage, and agent that caused it — surfaced as an AI-spend
-  panel in `/admin`. Only counts are stored, never prompt or completion content;
-  a model with no catalog price records tokens with an *unknown* cost rather than
-  a misleading $0.
+  panel in `/admin`, plus a lifetime **AI cost** column in the admin users table
+  (what each user costs us, next to what they pay us). Only counts are stored,
+  never prompt or completion content; a model with no catalog price records tokens
+  with an *unknown* cost rather than a misleading $0.
 - **Three independent authorization axes:** ownership (`SessionOwnerGuard`),
   entitlement (`ProGuard` / plan), and RBAC (`PermissionGuard` over a
   code-defined permission catalog with DB-managed roles).
@@ -247,10 +248,9 @@ readiness, 503 when degraded).
 
 ## Roadmap
 
-- Public share links for completed designs
-- LLM token/cost observability in the admin console
 - Lifecycle email (welcome / abandoned interview / upgrade nudge)
-- Frontend (Next.js) scaffold to pair with the backend scaffold
+- Cascade chat refinement into the standalone stages (roadmap, threat model, QA plan, cost)
+- Deployment artifact stage (Dockerfile / compose / provider config)
 - Dedicated worker process + BullMQ retries/backoff
 
 ## License

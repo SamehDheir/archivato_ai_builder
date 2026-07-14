@@ -196,20 +196,71 @@ tsconfig and never needs shared's `dist`.
   Arabic CLDR-plural trap) + `project.tab.qa` (EN+AR). Shared: `qa-plan.ts`
   (`TEST_TYPES`).
 - **Code scaffolding (`scaffold`).** A Pro-only stage that turns the confirmed
-  design into a **runnable NestJS + Prisma backend**. Like the cost estimator, the
-  generation is **fully deterministic — no LLM**: `buildBackendScaffold()` in
-  `@archivato/shared` (`scaffold.ts`, runtime-free) maps DB entities/relations →
-  `prisma/schema.prisma` models, and API modules/endpoints → NestJS
-  modules/controllers/services + class-validator DTOs, plus root project files.
-  **Correctness over richness:** output always compiles / `prisma validate`s —
-  FKs are emitted as scalar fields + a `// FK →` comment (never Prisma relations,
-  which could be invalid), service methods are typed stubs that throw "Not
-  implemented", exactly one `@id` is guaranteed (a flagged PK, else a promoted
-  `id` column, else a synthesized one — never a duplicate), and colliding
-  module/entity names are uniquified so the generated project always builds. The
-  `ScaffoldService` reuses `ExportService.bundle()` (so it inherits the "pipeline
-  complete through API design" 409 gate). Owner-guarded + `ProGuard` (mirrors
-  export); GitHub routes throttled (`THROTTLE_EXTERNAL`). Delivered two ways:
+  design into a **runnable app** — a NestJS + Prisma API, a Next.js client, or
+  both. Like the cost estimator, the generation is **fully deterministic — no
+  LLM**. Three pure builders in `@archivato/shared` (runtime-free):
+  `buildBackendScaffold()` (`scaffold.ts`), `buildFrontendScaffold()`
+  (`scaffold.frontend.ts`), and `buildScaffold(input, target)`
+  (`scaffold.compose.ts`) which picks between them. `ScaffoldTarget` =
+  **`backend | frontend | fullstack`**, and **fullstack is the default** — it
+  re-roots the two halves under `apps/api` + `apps/web` with a root
+  npm-workspaces `package.json` (the shape Archivato itself is built in). The
+  two builders stay unaware of each other: composing is a path re-rooting plus
+  three root files, so the single-target outputs are byte-for-byte what they
+  always were. Both builders derive their names from **one `assignHandlers()`**
+  (`scaffold.util.ts`) — that's *why* the frontend client's `create()` calls the
+  backend controller's `create()`, rather than two files happening to agree.
+  - **Backend:** DB entities/relations → `prisma/schema.prisma`; API
+    modules/endpoints → NestJS modules/controllers/services + class-validator
+    DTOs. FKs are scalar fields + a `// FK →` comment (never Prisma relations,
+    which could be invalid), service methods are typed stubs that throw "Not
+    implemented", exactly one `@id` is guaranteed (a flagged PK, else a promoted
+    `id` column, else a synthesized one — never a duplicate), and colliding
+    module/entity names are uniquified. `main.ts` **enables CORS** for
+    `WEB_ORIGIN` (default the frontend's port) — without it the generated client
+    can't call the API it ships with.
+  - **Frontend:** a typed client (`lib/api/<module>.ts`, one function per
+    endpoint, over a single `apiFetch` in `lib/api-client.ts`) + a page per
+    module: list wired to the collection GET, a create form from the POST body
+    schema, and a detail/edit page from GET/:id + PUT/:id.
+  - **Correctness over richness** (same bar as the backend — the output must
+    compile, and it's verified by actually running `tsc` + `next build` on it):
+    item fields are **all optional** (they come from the *designed* response
+    schema, not a running API, so a page must render when one is absent); list
+    responses are unwrapped defensively (`Array.isArray(data) ? data : []`);
+    design text (module names, summaries, the idea) is embedded in JSX as a
+    **JSON-encoded string expression**, never raw JSX text, because LLM output
+    contains quotes and braces; a `*/` in a summary is escaped so it can't end a
+    doc comment; and only endpoints with a single trailing `:param` get wired to
+    pages — a nested or **tenant-scoped path** (`/api/:tenant/reports`, whose
+    param is invisible to the module-relative subPath) still gets a typed client
+    function, but no invented UI and **no reference to a variable that was never
+    declared**. Two traps worth remembering: `qs()` takes `object`, not
+    `Record<string, unknown>` (a generated `*Query` **interface** has no implicit
+    index signature and would not be assignable); and the item type comes from
+    the **richest** designed response, not the detail one (a detail endpoint
+    often returns fewer fields than the list it belongs to).
+  - **The design is untrusted input to a code generator.** Artifacts are LLM
+    output derived from the user's own words, and they land *inside* generated
+    string literals (`'${path}'`, `@Controller('…')`, `method: '${m}'`), file
+    paths, comments, and Prisma `@map("…")`. A quote, backtick, `$`, or newline
+    there breaks out of the literal it sits in — the generated project stops
+    compiling (the one promise these builders make), and in the worst case
+    carries code the user never wrote into their own repo. Three chokepoints in
+    `scaffold.util.ts` hold the line, and **every generator must go through
+    them**: `safePath()`/`stripApi()` reduce a path to an inert charset
+    (`SAFE_PATH_CHARS`), `httpMethod()` whitelists the verb (it's emitted as both
+    a decorator name and a string literal), and `mapName()` strips quotes from a
+    Prisma map. Plus `oneLine()`/`comment()` for text going into a `//` or `/** */`
+    comment. Not cross-tenant (it's your own design, on your own machine), which
+    is why it's a *correctness* guarantee first — but don't hand-roll a fourth
+    path of design-text-into-source without one of these.
+
+  The `ScaffoldService` reuses `ExportService.bundle()` (so it inherits the
+  "pipeline complete through API design" 409 gate). Owner-guarded + `ProGuard`
+  (mirrors export); GitHub routes throttled (`THROTTLE_EXTERNAL`). `target` rides
+  in on `?target=` (`ScaffoldQueryDto`, `@IsIn` → a **400 on junk**, not a silent
+  fallback to a different artifact) and on the push body. Delivered two ways:
   - **ZIP** (`GET /scaffold/:id/zip`, server-zipped via `jszip`).
   - **Push to GitHub** (`POST /scaffold/:id/github`) via a native-`fetch` client.
     Because GitHub's Git Data API **rejects a tree on an empty repo (409 "Git
@@ -468,6 +519,21 @@ tsconfig and never needs shared's `dist`.
     `LlmUsagePanel` on `/admin` (i18n `admin.llm.*`, EN+AR) + `useFormat().usd()`
     (sub-cent precision below $1 — rounding a fraction-of-a-cent call to `$0.00`
     would make spend read as free).
+  - **Per-user cost-to-serve (the users table).** `AdminUserRow.aiSpend`
+    (`UserAiSpend`: calls/tokens/costUsd/unpricedCalls) puts **what a user costs us**
+    next to what they pay us, so a free account burning real money is visible in the
+    directory rather than only in an aggregate. It is **lifetime, not 30-day** — the
+    windowed view already exists in the panel, and cumulative burn is the whole point
+    of a per-user figure. Symmetric to the email rule above: the spend fields are
+    populated **only for a caller who also holds `admin:analytics`** (`null`
+    otherwise, and the web column hides itself), so a directory-only role gets rows
+    without costs. Unlike `report()`, this one **aggregates in SQL** —
+    `LlmUsageRepository.spendByUsers(ids)` (two `groupBy` reads, no row transfer),
+    scoped to the ids on the current page. The second read exists because "billed but
+    unpriceable" (null cost + real tokens) can't be expressed as a sum: without it an
+    unlisted model would render a confident `$0.00`. Web: an **AI cost** column in
+    `AdminUsersTable` (`—` when every call is unpriced, a trailing `*` when only some
+    are; i18n `admin.users.aiSpend*`, EN+AR).
   - **Known limit:** `report()` aggregates 30 days of rows **in JS** (the analytics
     precedent). `llm_usage` grows with paid work, not traffic, so this is the table
     most likely to need a SQL rollup first — it goes behind the repository
@@ -1113,9 +1179,19 @@ browser suite is ever reintroduced: never call an unbounded `textContent()` /
   color / letter-spacing — a `fontWeight: 700` renders as regular. Verify a change
   by actually fetching `/opengraph-image` and **looking at the PNG**; a byte count
   alone won't catch an invisible indigo-on-indigo logo.
-- **`.env` `LLM_PROVIDER` must stay UNSET** to let `GROQ_API_KEY` flip the
-  pipeline (an explicit `mock` forces mock). `apps/api/.env` is gitignored — the
-  user pastes real keys there; confirm via the startup `LLM provider:` log.
+- **`LLM_PROVIDER` must stay UNSET — and check the REPO-ROOT `.env`, not just
+  `apps/api/.env`.** This one silently forced the whole pipeline onto `mock` for
+  days. **`@prisma/client` loads the repo-root `.env` into `process.env` when it
+  is imported**, and `app.module.ts` requires PrismaModule *before*
+  `ConfigModule.forRoot()` evaluates — and ConfigModule merges
+  `{...envFile, ...process.env}` with **`process.env` winning**. So a stray
+  `LLM_PROVIDER=mock` in the root file **outranks** a perfectly good
+  `GROQ_API_KEY` in `apps/api/.env`, and the same is true of *any* key duplicated
+  across the two files (JWT secret, SMTP, cookie flags). Symptoms: templated
+  artifacts **and an AI-spend report that shows $0** (the meter is right — mock
+  calls cost nothing). `llm.module.ts` now **warns loudly at boot**
+  (`mockOverriddenKeys`) when it resolves `mock` while a real key is set; confirm
+  via the startup `LLM provider:` log either way.
 - **"Templated / mock-looking artifacts" = the pipeline is on the mock provider,
   not a bug in the agents.** It means no real provider resolved (no key, or
   `LLM_PROVIDER=mock`, or `dev:api` started before the key was added), so every

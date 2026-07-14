@@ -11,6 +11,7 @@ import {
   type InterviewStatus,
   type SubscriptionPlan,
   type TimePoint,
+  type UserAiSpend,
 } from '@archivato/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { USER_REPOSITORY, type UserRepository } from '../auth/user.repository';
@@ -20,6 +21,14 @@ import { RoleService } from '../roles/role.service';
 import type { AnalyticsEvent } from '../analytics/analytics-event.entity';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A user who has never triggered a model call: genuinely $0, not unknown. */
+const EMPTY_AI_SPEND: UserAiSpend = {
+  calls: 0,
+  totalTokens: 0,
+  costUsd: 0,
+  unpricedCalls: 0,
+};
 const INTERVIEW_STATUSES: InterviewStatus[] = [
   'collecting',
   'awaiting_confirmation',
@@ -208,7 +217,20 @@ export class AdminService {
   }
 
   /** A page of users with their plan + project count, newest first. */
-  async getUsers(page = 1, pageSize = 20): Promise<AdminUsersPage> {
+  /**
+   * One page of users, each with what they pay us (`plan`) next to what they cost
+   * us (`aiSpend`).
+   *
+   * `withAiSpend` is the caller's `admin:analytics` grant: model spend is an
+   * analytics question, so a role holding only `admin:users:read` administers the
+   * directory without being handed the cost book. When it's false every row's
+   * `aiSpend` is null and the column simply isn't rendered.
+   */
+  async getUsers(
+    page = 1,
+    pageSize = 20,
+    withAiSpend = false,
+  ): Promise<AdminUsersPage> {
     const now = new Date();
     const take = Math.min(Math.max(pageSize, 1), 100);
     const skip = Math.max(page - 1, 0) * take;
@@ -223,17 +245,23 @@ export class AdminService {
       this.prisma.user.count(),
     ]);
 
-    const counts = await this.prisma.interviewSession.groupBy({
-      by: ['userId'],
-      _count: { _all: true },
-      where: { userId: { in: rows.map((r) => r.id) } },
-    });
+    const ids = rows.map((r) => r.id);
+
+    const [counts, spend, roleKeys] = await Promise.all([
+      this.prisma.interviewSession.groupBy({
+        by: ['userId'],
+        _count: { _all: true },
+        where: { userId: { in: ids } },
+      }),
+      // Only pay for the aggregation when the caller is allowed to see it.
+      withAiSpend
+        ? this.llmUsage.spendByUsers(ids)
+        : Promise.resolve(new Map<string, UserAiSpend>()),
+      Promise.all(rows.map((r) => this.roles.roleKeysForUser(r.id))),
+    ]);
+
     const countMap = new Map(
       counts.map((c) => [c.userId, c._count._all] as const),
-    );
-
-    const roleKeys = await Promise.all(
-      rows.map((r) => this.roles.roleKeysForUser(r.id)),
     );
 
     const users: AdminUserRow[] = rows.map((r, i) => ({
@@ -248,6 +276,8 @@ export class AdminService {
       plan: effectivePlan(r.subscription, now),
       projectCount: countMap.get(r.id) ?? 0,
       createdAt: r.createdAt.toISOString(),
+      // A user with no metered call has spent nothing — $0, not "unknown".
+      aiSpend: withAiSpend ? (spend.get(r.id) ?? EMPTY_AI_SPEND) : null,
     }));
 
     return { users, total };

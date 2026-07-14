@@ -6,6 +6,7 @@ import {
   type LlmUsageStage,
   type LlmUsageTotals,
   type TimePoint,
+  type UserAiSpend,
 } from '@archivato/shared';
 import type { LlmUsageRecord } from './llm-usage.entity';
 import {
@@ -41,6 +42,27 @@ export class LlmUsageService {
     } catch (err) {
       this.logger.warn(`Failed to record LLM usage (${input.provider}): ${err}`);
     }
+  }
+
+  /**
+   * Lifetime AI spend for a set of users, keyed by user id — the cost-to-serve
+   * column of the admin users table. Users who never triggered a model call are
+   * absent from the map (the caller renders them as zero, not as unknown).
+   */
+  async spendByUsers(userIds: string[]): Promise<Map<string, UserAiSpend>> {
+    if (userIds.length === 0) return new Map();
+    const rows = await this.repo.spendByUsers(userIds);
+    return new Map(
+      rows.map((r) => [
+        r.userId,
+        {
+          calls: r.calls,
+          totalTokens: r.totalTokens,
+          costUsd: round6(r.costUsd),
+          unpricedCalls: r.unpricedCalls,
+        },
+      ]),
+    );
   }
 
   /**

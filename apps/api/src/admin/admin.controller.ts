@@ -60,14 +60,23 @@ export class AdminController {
     );
   }
 
-  /** Paginated users with plan + project count. */
+  /**
+   * Paginated users with plan + project count, and — for a caller who also holds
+   * `admin:analytics` — the lifetime AI spend each user has cost us. Spend is an
+   * analytics grant, so a directory-only role gets the rows without the costs.
+   */
   @RequirePermissions('admin:users:read')
   @Get('users')
   users(
+    @CurrentUser() me: AuthUser,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<AdminUsersPage> {
-    return this.admin.getUsers(Number(page) || 1, Number(pageSize) || 20);
+    return this.admin.getUsers(
+      Number(page) || 1,
+      Number(pageSize) || 20,
+      hasPermission(me.permissions, 'admin:analytics'),
+    );
   }
 
   /** Promote/demote a user (never your own account — avoids self-lockout). */

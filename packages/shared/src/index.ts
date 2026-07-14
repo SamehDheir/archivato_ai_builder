@@ -27,6 +27,8 @@ export * from './cost-estimate';
 export * from './export';
 export * from './share';
 export * from './scaffold';
+export * from './scaffold.frontend';
+export * from './scaffold.compose';
 export * from './auth';
 export * from './permissions';
 export * from './billing';

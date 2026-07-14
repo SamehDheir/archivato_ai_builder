@@ -1,4 +1,13 @@
-import { IsBoolean, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
+import { SCAFFOLD_TARGETS, type ScaffoldTarget } from '@archivato/shared';
 
 /**
  * Push-to-GitHub request. If `token` (a PAT) is supplied it is used once,
@@ -28,4 +37,9 @@ export class PushToGithubDto {
   @IsOptional()
   @IsBoolean()
   isPrivate?: boolean;
+
+  /** What to push: the backend, the frontend, or both (default). */
+  @IsOptional()
+  @IsIn(SCAFFOLD_TARGETS as readonly string[])
+  target?: ScaffoldTarget;
 }

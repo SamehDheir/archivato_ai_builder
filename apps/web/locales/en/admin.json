@@ -203,9 +203,13 @@
       "role": "Role",
       "plan": "Plan",
       "projects": "Projects",
+      "aiSpend": "AI cost",
       "joined": "Joined",
       "actions": "Actions"
     },
+    "aiSpendHint": "Lifetime AI spend — what this user has cost us in model calls (estimated from list prices).",
+    "aiSpendCalls": "{{n}} model calls",
+    "aiSpendUnpriced": "{{n}} calls ran on a model with no catalog price — this cost is a floor.",
     "unverified": "unverified",
     "revoke": "Revoke",
     "makeAdmin": "Make admin",

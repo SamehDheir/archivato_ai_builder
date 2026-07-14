@@ -243,6 +243,29 @@ export interface LlmUsageTotals {
   unpricedCalls: number;
 }
 
+/**
+ * What one user has cost us in model calls — their cost-to-serve.
+ *
+ * This is **lifetime**, not a 30-day window: the point of a per-user figure is
+ * cumulative burn (a free account that ran up $12 two months ago is exactly what
+ * it should surface), and the windowed view already exists in `AdminLlmUsage`.
+ */
+export interface UserAiSpend {
+  calls: number;
+  totalTokens: number;
+  costUsd: number;
+  /**
+   * Calls on a model with no catalog price. Their tokens are counted; their cost
+   * is not — so `costUsd` is a FLOOR while this is non-zero.
+   */
+  unpricedCalls: number;
+}
+
+/** `UserAiSpend` keyed by the user it belongs to (the repository's shape). */
+export interface LlmUserSpend extends UserAiSpend {
+  userId: string;
+}
+
 /** One row of a usage breakdown (by stage / model / provider / user). */
 export interface LlmUsageBreakdown {
   key: string;

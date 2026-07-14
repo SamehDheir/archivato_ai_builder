@@ -162,8 +162,19 @@
   },
   "scaffold": {
     "title": "Generate code",
-    "intro": "Turn this design into a runnable NestJS + Prisma backend — a real starter repo with your Prisma schema, modules, controllers, and validated DTOs.",
+    "intro": "Turn this design into a runnable app — a NestJS + Prisma API with your schema, modules and validated DTOs, and a Next.js client with a typed API client and CRUD pages.",
     "note": "Service methods are stubs for you to implement. Review the Prisma schema before running a migration.",
+    "targetLabel": "What to generate",
+    "target": {
+      "fullstack": "Full app",
+      "backend": "Backend only",
+      "frontend": "Frontend only"
+    },
+    "targetHint": {
+      "fullstack": "API + client in one repo",
+      "backend": "NestJS + Prisma",
+      "frontend": "Next.js + Tailwind"
+    },
     "downloadZip": "Download ZIP",
     "preparing": "Preparing…",
     "githubTitle": "Push to GitHub",

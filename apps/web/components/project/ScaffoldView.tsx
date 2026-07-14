@@ -3,10 +3,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Code2, Download, GitBranch, ExternalLink, Check } from 'lucide-react';
-import type { GithubConnectionStatus, GithubPushResult } from '@archivato/shared';
+import type {
+  GithubConnectionStatus,
+  GithubPushResult,
+  ScaffoldTarget,
+} from '@archivato/shared';
 import { scaffoldApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+
+/** The whole app first — it's the default, and the reason to be on this tab. */
+const TARGETS: ScaffoldTarget[] = ['fullstack', 'backend', 'frontend'];
+
+/** Default repo name per target — a sensible, editable starting point. */
+const REPO_NAMES: Record<ScaffoldTarget, string> = {
+  fullstack: 'generated-app',
+  backend: 'generated-backend',
+  frontend: 'generated-frontend',
+};
 
 /** Trigger a browser download for a Blob. */
 function downloadBlob(filename: string, blob: Blob) {
@@ -30,7 +44,10 @@ export function ScaffoldView({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation('stages');
   const [busy, setBusy] = useState<null | 'zip' | 'github' | 'connect'>(null);
   const [error, setError] = useState<string | null>(null);
-  const [repoName, setRepoName] = useState('generated-backend');
+  const [target, setTarget] = useState<ScaffoldTarget>('fullstack');
+  // Tracks the target unless the user has typed their own name.
+  const [repoName, setRepoName] = useState(REPO_NAMES.fullstack);
+  const [repoNameEdited, setRepoNameEdited] = useState(false);
   const [token, setToken] = useState('');
   const [isPrivate, setIsPrivate] = useState(true);
   const [result, setResult] = useState<GithubPushResult | null>(null);
@@ -79,12 +96,17 @@ export function ScaffoldView({ sessionId }: { sessionId: string }) {
     return () => window.removeEventListener('message', onMessage);
   }, [loadStatus, t]);
 
+  function selectTarget(next: ScaffoldTarget) {
+    setTarget(next);
+    if (!repoNameEdited) setRepoName(REPO_NAMES[next]);
+  }
+
   async function downloadZip() {
     setBusy('zip');
     setError(null);
     try {
-      const blob = await scaffoldApi.zip(sessionId);
-      downloadBlob(`scaffold-${sessionId}.zip`, blob);
+      const blob = await scaffoldApi.zip(sessionId, target);
+      downloadBlob(`${REPO_NAMES[target]}-${sessionId}.zip`, blob);
     } catch (e) {
       setError(msg(e));
     } finally {
@@ -135,6 +157,7 @@ export function ScaffoldView({ sessionId }: { sessionId: string }) {
       const r = await scaffoldApi.pushToGithub(sessionId, {
         repoName,
         isPrivate,
+        target,
         // Only send a PAT when using the fallback; otherwise use the stored connection.
         ...(useTokenFallback ? { token } : {}),
       });
@@ -164,6 +187,38 @@ export function ScaffoldView({ sessionId }: { sessionId: string }) {
       <p className="mt-1 text-xs text-muted-foreground" dir="auto">
         {t('scaffold.note')}
       </p>
+
+      {/* What to generate. Defaults to the whole app; the halves stay available. */}
+      <div
+        role="radiogroup"
+        aria-label={t('scaffold.targetLabel')}
+        className="mt-4 grid gap-2 sm:grid-cols-3"
+      >
+        {TARGETS.map((option) => {
+          const active = option === target;
+          return (
+            <button
+              key={option}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => selectTarget(option)}
+              className={`rounded-lg border p-3 text-start transition-colors ${
+                active
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-muted-foreground/40'
+              }`}
+            >
+              <span className="block text-sm font-medium">
+                {t(`scaffold.target.${option}`)}
+              </span>
+              <span className="mt-0.5 block text-xs text-muted-foreground" dir="auto">
+                {t(`scaffold.targetHint.${option}`)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       <div className="mt-3">
         <Button variant="secondary" disabled={!!busy} onClick={downloadZip}>
@@ -225,7 +280,10 @@ export function ScaffoldView({ sessionId }: { sessionId: string }) {
               <Input
                 dir="ltr"
                 value={repoName}
-                onChange={(e) => setRepoName(e.target.value)}
+                onChange={(e) => {
+                  setRepoName(e.target.value);
+                  setRepoNameEdited(true);
+                }}
                 pattern="[A-Za-z0-9._-]+"
                 required
                 className="mt-1"

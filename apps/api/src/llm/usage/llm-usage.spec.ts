@@ -135,6 +135,7 @@ describe('UsageTrackingLlmProvider', () => {
     const brokenRepo = {
       create: jest.fn().mockRejectedValue(new Error('db down')),
       findSince: jest.fn(),
+      spendByUsers: jest.fn(),
     };
     const provider = new UsageTrackingLlmProvider(
       new MockLlmProvider(),
@@ -269,5 +270,74 @@ describe('LlmUsageService.report', () => {
     // Averaging over `calls` would report $0.50/call and halve the true unit cost.
     expect(last30d.billedCalls).toBe(1);
     expect(last30d.costUsd / last30d.billedCalls).toBe(1);
+  });
+});
+
+describe('LlmUsageService.spendByUsers (per-user cost-to-serve)', () => {
+  const call = (userId: string | null, costUsd: number | null, tokens = 100) => ({
+    provider: 'groq',
+    model: 'llama-3.3-70b-versatile',
+    agent: AgentRole.SystemArchitect,
+    stage: 'system-design' as const,
+    userId,
+    sessionId: 's1',
+    promptTokens: tokens,
+    completionTokens: tokens,
+    cachedPromptTokens: 0,
+    cacheWritePromptTokens: 0,
+    costUsd,
+    ok: true,
+    durationMs: 10,
+  });
+
+  it('sums lifetime spend per user and ignores users not asked for', async () => {
+    const repo = new InMemoryLlmUsageRepository();
+    const service = new LlmUsageService(repo);
+    await repo.create(call('u1', 0.25));
+    await repo.create(call('u1', 0.5));
+    await repo.create(call('u2', 1));
+    await repo.create(call('u3', 9)); // not requested — must not leak into the map
+
+    const spend = await service.spendByUsers(['u1', 'u2']);
+
+    expect(spend.get('u1')).toEqual({
+      calls: 2,
+      totalTokens: 400,
+      costUsd: 0.75,
+      unpricedCalls: 0,
+    });
+    expect(spend.get('u2')?.costUsd).toBe(1);
+    expect(spend.has('u3')).toBe(false);
+  });
+
+  it('omits a user with no calls (the caller renders $0, not "unknown")', async () => {
+    const repo = new InMemoryLlmUsageRepository();
+    const service = new LlmUsageService(repo);
+    expect((await service.spendByUsers(['ghost'])).has('ghost')).toBe(false);
+    // And an empty page never hits the store at all.
+    expect((await service.spendByUsers([])).size).toBe(0);
+  });
+
+  it('counts unpriced calls so the cost reads as a floor, never a confident $0', async () => {
+    const repo = new InMemoryLlmUsageRepository();
+    const service = new LlmUsageService(repo);
+    // Real tokens on a model we have no price for ⇒ billed, but unpriceable.
+    await repo.create(call('u1', null));
+    await repo.create(call('u1', 0.25));
+    // A mock call: no tokens, so it genuinely cost $0 and is NOT "unpriced".
+    await repo.create({ ...call('u1', 0), provider: 'mock', model: 'mock', promptTokens: 0, completionTokens: 0 });
+
+    expect(await service.spendByUsers(['u1'])).toEqual(
+      new Map([
+        ['u1', { calls: 3, totalTokens: 400, costUsd: 0.25, unpricedCalls: 1 }],
+      ]),
+    );
+  });
+
+  it('never attributes an anonymous (userId-less) call to anyone', async () => {
+    const repo = new InMemoryLlmUsageRepository();
+    const service = new LlmUsageService(repo);
+    await repo.create(call(null, 5));
+    expect((await service.spendByUsers(['u1'])).size).toBe(0);
   });
 });

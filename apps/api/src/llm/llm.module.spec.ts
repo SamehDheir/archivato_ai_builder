@@ -1,4 +1,8 @@
-import { selectProviderKind, selectInterviewKind } from './llm.module';
+import {
+  mockOverriddenKeys,
+  selectProviderKind,
+  selectInterviewKind,
+} from './llm.module';
 
 describe('selectProviderKind (one-switch resolution)', () => {
   it('defaults to mock with no key and no override', () => {
@@ -30,6 +34,32 @@ describe('selectProviderKind (one-switch resolution)', () => {
 
   it('lets LLM_PROVIDER=azure force azure over a groq key', () => {
     expect(selectProviderKind('azure', 'gsk_real_key', 'az_key')).toBe('azure');
+  });
+});
+
+describe('mockOverriddenKeys (silent-mock guard)', () => {
+  const env = (vars: Record<string, string>) => (key: string) => vars[key];
+
+  it('reports the real keys being ignored when mock is forced', () => {
+    expect(mockOverriddenKeys('mock', env({ GROQ_API_KEY: 'gsk_real' }))).toEqual([
+      'GROQ_API_KEY',
+    ]);
+    expect(
+      mockOverriddenKeys(
+        'mock',
+        env({ GROQ_API_KEY: 'gsk_real', AZURE_OPENAI_API_KEY: 'az' }),
+      ),
+    ).toEqual(['GROQ_API_KEY', 'AZURE_OPENAI_API_KEY']);
+  });
+
+  it('stays quiet when mock is the honest resolution (no key anywhere)', () => {
+    expect(mockOverriddenKeys('mock', env({}))).toEqual([]);
+    // A blank `KEY=` line is unset, not a configured provider.
+    expect(mockOverriddenKeys('mock', env({ GROQ_API_KEY: '  ' }))).toEqual([]);
+  });
+
+  it('stays quiet whenever a real provider actually resolved', () => {
+    expect(mockOverriddenKeys('groq', env({ GROQ_API_KEY: 'gsk_real' }))).toEqual([]);
   });
 });
 

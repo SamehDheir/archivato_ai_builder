@@ -24,6 +24,7 @@ import type {
   ProjectSnapshot,
   ProjectStructure,
   ScaffoldManifest,
+  ScaffoldTarget,
   GithubPushResult,
   GithubConnectionStatus,
   ProductVision,
@@ -918,13 +919,19 @@ export async function fetchSharedProject(
   }
 }
 
+/** `?target=…`, omitted entirely when the caller wants the server's default. */
+function targetQuery(target?: ScaffoldTarget): string {
+  return target ? `?target=${target}` : '';
+}
+
 export const scaffoldApi = {
-  /** File manifest (paths + contents) of the generated backend. */
-  manifest: (sessionId: string) =>
-    request<ScaffoldManifest>(`/scaffold/${sessionId}`),
+  /** File manifest (paths + contents) of the generated code. */
+  manifest: (sessionId: string, target?: ScaffoldTarget) =>
+    request<ScaffoldManifest>(`/scaffold/${sessionId}${targetQuery(target)}`),
 
   /** The scaffold as a downloadable .zip Blob. */
-  zip: (sessionId: string) => requestBlob(`/scaffold/${sessionId}/zip`),
+  zip: (sessionId: string, target?: ScaffoldTarget) =>
+    requestBlob(`/scaffold/${sessionId}/zip${targetQuery(target)}`),
 
   /**
    * Create a GitHub repo and push the scaffold. Omit `token` to use the stored
@@ -932,7 +939,12 @@ export const scaffoldApi = {
    */
   pushToGithub: (
     sessionId: string,
-    input: { token?: string; repoName: string; isPrivate?: boolean },
+    input: {
+      token?: string;
+      repoName: string;
+      isPrivate?: boolean;
+      target?: ScaffoldTarget;
+    },
   ) =>
     request<GithubPushResult>(`/scaffold/${sessionId}/github`, {
       method: 'POST',

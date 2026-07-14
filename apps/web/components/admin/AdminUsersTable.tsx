@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Trash2 } from 'lucide-react';
-import type { AdminUserRow } from '@archivato/shared';
+import type { AdminUserRow, UserAiSpend } from '@archivato/shared';
 import { adminApi, authApi } from '@/lib/api';
 import { useFormat } from '@/lib/i18n/format';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,44 @@ import { useToast } from '@/components/shared/toast';
 import { UserAvatar } from '@/components/shared/UserAvatar';
 
 const PAGE_SIZE = 20;
+
+/**
+ * What one user has cost us in model calls, rendered next to what they pay us.
+ *
+ * Three states, and the difference between them matters more than the number:
+ *  - never called a model      → a plain `$0.00` (they genuinely cost nothing);
+ *  - every call on an unpriced → `—`, because a confident `$0.00` next to real
+ *    model  (unlisted model)     token burn is the one lie this feature can tell;
+ *  - some calls unpriced       → the cost with a `*`, marking it as a FLOOR.
+ */
+function AiSpendCell({ spend }: { spend: UserAiSpend }) {
+  const { t } = useTranslation('admin');
+  const fmt = useFormat();
+
+  const unknown = spend.unpricedCalls > 0 && spend.unpricedCalls === spend.calls;
+  const partial = spend.unpricedCalls > 0 && !unknown;
+
+  return (
+    <span
+      className="tabular-nums"
+      dir="ltr"
+      title={
+        spend.unpricedCalls > 0
+          ? t('users.aiSpendUnpriced', { n: fmt.number(spend.unpricedCalls) })
+          : t('users.aiSpendCalls', { n: fmt.number(spend.calls) })
+      }
+    >
+      {unknown ? (
+        <span className="text-muted-foreground">—</span>
+      ) : (
+        <>
+          {fmt.usd(spend.costUsd)}
+          {partial && '*'}
+        </>
+      )}
+    </span>
+  );
+}
 
 /** The admin users table: plan + project count per user, with role + delete actions. */
 export function AdminUsersTable() {
@@ -115,6 +153,9 @@ export function AdminUsersTable() {
   }
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // The server nulls `aiSpend` for a caller without `admin:analytics`; when it
+  // does, the column has nothing to say and shouldn't take up space.
+  const showSpend = rows.some((u) => u.aiSpend !== null);
 
   return (
     <Card>
@@ -140,6 +181,11 @@ export function AdminUsersTable() {
                 <TableHead>{t('users.col.role')}</TableHead>
                 <TableHead>{t('users.col.plan')}</TableHead>
                 <TableHead className="text-end">{t('users.col.projects')}</TableHead>
+                {showSpend && (
+                  <TableHead className="text-end" title={t('users.aiSpendHint')}>
+                    {t('users.col.aiSpend')}
+                  </TableHead>
+                )}
                 <TableHead>{t('users.col.joined')}</TableHead>
                 <TableHead className="text-end">{t('users.col.actions')}</TableHead>
               </TableRow>
@@ -184,6 +230,11 @@ export function AdminUsersTable() {
                     <TableCell className="text-end tabular-nums">
                       {u.projectCount}
                     </TableCell>
+                    {showSpend && (
+                      <TableCell className="text-end font-medium">
+                        {u.aiSpend && <AiSpendCell spend={u.aiSpend} />}
+                      </TableCell>
+                    )}
                     <TableCell className="text-xs text-muted-foreground">
                       {fmt.date(u.createdAt)}
                     </TableCell>
