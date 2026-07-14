@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import * as Sentry from '@sentry/node';
 import type { Request, Response } from 'express';
+import { redactSharePath } from '@archivato/shared';
 
 /**
  * Global catch-all exception filter. It preserves the (already validated /
@@ -34,8 +35,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (status >= 500) {
       const err =
         exception instanceof Error ? exception : new Error(String(exception));
+      // Some path params ARE credentials — a share token is the entire security
+      // boundary on `GET /api/shared/:token`. Never write one to the log
+      // pipeline: logs are shipped, aggregated, and read by people who were never
+      // given the link.
       this.logger.error(
-        `${req.method} ${req.originalUrl} → ${status}: ${err.message}`,
+        `${req.method} ${redactSharePath(req.originalUrl)} → ${status}: ${err.message}`,
         err.stack,
       );
       // No-op when Sentry.init hasn't run (SENTRY_DSN unset).

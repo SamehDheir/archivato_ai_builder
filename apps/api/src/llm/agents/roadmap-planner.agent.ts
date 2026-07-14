@@ -264,7 +264,7 @@ export class RoadmapPlannerAgent extends BaseAgent {
     );
   }
 
-  private hardeningPhase(ctx: RoadmapContext): RoadmapPhase {
+  private hardeningPhase(_ctx: RoadmapContext): RoadmapPhase {
     return this.phase(
       'Hardening & launch',
       'Security, performance, observability, and production readiness.',

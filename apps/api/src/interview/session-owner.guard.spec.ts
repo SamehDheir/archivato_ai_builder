@@ -24,6 +24,7 @@ function seed(
     userId,
     input: { idea: 'idea' },
     title: null,
+    clientName: null,
     status: 'collecting',
     intent: null,
     history: [],

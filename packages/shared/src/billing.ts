@@ -215,7 +215,17 @@ export interface CheckoutResponse {
   };
 }
 
-/** Canonical plan definitions — free = 1 project ever, pro = $19/mo for 5. */
+/**
+ * Canonical plan definitions — free = 1 scoping ever, pro = $19/mo for 5.
+ *
+ * **The client link is on BOTH plans** (see `shouldWatermarkShare`): the shared
+ * proposal page is how a dev shop's own client discovers us, so gating it would
+ * tax the users doing our marketing. What Pro sells is the link *without our
+ * watermark* — a proposal that carries their brand alone.
+ *
+ * These prices are the single source of truth; the marketing/pricing UI reads
+ * the numbers from here and its prose from i18n.
+ */
 export const PLANS: Record<SubscriptionPlan, PlanInfo> = {
   free: {
     plan: 'free',
@@ -224,10 +234,11 @@ export const PLANS: Record<SubscriptionPlan, PlanInfo> = {
     projectQuota: 1,
     interval: 'once',
     features: [
-      '1 project',
-      'Adaptive AI interview → requirements',
+      '1 client scoping',
+      'Adaptive AI interview → scoping document',
       'System & database design (with diagrams & canvas)',
       'Product Vision',
+      'Client-ready share link (carries a "Built with Archivato" watermark)',
     ],
   },
   pro: {
@@ -238,10 +249,11 @@ export const PLANS: Record<SubscriptionPlan, PlanInfo> = {
     projectQuota: 5,
     interval: 'month',
     features: [
-      'Up to 5 projects (Free includes 1)',
+      'Up to 5 client scopings (Free includes 1)',
+      'Client share link with NO Archivato watermark — your brand only',
       'REST API design — endpoints, request/response schemas & status codes',
       'AI Architect Review — scored on security, scalability, performance & cost, with critical-issue callouts',
-      'Implementation roadmap — phases → milestones → tasks with effort estimates',
+      'Cost estimate & implementation roadmap — what it costs to run, and how long it takes',
       'Interactive OpenAPI / Swagger API explorer',
       'Refine the whole design by chat — every change versioned',
       'Export to JSON, Markdown & OpenAPI (import straight into Postman)',

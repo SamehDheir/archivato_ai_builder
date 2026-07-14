@@ -1,5 +1,6 @@
 import type {
   AccountRole,
+  AdminLlmUsage,
   AdminStats,
   AdminTraffic,
   AdminUsersPage,
@@ -23,11 +24,14 @@ import type {
   ProjectSnapshot,
   ProjectStructure,
   ScaffoldManifest,
+  ScaffoldTarget,
+  CostProviderId,
   GithubPushResult,
   GithubConnectionStatus,
   ProductVision,
   ProjectRoadmap,
   CostEstimate,
+  ProjectOverview,
   ProjectSummary,
   ProjectVersionDetail,
   ProjectVersionMeta,
@@ -35,6 +39,8 @@ import type {
   RefineResult,
   RegisterInput,
   RequirementDocument,
+  ShareLink,
+  SharedProject,
   SubscriptionView,
   UpdateProfileInput,
   ReviewReport,
@@ -166,11 +172,21 @@ async function request<T>(
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/**
+ * The dashboard's list: every scoping plus its pipeline progress and whether the
+ * client has been sent a link. `interviewApi.list` still returns the lean
+ * summaries — this is the deal-board view.
+ */
+export const projectsApi = {
+  list: () => request<ProjectOverview[]>('/projects'),
+};
+
 export const interviewApi = {
   /** The signed-in user's projects, most recently updated first. */
   list: () => request<ProjectSummary[]>('/interview'),
 
-  start: (input: ProjectIdeaInput) =>
+  /** Start a scoping. `clientName` is the owner's label — never part of the idea. */
+  start: (input: ProjectIdeaInput & { clientName?: string }) =>
     request<InterviewState>('/interview', {
       method: 'POST',
       body: JSON.stringify(input),
@@ -190,11 +206,17 @@ export const interviewApi = {
   get: (sessionId: string) =>
     request<InterviewState>(`/interview/${sessionId}`),
 
-  /** Set or clear a project's display name (empty string clears it). */
-  rename: (sessionId: string, title: string) =>
+  /**
+   * Patch a project's labels. An omitted field is left alone; an empty string
+   * clears it — so renaming never wipes the client the scoping was created for.
+   */
+  update: (
+    sessionId: string,
+    patch: { title?: string; clientName?: string },
+  ) =>
     request<ProjectSummary>(`/interview/${sessionId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ title }),
+      body: JSON.stringify(patch),
     }),
 
   /** Permanently delete a project and all its artifacts (frees a quota slot). */
@@ -634,6 +656,8 @@ export const adminApi = {
   stats: () => request<AdminStats>('/admin/stats'),
   /** Traffic detail (daily series + top pages/referrers). */
   traffic: () => request<AdminTraffic>('/admin/traffic'),
+  /** LLM token spend (30d) — by stage, model, agent, heaviest users. */
+  llmUsage: () => request<AdminLlmUsage>('/admin/llm-usage'),
   /** Paginated users with plan + project count. */
   users: (page = 1, pageSize = 20) =>
     request<AdminUsersPage>(`/admin/users?page=${page}&pageSize=${pageSize}`),
@@ -856,13 +880,86 @@ export const exportApi = {
   all: (sessionId: string) => requestBlob(`/export/${sessionId}/all.zip`),
 };
 
+export const shareApi = {
+  /** The session's public link, or null when it isn't shared. */
+  get: (sessionId: string) => request<ShareLink | null>(`/share/${sessionId}`),
+
+  /** Mint a public link (idempotent). Pro-gated — a 402 opens the upgrade modal. */
+  create: (sessionId: string) =>
+    request<ShareLink>(`/share/${sessionId}`, { method: 'POST' }),
+
+  /** Revoke the link. The token dies permanently; re-sharing mints a new one. */
+  revoke: (sessionId: string) =>
+    request<void>(`/share/${sessionId}`, { method: 'DELETE' }),
+};
+
+/**
+ * The outcome of resolving a share token. `missing` and `unavailable` are kept
+ * apart on purpose: "the owner revoked this link" and "our API is asleep" are
+ * different truths, and telling a visitor the first when the second is true
+ * permanently kills a link that is actually fine.
+ */
+export type SharedProjectResult =
+  | { status: 'ok'; project: SharedProject }
+  | { status: 'missing' }
+  | { status: 'unavailable' };
+
+/** A cold Render free instance takes ~50s to wake; don't hang SSR waiting. */
+const SHARE_FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * Read a shared design by its public token — the one API call in this file that
+ * is **unauthenticated**. It deliberately bypasses `request()`: that helper sends
+ * cookies and retries a 401 through the refresh endpoint, neither of which makes
+ * sense for a stranger following a link (and it runs during SSR, where there is
+ * no session to refresh).
+ *
+ * It never throws. This runs inside a server component and `generateMetadata`,
+ * where an unhandled rejection is a **500 error page** — the worst possible
+ * outcome for the one page whose whole job is converting a stranger. A dead API
+ * degrades to a "temporarily unavailable" page instead.
+ */
+export async function fetchSharedProject(
+  token: string,
+): Promise<SharedProjectResult> {
+  try {
+    const res = await fetch(`${API_URL}/shared/${encodeURIComponent(token)}`, {
+      // Never serve a stale design (a revoked link must 404 immediately).
+      cache: 'no-store',
+      signal: AbortSignal.timeout(SHARE_FETCH_TIMEOUT_MS),
+    });
+    if (res.status === 404) return { status: 'missing' };
+    if (!res.ok) return { status: 'unavailable' };
+    return { status: 'ok', project: (await res.json()) as SharedProject };
+  } catch {
+    // Network error, DNS failure, or the timeout above.
+    return { status: 'unavailable' };
+  }
+}
+
+/**
+ * `?target=…&provider=…`. Each is omitted entirely when the caller wants the
+ * server's default — for `provider`, that's the Cost Estimator's recommendation
+ * for this design, which the client has no reason to compute for itself.
+ */
+function scaffoldQuery(target?: ScaffoldTarget, provider?: CostProviderId): string {
+  const params = new URLSearchParams();
+  if (target) params.set('target', target);
+  if (provider) params.set('provider', provider);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
 export const scaffoldApi = {
-  /** File manifest (paths + contents) of the generated backend. */
-  manifest: (sessionId: string) =>
-    request<ScaffoldManifest>(`/scaffold/${sessionId}`),
+  /** File manifest (paths + contents) of the generated code. */
+  manifest: (sessionId: string, target?: ScaffoldTarget, provider?: CostProviderId) =>
+    request<ScaffoldManifest>(
+      `/scaffold/${sessionId}${scaffoldQuery(target, provider)}`,
+    ),
 
   /** The scaffold as a downloadable .zip Blob. */
-  zip: (sessionId: string) => requestBlob(`/scaffold/${sessionId}/zip`),
+  zip: (sessionId: string, target?: ScaffoldTarget, provider?: CostProviderId) =>
+    requestBlob(`/scaffold/${sessionId}/zip${scaffoldQuery(target, provider)}`),
 
   /**
    * Create a GitHub repo and push the scaffold. Omit `token` to use the stored
@@ -870,7 +967,13 @@ export const scaffoldApi = {
    */
   pushToGithub: (
     sessionId: string,
-    input: { token?: string; repoName: string; isPrivate?: boolean },
+    input: {
+      token?: string;
+      repoName: string;
+      isPrivate?: boolean;
+      target?: ScaffoldTarget;
+      provider?: CostProviderId;
+    },
   ) =>
     request<GithubPushResult>(`/scaffold/${sessionId}/github`, {
       method: 'POST',

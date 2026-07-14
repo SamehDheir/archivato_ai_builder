@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { ProjectRoadmap } from '@archivato/shared';
+import { upstreamStamp, type ProjectRoadmap } from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -89,7 +89,18 @@ export class RoadmapService {
       apiDesign,
     });
 
-    return this.roadmaps.upsert(roadmap);
+    // Record which design revision this was built from, so the UI can tell the
+    // user when a later refine/edit/restore has left it describing a design that
+    // no longer exists.
+    return this.roadmaps.upsert({
+      ...roadmap,
+      sourceStamp: upstreamStamp('roadmap', {
+        requirements: requirements.generatedAt,
+        systemDesign: systemDesign.generatedAt,
+        databaseDesign: databaseDesign.generatedAt,
+        apiDesign: apiDesign.generatedAt,
+      }),
+    });
   }
 
   async get(sessionId: string): Promise<ProjectRoadmap> {

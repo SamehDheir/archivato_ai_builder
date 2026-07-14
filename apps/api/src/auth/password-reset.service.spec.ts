@@ -62,7 +62,7 @@ describe('PasswordResetService', () => {
 
   it('resets the password with a valid code and revokes sessions', async () => {
     const user = await seedUser();
-    const refresh = await refreshTokens.create({
+    await refreshTokens.create({
       userId: user.id,
       tokenHash: 'rt',
       expiresAt: new Date(Date.now() + 1000),

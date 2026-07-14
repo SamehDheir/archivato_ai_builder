@@ -6,6 +6,7 @@ import type {
   LlmCompleteOptions,
 } from './llm-provider.interface';
 import { parseJsonFromLlm } from './json.util';
+import { readOpenAiUsage, type OpenAiStyleUsage } from './openai-usage';
 
 /** GA api-version that supports `response_format: json_object`. */
 const DEFAULT_API_VERSION = '2024-10-21';
@@ -35,6 +36,11 @@ export class AzureOpenAiLlmProvider implements LlmProvider {
   private readonly endpoint: string;
   private readonly deployment: string;
   private readonly apiVersion: string;
+
+  /** Azure has no model field — the deployment IS the model selector. */
+  get defaultModel(): string {
+    return this.deployment;
+  }
 
   constructor(config: ConfigService) {
     const apiKey = config.get<string>('AZURE_OPENAI_API_KEY');
@@ -109,7 +115,8 @@ export class AzureOpenAiLlmProvider implements LlmProvider {
 
     // Azure selects the model by deployment, so an explicit `model` option maps
     // onto the deployment segment of the URL rather than a body field.
-    const url = this.buildUrl(options?.model ?? this.deployment);
+    const model = options?.model ?? this.deployment;
+    const url = this.buildUrl(model);
 
     const res = await fetch(url, {
       method: 'POST',
@@ -128,7 +135,15 @@ export class AzureOpenAiLlmProvider implements LlmProvider {
 
     const data = (await res.json()) as {
       choices?: { message?: { content?: string } }[];
+      usage?: OpenAiStyleUsage;
+      /** Azure echoes the model behind the deployment — price off that, not the
+       *  deployment name, which is an arbitrary string the operator chose. */
+      model?: string;
     };
+    options?.onUsage?.({
+      model: data.model || model,
+      usage: readOpenAiUsage(data.usage),
+    });
     return data.choices?.[0]?.message?.content ?? '';
   }
 

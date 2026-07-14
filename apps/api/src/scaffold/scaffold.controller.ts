@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -17,6 +18,7 @@ import { ProGuard } from '../billing/pro.guard';
 import { THROTTLE_EXTERNAL } from '../common/throttling';
 import { ScaffoldService } from './scaffold.service';
 import { PushToGithubDto } from './dto/push-to-github.dto';
+import { ScaffoldQueryDto } from './dto/scaffold-query.dto';
 
 /**
  * Code scaffolding — the Pro deliverable that turns the design into a runnable
@@ -32,17 +34,19 @@ export class ScaffoldController {
   @Get(':sessionId')
   manifest(
     @Param('sessionId') sessionId: string,
+    @Query() query: ScaffoldQueryDto,
   ): Promise<ScaffoldManifest> {
-    return this.scaffold.manifest(sessionId);
+    return this.scaffold.manifest(sessionId, query.target, query.provider);
   }
 
   /** Download the scaffold as a .zip archive. */
   @Get(':sessionId/zip')
   async zip(
     @Param('sessionId') sessionId: string,
+    @Query() query: ScaffoldQueryDto,
     @Res() res: Response,
   ): Promise<void> {
-    const buffer = await this.scaffold.zip(sessionId);
+    const buffer = await this.scaffold.zip(sessionId, query.target, query.provider);
     res.set({
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="scaffold-${sessionId}.zip"`,

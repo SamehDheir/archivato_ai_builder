@@ -15,6 +15,26 @@ interview), **Roadmap** (phased implementation plan from the full design), and
 users). Plus post-generation **chat refine**, **version history**,
 **diagrams/canvas**, **auth**.
 
+## Product positioning (2026 pivot)
+
+Read **[docs/POSITIONING.md](docs/POSITIONING.md)** before any product/copy call —
+it is the source of truth for who we sell to. Summary:
+
+- **Customer:** owner/tech lead of a small MENA software house (3–20 people) that
+  bids on client work — **not** developers learning architecture. That audience
+  doesn't pay; this pivot (July 2026) is the response.
+- **Message:** *turn a client call into a complete scoping package — requirements,
+  architecture, cost, client-ready proposal — in one hour instead of one week.*
+- **Differentiator = the "two-sided document":** one artifact the **client** can
+  read (vision/cost/roadmap) and the **dev team** can use (OpenAPI/SQL/scaffold).
+  So the share page leads with business artifacts and collapses the technical ones.
+- **The share link stays FREE (watermarked for non-Pro)** — it's the growth loop;
+  never re-gate it. Copy shifts from "project" to **client scoping** (EN+AR), and
+  all educational framing comes out.
+- **Order of work: Phase RED first** (landing rebuild · share=free+watermark ·
+  client-facing share page · vocabulary · dashboard client-name/"sent" cards).
+  Prefer small reversible changes that reuse existing infra over new engineering.
+
 ## Tech Stack
 
 - **Backend:** NestJS + TypeScript (`apps/api`)
@@ -148,7 +168,7 @@ tsconfig and never needs shared's `dist`.
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
-  `threat-model`, `qa-plan`, `export`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
+  `threat-model`, `qa-plan`, `export`, `share`, `projects`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
   `billing`, `analytics`, `admin`, `support`, `notifications`, `roles`,
   `waitlist`).
   Modules export their repository token + service for downstream use.
@@ -157,6 +177,38 @@ tsconfig and never needs shared's `dist`.
   controller and is not in version snapshots. `product-vision` needs only the
   confirmed interview; `roadmap` and `cost-estimate` need the full pipeline
   (import the upstream design stores, 409 until the API design exists).
+- **Derived-artifact freshness (`freshness.ts`).** Because the standalone stages
+  hang off the design without gating it, **nothing regenerated them** when the
+  design changed: a chat refine rebuilds requirements → system → database → API
+  (+ review), and the user was then shown a roadmap / cost estimate / threat model
+  / QA plan describing a design that no longer existed — with no indication
+  anything was wrong. An edit (the editors **autosave**) or a version **restore**
+  did the same. Fix: at generation time each derived artifact records the exact
+  upstream revisions it was built from (**`sourceStamp`**, via `upstreamStamp()`);
+  the web rebuilds that stamp from the current design and renders `StaleNotice`
+  (warning + one-click regenerate) above any artifact where `isStale()` — no new
+  API surface, since `ProjectStages` already holds every design artifact. Pure,
+  runtime-free, shared by API and web. **Migration-free**: these tables store the
+  artifact as `data Json`, so an optional field on the *type* is the whole change
+  (the JSON-artifact convention below). Four things not to undo:
+  1. **Compare for equality, not recency.** "Stale if an upstream is *newer*"
+     misses a **restore**, which rewinds the design to an *older* revision under a
+     newer roadmap — nothing is newer, yet the roadmap is wrong.
+  2. **`generatedAt` is the revision marker** because every write path moves it —
+     an agent run sets it, and `save()` (the editors) stamps a fresh one per edit.
+  3. **An unstamped artifact is never stale.** Pre-existing rows carry no stamp
+     and we cannot know their source; nagging every old project to re-run a
+     **billed, Pro, LLM** stage on a guess would be worse than the bug.
+  4. **`DERIVED_STAGE_SOURCES` mirrors each service's real `generate()` inputs** —
+     the **cost estimate never reads the requirements** (it derives a workload from
+     the designs), so editing a requirement must not flag it. Change a service's
+     inputs ⇒ change its entry.
+
+  The banner lives on the tab that renders the artifact (Radix **unmounts inactive
+  `TabsContent`**, so a stale *dot on the tab bar* would need the four panels'
+  fetches lifted into the parent — deliberately not done). It's sufficient: exports
+  and version snapshots don't carry these artifacts, so the tab is the only place a
+  stale one can be seen.
 - **Cost Estimator (`cost-estimate`).** A standalone, Pro-only stage that
   projects a **ballpark monthly hosting bill** across 8 providers (AWS,
   DigitalOcean, Railway, Render, Vercel, Cloudflare, Fly.io, Heroku) at 100 /
@@ -196,20 +248,112 @@ tsconfig and never needs shared's `dist`.
   Arabic CLDR-plural trap) + `project.tab.qa` (EN+AR). Shared: `qa-plan.ts`
   (`TEST_TYPES`).
 - **Code scaffolding (`scaffold`).** A Pro-only stage that turns the confirmed
-  design into a **runnable NestJS + Prisma backend**. Like the cost estimator, the
-  generation is **fully deterministic — no LLM**: `buildBackendScaffold()` in
-  `@archivato/shared` (`scaffold.ts`, runtime-free) maps DB entities/relations →
-  `prisma/schema.prisma` models, and API modules/endpoints → NestJS
-  modules/controllers/services + class-validator DTOs, plus root project files.
-  **Correctness over richness:** output always compiles / `prisma validate`s —
-  FKs are emitted as scalar fields + a `// FK →` comment (never Prisma relations,
-  which could be invalid), service methods are typed stubs that throw "Not
-  implemented", exactly one `@id` is guaranteed (a flagged PK, else a promoted
-  `id` column, else a synthesized one — never a duplicate), and colliding
-  module/entity names are uniquified so the generated project always builds. The
-  `ScaffoldService` reuses `ExportService.bundle()` (so it inherits the "pipeline
-  complete through API design" 409 gate). Owner-guarded + `ProGuard` (mirrors
-  export); GitHub routes throttled (`THROTTLE_EXTERNAL`). Delivered two ways:
+  design into a **runnable app** — a NestJS + Prisma API, a Next.js client, or
+  both. Like the cost estimator, the generation is **fully deterministic — no
+  LLM**. Three pure builders in `@archivato/shared` (runtime-free):
+  `buildBackendScaffold()` (`scaffold.ts`), `buildFrontendScaffold()`
+  (`scaffold.frontend.ts`), and `buildScaffold(input, target)`
+  (`scaffold.compose.ts`) which picks between them. `ScaffoldTarget` =
+  **`backend | frontend | fullstack`**, and **fullstack is the default** — it
+  re-roots the two halves under `apps/api` + `apps/web` with a root
+  npm-workspaces `package.json` (the shape Archivato itself is built in). The
+  two builders stay unaware of each other: composing is a path re-rooting plus
+  three root files, so the single-target outputs are byte-for-byte what they
+  always were. Both builders derive their names from **one `assignHandlers()`**
+  (`scaffold.util.ts`) — that's *why* the frontend client's `create()` calls the
+  backend controller's `create()`, rather than two files happening to agree.
+  - **Backend:** DB entities/relations → `prisma/schema.prisma`; API
+    modules/endpoints → NestJS modules/controllers/services + class-validator
+    DTOs. FKs are scalar fields + a `// FK →` comment (never Prisma relations,
+    which could be invalid), service methods are typed stubs that throw "Not
+    implemented", exactly one `@id` is guaranteed (a flagged PK, else a promoted
+    `id` column, else a synthesized one — never a duplicate), and colliding
+    module/entity names are uniquified. `main.ts` **enables CORS** for
+    `WEB_ORIGIN` (default the frontend's port) — without it the generated client
+    can't call the API it ships with.
+  - **Frontend:** a typed client (`lib/api/<module>.ts`, one function per
+    endpoint, over a single `apiFetch` in `lib/api-client.ts`) + a page per
+    module: list wired to the collection GET, a create form from the POST body
+    schema, and a detail/edit page from GET/:id + PUT/:id.
+  - **"It compiles" is only true if you RUN the compiler on the output.** Both
+    halves are verified by generating a project from a hostile design and running
+    `tsc` (api **and** web) + `next build` on it. That is not ceremony — it is the
+    only reason three shipped bugs were caught: required DTO fields were emitted as
+    `email: string` (fails **`strictPropertyInitialization`/TS2564** — the backend
+    scaffold had **never** compiled for any DTO with a required field; it's `!` now),
+    `qs()` took a `Record` an interface can't satisfy, and the item type came from
+    the detail response instead of the richest one. Re-run it after touching a
+    builder.
+  - **Correctness over richness** (same bar as the backend — the output must
+    compile, and it's verified by actually running `tsc` + `next build` on it):
+    item fields are **all optional** (they come from the *designed* response
+    schema, not a running API, so a page must render when one is absent); list
+    responses are unwrapped defensively (`Array.isArray(data) ? data : []`);
+    design text (module names, summaries, the idea) is embedded in JSX as a
+    **JSON-encoded string expression**, never raw JSX text, because LLM output
+    contains quotes and braces; a `*/` in a summary is escaped so it can't end a
+    doc comment; and only endpoints with a single trailing `:param` get wired to
+    pages — a nested or **tenant-scoped path** (`/api/:tenant/reports`, whose
+    param is invisible to the module-relative subPath) still gets a typed client
+    function, but no invented UI and **no reference to a variable that was never
+    declared**. Two traps worth remembering: `qs()` takes `object`, not
+    `Record<string, unknown>` (a generated `*Query` **interface** has no implicit
+    index signature and would not be assignable); and the item type comes from
+    the **richest** designed response, not the detail one (a detail endpoint
+    often returns fewer fields than the list it belongs to).
+  - **The design is untrusted input to a code generator.** Artifacts are LLM
+    output derived from the user's own words, and they land *inside* generated
+    string literals (`'${path}'`, `@Controller('…')`, `method: '${m}'`), file
+    paths, comments, and Prisma `@map("…")`. A quote, backtick, `$`, or newline
+    there breaks out of the literal it sits in — the generated project stops
+    compiling (the one promise these builders make), and in the worst case
+    carries code the user never wrote into their own repo. Three chokepoints in
+    `scaffold.util.ts` hold the line, and **every generator must go through
+    them**: `safePath()`/`stripApi()` reduce a path to an inert charset
+    (`SAFE_PATH_CHARS`), `httpMethod()` whitelists the verb (it's emitted as both
+    a decorator name and a string literal), and `mapName()` strips quotes from a
+    Prisma map. Plus `oneLine()`/`comment()` for text going into a `//` or `/** */`
+    comment. Not cross-tenant (it's your own design, on your own machine), which
+    is why it's a *correctness* guarantee first — but don't hand-roll a fourth
+    path of design-text-into-source without one of these.
+
+  - **Deployment artifacts (`scaffold.deploy.ts`).** Every scaffold also ships a
+    **Dockerfile per app + `docker-compose.yml` + a GitHub Actions workflow +
+    `DEPLOY.md`**, plus a real provider config where one honestly exists:
+    `render.yaml`, `fly.toml`, `railway.json`, `Procfile`+`app.json`,
+    `.do/app.yaml`, `vercel.json` (`DEPLOY_CONFIGURED`). Deterministic, no LLM.
+    Generated in **`scaffold.compose.ts`, not the two builders** — only that layer
+    knows the final layout (`apps/api/` vs the repo root), and a Dockerfile has to
+    point at the app it actually builds. `?provider=`/`{provider}` (`@IsIn` → 400
+    on junk); omit it for the default.
+    - **AWS and Cloudflare deliberately get NO config.** A real AWS deploy is
+      account-specific infra (a CDK/Terraform stack) and Cloudflare's compute is
+      **Workers, which a long-lived NestJS server doesn't run on at all**. They
+      fall back to the Docker path (which genuinely works) and DEPLOY.md says so.
+      Shipping an unrun CDK stack would be the confidently-wrong output this repo
+      refuses everywhere else.
+    - **The default provider is NOT `estimate.recommended`.** `recommendedProvider()`
+      takes the cheapest among **`DEPLOY_CONFIGURED`**, because the estimator prices
+      all eight as if any could host the design and on small workloads picks
+      **Cloudflare** (infeasible, above) or AWS — so inheriting it would hand every
+      user the Docker fallback instead of the config this stage exists to produce.
+      *(The estimator recommending an infeasible host is its own bug, in its own
+      stage — deliberately not papered over here.)*
+    - Three traps, each of which broke a real deploy and now has a test: the web
+      `CMD` must bind **`${PORT:-3001}`** (Render/Heroku *assign* the port; a
+      hardcoded one is a container nothing can reach); `healthCheckPath` must point
+      at a route that **exists** (the generated backend gained
+      `health.controller.ts` → `/api/health`, else Render 404s it unhealthy
+      forever); and Render's `WEB_ORIGIN` must **not** use `fromService: property:
+      host` — that yields a bare hostname with no scheme, and CORS compares full
+      origins, so every browser request would be blocked. Also: `NEXT_PUBLIC_*` is
+      inlined at **build** time, so it's a Docker build **arg**, never a runtime env.
+
+  The `ScaffoldService` reuses `ExportService.bundle()` (so it inherits the
+  "pipeline complete through API design" 409 gate). Owner-guarded + `ProGuard`
+  (mirrors export); GitHub routes throttled (`THROTTLE_EXTERNAL`). `target` rides
+  in on `?target=` (`ScaffoldQueryDto`, `@IsIn` → a **400 on junk**, not a silent
+  fallback to a different artifact) and on the push body. Delivered two ways:
   - **ZIP** (`GET /scaffold/:id/zip`, server-zipped via `jszip`).
   - **Push to GitHub** (`POST /scaffold/:id/github`) via a native-`fetch` client.
     Because GitHub's Git Data API **rejects a tree on an empty repo (409 "Git
@@ -238,6 +382,130 @@ tsconfig and never needs shared's `dist`.
   from the API origin) → connected state (`login` + Disconnect) → push with no
   token; a **"use a token instead"** toggle keeps the PAT path. i18n'd
   `stages.scaffold.*` (EN+AR).
+- **Public share links (`share`).** A read-only page for a design that anyone can
+  open with no account — the product's organic loop. One `share_links` row per
+  session (repo pattern; `sessionId` PK, unique `token`, `viewCount`).
+  The token is **32 CSPRNG bytes base64url** and is the link's only credential.
+  Owner routes (`/share/:sessionId`, `JwtAuthGuard + SessionOwnerGuard`): `GET`
+  (link or null), `POST` (mint), `DELETE` (revoke). `create` is **idempotent**
+  (sharing twice never invalidates a link already sent out); **revoke is a hard
+  delete**, so the token dies for good and re-sharing mints a new one (there is no
+  "pause").
+  - **Sharing is FREE on every plan — do not re-gate it.** It was originally
+    Pro-only and that was backwards on two counts: the public page is what brings
+    *new* visitors in, so paywalling it taxed exactly the free users doing our
+    marketing; and it was unreachable anyway — the button lived in the (Pro)
+    Export tab and the route's gate came from `ExportService.bundle()`, which 409s
+    until the **API design** exists, itself a Pro stage. So a free plan + a Pro
+    gate on the pipeline would just be a button that always 409s. Three things had
+    to move together, and all three must stay moved: no `ProGuard` on the mint
+    route, share owns its **own gate** (`ShareService.readDesign` — its own reads
+    of the design stores, 409 until the **database design** exists, which is
+    exactly the free tier's floor), and the control sits in the **project header**,
+    not in Export. Share is therefore **no longer a subset of export** and
+    `ShareModule` imports the upstream design stores directly (the roadmap/cost
+    precedent) rather than `ExportModule`/`BillingModule`. **Export stays Pro** —
+    that's the deliverable the customer keeps; the link is the one they hand out.
+  - **`SharedProject.apiDesign` and `.review` are nullable** because of the above:
+    both are Pro stages, so a free owner's link legitimately carries neither and
+    the page renders the design it has (the tab and the stat tile disappear). Every
+    consumer must tolerate that — the public page, **`generateMetadata`**, and the
+    **OG card** (`ShareOgFacts.endpoints` is optional). Show *nothing* rather than
+    `0 endpoints`: a zero reads as a claim about the design instead of about the
+    plan that generated it. Losing only the API design is likewise **not** a
+    regression any more (a live link keeps working and drops the tab); the 404 case
+    is a design that rewinds *below* the database design.
+  - **The shared page is a CLIENT PRESENTATION, not a technical document** (the
+    2026 client-scoping pivot — see [docs/POSITIONING.md](docs/POSITIONING.md)). The
+    reader is the person whose idea it is, deciding whether to sign — they cannot
+    read an ERD, and an OpenAPI table tells them nothing. So `SharedProjectView`
+    is ordered the way a buyer reads: **vision → requirements → cost → roadmap**,
+    with **architecture / database / API / review / threat model / QA plan collapsed
+    below** in a "Technical details" appendix (individual `Collapsible` rows, *not*
+    tabs — a tab strip says "pick one of these", which is the wrong invitation for a
+    client). The header is the **project's own name** + the client's one-line idea
+    + three tiles they actually ask about (features in scope, timeline, running
+    cost). `generateMetadata` follows: `title:{absolute}` = the project name (the
+    root layout's `%s · Archivato` template is bypassed — the proposal is the
+    *owner's* document, not ours), description = a **locale-aware** one-line
+    "Software scoping proposal …" (`PROPOSAL_TAGLINE`, EN+AR — the one machine-facing
+    string that IS localized, because the audience is a person in WhatsApp/email, not
+    a crawler), **not** `"modular monolith · 5 services · 12 tables"`. Two traps: the
+    header must **not** repeat `vision.vision` (ProductVisionView already opens
+    with it — printing it twice one screen apart reads as a copy-paste slip), and
+    the lead is skipped when `title === idea` (an unnamed project's title *is* the
+    idea).
+  - **The watermark is the server's call, from the OWNER's plan** — the growth
+    loop's price on an otherwise-free feature. `SharedProject.watermark` is set in
+    `ShareService.view` via `billing.planFor(session.userId)` →
+    `shouldWatermarkShare(plan)` (free ⇒ watermark, pro ⇒ clean); the page only
+    *renders* the flag (`{project.watermark && <Watermark />}`). **Never a
+    client-side plan check** — the page is public, so anything the browser decides,
+    a browser can skip. Read the plan at *view* time, not mint time, so a downgrade
+    (or a lapsed Pro period) re-watermarks links already out in the world. Use
+    `BillingService.planFor` (**read-only**, never `getOrCreate` — the public read
+    must not write a subscription row for every anonymous visitor); a null/owner-less
+    session is free. `ShareModule` imports `BillingModule` **only** for this read —
+    it is emphatically *not* a `ProGuard` on the mint route.
+  - **The public payload IS the security boundary.** `GET /shared/:token`
+    (separate `SharePublicController`, so a token can never collide with a session
+    id on the route table) returns strictly `SharedProject` (`@archivato/shared`):
+    the design chain + the client-facing artifacts (**`vision`, `costEstimate`,
+    `roadmap`** — all optional) + optional review + **`threatModel` / `qaPlan`**
+    (Pro, appendix) + a server-set **`watermark`** boolean + the title/idea — **no
+    interview transcript** (the user's own words about their business), no owner,
+    and **not even the session id**. Widening it to the three client-facing
+    artifacts was deliberate: the vision is *derived from* the interview but **is
+    not** the interview — it's a structured artifact the owner reviewed and chose to
+    send, whereas the raw transcript never leaves the session. They are **additive
+    and never gate** the link (the floor is still the database design), so a free
+    owner's link carries `vision` (a free stage) but `costEstimate: null` /
+    `roadmap: null` / `threatModel: null` / `qaPlan: null` (Pro) and the page drops
+    those sections rather than showing an empty one. `ShareModule` therefore imports
+    `ProductVisionModule` / `CostEstimateModule` / `RoadmapModule` /
+    `ThreatModelModule` / `QaPlanModule` for their repo tokens. Every artifact is stamped with `sessionId`, so the
+    projection **overwrites it with the token** — an internal id that addresses
+    owner-scoped routes has no business on a public page. A design that later
+    regresses below the shareable floor (a version restore rewinds past the
+    database design) 404s rather than surfacing the 409 a stranger couldn't act on.
+  - **The token is a bearer credential — never write it down.** It is the whole
+    security boundary, so it must not land in any store with a *different* access
+    model than the link itself. Two sinks would have leaked it and both are now
+    scrubbed through one shared `redactSharePath()` (`share.ts`, covers `/s/<t>`
+    **and** `/api/shared/<t>`): the **pageview beacon** (the admin "Top pages" panel
+    renders paths verbatim to anyone holding `admin:analytics` — a role with *no*
+    project access, who could then just open the link), redacted client-side **and
+    again server-side** because that beacon is public and unauthenticated; and the
+    **`AllExceptionsFilter` log line**, which would otherwise ship a live token to
+    the log pipeline/Sentry on any 5xx. Any new sink that records a URL must call
+    it too. `/share/:sessionId` (the *owner's* route) is deliberately NOT redacted —
+    a session id is not a credential.
+  - **The public read is `@SkipThrottle()`** (the Paddle-webhook precedent). The
+    page is **server-rendered**, so every viewer reaches the API from the same
+    Next.js server IP — IP-keyed throttling would put a link's whole audience in
+    one bucket and start 429ing readers exactly when a link takes off. What guards
+    it instead: an unguessable token (nothing to enumerate) + a read-only
+    projection; burst protection belongs at the edge (Cloudflare, per DEPLOY.md).
+  - **Unlisted, not published.** The page is **`noindex`** and `/s/` is disallowed
+    in `robots.ts` — someone's business idea turning up in a Google search for
+    their company would be a nasty surprise. The **per-project OG card**
+    (`shareOgImage()` in `lib/og.tsx` — their title + architecture/services/tables/
+    endpoints) still unfurls in Slack/X/LinkedIn, which is where the loop lives.
+  - **Web.** `app/s/[token]/page.tsx` is a **server component** outside the `(app)`
+    group (no AuthGate, no app providers): it fetches once (`cache`-deduped across
+    `generateMetadata` + body) and passes the payload to `SharedProjectView`, which
+    renders the **same artifact `*View` components** the owner sees (they're pure
+    functions of their artifact — the `ExampleProjectView` proof) and ends in a
+    "Built with Archivato" CTA. It mounts the one provider it actually needs
+    (`ToastProvider`, for ErDiagram's export buttons) and awaits its **own lazy i18n
+    tier** — `loadShareNamespaces()` / `resources.share.ts` = **`stages` + `share`
+    only**, because a cold visitor following a link shouldn't download the dashboard's
+    and admin console's copy. `SystemDesignView` gets `interactive={false}` (Explain
+    calls an owner-scoped API). The **not-found state is server-rendered English**:
+    it must render without the lazy chunk. Owner controls: `ShareLinkCard` in the
+    **project header** (`ProjectStages`, rendered once `dbDesign` exists — the same
+    floor the API mints against): create/copy/views/revoke, with no upgrade path,
+    since there is no 402 to catch any more.
 - **Streaming generation (`stream`) — the "narration layer".** A live alternative
   to the poll-based `/jobs` path for the 5 pipeline stages. `GET /stream/:sessionId/:stage`
   is a Nest **`@Sse()`** endpoint (owner-guarded by the same `SessionOwnerGuard`,
@@ -316,8 +584,10 @@ tsconfig and never needs shared's `dist`.
   users get a free plan on first access.
 - **Freemium feature gate.** Beyond the project *count* cap, the pipeline itself
   is tiered: **Free covers interview → requirements → system design → database
-  design** (plus Product Vision); **Pro is required to generate the API design
-  and everything after it — AI review, roadmap, cost estimate, and export.**
+  design** (plus Product Vision, **plus the public share link** — see `share`:
+  the growth loop is deliberately unpaywalled); **Pro is required to generate the
+  API design and everything after it — AI review, roadmap, cost estimate, and
+  export.**
   Enforced by `BillingService.assertPro(userId)` (throws **402**
   `code:'upgrade_required'`) and a reusable **`ProGuard`** (exported by
   `BillingModule`) applied to the Pro-only generate routes
@@ -347,6 +617,88 @@ tsconfig and never needs shared's `dist`.
   json_object`** for guaranteed JSON (the structured-output path for the default
   real-AI provider). The deterministic fallbacks are a **resilience layer, not
   mock data** — they only run when no LLM is configured or the model fails.
+- **LLM usage metering (`llm/usage`) — margin protection.** Every model call made
+  through the `LlmProvider` seam is recorded: provider, model, **agent**, stage,
+  user, session, tokens, cost, ok/failed, duration. One `llm_usage` row per call
+  (repo pattern; append-only, **no FK**, so it outlives the user/session). It stores
+  **counts only — never prompt or completion content** — so a role holding just
+  `admin:analytics` (no project access) can safely report on it.
+  - **Cost is deterministic — no billing API, no LLM.** `estimateLlmCostUsd()` in
+    `@archivato/shared` (`llm-usage.ts`, runtime-free/tested) prices a call off a
+    per-model catalog (`MODEL_PRICING`, published list prices). Matching is
+    **exact**, with one narrow relaxation — a **dated snapshot** id
+    (`…-20250101`) prices off its base model. It deliberately does **not**
+    prefix-match in general: that would price `gpt-4o-realtime-preview` (pricier)
+    off `gpt-4o`, and a *confidently wrong* number is worse than an honest
+    unknown. Cache multipliers are **per-model, not universal** — Anthropic
+    discounts a cached input token 0.1× (and surcharges a cache write 1.25×) but
+    **OpenAI/Azure discount it only 0.5×**, so the `gpt-*` entries override it;
+    getting that wrong understates Azure spend ~5×. **An unlisted model returns
+    `null`, not 0** — tokens are recorded with a null cost and both the totals AND
+    **each breakdown row** carry `unpricedCalls`, so a row can render "—" instead
+    of a confident `$0.00` (a blank $0.00 next to real traffic is worse than
+    useless in a tool whose whole job is margin protection). Prices drift: **edit
+    the table** when a provider changes them.
+  - **Capture seam = a decorator, not 4 edits.** `UsageTrackingLlmProvider` wraps
+    whichever provider `LlmModule` resolved, so agents are untouched and there is
+    exactly one place that turns a call into a row. Tokens come *out* of a provider
+    via an **`options.onUsage` callback** (an API-local extension of
+    `LlmCompleteOptions`, never sent to a model) — **not** a "usage of the last
+    call" field, which the concurrent pipeline would scramble. Claude's
+    `input_tokens` is the *uncached remainder*, so the adapter sums it with the
+    cache tokens; the OpenAI-shaped providers (Groq/Azure) already report the total
+    (`openai-usage.ts`). A **failed call is still recorded** — the case that matters
+    is a `completeJson` whose model call *succeeded* and whose JSON then failed to
+    parse: we were billed for those tokens even though the agent fell back to its
+    deterministic path. No usage report at all (mock, or a request that died before
+    a response) ⇒ nothing was billed ⇒ **$0, not "unknown"**.
+  - **Attribution = `AsyncLocalStorage`, established in exactly 2 places.** The
+    provider can see the model but has no idea *who* asked; threading a caller
+    through 14 agents and a dozen services would be a wide, invasive change. So
+    `llm-usage.context.ts` carries `{userId, sessionId, stage}` ambiently:
+    **`LlmContextInterceptor`** (global `APP_INTERCEPTOR`) covers every HTTP route
+    (incl. SSE stream, chat refine, explain, support AI) — it must **subscribe to
+    `next.handle()` INSIDE `als.run()`**, because Nest *defers* the route handler
+    until subscription and wrapping the call alone would run it outside the store
+    (there's a test that fails if you regress this); and **`PipelineProcessor`**
+    re-establishes the same context from the job payload, since a BullMQ worker has
+    no request (`GenerateJobData` gained an optional `userId`). Stage = the explicit
+    `:stage` param (jobs/stream) else the **first path segment after `/api`**;
+    anything unrecognized normalizes to `other`. `BaseAgent.think*` stamps
+    `agent: this.role` — one edit, all 14 agents attributed.
+  - **Metering is best-effort, always.** `LlmUsageService.record` swallows its own
+    failures and the decorator fires it without awaiting: a metering outage costs a
+    row, never the artifact the user already paid for (in tokens *and* wall-clock).
+  - **Admin.** `GET /admin/llm-usage` (`admin:analytics`) → 30-day totals + 7-day,
+    daily cost/token series, and breakdowns by stage / model / agent / heaviest
+    user. The heaviest-spender rows are labelled with an **email only for a caller
+    who also holds `admin:users:read`** — spend is an analytics question, "which
+    email spent it" is a user-directory one, and an analytics-only role must not be
+    handed the email list as a side effect. Cost-per-call divides by
+    **`billedCalls`** (calls that actually consumed tokens), not by `calls` —
+    mock/failed calls in the denominator would halve the apparent unit cost. Web:
+    `LlmUsagePanel` on `/admin` (i18n `admin.llm.*`, EN+AR) + `useFormat().usd()`
+    (sub-cent precision below $1 — rounding a fraction-of-a-cent call to `$0.00`
+    would make spend read as free).
+  - **Per-user cost-to-serve (the users table).** `AdminUserRow.aiSpend`
+    (`UserAiSpend`: calls/tokens/costUsd/unpricedCalls) puts **what a user costs us**
+    next to what they pay us, so a free account burning real money is visible in the
+    directory rather than only in an aggregate. It is **lifetime, not 30-day** — the
+    windowed view already exists in the panel, and cumulative burn is the whole point
+    of a per-user figure. Symmetric to the email rule above: the spend fields are
+    populated **only for a caller who also holds `admin:analytics`** (`null`
+    otherwise, and the web column hides itself), so a directory-only role gets rows
+    without costs. Unlike `report()`, this one **aggregates in SQL** —
+    `LlmUsageRepository.spendByUsers(ids)` (two `groupBy` reads, no row transfer),
+    scoped to the ids on the current page. The second read exists because "billed but
+    unpriceable" (null cost + real tokens) can't be expressed as a sum: without it an
+    unlisted model would render a confident `$0.00`. Web: an **AI cost** column in
+    `AdminUsersTable` (`—` when every call is unpriced, a trailing `*` when only some
+    are; i18n `admin.users.aiSpend*`, EN+AR).
+  - **Known limit:** `report()` aggregates 30 days of rows **in JS** (the analytics
+    precedent). `llm_usage` grows with paid work, not traffic, so this is the table
+    most likely to need a SQL rollup first — it goes behind the repository
+    interface when it does.
 - **Provider selection** (`llm.module.ts`): `LLM_PROVIDER=mock|claude|groq|azure`
   forces it for all agents; else `GROQ_API_KEY` present → groq for everything;
   else `AZURE_OPENAI_API_KEY` present → azure; else mock. **Groq keeps priority
@@ -697,13 +1049,13 @@ tsconfig and never needs shared's `dist`.
   language (`apps/api/src/interview/language.ts`).
 - **Structure:** `app/` holds routes only. The **root** level is the lean public
   surface — `layout.tsx`, `page.tsx` (marketing **landing** at `/`), `privacy/`,
-  `terms/`, and the metadata files (`icon.svg`, `apple-icon.tsx`,
-  `opengraph-image.tsx`, `manifest.ts`, `robots.ts`, `sitemap.ts`). Everything
-  authenticated lives in the **`(app)` route group** — `dashboard/`, `login/`,
-  `register/`, `verify/`, `settings/`, `admin/`, `support/` (URLs unchanged;
-  route groups don't affect paths). Feature components live in
+  `terms/`, `s/[token]/` (the public **share** page), and the metadata files
+  (`icon.svg`, `apple-icon.tsx`, `opengraph-image.tsx`, `manifest.ts`, `robots.ts`,
+  `sitemap.ts`). Everything authenticated lives in the **`(app)` route group** —
+  `dashboard/`, `login/`, `register/`, `verify/`, `settings/`, `admin/`, `support/`
+  (URLs unchanged; route groups don't affect paths). Feature components live in
   `components/<domain>/` (`auth`, `interview`, `design`, `review`, `product`,
-  `roadmap`, `project`, `settings`, `shared`, `marketing`) alongside
+  `roadmap`, `project`, `settings`, `shared`, `share`, `marketing`) alongside
   `components/ui/`. Import via the `@/*` alias
   (→ web root), e.g. `@/components/project/ProjectStages`, `@/lib/api`.
 - **The `(app)`/root layout split is a performance boundary — keep it.** The root
@@ -716,19 +1068,23 @@ tsconfig and never needs shared's `dist`.
   authed helpers from the root layout or any marketing/legal page. New authed
   routes go **inside `(app)/`**; new public pages stay outside and must not pull
   app chrome.
-- **i18n bundles are code-split — three tiers** (`lib/i18n/`): `resources.ts` =
+- **i18n bundles are code-split — four tiers** (`lib/i18n/`): `resources.ts` =
   **eager EN, public namespaces only** (common/auth/marketing/legal — SSR needs
   them synchronously); `resources.app.ts` = EN for the authed app
   (dashboard/billing/interview/project/stages/settings/admin/support), loaded by
   `loadAppNamespaces()` which **`AuthGate` awaits in parallel with `/auth/me`**
   (loading screen holds until both settle, so app pages never flash raw keys);
-  `resources.ar.ts` = **all Arabic**, loaded by `loadLocale('ar')` before
-  `changeLanguage` (`<html dir/lang>` flips immediately; the text switch waits for
-  the chunk). Both loaders swallow failures → `fallbackLng`/keys, never a crash.
-  **Only `client.ts` may import the `.app`/`.ar` files, and only dynamically** — a
-  static import anywhere folds ~240 KB of JSON back into every visitor's bundle.
-  A new namespace goes in `namespaces` + the tier it belongs to (public → eager,
-  app-only → `resources.app.ts`), and its AR file into `resources.ar.ts`.
+  `resources.share.ts` = EN for the **public share page** (`stages` + `share`
+  only), loaded by `loadShareNamespaces()` which `SharedProjectView` awaits before
+  its first render — a cold visitor following a share link must not pay for the
+  dashboard's/admin's copy just to read a design; `resources.ar.ts` = **all
+  Arabic**, loaded by `loadLocale('ar')` before `changeLanguage` (`<html dir/lang>`
+  flips immediately; the text switch waits for the chunk). Every loader swallows
+  failures → `fallbackLng`/keys, never a crash. **Only `client.ts` may import the
+  `.app`/`.share`/`.ar` files, and only dynamically** — a static import anywhere
+  folds ~240 KB of JSON back into every visitor's bundle. A new namespace goes in
+  `namespaces` + the tier it belongs to (public → eager, app-only →
+  `resources.app.ts`), and its AR file into `resources.ar.ts`.
 - **Auth gating:** `AuthGate` (in the **`(app)` layout**) wraps the authed app.
   `/` and `/verify` are public (`PUBLIC_EXACT` / `PUBLIC_PREFIXES`);
   `/login`+`/register` are guest-only (signed-in users bounce to `/dashboard`);
@@ -875,15 +1231,46 @@ tsconfig and never needs shared's `dist`.
 - **Projects hub** (`ProjectsDashboard`): the post-login project list, presentational
   (all state/handlers come from `app/dashboard/page.tsx`). **Grid/list toggle**
   (persisted `archivato.projectsView`). Each project has an optional **`title`**
-  (session column; `PATCH /interview/:id`, owner-guarded — the idea stays the AI's
-  untouched source; cards show `title || idea`). A per-card **kebab menu**
+  and an optional **`clientName`** (the client a scoping is for — both session
+  columns; `PATCH /interview/:id`, owner-guarded — the idea stays the AI's untouched
+  source; cards show `title || idea`). A per-card **kebab menu**
   (`ProjectMenu`, rendered as a *sibling* of the open-button, never nested):
-  **Rename** (inline input), **Direct Export** (JSON/Markdown/OpenAPI for confirmed
+  **Rename** + **Set/Change client** (both inline inputs sharing one editor),
+  **Direct Export** (JSON/Markdown/OpenAPI for confirmed
   projects — reuses the Pro `exportApi`; a 402 opens the upgrade modal, 409 hints to
   finish the pipeline), **Delete**. **Smart Resume**: the last stage tab viewed per
   project is saved (`archivato.lastTab:<uid>:<sid>` in `goToStage`) and restored in
   `openProject` (ProjectStages re-guards availability); a **Continue banner** resumes
   the most-recent project on that tab.
+- **The dashboard is a DEAL BOARD, not an experiment list** (client-scoping pivot).
+  Cards lead with the **client name** (`ClientLine`), a compact **pipeline rail**
+  (`PipelineRail`, one segment per stage), a **"Sent to client"** badge when a share
+  link exists, and a primary **"Copy client link"** action (`CopyLinkButton`). The
+  empty state teaches the workflow (`dashboard.projects.emptyHelp`: bring the call's
+  answers → run the interview → send the proposal) instead of describing the
+  pipeline. Two things not to undo:
+  1. **The list comes from a NEW read-model, `GET /projects` (`ProjectsModule`),
+     not `GET /interview`.** The card needs two facts the session doesn't hold — how
+     far the pipeline got, and whether a link was sent — so `ProjectsService`
+     projects `ProjectOverview` = `ProjectSummary` + `artifacts` (existence booleans
+     per stage) + `shared` (a share row exists). It imports *downward* (interview +
+     the five design stores + `ShareModule` for the share-link token); the reverse is
+     a cycle, since every design module already imports `InterviewModule`. A read-only
+     composing module — the AdminService read-model precedent, but through the repo
+     interfaces so it unit-tests against the in-memory impls. **Adding a route + a
+     Prisma column means the running `dev:api` must be restarted and the migration
+     applied — a stale server 404s `/projects` and the dashboard silently shows
+     nothing.**
+  2. **Progress + link state are PURE, derived from artifact existence**
+     (`@archivato/shared/projects.ts`): `projectProgress(status, artifacts)` (the
+     artifacts *are* the truth — a version restore can rewind them, so never a stored
+     counter; `interview` is the one step with no artifact, unlocked by `confirmed`)
+     and `clientLinkState(project)` → `locked | ready | sent`. `locked` is the one
+     that matters: the API mints only once the **database design** exists
+     (`canShareProject`), so the button is *disabled with the reason*, not offered as
+     a 409. `CopyLinkButton` calls `shareApi.create` (idempotent — an existing link
+     comes back unchanged, so "first send" and "already sent" are the same call and a
+     link already emailed is never silently rotated).
 - **Activation / onboarding (sign-up → first artifact).** Three fixes attack the
   drop-off between sign-up and the first generated artifact (informed by a
   ux-consultant pass): (1) **Starter-idea chips** — `StarterIdeas` in
@@ -935,6 +1322,25 @@ tsconfig and never needs shared's `dist`.
   silent (no toast/version bump) on autosave. Canvas saves stay manual. The
   leave guard still applies (`dirty` + `confirmLeave()` + `useConfirm`).
 
+**CI (GitHub Actions).** `.github/workflows/ci.yml` runs on push/PR to
+`develop`/`main`: one `checks` job — shared build → prisma generate → lint
+(api + web) → unit tests (api + web) → api + web production builds. It needs no
+services and no secrets: every repository has an in-memory implementation and
+every agent has a deterministic fallback, so the suite is hermetic (no Postgres,
+no Redis, no LLM key).
+
+**There is deliberately no e2e/browser suite.** A Playwright full-funnel smoke
+was built and then **removed**: it was flaky in a way that taught a real lesson
+worth keeping. Playwright locators **auto-wait**, so any locator call inside a
+polling predicate (`expect(...).toPass`) can park on an element that has already
+unmounted — the interview's question counter vanishes the moment the completeness
+gate closes — and it then burns the entire timeout without ever re-checking the
+success condition, failing a page that is sitting there correct and ready. If a
+browser suite is ever reintroduced: never call an unbounded `textContent()` /
+`inputValue()` inside a retry predicate (give it a short explicit timeout, or use
+`count()`, which resolves immediately), and prefer signals derived from
+**server-confirmed state** over view-local state that an effect happens to reset.
+
 ## Gotchas (read before you trip on them)
 
 - **Nothing on the landing page may auto-animate large regions or hold a network
@@ -965,9 +1371,19 @@ tsconfig and never needs shared's `dist`.
   color / letter-spacing — a `fontWeight: 700` renders as regular. Verify a change
   by actually fetching `/opengraph-image` and **looking at the PNG**; a byte count
   alone won't catch an invisible indigo-on-indigo logo.
-- **`.env` `LLM_PROVIDER` must stay UNSET** to let `GROQ_API_KEY` flip the
-  pipeline (an explicit `mock` forces mock). `apps/api/.env` is gitignored — the
-  user pastes real keys there; confirm via the startup `LLM provider:` log.
+- **`LLM_PROVIDER` must stay UNSET — and check the REPO-ROOT `.env`, not just
+  `apps/api/.env`.** This one silently forced the whole pipeline onto `mock` for
+  days. **`@prisma/client` loads the repo-root `.env` into `process.env` when it
+  is imported**, and `app.module.ts` requires PrismaModule *before*
+  `ConfigModule.forRoot()` evaluates — and ConfigModule merges
+  `{...envFile, ...process.env}` with **`process.env` winning**. So a stray
+  `LLM_PROVIDER=mock` in the root file **outranks** a perfectly good
+  `GROQ_API_KEY` in `apps/api/.env`, and the same is true of *any* key duplicated
+  across the two files (JWT secret, SMTP, cookie flags). Symptoms: templated
+  artifacts **and an AI-spend report that shows $0** (the meter is right — mock
+  calls cost nothing). `llm.module.ts` now **warns loudly at boot**
+  (`mockOverriddenKeys`) when it resolves `mock` while a real key is set; confirm
+  via the startup `LLM provider:` log either way.
 - **"Templated / mock-looking artifacts" = the pipeline is on the mock provider,
   not a bug in the agents.** It means no real provider resolved (no key, or
   `LLM_PROVIDER=mock`, or `dev:api` started before the key was added), so every

@@ -1,6 +1,33 @@
-import type { LlmMessage, LlmCompleteOptions } from '@archivato/shared';
+import type {
+  AgentRole,
+  LlmMessage,
+  LlmUsage,
+  LlmCompleteOptions as SharedLlmCompleteOptions,
+} from '@archivato/shared';
 
-export type { LlmMessage, LlmCompleteOptions };
+export type { LlmMessage, LlmUsage };
+
+/** What a provider reports back about one completed model call. */
+export interface LlmUsageReport {
+  /** The model actually used (an `options.model` override, else the default). */
+  model: string;
+  usage: LlmUsage;
+}
+
+/**
+ * The shared options plus two API-internal plumbing fields. Neither is ever sent
+ * to a model — providers build their request payloads field by field.
+ *
+ * `agent` is stamped by `BaseAgent`, so every call is attributable to the agent
+ * that made it without touching all 14 agent implementations. `onUsage` is set
+ * ONLY by `UsageTrackingLlmProvider`: it's how token counts get *out* of a
+ * provider without changing `complete()`'s return type (and without the racy
+ * "usage of the last call" field a concurrent pipeline would scramble).
+ */
+export interface LlmCompleteOptions extends SharedLlmCompleteOptions {
+  agent?: AgentRole;
+  onUsage?: (report: LlmUsageReport) => void;
+}
 
 /**
  * The single seam through which the whole platform talks to an LLM.
@@ -12,6 +39,9 @@ export type { LlmMessage, LlmCompleteOptions };
 export interface LlmProvider {
   /** Human-readable id, e.g. "mock" or "claude". */
   readonly name: string;
+
+  /** The model used when a call doesn't override it (metering + reporting). */
+  readonly defaultModel: string;
 
   /** Free-form text completion. */
   complete(

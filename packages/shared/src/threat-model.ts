@@ -11,6 +11,7 @@
  */
 
 import type { Severity } from './review';
+import type { DerivedArtifact } from './freshness';
 
 export type StrideCategory =
   | 'spoofing'
@@ -58,7 +59,7 @@ export interface Threat {
   mitigation: string;
 }
 
-export interface ThreatModel {
+export interface ThreatModel extends DerivedArtifact {
   sessionId: string;
   generatedAt: string;
   /** One-paragraph overview of the security posture. */

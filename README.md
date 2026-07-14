@@ -1,1008 +1,267 @@
 # Archivato AI Builder
 
-**An AI Software Architecture Generator** — not a chatbot. It transforms a raw
-business idea into a complete software system design by acting as Product
-Manager, System Architect, Business Analyst, and Software Designer.
+**AI Software Architecture Generator** — turn a business idea into a complete,
+export-ready software system design. Not a chatbot: a structured AI interview
+extracts the requirements, then a pipeline of specialized agents produces the
+architecture, database schema, REST API, review, and a runnable code scaffold.
 
-Instead of generating output immediately, it runs a **structured AI interview**
-to extract requirements, then drives a pipeline of specialized agents through
-design, review, and export.
+[![CI](https://github.com/SamehDheir/archivato_ai_builder/actions/workflows/ci.yml/badge.svg)](https://github.com/SamehDheir/archivato_ai_builder/actions/workflows/ci.yml)
+![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)
+![NestJS](https://img.shields.io/badge/NestJS-10-e0234e?logo=nestjs)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-5-2d3748?logo=prisma)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-dc382d?logo=redis&logoColor=white)
+![i18n](https://img.shields.io/badge/i18n-EN%20%2B%20AR%20(RTL)-6366f1)
 
 ```
-User Input → Intent Analysis → Interview Loop → Requirements →
-System Design → DB Design → API Design → Review → Export
+Idea → AI Interview → Requirements → System Design → Database Design →
+API Design → AI Review → Roadmap · Cost · Threat Model · QA Plan → Export / Scaffold
 ```
 
 ---
 
-## Tech Stack
+## Table of Contents
 
-| Layer        | Choice                                             |
-| ------------ | -------------------------------------------------- |
-| Backend      | NestJS + TypeScript (`apps/api`)                   |
-| Frontend     | Next.js 14 (App Router) + React (`apps/web`)       |
-| Shared types | `@archivato/shared` (`packages/shared`)            |
-| Database     | PostgreSQL + Prisma (all data persisted)           |
-| Queue        | BullMQ + Redis (async pipeline generation)         |
-| AI           | Swappable `LlmProvider`: mock · Claude · Groq · Azure OpenAI |
-| Auth         | JWT access + rotating refresh tokens (httpOnly cookies) |
-| Frontend UI  | Tailwind CSS + shadcn/ui (dark theme)              |
-| Monorepo     | npm workspaces (`apps/*` + `packages/*`)           |
-
-Architecture pattern: **Modular Monolith** (split later if needed).
+- [What it does](#what-it-does)
+- [Feature matrix (Free vs Pro)](#feature-matrix-free-vs-pro)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Repository layout](#repository-layout)
+- [Getting started](#getting-started)
+- [Configuration](#configuration)
+- [Testing & CI](#testing--ci)
+- [Deployment](#deployment)
+- [Engineering practices](#engineering-practices)
+- [Documentation](#documentation)
+- [Roadmap](#roadmap)
+- [License](#license)
 
 ---
 
-## Repository Layout
+## What it does
+
+Archivato interviews you like a senior consultant (≤ 9 adaptive questions),
+locks the requirements behind an explicit confirmation gate, then generates a
+chain of structured artifacts — each one grounded in the previous:
+
+| Artifact | Description |
+| --- | --- |
+| **Requirement Document** | Functional/non-functional requirements, roles, business rules, constraints |
+| **Product Vision** | PM-style vision derived from the interview |
+| **System Design** | Architecture pattern, tech stack, service modules — with per-decision "Explain this" rationale |
+| **Database Design** | Entities, columns, keys, relationships + ER diagram (Mermaid, exportable to Draw.io/SVG/PNG/PDF) |
+| **API Design** | REST endpoints per module with schemas + interactive API docs and a working mock server |
+| **AI Architect Review** | Scored review across security / scalability / performance / cost with findings |
+| **Roadmap** | Phased implementation plan |
+| **Cloud Cost Estimator** | Deterministic monthly bill across 8 providers at 100 / 1k / 10k users |
+| **Threat Model** | STRIDE security analysis with severities + mitigations |
+| **QA Plan** | Test strategy + concrete test cases by type |
+| **Diagrams & Canvas** | Architecture, ER, per-endpoint sequence flows; editable canvas |
+| **Export & Scaffold** | JSON / Markdown / OpenAPI (JSON+YAML) / SQL DDL / Postman / zip — plus a **runnable app scaffold**: a NestJS + Prisma API, a Next.js client (typed API client + CRUD pages), or both as one workspace (ZIP or one-click push to GitHub) |
+| **Deployment** | Every scaffold ships a Dockerfile, `docker-compose.yml`, a GitHub Actions workflow, and the config for the provider your cost estimate says is the best value it can actually run on (Render / Fly.io / Railway / Heroku / DigitalOcean / Vercel) |
+
+Around the pipeline: **chat refinement** (amend requirements, downstream stages
+regenerate consistently — and the derived artifacts that don't, like the roadmap
+or cost estimate, are **flagged stale with one-click regenerate** rather than
+quietly describing a design that changed), **version history** with diff +
+restore, **live SSE
+generation console**, **client-facing share links** (a read-only *proposal* page
+ordered for the buyer — vision → requirements → cost → roadmap, with the technical
+detail collapsed below — that anyone can open with no account; free on every plan
+as the organic loop, carrying a "Built with Archivato" watermark below Pro), full
+**auth** (email + Google/GitHub
+OAuth), **billing** (Free/Pro via Paddle or an offline mock), a **customer
+support center** with a three-layer AI assistant + knowledge base, **RBAC** for
+staff consoles, **admin analytics**, and a bilingual UI (**English + Arabic,
+RTL-safe**).
+
+## Feature matrix (Free vs Pro)
+
+| | Free | Pro ($19/mo or $182/yr) |
+| --- | --- | --- |
+| Client scopings | 1 | 5 |
+| Interview → Requirements → System → Database design | ✅ | ✅ |
+| Product Vision | ✅ | ✅ |
+| Client-facing share link (read-only proposal page) | ✅ with watermark | ✅ no watermark |
+| API design, AI review, roadmap, cost, threat model, QA plan | — | ✅ |
+| Export formats + code scaffold + API docs/mock server | — | ✅ |
+
+Billing runs **offline in mock mode by default** (instant upgrade, no charge),
+so the entire funnel is demoable with zero setup; Paddle (Merchant-of-Record)
+activates with a key.
+
+## Architecture
+
+- **Modular monolith** (NestJS): every pipeline stage is its own module with
+  its own controller, service, DTOs, and guarded routes. Stages gate on their
+  upstream artifacts (409 until prerequisites exist).
+- **Repository pattern everywhere:** each store has an interface, an in-memory
+  implementation (unit tests run DB-free), and a Prisma implementation.
+- **Provider interfaces for every external dependency** — swap by env var, no
+  code changes:
+  - `LlmProvider`: mock · Claude · Groq · Azure OpenAI
+  - `BillingProvider`: mock · Paddle
+  - `MailService`: Resend · SMTP · Ethereal preview · log
+- **Deterministic fallbacks:** every AI agent produces a valid artifact even
+  with no key or a failed model call — the app, tests, and CI run fully
+  offline. Fallbacks are a resilience layer, not mock data.
+- **Async + streaming generation:** BullMQ (Redis) job queue, plus an SSE
+  "narration" console that streams a human-readable account of each artifact.
+- **LLM usage metering:** every model call is recorded (tokens, latency, and a
+  deterministic cost from a per-model price catalog) and attributed to the user,
+  session, pipeline stage, and agent that caused it — surfaced as an AI-spend
+  panel in `/admin`, plus a lifetime **AI cost** column in the admin users table
+  (what each user costs us, next to what they pay us). Only counts are stored,
+  never prompt or completion content; a model with no catalog price records tokens
+  with an *unknown* cost rather than a misleading $0.
+- **Three independent authorization axes:** ownership (`SessionOwnerGuard`),
+  entitlement (`ProGuard` / plan), and RBAC (`PermissionGuard` over a
+  code-defined permission catalog with DB-managed roles).
+- **Security posture:** JWT access + rotating single-use refresh tokens in
+  httpOnly cookies, global rate limiting with per-route tightening, boot-time
+  env validation that refuses insecure production configs, HMAC-verified
+  webhooks, global exception filter (no stack leaks), Sentry opt-in.
+
+## Tech stack
+
+| Layer | Choice |
+| --- | --- |
+| Backend | NestJS + TypeScript (`apps/api`) |
+| Frontend | Next.js 14 App Router + Tailwind CSS + shadcn/ui (`apps/web`) |
+| Shared domain types | `@archivato/shared` (`packages/shared`, runtime-free) |
+| Database | PostgreSQL + Prisma |
+| Queue | BullMQ + Redis |
+| AI | Swappable `LlmProvider` (mock / Claude / Groq / Azure OpenAI) |
+| Payments | Paddle (MoR) behind `BillingProvider` (offline mock default) |
+| Auth | JWT + rotating refresh (httpOnly cookies), Google/GitHub OAuth |
+| Testing | Jest (api, node) · Jest + Testing Library (web, jsdom) |
+| CI | GitHub Actions (lint, unit tests, builds) |
+| Monorepo | npm workspaces (`apps/*` + `packages/*`) |
+
+## Repository layout
 
 ```
 archivato-ai-builder/
-├─ packages/
-│  └─ shared/            # framework-free domain types shared by api + web
+├─ packages/shared/       # framework-free domain types + pure builders (cost,
+│                         # scaffold, SQL/YAML/Postman, diagrams, permissions…)
 ├─ apps/
-│  ├─ api/               # NestJS backend
-│  │  ├─ prisma/         # Prisma schema + migrations (PostgreSQL)
-│  │  └─ src/
-│  │     ├─ prisma/      # PrismaService + global module
-│  │     ├─ auth/        # register/login/refresh, JWT cookie guard
-│  │     ├─ llm/         # LlmProvider interface, mock + claude, agents
-│  │     ├─ interview/   # phased interview engine (state machine, REST)
-│  │     ├─ requirements/# Requirement Document generation (REST)
-│  │     ├─ system-design/   # System Design generation (REST)
-│  │     ├─ database-design/ # Database Design generation (REST)
-│  │     ├─ api-design/      # API Design generation (REST)
-│  │     ├─ review/          # AI Review Engine (REST)
-│  │     ├─ export/          # Export: JSON/Markdown/OpenAPI/structure
-│  │     └─ prisma/          # PrismaService + module
-│  └─ web/               # Next.js frontend (interview → requirements → designs)
-├─ CLAUDE.md             # working memory / decisions log
-└─ README.md            # this file
+│  ├─ api/                # NestJS backend — one module per pipeline stage +
+│  │                      # auth, billing, support, admin, analytics, roles…
+│  └─ web/                # Next.js frontend — landing, dashboard, admin consoles
+├─ .github/workflows/     # CI (lint · unit tests · builds)
+├─ docs/                  # PROGRESS.md (slice log) · API.md (route reference)
+├─ CLAUDE.md              # engineering memory: conventions, decisions, gotchas
+└─ DEPLOY.md              # self-hosted (Docker) + managed (Render/Vercel) guides
 ```
 
----
+## Getting started
 
-## Getting Started
+**Prerequisites:** Node.js ≥ 20, Docker (for Postgres + Redis).
 
-### Prerequisites
-- Node.js >= 20
-
-### Install
 ```bash
+# 1. Install & build the shared package
 npm install
-npm run build:shared      # build the shared types package once
-```
+npm run build:shared
 
-### Configure
-```bash
-cp .env.example apps/api/.env              # API + Prisma read apps/api/.env
+# 2. Configure
+cp .env.example apps/api/.env
 cp apps/web/.env.local.example apps/web/.env.local
-```
-> The NestJS dev server and Prisma CLI load `apps/api/.env` (that's where
-> `DATABASE_URL` must live). On Windows, stop the dev API before running
-> `prisma migrate`/`generate` to avoid an engine-DLL file lock (`EPERM`).
-**One switch for real AI.** With no key the API runs fully offline in **mock
-mode** (deterministic). Pasting a **free Groq key** flips the *entire* pipeline
-— the interview **and** every design agent (requirements, system, database, API,
-review, refine) — to real AI:
-```env
-# leave LLM_PROVIDER unset → auto: Groq when GROQ_API_KEY is set, else mock
-GROQ_API_KEY=gsk_...            # free, https://console.groq.com/keys
-GROQ_MODEL=llama-3.3-70b-versatile
-```
-To force a specific provider for everything instead, set `LLM_PROVIDER`:
-```env
-LLM_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-sonnet-4-6   # claude-opus-4-8 is more capable
-```
-**Azure OpenAI** is also supported (handy if you have Microsoft-for-Startups
-credits). The model is chosen by the **deployment name**, not a model id:
-```env
-LLM_PROVIDER=azure                  # optional: Groq wins if both keys are set
-AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_ENDPOINT=https://<your-resource>.openai.azure.com
-AZURE_OPENAI_DEPLOYMENT=gpt-4o
-AZURE_OPENAI_API_VERSION=2024-10-21 # optional (GA version with JSON mode)
-```
-Every agent keeps a deterministic fallback, so malformed model output still
-produces a valid artifact. The API logs which provider it resolved on startup
-(`Agent LLM provider: …` / `Interview LLM provider: …`).
 
-**Subscriptions (optional).** Two dimensions are metered. **(1) Project count** —
-Free = 1 project, **Pro = $19/mo → 5 projects**; you're blocked from starting a
-new project at the limit (delete one to free a slot, or upgrade). **(2) Pipeline
-depth (freemium)** — Free generates the interview, requirements, system design,
-and database design (plus Product Vision); **Pro unlocks the API design and
-everything after it: AI review, roadmap, cloud cost estimator, and export.**
-Wherever a free user hits
-a wall — the API tab, the quota banner, or starting a project at the cap — an
-**in-app upgrade modal** pops up and unlocks the UI in place on success. Billing
-runs **offline in mock mode by default** — upgrade applies
-instantly and **cancel is at-period-end** (you keep Pro until the period ends,
-then drop to Free), all with no charge, so the whole flow is demoable with zero
-setup. To
-use real **Paddle** (Merchant-of-Record), set `BILLING_PROVIDER=paddle` and:
-```env
-PADDLE_API_KEY=...            # server API key (sandbox or live)
-PADDLE_PRICE_ID=pri_...       # the $19/mo recurring price
-PADDLE_CLIENT_TOKEN=...       # client-side token for Paddle.js checkout
-PADDLE_WEBHOOK_SECRET=...     # verifies POST /api/billing/webhook
-PADDLE_ENV=sandbox            # or production
-```
-Point a Paddle webhook (subscription.* events) at `POST /api/billing/webhook`
-(use a tunnel like ngrok for local testing). The startup log shows the resolved
-`Billing provider: …`.
+# 3. Database + queue
+docker compose up -d db redis                        # Postgres on 5433, Redis on 6379
+npm run prisma:migrate --workspace @archivato/api
 
-### Database + Redis (PostgreSQL via Prisma, Redis for the job queue)
-All pipeline data is persisted; async generation runs on Redis (BullMQ). Start
-both services and apply the schema:
-```bash
-docker compose up -d db redis              # Postgres on 5433, Redis on 6379
-npm run prisma:migrate --workspace @archivato/api   # apply migrations + generate client
-```
-`DATABASE_URL` (in `.env`) defaults to the docker-compose database. Point it at
-any other Postgres if you prefer.
-
-### Run (two terminals)
-```bash
+# 4. Run (two terminals)
 npm run dev:api    # NestJS  → http://localhost:3001/api
 npm run dev:web    # Next.js → http://localhost:3000
 ```
-Open <http://localhost:3000> and walk through the requirements interview.
 
-### Test & Build
+Open <http://localhost:3000> — with no API keys the whole product runs
+**offline in mock mode**, deterministic end to end.
+
+## Configuration
+
+Everything is env-driven (see `.env.example` for the full list). The important
+switches:
+
+| Variable | Effect |
+| --- | --- |
+| `GROQ_API_KEY` | One free key flips the **entire pipeline** to real AI (leave `LLM_PROVIDER` unset) |
+| `LLM_PROVIDER` | Force `mock` · `claude` · `groq` · `azure` for all agents |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude provider (`claude-sonnet-4-6` default) |
+| `AZURE_OPENAI_API_KEY` / `_ENDPOINT` / `_DEPLOYMENT` | Azure OpenAI provider (deployment-name routing) |
+| `BILLING_PROVIDER` / `PADDLE_*` | Paddle checkout + HMAC-verified webhook; offline mock otherwise |
+| `MAIL_PROVIDER` / `RESEND_API_KEY` / `SMTP_*` | Transactional email; logs to console otherwise |
+| `DATABASE_URL` / `DIRECT_URL` / `REDIS_URL` | Postgres (pooled + direct for migrations) and Redis (`rediss://` supported) |
+| `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` | Seeds a ready-to-log-in super-admin on boot |
+| `JWT_ACCESS_SECRET` | Required ≥ 32 chars in production (boot refuses insecure configs) |
+
+The API logs the resolved providers on startup
+(`Agent LLM provider: …`, `Billing provider: …`, `Mail provider: …`).
+
+## Testing & CI
+
 ```bash
-npm run test:api   # API Jest unit tests (node)
-npm run test:web   # Web Jest tests (jsdom + React Testing Library)
-npm run lint:web   # Web ESLint (eslint-config-next)
-npm run build      # builds shared → api → web
+npm run test:api   # API unit tests (Jest, node, DB-free via in-memory repos)
+npm run test:web   # Web tests (Jest + React Testing Library, jsdom)
+npm run lint:web   # ESLint (eslint-config-next); api: npm run lint -w @archivato/api
+npm run build      # shared → api → web
 ```
 
----
+Every unit test runs **offline**: the API's repositories have in-memory
+implementations (no database) and the agents fall back to their deterministic
+builders (no LLM key), so the whole suite is hermetic.
 
-## Implementation Progress
+**CI** (`.github/workflows/ci.yml`) runs on every push/PR to `develop`/`main`:
+one `checks` job — build shared → prisma generate → lint api + web → unit tests
+api + web → production builds api + web.
 
-The project is built incrementally, **one slice at a time**, and each slice
-ships a backend feature **and** its frontend so it can be verified by hand.
+## Deployment
 
-### ✅ Slice 1 — Monorepo + LLM/Agent Core
-- npm-workspaces monorepo; `@archivato/shared` domain types.
-- `LlmProvider` interface with a **mock provider** (default, offline,
-  deterministic) and a **Claude provider** selected at runtime via
-  `LLM_PROVIDER`.
-- `BaseAgent` + structured `completeJson<T>()` contract.
+Two documented paths (see **[DEPLOY.md](DEPLOY.md)**):
 
-### ✅ Slice 2 — AI Interview Engine + UI
-- Phased **A–E interview** (Understanding → Business Logic → Features → Scale →
-  Technical) driven by a deterministic question plan — **kept short (≤ 9
-  questions; fewer is fine)**.
-- **Tap-to-answer**: questions can carry preset `options` (single-select or
-  multi-select checkboxes) so users pick instead of typing; a free-text field is
-  always available for extra detail. The adaptive (real-AI) interviewer can emit
-  options too. The submitted answer is still a plain string (picks + detail).
-- **Completeness scoring** with a **90% gate**: the system summarizes the
-  requirements and refuses to proceed until the user explicitly confirms.
-- Intent analysis via the `ProductAnalystAgent` (with a deterministic fallback).
-- Repository pattern for sessions — **in-memory for now**, Prisma later.
-- REST API (`/interview`, `/interview/:id`, `/interview/:id/answer`,
-  `/interview/:id/confirm`) with validated DTOs and CORS.
-- **Next.js chat UI**: idea form → phased Q&A → live completeness bar →
-  requirements summary → confirm.
+- **Self-hosted:** multi-stage Dockerfiles for api + web,
+  `docker-compose.prod.yml` (db + redis + api + web with healthchecks),
+  `scripts/backup-db.sh`.
+- **Managed:** Render (API, via `render.yaml` blueprint) + Vercel (web) +
+  Supabase (Postgres, pooled + direct URLs) + Upstash (Redis over TLS).
 
-### ✅ Slice 3 — Requirement Document + UI
-- `RequirementEngineerAgent` turns a **confirmed** interview into a formal,
-  structured **Requirement Document**: functional (FR-n, prioritized),
-  non-functional (NFR-n), user roles, business rules, constraints, assumptions.
-- LLM-generated with a **deterministic fallback** built from the interview, so
-  the stage always yields a valid document (and demos cleanly in mock mode).
-- Gate enforced: requirements can only be generated **after** confirmation.
-- Repository pattern for documents — in-memory for now, Prisma later.
-- REST API (`/requirements/:sessionId/generate`, `/requirements/:sessionId`).
-- **Frontend**: a "Generate Requirement Document" button on the confirmed
-  screen renders the full document (FR table, NFRs, roles, rules…), with regenerate.
+Health probes: `GET /health` (liveness) and `GET /health/ready` (DB + Redis
+readiness, 503 when degraded).
 
-### ✅ Slice 4 — System Design + UI
-- `SystemArchitectAgent` turns a confirmed interview + its Requirement Document
-  into a **System Design**: architecture type (monolith / modular_monolith /
-  microservices) with rationale, a **tech-stack recommendation**, and a
-  **service breakdown** (Auth, Users, Billing, Notifications… with dependencies).
-- LLM-generated with a **deterministic fallback** that infers the design from
-  the requirements (keyword-driven), so the stage always yields a valid design.
-- Gate enforced: requires a confirmed interview **and** a generated requirement
-  document (pipeline order: Requirements → System Design).
-- Repository pattern for designs — in-memory for now, Prisma later.
-- REST API (`/system-design/:sessionId/generate`, `/system-design/:sessionId`).
-- **Frontend**: a "Generate System Design" button after the requirement document
-  renders architecture, tech-stack table, and a service-card grid.
+## Engineering practices
 
-### ✅ Slice 5 — Database Design + UI
-- `DatabaseDesignerAgent` turns the confirmed interview + Requirement Document +
-  System Design into a **Database Design**: entities with **primary keys**,
-  **foreign keys**, column types, and **relations** (one-to-one / one-to-many /
-  many-to-many).
-- LLM-generated with a **deterministic fallback** derived from the system
-  design's services and the requirement roles (always a `users` table; profile
-  tables per role; `invoices`/`notifications`/`reports` per service).
-- Gate enforced: requires a confirmed interview, a requirement document, **and**
-  a system design (pipeline order: System Design → Database Design).
-- Repository pattern for designs — in-memory for now, Prisma later.
-- REST API (`/database-design/:sessionId/generate`, `/database-design/:sessionId`).
-- **Frontend**: a "Generate Database Design" button after the system design
-  renders entity cards (columns with PK/FK/unique badges) and a relations list.
+- **Vertical slices:** every feature ships backend + frontend together and is
+  hand-verifiable; each slice ends with a security review + code review.
+- **Validation & guards on every route:** class-validator DTOs, ownership
+  guards that 404 (never leak existence), permission guards, throttling.
+- **Shared, pure domain logic:** deterministic builders (cost estimation,
+  scaffold, SQL/YAML/Postman/diagram generation) live in `@archivato/shared`
+  as runtime-free, unit-tested functions.
+- **i18n by default:** all UI chrome is English + Arabic with RTL-safe logical
+  styling; AI artifacts stay server-side English by convention.
+- **Docs as memory:** [CLAUDE.md](CLAUDE.md) records conventions, decisions,
+  and hard-won gotchas; [docs/PROGRESS.md](docs/PROGRESS.md) is the slice log.
 
-### ✅ Slice 6 — API Design + UI
-- `ApiDesignerAgent` turns the upstream chain (interview → requirements →
-  system design → database design) into an **API Design**: endpoints grouped by
-  module, each with HTTP method, request/response schemas, and status codes.
-- LLM-generated with a **deterministic fallback** that derives REST CRUD
-  endpoints from the database entities (plus an Auth module: register / login /
-  refresh). Server-managed fields (id, timestamps, password_hash) are excluded
-  from write schemas.
-- Gate enforced: requires the full upstream chain incl. a database design.
-- Repository pattern for designs — in-memory for now, Prisma later.
-- REST API (`/api-design/:sessionId/generate`, `/api-design/:sessionId`).
-- **Frontend**: a "Generate API Design" button after the database design renders
-  module sections with colored method badges, paths, status codes, and
-  request/response schema columns. Per-part JSON download included.
+## Documentation
 
-### ✅ Persistence — PostgreSQL + Prisma
-- All pipeline data is now stored in PostgreSQL via Prisma. Every in-memory
-  repository was swapped for a Prisma-backed implementation behind the **same
-  repository interface** — services were untouched.
-- Schema: an `interview_sessions` table plus one table per artifact
-  (`requirement_documents`, `system_designs`, `database_designs`, `api_designs`,
-  `review_reports`), each storing the artifact as JSONB and cascading on session
-  delete.
-- `docker-compose.yml` provides a local Postgres; `prisma migrate` manages the
-  schema. Verified end-to-end: artifacts survive a full API restart.
+| Doc | Contents |
+| --- | --- |
+| [CLAUDE.md](CLAUDE.md) | Engineering memory: architecture conventions, module map, gotchas |
+| [DEPLOY.md](DEPLOY.md) | Docker + Render/Vercel/Supabase/Upstash deployment guides |
+| [docs/PROGRESS.md](docs/PROGRESS.md) | Full implementation slice log |
+| [docs/API.md](docs/API.md) | REST route reference |
 
-### ✅ Slice 7 — Review Engine + UI
-- `ReviewerAgent` analyzes the whole pipeline and outputs a **scalability score**
-  (0–100), **security issues** and **performance risks** (with severity),
-  **missing features**, and **recommendations**.
-- LLM-generated with a deterministic, artifact-aware fallback (detects pagination,
-  caching, queues; flags weak authorization, missing rate limits, N+1 risks).
-- Gate enforced: requires the full pipeline through the API design. Persisted to
-  `review_reports`.
-- REST API (`/review/:sessionId/generate`, `/review/:sessionId`).
-- **Frontend**: a "Run AI Review" button after the API design renders a score
-  ring, severity-tagged findings, and recommendations, with JSON download.
+## Roadmap
 
-### ✅ Slice 8 — Export + UI
-- `ExportService` assembles the full pipeline into portable formats:
-  **JSON** bundle, **Markdown** report, **OpenAPI 3.0** spec (derived from the API
-  + database design, with `:id`→`{id}` paths and component schemas), and a
-  **GitHub project structure** (module folders per service + shared/middleware/
-  config/utils, spec Step 7). Dependency-free pure builders.
-- **PDF** is produced client-side via the browser print dialog — no server PDF
-  dependency.
-- Gate enforced: requires the design pipeline through the API design (review is
-  included if present).
-- REST API (`/export/:sessionId/{json,markdown,openapi,openapi.yaml,structure}`).
-  The OpenAPI spec is offered as **JSON and YAML** (same document; YAML via a
-  pure, dependency-free `toYaml()` serializer in `@archivato/shared`).
-- **Frontend**: an Export panel after the review with one-click downloads for
-  each format (OpenAPI JSON + YAML) plus "Print / Save as PDF".
+- Lifecycle email (welcome / abandoned interview / upgrade nudge)
+- Cascade regeneration into the standalone stages (they are flagged stale today,
+  with one-click regenerate — auto-cascading would re-bill four LLM stages on
+  every refine, so it needs a cost decision first)
+- Dedicated worker process + BullMQ retries/backoff
 
-### ✅ Slice 9a — Auth core (Register / Login / Refresh) + UI
-- Local **register / login** with bcrypt-hashed passwords, **rotating refresh
-  tokens** (only a SHA-256 hash is stored; single-use rotation on every refresh),
-  and a short-lived **access JWT**.
-- **Tokens are delivered as httpOnly cookies** (`archivato_access` site-wide,
-  `archivato_refresh` scoped to `/api/auth`) — the browser never exposes them to
-  JS. CORS is now locked to `WEB_ORIGIN` with credentials (was `origin:true`).
-- `JwtAuthGuard` + `@CurrentUser()` protect routes; login returns a generic 401
-  so it never reveals which emails exist.
-- Repository pattern for **both** new stores (users + refresh tokens) — in-memory
-  for tests, Prisma for the app. New `users` + `refresh_tokens` tables.
-- REST API (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`,
-  `/auth/me`).
-- **Frontend**: an `AuthGate` wraps the whole app — dedicated `/login` and
-  `/register` routes (guest-only: signed-in users are redirected home), a header
-  with the current user + **Sign out** when signed in.
-- Pipeline routes stay public for now; per-user ownership is a focused follow-up.
+## License
 
-### ✅ Slice 9b — Email verification (+ UI)
-- **Single-use, 24h verification tokens** (only a SHA-256 hash stored) issued on
-  registration and on demand. `MailService` picks a transport via `MAIL_PROVIDER`
-  or auto-resolves in priority order: **Resend** (HTTP API, recommended for prod —
-  `RESEND_API_KEY`, works where SMTP ports are blocked) → **SMTP** (nodemailer,
-  `SMTP_HOST`) → **Ethereal preview** (`MAIL_PREVIEW=true`, zero-setup dev inbox +
-  logged preview URL) → **console log**. The resolved provider is logged on boot,
-  and `preview`/`log` under `NODE_ENV=production` logs a loud warning (they don't
-  deliver real mail). Verification + reset sends are **best-effort** at the call
-  site, so a transient provider outage never fails sign-up and never lets
-  forgot-password enumerate registered emails.
-- REST API (`/auth/verify-email`, `/auth/resend-verification`).
-- **Frontend**: a `/verify` landing page that confirms the token, plus an
-  "unverified" banner with a **Resend** action for signed-in users.
-
-### ✅ Slice 9b — Forgot password (email OTP)
-- **One-time 6-digit code** emailed on request (only its SHA-256 hash is stored;
-  10-minute expiry, single-use, bounded attempts). Verifying the code sets a new
-  password, **revokes all sessions**, and marks the email verified. Responses
-  never reveal whether an email exists.
-- REST API (`/auth/forgot-password`, `/auth/reset-password`).
-- **Frontend**: a "Forgot password?" flow on the login screen — request a code,
-  then enter the code + a new password.
-
-### ✅ Slice 10 — AI Chat After Generation (+ UI)
-- Once the design is complete, a chat panel lets you refine it in natural
-  language ("Add notifications", "Make it scalable to 5 million users").
-- A `RefinementAgent` amends the **Requirement Document**, then the existing
-  System / Database / API services **regenerate from it** (and the review too, if
-  one was already run) so every artifact stays consistent — the keyword-driven
-  fallbacks make changes cascade in mock mode.
-- The conversation is **persisted** (`chat_messages` table) and replayed on load.
-- REST API (`POST /chat/:sessionId`, `GET /chat/:sessionId`).
-- **Frontend**: a `ChatPanel` after the API design with example prompts; applying
-  a change re-renders the whole design at once.
-
-### ✅ Slice — Adaptive interview + free Groq AI
-- The interview now asks **AI-generated, concept-aware questions** instead of a
-  fixed plan. A `GroqLlmProvider` (free, OpenAI-compatible) drives the interview
-  when `GROQ_API_KEY` is set, via a dedicated `INTERVIEW_LLM_PROVIDER` — so the
-  free key flips only the interview to real AI while design agents stay on the
-  default. Falls back to the deterministic question plan when unavailable.
-
-### ✅ Slice 10 — AI Chat After Generation
-- A post-generation chat refines the design in natural language ("Add
-  notifications", "Make it scalable to 5M users"): the requirements are amended
-  and the system/database/API designs (and the review, if present) regenerate
-  together. Conversation persisted; `POST/GET /chat/:sessionId`.
-
-### Resume
-- The web app remembers the active session (localStorage) and rehydrates the
-  interview + every generated artifact on load, so a refresh continues where you
-  left off.
-
-### ✅ Slice 9c — OAuth (Google / GitHub)
-- Sign in with Google or GitHub via a server-side authorization-code flow (no
-  extra SDK — native `fetch`). Accounts are **linked by verified email**: an
-  OAuth login for an existing email attaches the provider; otherwise a new
-  password-less, email-verified account is created. CSRF-protected with a `state`
-  cookie; a provider is enabled only when its client id + secret are set.
-- REST API (`GET /auth/oauth/providers`, `GET /auth/oauth/:provider/start`,
-  `GET /auth/oauth/:provider/callback`).
-- **Frontend**: "Continue with Google / GitHub" buttons on the auth screen,
-  shown only for configured providers; callback errors surface on `/login`.
-
-### ✅ Slice 11 — Per-user pipeline ownership ("My projects")
-- Every interview session is now owned by the authenticated user (`userId` FK).
-  A `SessionOwnerGuard` protects **all** pipeline routes (previously public):
-  non-owners get a `404` (no existence leak), unauthenticated requests `401`.
-- `GET /interview` lists the signed-in user's projects; the home screen shows a
-  **"My projects"** list to resume any past session.
-
-### ✅ Slice 11 — Async generation (BullMQ + Redis)
-- Heavy generation stages run on a background worker. The client enqueues a job
-  and polls its status, with a **live progress bar**, instead of blocking on a
-  long request. Jobs are owner-scoped and a job's status can only be read for
-  the session it belongs to.
-- REST API (`POST /jobs/:sessionId/:stage`, `GET /jobs/:sessionId/:jobId`).
-
-### ✅ Slice 11 — UI rebuilt on Tailwind CSS + shadcn/ui
-- The entire web app was migrated to **Tailwind CSS + shadcn/ui** with a cohesive
-  dark theme (Card, Button, Badge, Input, Select, Tabs, Table, Progress, Alert…).
-
-### ✅ Slice 13 — Architecture diagrams (Mermaid)
-- The structured designs are turned into **rendered diagrams** shown in a
-  **Diagrams** tab: **Flow Chart, Sequence, Class, ERD, Microservices,
-  Deployment**. Source is built deterministically from the system / database /
-  API designs (no LLM) as **Mermaid** and rendered to SVG in the browser, with
-  a "View source / Copy Mermaid" option (paste into Mermaid Live, PlantUML, or
-  draw.io). REST API (`GET /diagrams/:sessionId`), owner-scoped.
-
-### ✅ UI — Tabbed project view
-- The confirmed project view is organized into **tabs** (Requirements · System ·
-  Database · API · Review · Export · Refine · History) instead of one long
-  scroll — one stage at a time, with downstream tabs unlocking as artifacts are
-  generated. `page.tsx` was split into focused components
-  (`ProjectsDashboard`, `InterviewPanel`, `ProjectStages`, …).
-
-### ✅ Slice 12 — Project version history (compare + restore)
-- **Every modification snapshots the whole project** (all artifacts together) as
-  the next sequential version — captured after each async stage generation and
-  each chat refinement (identical no-op snapshots are deduped).
-- **Compare** any two versions in a side-by-side JSON diff, and **Restore** any
-  version in one click (the project is rewritten to match that snapshot exactly,
-  and the restore is saved as a new version, so history is never lost).
-- REST API (`GET /versions/:sessionId`, `GET /versions/:sessionId/:version`,
-  `POST /versions/:sessionId/:version/restore`), all owner-scoped.
-
-### ✅ Slice — SuperAdmin dashboard + analytics
-- **Role-based admin**: a `role` (`user`/`admin`) on users, bootstrapped from an
-  **`ADMIN_EMAILS`** allowlist (listed emails are auto-promoted on login). An
-  `AdminGuard` protects every `/admin` route; admins can promote/demote or delete
-  users from the dashboard (never themselves). Admin accounts are **stats-only** —
-  they can't create projects (the dashboard points them to `/admin` instead).
-- **Full traffic analytics**: a public `POST /analytics/track` beacon records
-  anonymous landing **pageviews** (cookie-scoped visitor id), while
-  **signup/login/generate** events are logged server-side. All best-effort — a
-  tracking failure never breaks the app.
-- **`/admin` dashboard**: live KPIs (users, projects, Pro subscribers + MRR,
-  pageviews, unique/active visitors, generations), 30-day signup & pageview trend
-  charts, projects-by-status, plan mix, top pages/referrers, and a paginated user
-  management table. Self-guards (non-admins bounce to the app); an admin-only
-  header link opens it.
-- **Super Admin is seeded on boot.** Set `SUPER_ADMIN_EMAIL` +
-  `SUPER_ADMIN_PASSWORD` in `apps/api/.env` and a pre-verified super-admin account
-  is created on startup — log in directly, no self-registration. (The legacy
-  `ADMIN_EMAILS` promote-on-login allowlist still works but is empty by default.)
-
-### ✅ Slice — Customer Support Center + AI Support Assistant
-- A professional **ticketing system** (Zendesk/Linear-style) reachable from the
-  **Support** header link (`/support`): dashboard with per-status counts, a
-  searchable/filterable **My Tickets** list, **Create Ticket** (subject,
-  category, priority, optional related project), and a chat-like **ticket
-  conversation** (Markdown + code blocks + attachments) with a full **timeline**
-  of every action (created / replied / status & priority changes / assigned /
-  closed / reopened / AI suggestion). Statuses: open · in progress · waiting for
-  customer · waiting for admin · resolved · closed. Customers can reply, close,
-  and reopen; internal notes stay admin-only.
-- **Three-layer AI Support Assistant** (free for everyone, offline in mock mode,
-  every response has a deterministic fallback): **(1) pre-ticket deflection** —
-  describe the problem and the AI searches the Knowledge Base + your own past
-  tickets and proposes a solution before a ticket is opened; **(2) in-ticket
-  assistant** — one click gives an issue summary, root-cause, suggested fix, and
-  a ready-to-send reply draft; **(3) admin copilot** — the same plus urgency,
-  priority, assignment, and similar tickets across the system.
-- **Attachments** (images / PDF / ZIP / TXT / JSON / logs) are stored as
-  metadata; for text-based files the extracted text is persisted inline so the
-  AI can analyze uploaded logs. **Knowledge Base** is a placeholder listing whose
-  seed articles also power the deflection layer. **Admin Support Panel**
-  (`/support/admin`, admin-guarded) adds a metrics dashboard (open / waiting /
-  critical / unassigned counts, avg first-response & resolution time, and
-  AI-flagged tickets that need attention), an all-tickets table with filters, and
-  per-ticket management (status / priority / category / assignment / notes /
-  copilot). **Notification hooks** are stubbed (in-app + email + AI smart
-  alerts), ready to wire to a real channel.
-- REST API under `/support` (customer) and `/support/admin` (admin). All routes
-  are owner-scoped (a customer only ever sees their own tickets; a non-owner gets
-  a 404, no existence leak); the AI never reads another user's ticket data.
-
-### ✅ Slice — RBAC (dynamic roles & permissions)
-- The monolithic `admin` is replaced by a **dynamic, DB-managed role system**.
-  The **permission catalog is code-defined** in `@archivato/shared` (a permission
-  only exists because a guard enforces it), while **roles, their granted
-  permissions, and who holds them are editable at runtime**. A user can hold
-  **multiple roles**; their effective permissions are the **union**.
-- **Seeded system roles**: **Super Admin** (full catalog), **Support Agent** (all
-  `support:*` — works tickets without platform access), **Billing Admin**
-  (`billing:manage`), and **User** (none; acts via ownership). `ADMIN_EMAILS`
-  bootstraps the first Super Admin; everyone else is assigned in the UI.
-- Enforcement is a **`PermissionGuard` + `@RequirePermissions(...)`** decorator.
-  `/admin` split into `admin:analytics` / `admin:users:read` / `admin:users:manage`;
-  the Support staff panel now needs `support:read_all` (so a Support Agent can
-  work tickets without being a super admin). The web mirrors this with a shared
-  `hasPermission()` helper driving nav + self-guards.
-- **Role management UI** at **`/admin/roles`** (needs `admin:roles:manage`):
-  create/edit/delete roles with a grouped permission grid, and assign roles to
-  users. Super Admin's permissions are locked to the full catalog (no lock-out)
-  and system roles can't be deleted. REST API under `/admin/roles`.
-
-### ✅ Slice — Role-aware interfaces & staff provisioning
-- **Staff = console-only accounts.** A user who holds *any* permission is
-  **staff** (`isStaffUser`) and **cannot create projects** — `POST /interview`
-  403s them (generalizing the old admin-only block to Support/Billing agents).
-- **Role-aware dashboard.** `/dashboard` shows a **`StaffHome`** to staff instead
-  of the project creator: one card per console their permissions grant (Support,
-  Analytics, Roles, Billing) — the **union** of their roles. Regular users still
-  get the project creator. Fully i18n'd (EN + AR).
-- **Super Admin provisions staff without self-registration.** `POST
-  /admin/roles/provision-user` (`admin:roles:manage`) creates a **pre-verified**
-  account with a **generated strong password** (returned once), **bypassing** the
-  one-account-per-device gate, and assigns RBAC roles. The `/admin/roles` page has
-  a "Provision staff account" card that shows the password once with a copy button.
-
-### ✅ Slice — Professional landing page + waitlist
-- The public landing page was redesigned into a conversion flow: **Hero (with the
-  looping build video) → Problem → Solution → Pricing → FAQ → Waitlist**. Pricing
-  reads from `PLANS`; FAQ is an accordion; copy is fully i18n'd (EN + AR, RTL).
-- **Waitlist** is a real backend: a public `POST /waitlist` (repo pattern +
-  `waitlist_entries` table) with **idempotent**, normalized email signup. The
-  landing form posts to it with success / already-joined / invalid states.
-
-### ✅ Slice — Legal pages + cookie consent
-- Public **`/privacy`** and **`/terms`** pages, rendered from one data-driven
-  `LegalDocument` component and a bilingual **`legal`** i18n namespace (EN + AR,
-  RTL-safe). The content honestly reflects the app (account data, hashed device
-  fingerprint, AI processing of your input, Paddle billing, self-serve account
-  deletion + export) and carries `[LEGAL_ENTITY]` / `[JURISDICTION]` /
-  `[CONTACT_EMAIL]` **placeholders to fill before launch**; "contact us" points to
-  the in-app Support Center. Linked from the landing footer's new **Legal** column.
-- A **cookie-consent banner** (shown on every page until you choose) gates
-  **analytics only** — essential cookies (auth, locale, theme) always run. The
-  anonymous pageview beacon + its visitor cookie fire **only after consent**; the
-  choice persists in `localStorage` and updates the tracker live (no reload).
-
-### ✅ Slice — Production hardening (health, errors, deploy)
-- **Health probes** (root-level, un-throttled, outside the `/api` prefix):
-  `GET /health` (liveness) and `GET /health/ready` (readiness — checks Postgres
-  **and** Redis, returns `503` if either is down) for load balancers / orchestrators.
-- **Global exception handling**: an `AllExceptionsFilter` preserves known HTTP
-  error bodies, returns a generic 500 for unexpected errors (no stack/detail leak),
-  logs 5xx with request context, and reports to **Sentry** when `SENTRY_DSN` is set
-  (a no-op otherwise).
-- **Deployment**: multi-stage **Dockerfiles** for the API and web (Next standalone
-  output), a **`docker-compose.prod.yml`** (db + redis + api + web, with
-  healthchecks), a **`scripts/backup-db.sh`** pg_dump/retention script, and a full
-  **[`DEPLOY.md`](./DEPLOY.md)** guide (single-host and managed-hosting paths).
-
-### ✅ Slice — Code scaffolding (design → runnable backend)
-- Closes the "last mile": a Pro-only stage that turns the confirmed design into a
-  **runnable NestJS + Prisma backend**. Fully **deterministic** (no LLM):
-  `buildBackendScaffold()` in `@archivato/shared` maps entities/relations → a
-  `prisma/schema.prisma` and API modules/endpoints → NestJS
-  modules/controllers/services + class-validator DTOs, plus root project files.
-  The output always compiles (FKs are documented scalar fields; service methods
-  are typed "Not implemented" stubs; a PK is synthesized when missing).
-- **Two deliveries**: **Download ZIP** (`GET /api/scaffold/:id/zip`) and **Push to
-  GitHub** (`POST /api/scaffold/:id/github`). The push creates the repo with
-  `auto_init` (GitHub refuses a tree on an empty repo), then commits the scaffold
-  onto `main`; the GitHub client retries transient failures with backoff.
-
-### ✅ Slice — "Connect with GitHub" (one-click push)
-- Instead of pasting a token, a **Connect with GitHub** button runs an OAuth popup
-  and stores a per-user connection so pushes need no token. The access token is
-  **encrypted at rest** (AES-256-GCM); the OAuth `state` is HMAC-signed to bind the
-  callback to the user. A **Personal Access Token** remains as a fallback (used
-  once, never stored).
-- Reuses your existing **login GitHub OAuth App** — set the scaffold callback URL
-  (`…/api/scaffold/github/connect/callback`) on it and leave
-  `GITHUB_SCAFFOLD_CLIENT_ID/SECRET` empty (they fall back to `GITHUB_CLIENT_ID/SECRET`).
-  New endpoints: `GET /api/scaffold/github/connect/start`, `…/connect/callback`,
-  `GET/DELETE /api/scaffold/github/connection`.
-- **Web**: the "Generate code" section shows Connect → connected state (with
-  Disconnect) → push, plus a "use a token instead" toggle. i18n'd (EN + AR).
-
-### ✅ Slice — Streaming generation (live "narration" console)
-- Generating a pipeline stage now streams a **live narration** of the work over
-  **Server-Sent Events** (`GET /api/stream/:sessionId/:stage`) instead of a flat
-  progress bar — a terminal-style console types out each step as the design takes
-  shape (roles found → requirements derived → services decomposed → endpoints
-  defined → review scored), with an active-step spinner and a blinking caret.
-- Because artifacts are structured JSON and every agent has a deterministic
-  offline fallback, we stream a **human-readable narration derived from the
-  finished artifact** (the pure, unit-tested `buildNarration()` in
-  `@archivato/shared`), not raw JSON tokens — so it reads identically in mock mode
-  and with a real provider. The endpoint runs the **same generation** the async
-  worker does (persist + version snapshot); the **Pro gate is enforced server-side
-  before any generation**; and the **poll-based `/jobs` path remains the fallback**
-  (the web client degrades to it automatically if SSE is blocked or the auth cookie
-  needs a refresh).
-
-### ✅ Slice — Annual Pro plan (annual billing option)
-- Pro can now be billed **annually — $182/yr (20% off $228, ~$15.17/mo)** alongside
-  the $19/mo option. Annual is modeled as a **billing cadence, not a new tier**: an
-  orthogonal `billingCycle` (`monthly` | `annual`) changes only the price, the
-  period length, and the Paddle price id — the Pro entitlement (5-project quota, the
-  freemium unlock) is byte-for-byte identical, so none of the `plan === 'pro'` logic
-  changed.
-- Cadence is chosen at **checkout** (`POST /api/billing/checkout` now takes an
-  optional `{ billingCycle }`); switching cadence is just a fresh checkout / new
-  period (mock applies it instantly with a 365-day period; Paddle handles proration
-  as Merchant-of-Record via `PADDLE_PRICE_ID_ANNUAL`). The **in-app upgrade modal**
-  and the **landing pricing** both get a Monthly/Annual toggle with the savings
-  badge; **settings** shows an "Annual" badge; and the billing-admin **MRR
-  normalizes** annual subscriptions to their monthly-equivalent revenue.
-
-### ✅ Slice — Notifications wired (in-app bell + email)
-- The Support Center's notification hooks are no longer a stub: every ticket event
-  now delivers **two real channels** to the **involved party** — an **in-app
-  notification** (a new header **bell** with an unread badge + dropdown) and an
-  **email** via the existing `MailService`. Recipients are scoped (no staff
-  broadcast): a new ticket / status change confirms to the customer; a reply
-  notifies the *other* side; an assignment notifies the assignee; an AI
-  smart-alert goes to the assignee. Everything is **best-effort** — a
-  notification or mail failure never breaks the ticket action.
-- New **`notifications`** module (repo pattern + `notifications` table):
-  owner-scoped `GET /api/notifications` (items + unread count),
-  `POST /api/notifications/read-all`, `PATCH /api/notifications/:id/read`. The web
-  bell polls every 60s (and on tab focus), marks read, and deep-links to the
-  ticket. Emails HTML-escape the user-supplied subject and carry an absolute
-  deep-link; `MailService` gained a public `sendNotificationEmail`.
-
-### ✅ Slice — Per-flow sequence diagrams
-- The **Diagrams** tab's single Sequence diagram is now a **per-flow** set: pick
-  any endpoint (grouped by module) and see its own sequence diagram. Auth flows
-  (login / register / refresh) are specialised — credential check, password-hash
-  verify, token issuance + `Set-Cookie` — while reads show a cache lookup and
-  writes an optional queue enqueue (both driven by the system design's tech
-  stack). Fully **deterministic** (no LLM): `buildSequenceFlows()` in
-  `@archivato/shared` builds one Mermaid `sequenceDiagram` per endpoint. The
-  generic Sequence entry stays as an "Overview (happy path)"; `ProjectDiagrams`
-  gained a `flows: SequenceFlow[]` field. No new endpoints — `GET /api/diagrams/:id`
-  now returns the flows too. i18n'd (EN + AR).
-
-### ✅ Slice — "Explain this decision" (architecture rationale on demand)
-- The **System Design** view gained an **Explain** button next to the
-  architecture, every tech-stack pick, and every service. Clicking it asks a new
-  **`ArchitectExplainer`** agent for the decision's **rationale, tradeoffs,
-  alternatives (and why-not), and risks** — rendered in a modal. Like every
-  agent it's **LLM-driven with a deterministic, knowledge-based fallback**
-  (`buildDecisionExplanation()` in `@archivato/shared`), so it always returns a
-  coherent answer offline and in tests.
-- New endpoint `POST /api/system-design/:sessionId/explain` (owner-guarded,
-  `THROTTLE_AI`), body `{ kind: 'architecture'|'tech'|'service', key }`. The
-  result is **ephemeral** — nothing is persisted. Available on the (free)
-  System Design stage. i18n'd (EN + AR).
-
-### ✅ Slice — Security threat model (STRIDE)
-- A new **Security** tab (Pro) runs a **STRIDE threat model** of the generated
-  design: for each category — **Spoofing, Tampering, Repudiation, Information
-  Disclosure, Denial of Service, Elevation of Privilege** — it enumerates
-  concrete threats against the system's components/entry points, each with a
-  **severity** and a **mitigation**, plus the **trust boundaries** and
-  **assumptions**. A new **`ThreatModeler`** agent generates it — **LLM-driven
-  with a deterministic heuristic fallback** that inspects the design (auth &
-  rate-limiting, roles/permissions, id-scoped routes → IDOR, sensitive entities,
-  cache/queue), so it always yields a complete model offline and in tests.
-- Standalone Pro artifact (own `threat_models` table; not in version snapshots),
-  mirroring roadmap/cost: `POST /api/threat-model/:sessionId/generate`
-  (owner-guarded + `ProGuard` + `THROTTLE_AI`) and `GET /api/threat-model/:sessionId`.
-  Web: a `ThreatModelView` grouping threats by STRIDE category with a severity
-  tally + JSON download. i18n'd (EN + AR).
-
-### ✅ Slice — Test / QA plan
-- A new **QA Plan** tab (Pro) turns the generated design into a **structured
-  testing plan**: an overall strategy plus suites of concrete, verifiable test
-  cases grouped by type — **unit, integration, end-to-end, security,
-  performance, acceptance** — each case with an expected result and priority,
-  plus **coverage goals**, recommended **tooling** (derived from the stack), and
-  **out-of-scope** notes. A new **`QaPlanner`** agent generates it — **LLM-driven
-  with a deterministic fallback** that maps services → unit tests, API modules →
-  integration tests, key flows → e2e, roles/authz → security, list endpoints →
-  performance, and functional requirements → acceptance (with sequential `TC-n`
-  ids), so it always yields a complete plan offline and in tests.
-- Standalone Pro artifact (own `qa_plans` table; not in version snapshots):
-  `POST /api/qa-plan/:sessionId/generate` (owner-guarded + `ProGuard` +
-  `THROTTLE_AI`) and `GET /api/qa-plan/:sessionId`. Web: a `QaPlanView` grouping
-  suites by test type with a per-type tally + JSON download. i18n'd (EN + AR).
-
-### ✅ Slice — Editable Knowledge Base (real store + CRUD)
-- The Support Center's Knowledge Base is no longer a static in-code seed: it's a
-  real **`kb_articles`** store (repository pattern: interface + in-memory +
-  Prisma) with **staff CRUD**. On first boot the curated set is **seeded only
-  when empty**, so AI deflection and the reader keep working out of the box.
-- Articles carry a **draft/published** state — **drafts are hidden from customers
-  and excluded from AI deflection**. A new **`support:kb:manage`** permission
-  (held by Support Agent + Super Admin) gates authoring; the keyword scorer is now
-  a pure, shared `searchArticles()` used by both public search and deflection.
-- **Public** (any signed-in user): `GET /api/support/kb?q=` (published,
-  keyword-ranked) and `GET /api/support/kb/:id` (full body). **Admin**
-  (`support:kb:manage`): full CRUD under `/api/support/admin/kb`. **Web**: the KB
-  page is now a real **reader with live search + article detail pages** (Markdown
-  body), plus a **Manage KB** console (`/support/admin/kb`) to create/edit/publish/
-  delete. i18n'd (EN + AR).
-
-### ✅ Slice — Unified admin console (permission-aware sidebar)
-- Every staff/admin area now shares one professional shell: a persistent
-  **left sidebar** (below the app header) that lists **only the consoles the
-  viewer's roles grant** — Overview, Support (Tickets · Knowledge Base),
-  Platform (Analytics · Roles), Billing — grouped and with an active-state
-  highlight. A single `admin-nav` config drives both the sidebar and the staff
-  landing, so a support agent sees only Support while a super admin sees
-  everything; the sidebar re-resolves on tab focus (a revoked permission's item
-  disappears without a reload).
-- The shell (`AdminShell`) is applied via **route-group layouts** for `/admin/*`
-  and `/support/admin/*`, and the staff **`/dashboard`** now shows a redesigned
-  **console overview** (a card per reachable console) inside it — replacing the
-  old card grid. Regular users' project dashboard is unchanged. The top **navbar
-  was decluttered**: the redundant Admin quick-link is gone and the Support link
-  shows for customers only (staff navigate via the sidebar). i18n'd (EN + AR,
-  RTL-safe).
-
-### ✅ Slice — Agent quality upgrade (prompts, outputs & provider hardening)
-- **All 14 AI agents** (product analyst, interviewer, requirement engineer,
-  system architect, database designer, API designer, reviewer, product manager,
-  roadmap planner, refiner, threat modeler, QA planner, architect explainer,
-  support assistant) were re-authored to a single professional standard: each
-  **system prompt** now defines a senior role, an explicit method, and a precise
-  **output standard** (specific to *this* system, actionable, correct
-  terminology, no invented scope, complete and internally consistent, strict
-  JSON only), and each **input prompt** passes richer, structured upstream
-  context with field-level guidance. The artifact **schemas are unchanged**, so
-  every view, export, and version snapshot keeps working.
-- **Provider hardening.** The JSON extractor is now a string/escape-aware
-  **balanced-brace scan** with trailing-comma repair (resilient to fences,
-  surrounding prose, and truncated output). The **Claude** provider only sends
-  sampling params (`temperature`) to models that still accept them — so setting
-  `ANTHROPIC_MODEL` to a newer model (Opus 4.7/4.8, Sonnet 5) no longer 400s
-  every call — and marks the stable system prompt for **prompt caching**. The
-  **Groq** provider (the default free real-AI path) uses native
-  **`response_format: json_object`** so structured output is guaranteed, not
-  coaxed.
-- **The deterministic fallbacks stay** — they are a resilience layer (offline
-  mock mode + tests), not "mock data." To get real AI everywhere, set a provider
-  key (a free `GROQ_API_KEY`, with `LLM_PROVIDER` unset, flips the whole
-  pipeline) and restart the API; the boot log confirms `Agent LLM provider:
-  groq`. Full suite green (43 suites, 280 tests).
-
-### ✅ Slice — YAML OpenAPI export
-- The generated **OpenAPI 3.0** spec can now be downloaded as **YAML** as well as
-  JSON — the same document, serialized by a pure, dependency-free `toYaml()` in
-  `@archivato/shared` (no new package; block-style, quotes keys/strings only when
-  ambiguous, correct for the numeric status-code and `{id}` path keys). New route
-  `GET /api/export/:sessionId/openapi.yaml` (`application/yaml`), Pro-gated and
-  owner-scoped like the rest of export. The Export panel splits the OpenAPI
-  download into **JSON** and **YAML** buttons. i18n'd (EN + AR). Unit-tested
-  (serializer edge cases) + an integration test on the real spec.
-
-### ✅ Slice — Richer export formats (SQL, Postman, "Download all")
-- The Export tab now covers the whole delivery workflow, not just documents. Three
-  developer-facing formats were added, all from **pure, dependency-free builders**
-  in `@archivato/shared`:
-  - **SQL DDL** (`schema.sql`) — the database design as runnable PostgreSQL:
-    quoted identifiers, mapped column types, primary keys inline, and foreign keys
-    emitted as `ALTER TABLE … ADD CONSTRAINT` after all tables so it runs in any
-    order. `GET /api/export/:id/schema.sql`.
-  - **Postman collection** (v2.1) — the API design as an importable collection
-    (folder per module, `{{baseUrl}}` variable, `:id` path vars, query params, and
-    schema-derived JSON bodies on writes) for Postman/Insomnia.
-    `GET /api/export/:id/postman`.
-  - **Download all** (`.zip`) — one click bundles README.md + bundle.json +
-    openapi.json/yaml + schema.sql + postman_collection.json + structure.json
-    (server-side via the existing `jszip` dep; the pipeline is fetched once).
-    `GET /api/export/:id/all.zip`.
-- All Pro-gated + owner-scoped like the rest of export. Web: a prominent
-  **Download all** button plus **SQL schema** / **Postman** downloads in the
-  Export panel. i18n'd (EN + AR). Unit-tested builders + integration/zip tests.
-
-### ✅ Slice — Profile pictures (avatar + initials fallback)
-- Users can now set a **profile picture**. When none is set, a stable, colored
-  **initials avatar** (derived from the display name) is shown everywhere the user
-  appears — the header, the settings Profile card, and the admin users table.
-- **Upload** is inline with no object store: the browser **center-crops + resizes
-  the image to a 256px square JPEG** (kept tiny so the JSON body stays under the
-  API's default limit) and stores it as a base64 `data:` URI on a new nullable
-  `avatarUrl` column. Set via `PUT /api/auth/avatar` (validated data URI, size
-  cap), remove via `DELETE /api/auth/avatar` — both owner-scoped.
-- **OAuth sign-in captures the provider avatar** (Google `picture` / GitHub
-  `avatar_url`) as the initial picture, backfilling a picture-less account but
-  never overwriting one the user set themselves. A reusable `UserAvatar` component
-  handles the image/initials switch (and falls back to initials if an image fails
-  to load). i18n'd (EN + AR); unit-tested (`initialsFromName`, OAuth capture).
-
-### ✅ Slice — Frontend test + lint harness (`apps/web`)
-- Closed a real coverage gap: the backend had ~300 Jest tests but the **web app
-  had no test runner and no working ESLint** (`next lint` was uninitialized). Added
-  a **Jest + React Testing Library** setup through **`next/jest`** (jsdom, SWC
-  transform, CSS/asset mocks, tsconfig-alias mapping) with the first component
-  tests (`UserAvatar`, `AccountMenu`), run via `npm run test:web`.
-- Wired **ESLint** via **`eslint-config-next`** (`next/core-web-vitals`) so
-  `npm run lint:web` runs non-interactively and passes clean (also fixed a stale
-  `react-hooks/exhaustive-deps` case in `AdminShell`). Colocated `*.test.tsx`
-  convention (vs the API's `*.spec.ts`); i18n-dependent chrome mocks
-  `useTranslation`.
-
-### ✅ Slice — Azure OpenAI provider
-- Added **`AzureOpenAiLlmProvider`** behind the existing `LlmProvider` seam, so
-  the whole pipeline (interview + all 14 agents) can run on **Azure OpenAI** — no
-  agent code changed. Enable with `LLM_PROVIDER=azure`, or just set
-  `AZURE_OPENAI_API_KEY` (Groq keeps priority when both keys are present).
-- Shape-compatible with OpenAI, so it mirrors the Groq provider (native
-  `response_format: json_object` for guaranteed structured output), with the three
-  Azure specifics handled: the model comes from the **deployment name in the URL**
-  (an explicit `model` option maps onto that segment), auth is an **`api-key`
-  header** rather than a Bearer token, and requests carry an **`api-version`**.
-  Native `fetch`, no SDK. Unit-tested (URL/auth/JSON-mode/error paths + provider
-  resolution precedence).
-
-### ✅ Slice — Waitlist admin view
-- Realized the waitlist service's "future admin view": a read-only, **Super-Admin
-  only** console at **`/admin/waitlist`** listing everyone who joined from the
-  landing page — a total KPI, debounced email/source search, a paginated
-  newest-first table (email · locale · source · joined), and a one-click **CSV
-  export**. Sits in the AdminShell sidebar under Platform.
-- Backend: `GET /api/waitlist/admin?q=&page=&pageSize=` (`WaitlistService.list` →
-  a client-safe `WaitlistEntryView` page, page size capped at 200), gated by
-  `admin:roles:manage` (the app's super-admin gate). Repository gained a filtered
-  `list()` across the in-memory + Prisma impls. Unit-tested (ordering, pagination,
-  case-insensitive search, input clamping).
-
-### ✅ Slice — Visitor country (waitlist + analytics geolocation)
-- The waitlist admin table and the analytics dashboard now show **where visitors
-  are from**: a **Country** column (+ CSV field) on `/admin/waitlist`, and a **Top
-  countries (30d)** breakdown on `/admin`. Country is resolved server-side at
-  signup (`POST /waitlist`) and on the pageview beacon (`POST /analytics/track`);
-  only the 2-letter code is stored, never the IP.
-- Resolution is **hybrid + cheapest-first** (`common/geo.ts`): a CDN/edge country
-  header (Cloudflare `CF-IPCountry`, Vercel `x-vercel-ip-country`, …), then an
-  **offline `geoip-lite`** lookup on the client IP. `geoip-lite` is an **optional
-  dependency, lazy-loaded** — behind a CDN the header wins and the ~150 MB DB never
-  loads, and a lean production image can drop it entirely (`npm ci --omit=optional`,
-  see DEPLOY.md) and fall back to header-only. `GEOIP_FALLBACK=false` forces
-  header-only. Unit-tested (header precedence, code normalization, graceful null).
-  i18n'd EN + AR (country names localized via `Intl.DisplayNames`).
-
-### ✅ Slice — Activation & onboarding (sign-up → first artifact)
-- Attacks the drop-off between sign-up and the first generated artifact (from a
-  ux-consultant pass on the flow):
-  - **Starter-idea chips** — 5 concrete, tappable example ideas above the idea box
-    (`StarterIdeas` in `ProjectsDashboard`, data in `lib/starter-ideas.ts`). Tapping
-    **prefills** idea+industry+scale (still editable) so a first-timer never faces a
-    blank textarea. Chosen over an abstract "SaaS/marketplace" template gallery,
-    which would just relocate the blank-page problem. A soft hint replaces the silent
-    10-char gate.
-  - **Read-only Example project** — a persistent banner opens `ExampleProjectView`, a
-    tabbed read-only tour of a **finished sample** ("HomeHelper" booking app) rendered
-    from a static fixture (`lib/example-project.ts`) through the real artifact views.
-    It previews **every AI agent** — Interview, Vision, Requirements, Architecture,
-    Database, API, Review, Roadmap, Cost, Security (STRIDE), QA Plan — in the same tab
-    order as a real project. The cost figures are **derived from the example design**
-    by the same deterministic `estimateCosts()` the real stage uses, so they can't
-    drift from the fixture. **No backend, no session, no quota impact** — it shows the
-    payoff before the interview. `SystemDesignView` gained an `interactive` flag to hide
-    the API-backed "Explain" buttons in the demo.
-  - **Quick wins** — the interview counter now reads **"Question N of up to M"**
-    (`INTERVIEW_MAX_QUESTIONS`, single source for the API cap); the quota/upsell
-    banner is **hidden until the user owns ≥1 project**; and **confirming the
-    interview auto-generates Requirements** (no redundant Generate click).
-- i18n EN + AR (`dashboard.starters.*` / `dashboard.example.*` / `interview.questionN`);
-  Example fixtures covered by a render smoke test.
-
-### ✅ Slice — Landing conversion, site metadata & Lighthouse 100s
-- **Landing page**: hero CTA now leads with the product (**Start building — free**
-  → `/register`) instead of the waitlist (kept as its own section); new
-  **"What you get"** section — a grid of all 12 pipeline artifacts with the
-  Free/Pro cutline marked (threat model, QA plan, cost estimate, diagrams, and
-  scaffold were previously invisible to visitors); hero proof stats (product
-  facts, not invented social proof); scroll-aware sticky **`LandingHeader`**
-  (transparent over the hero → solid on scroll, active-section highlight via
-  IntersectionObserver) + a floating RTL-safe **`BackToTop`** button; smooth
-  anchor scrolling (`prefers-reduced-motion`-gated) with `scroll-mt` so headings
-  clear the sticky bar. Fully i18n'd EN + AR.
-- **Brand icon rebuilt** for 16 px legibility (coarse truss "A" mark — 2 strokes,
-  3 nodes) and synced across `app/icon.svg`, the `public/` brand SVGs, and
-  `LogoMark`. Fixed the production bug where `metadata.icons` **suppressed the
-  favicon entirely** (it overrides Next's file conventions instead of merging).
-- **Metadata/SEO**: generated 1200×630 OG/Twitter card (`lib/og.tsx` — scrapers
-  don't render SVG, so it's a real PNG), `apple-icon.tsx`, `manifest.ts`,
-  `robots.ts`, `sitemap.ts`, canonical URL, and JSON-LD
-  (`SoftwareApplication` + `FAQPage`) emitted from the server component;
-  `lib/site.ts` is the single source of the machine-facing identity.
-- **Lighthouse: 100/100/100/100** (desktop preset, local prod build; was
-  57/98/96/100 deployed). The big lever was a **route-group split** — the authed
-  app's providers + `AuthGate` moved to `app/(app)/layout.tsx`, so the landing
-  no longer downloads/hydrates the app (landing First Load JS **200→157 kB**);
-  **i18n bundles code-split into three tiers** (eager public EN / lazy app EN
-  awaited by AuthGate / lazy AR on locale switch); the landing nav no longer
-  fires `/auth/me` for anonymous visitors (killed the console 401 →
-  Best-Practices 100); `<main>` landmarks (A11y 100). Deployed-site follow-up:
-  the hero reel's 2.6s autoplay read as a never-settling page (**Speed Index
-  6.8s** → autoplay now arms on first user interaction, 8s fallback), and the
-  pageview beacon got a **4s timeout** so a cold Render API can't hold
-  network-idle open for its ~50s wake.
-
-### ⏳ Upcoming
-- A dedicated worker process + BullMQ retries/backoff.
-- Broaden web test coverage (more components + a happy-path flow).
-
----
-
-## API Reference (current)
-
-| Method | Path                       | Description                                  |
-| ------ | -------------------------- | -------------------------------------------- |
-| POST   | `/api/auth/register`       | Create an account; sets auth cookies         |
-| POST   | `/api/auth/login`          | Sign in; sets auth cookies                   |
-| POST   | `/api/auth/refresh`        | Rotate the refresh cookie + re-issue access  |
-| POST   | `/api/auth/logout`         | Revoke the refresh token and clear cookies   |
-| POST   | `/api/auth/verify-email`   | Confirm an email-verification token (public) |
-| POST   | `/api/auth/resend-verification`| Re-send the verification email (guarded) |
-| GET    | `/api/auth/me`             | Current user (requires a valid access cookie)|
-| PATCH  | `/api/auth/profile`        | Update the signed-in user's display name     |
-| PUT    | `/api/auth/avatar`         | Set the profile picture (base64 image data URI) |
-| DELETE | `/api/auth/avatar`         | Remove the profile picture (falls back to initials) |
-| POST   | `/api/auth/change-password`| Change/set password; revokes other sessions  |
-| DELETE | `/api/auth/me`             | Permanently delete the account (cascades)    |
-| GET    | `/api/interview`           | List the signed-in user's projects           |
-| POST   | `/api/interview`           | Start an interview from a raw idea (owned)    |
-| GET    | `/api/interview/:id`       | Fetch current interview state (owner only)   |
-| POST   | `/api/interview/:id/answer`| Answer the current question and advance      |
-| POST   | `/api/interview/:id/confirm`| Confirm the summarized requirements (gate)  |
-| DELETE | `/api/interview/:id`       | Delete a project + its artifacts (owner only)|
-| POST   | `/api/requirements/:sessionId/generate`| Generate the Requirement Document (confirmed only) |
-| GET    | `/api/requirements/:sessionId`| Fetch a generated Requirement Document    |
-| POST   | `/api/system-design/:sessionId/generate`| Generate the System Design (requirements required) |
-| GET    | `/api/system-design/:sessionId`| Fetch a generated System Design          |
-| POST   | `/api/system-design/:sessionId/explain`| Explain one design decision (rationale/tradeoffs; ephemeral) |
-| POST   | `/api/database-design/:sessionId/generate`| Generate the Database Design (system design required) |
-| GET    | `/api/database-design/:sessionId`| Fetch a generated Database Design       |
-| POST   | `/api/api-design/:sessionId/generate`| Generate the API Design (database design required) |
-| GET    | `/api/api-design/:sessionId`| Fetch a generated API Design                 |
-| POST   | `/api/review/:sessionId/generate`| Run the AI Review (full pipeline required)  |
-| GET    | `/api/review/:sessionId`| Fetch a generated Review report                  |
-| POST   | `/api/threat-model/:sessionId/generate`| Generate the STRIDE threat model (Pro; full pipeline) |
-| GET    | `/api/threat-model/:sessionId`| Fetch a generated threat model             |
-| POST   | `/api/qa-plan/:sessionId/generate`| Generate the test/QA plan (Pro; full pipeline) |
-| GET    | `/api/qa-plan/:sessionId`| Fetch a generated QA plan                       |
-| POST   | `/api/chat/:sessionId`  | Refine the design from a chat instruction        |
-| GET    | `/api/chat/:sessionId`  | Fetch the refinement conversation                |
-| POST   | `/api/jobs/:sessionId/:stage` | Enqueue async generation of a stage        |
-| GET    | `/api/jobs/:sessionId/:jobId` | Poll a generation job's status + result    |
-| GET    | `/api/stream/:sessionId/:stage` | Stream a stage's generation as SSE narration (owner-scoped) |
-| GET    | `/api/versions/:sessionId` | List a project's version history             |
-| GET    | `/api/versions/:sessionId/:version` | Fetch one version's full snapshot   |
-| POST   | `/api/versions/:sessionId/:version/restore` | Restore the project to a version |
-| GET    | `/api/diagrams/:sessionId` | Architecture diagrams (Mermaid source per kind) |
-| GET    | `/api/billing/plans`       | Public plan catalogue (Free / Pro)           |
-| GET    | `/api/billing`             | Current subscription + project-quota usage   |
-| POST   | `/api/billing/checkout`    | Upgrade to Pro at `{billingCycle}` monthly/annual (mock activates; Paddle checkout) |
-| POST   | `/api/billing/cancel`      | Cancel Pro                                   |
-| POST   | `/api/billing/webhook`     | Paddle webhook (HMAC-verified; no auth)      |
-| GET    | `/api/export/:sessionId/json`| Full artifact bundle (JSON)                 |
-| GET    | `/api/export/:sessionId/markdown`| Markdown report                         |
-| GET    | `/api/export/:sessionId/openapi`| OpenAPI 3.0 spec (JSON)                   |
-| GET    | `/api/export/:sessionId/openapi.yaml`| OpenAPI 3.0 spec (YAML)              |
-| GET    | `/api/export/:sessionId/schema.sql`| PostgreSQL DDL for the database design  |
-| GET    | `/api/export/:sessionId/postman`| Postman collection (v2.1) of the API     |
-| GET    | `/api/export/:sessionId/all.zip`| All formats bundled into one .zip        |
-| GET    | `/api/export/:sessionId/structure`| GitHub project structure manifest       |
-| GET    | `/api/scaffold/:sessionId` | Scaffold file manifest (Pro)                 |
-| GET    | `/api/scaffold/:sessionId/zip`| Download the generated backend as a .zip (Pro)|
-| POST   | `/api/scaffold/:sessionId/github`| Create a GitHub repo + push the scaffold (Pro)|
-| GET    | `/api/scaffold/github/connection`| GitHub connection status (available/connected)|
-| GET    | `/api/scaffold/github/connect/start`| Begin the Connect-with-GitHub OAuth popup |
-| GET    | `/api/scaffold/github/connect/callback`| OAuth callback (stores the connection)  |
-| DELETE | `/api/scaffold/github/connection`| Disconnect the stored GitHub connection      |
-| GET    | `/api/notifications`       | My notifications + unread count (bell)       |
-| POST   | `/api/notifications/read-all`| Mark all my notifications read             |
-| PATCH  | `/api/notifications/:id/read`| Mark one notification read                 |
-| POST   | `/api/analytics/track`     | Anonymous pageview beacon (no auth)          |
-| GET    | `/api/admin/stats`         | Admin: KPIs + 30-day trends (admin only)     |
-| GET    | `/api/admin/traffic`       | Admin: traffic detail (admin only)           |
-| GET    | `/api/admin/users`         | Admin: paginated users (admin only)          |
-| PATCH  | `/api/admin/users/:id/role`| Admin: promote/demote a user (bridges to RBAC)|
-| DELETE | `/api/admin/users/:id`     | Admin: delete a user                         |
-| GET    | `/api/admin/roles`         | List roles + user counts (`admin:roles:manage`)|
-| POST   | `/api/admin/roles`         | Create a custom role                         |
-| PATCH  | `/api/admin/roles/:id`     | Edit a role's name/description/permissions   |
-| DELETE | `/api/admin/roles/:id`     | Delete a custom role (system roles protected)|
-| GET    | `/api/admin/roles/user/:id`| A user's assigned role ids                   |
-| PUT    | `/api/admin/roles/user/:id`| Replace a user's whole role set              |
-| POST   | `/api/admin/roles/provision-user`| Provision a staff account (generated password, returned once)|
-| POST   | `/api/waitlist`            | Public: join the marketing waitlist (idempotent)|
-| GET    | `/api/waitlist/admin`      | Super-admin: filtered/paginated waitlist signups (`admin:roles:manage`)|
-| GET    | `/api/billing/admin`       | Billing-admin: KPIs + filtered/paginated subscriptions (`billing:manage`)|
-| GET    | `/api/billing/admin/trends`| Billing-admin: 30-day new-Pro vs churn series                |
-| GET    | `/api/billing/admin/subscriptions/:id`| Billing-admin: one customer's detail + event history|
-| POST   | `/api/billing/admin/subscriptions/:id/grant-pro`| Billing-admin: comp a user to Pro   |
-| POST   | `/api/billing/admin/subscriptions/:id/revoke`| Billing-admin: downgrade a user to Free|
-| GET    | `/api/support/stats`       | Customer's ticket counts by status           |
-| GET    | `/api/support/kb`          | Published KB articles (optional `?q=` search; also used by the AI)|
-| GET    | `/api/support/kb/:id`      | One published KB article (full body)         |
-| GET    | `/api/support/admin/kb`    | List all KB articles incl. drafts (`support:kb:manage`)|
-| POST   | `/api/support/admin/kb`    | Create a KB article (`support:kb:manage`)    |
-| GET    | `/api/support/admin/kb/:id`| Fetch one KB article for editing (`support:kb:manage`)|
-| PATCH  | `/api/support/admin/kb/:id`| Update a KB article (`support:kb:manage`)    |
-| DELETE | `/api/support/admin/kb/:id`| Delete a KB article (`support:kb:manage`)    |
-| GET    | `/api/support/tickets`     | List my tickets (filter/search/paginate)     |
-| POST   | `/api/support/tickets`     | Open a new support ticket                    |
-| GET    | `/api/support/tickets/:id` | Ticket detail (conversation + timeline)      |
-| POST   | `/api/support/tickets/:id/reply`   | Reply to a ticket                    |
-| POST   | `/api/support/tickets/:id/close`   | Close my ticket                      |
-| POST   | `/api/support/tickets/:id/reopen`  | Reopen a resolved/closed ticket      |
-| POST   | `/api/support/tickets/:id/attachments` | Attach a file (metadata + text)  |
-| POST   | `/api/support/ai/deflect`  | Pre-ticket AI deflection (KB + past tickets) |
-| POST   | `/api/support/tickets/:id/ai/analyze` | In-ticket AI assistant            |
-| GET    | `/api/support/admin/stats` | Admin support dashboard metrics (admin only) |
-| GET    | `/api/support/admin/agents`| Assignable admins (admin only)               |
-| GET    | `/api/support/admin/tickets`| All tickets, filtered (admin only)          |
-| PATCH  | `/api/support/admin/tickets/:id`| Change status/priority/category/assignee|
-| POST   | `/api/support/admin/tickets/:id/notes`  | Add an internal note (admin)    |
-| POST   | `/api/support/admin/tickets/:id/ai/copilot` | AI Copilot (admin only)     |
-
----
-
-## Notes
-- All pipeline data is **persisted in PostgreSQL** (Prisma); artifacts survive
-  API restarts. The API requires a reachable `DATABASE_URL` to boot.
-- **Production boot is validated.** With `NODE_ENV=production` the API refuses to
-  start on an insecure config — a missing / default / too-short `JWT_ACCESS_SECRET`
-  (generate one with `openssl rand -base64 48`), or `COOKIE_SAMESITE=none` without
-  Secure cookies. See `apps/api/src/config/env.validation.ts`. For a cross-domain
-  deploy (web + API on different hosts) set `COOKIE_SAMESITE=none` and
-  `COOKIE_SECURE=true` (auto-on in production) so the auth cookies are sent.
-- See [`CLAUDE.md`](./CLAUDE.md) for the running log of decisions and phase status.
+Copyright © Sameh Dheir. All rights reserved. No license is currently granted
+for reuse or redistribution; open an issue to discuss usage.

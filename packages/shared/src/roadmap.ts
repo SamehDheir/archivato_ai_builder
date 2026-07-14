@@ -8,6 +8,8 @@
  * implementation plan derived from it.
  */
 
+import type { DerivedArtifact } from './freshness';
+
 export interface RoadmapTask {
   title: string;
   /** Optional extra context for the task. */
@@ -33,7 +35,7 @@ export interface RoadmapPhase {
   milestones: RoadmapMilestone[];
 }
 
-export interface ProjectRoadmap {
+export interface ProjectRoadmap extends DerivedArtifact {
   sessionId: string;
   generatedAt: string;
   summary: string;

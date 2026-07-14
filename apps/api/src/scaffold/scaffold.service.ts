@@ -8,10 +8,14 @@ import {
 } from '@nestjs/common';
 import JSZip from 'jszip';
 import {
-  buildBackendScaffold,
+  buildScaffold,
+  DEFAULT_SCAFFOLD_TARGET,
+  recommendedProvider,
+  type CostProviderId,
   type GithubPushResult,
   type ScaffoldFile,
   type ScaffoldManifest,
+  type ScaffoldTarget,
 } from '@archivato/shared';
 import { ExportService } from '../export/export.service';
 import { GithubConnectionService } from './github-connection.service';
@@ -28,32 +32,59 @@ export class ScaffoldService {
     private readonly connection: GithubConnectionService,
   ) {}
 
-  /** Build the scaffold file set from the confirmed design bundle. */
-  private async files(sessionId: string): Promise<ScaffoldFile[]> {
+  /**
+   * Build the scaffold file set from the confirmed design bundle, including its
+   * deployment artifacts.
+   *
+   * When no provider is asked for, it defaults to the one the **Cost Estimator**
+   * would recommend for this exact design — same pure `estimateCosts()`, same
+   * inputs — so the deploy config the user downloads is for the provider the cost
+   * tab told them was the best value. That link is the point of the stage.
+   */
+  private async build(
+    sessionId: string,
+    target: ScaffoldTarget,
+    provider?: CostProviderId,
+  ): Promise<{ files: ScaffoldFile[]; provider: CostProviderId }> {
     // bundle() enforces the "pipeline complete through API design" gate (409).
     const bundle = await this.exporter.bundle(sessionId);
-    return buildBackendScaffold({
+    const input = {
       idea: bundle.idea.idea,
       systemDesign: bundle.systemDesign,
       databaseDesign: bundle.databaseDesign,
       apiDesign: bundle.apiDesign,
-    });
+    };
+    const resolved = provider ?? recommendedProvider(input);
+    return {
+      files: buildScaffold(input, target, { provider: resolved }),
+      provider: resolved,
+    };
   }
 
   /** File manifest (paths + contents) — powers the UI file list. */
-  async manifest(sessionId: string): Promise<ScaffoldManifest> {
-    const files = await this.files(sessionId);
+  async manifest(
+    sessionId: string,
+    target: ScaffoldTarget = DEFAULT_SCAFFOLD_TARGET,
+    provider?: CostProviderId,
+  ): Promise<ScaffoldManifest> {
+    const built = await this.build(sessionId, target, provider);
     return {
       sessionId,
       generatedAt: new Date().toISOString(),
-      fileCount: files.length,
-      files,
+      target,
+      provider: built.provider,
+      fileCount: built.files.length,
+      files: built.files,
     };
   }
 
   /** The scaffold as a .zip archive (Buffer). */
-  async zip(sessionId: string): Promise<Buffer> {
-    const files = await this.files(sessionId);
+  async zip(
+    sessionId: string,
+    target: ScaffoldTarget = DEFAULT_SCAFFOLD_TARGET,
+    provider?: CostProviderId,
+  ): Promise<Buffer> {
+    const { files } = await this.build(sessionId, target, provider);
     const archive = new JSZip();
     for (const file of files) archive.file(file.path, file.content);
     return archive.generateAsync({ type: 'nodebuffer' });
@@ -74,7 +105,11 @@ export class ScaffoldService {
     userId: string,
     dto: PushToGithubDto,
   ): Promise<GithubPushResult> {
-    const files = await this.files(sessionId);
+    const { files } = await this.build(
+      sessionId,
+      dto.target ?? DEFAULT_SCAFFOLD_TARGET,
+      dto.provider,
+    );
     const token = dto.token ?? (await this.connection.resolveToken(userId));
     if (!token) {
       throw new BadRequestException(

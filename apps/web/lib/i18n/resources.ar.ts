@@ -10,6 +10,7 @@ import arSettings from '@/locales/ar/settings.json';
 import arAdmin from '@/locales/ar/admin.json';
 import arSupport from '@/locales/ar/support.json';
 import arLegal from '@/locales/ar/legal.json';
+import arShare from '@/locales/ar/share.json';
 
 /**
  * The Arabic bundle, in its own module so it becomes its own chunk.
@@ -32,4 +33,5 @@ export const arResources = {
   admin: arAdmin,
   support: arSupport,
   legal: arLegal,
+  share: arShare,
 } as const;

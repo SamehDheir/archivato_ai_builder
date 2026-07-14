@@ -21,7 +21,10 @@ export abstract class BaseAgent {
 
   constructor(protected readonly llm: LlmProvider) {}
 
-  /** Free-form text reasoning. */
+  /**
+   * Free-form text reasoning. Stamps `agent` on the options so the usage meter
+   * can attribute the tokens without any agent having to know it's being metered.
+   */
   protected async think(
     userPrompt: string,
     options?: LlmCompleteOptions,
@@ -29,6 +32,7 @@ export abstract class BaseAgent {
     return this.llm.complete(this.buildMessages(userPrompt), {
       system: this.systemPrompt,
       ...options,
+      agent: this.role,
     });
   }
 
@@ -40,6 +44,7 @@ export abstract class BaseAgent {
     return this.llm.completeJson<T>(this.buildMessages(userPrompt), {
       system: this.systemPrompt,
       ...options,
+      agent: this.role,
     });
   }
 

@@ -1,239 +1,179 @@
 {
+  "meta": {
+    "title": "Archivato — Client scoping in an hour, not a week",
+    "description": "Client scoping for software shops: turn a client call into a complete scoping package — requirements, architecture, cost estimate, and a client-ready proposal — in one hour instead of one week."
+  },
   "nav": {
-    "problem": "Problem",
-    "solution": "Solution",
-    "deliverables": "What you get",
+    "pain": "The problem",
+    "how": "How it works",
+    "value": "What you get",
+    "proof": "See it",
     "pricing": "Pricing",
-    "faq": "FAQ",
     "signIn": "Sign in",
-    "startBuilding": "Start building",
+    "startBuilding": "Try it free",
     "dashboard": "Dashboard",
     "backToTop": "Back to top"
   },
   "hero": {
-    "badge": "AI Software Architecture Generator",
-    "titleLead": "Describe your idea.",
-    "titleAccent": "Ship a complete system design.",
-    "body": "Archivato interviews you about your app, then generates the entire blueprint — requirements, architecture, database, API, a scored review, and a build roadmap. You edit, refine, and export. Not a chatbot; an architecture engine.",
-    "start": "Start building — free",
-    "seeDemo": "See what it builds",
-    "noCard": "Free to start. No credit card.",
-    "notReady": "Not launching yet?",
-    "joinWaitlist": "Join the waitlist",
-    "demoCaption": "A looping demo — watch an idea become a complete system design.",
+    "badge": "Client scoping for software shops",
+    "title": "Win the deal before your competitor finishes their first meeting.",
+    "body": "Archivato turns a client call into a complete scoping package — requirements, system architecture, cost estimate, and a client-ready proposal — in one hour instead of one week.",
+    "primaryCta": "Try it free on your next project",
+    "secondaryCta": "See a real scoping package",
+    "noCard": "No credit card. Bring a real client call and see what comes out.",
+    "demoCaption": "One run: the client's answers go in, the scoping package comes out.",
     "stats": {
-      "artifacts": { "value": "12", "label": "design artifacts, generated" },
-      "questions": { "value": "9", "label": "interview questions, at most" },
-      "editable": { "value": "100%", "label": "editable and versioned" }
+      "time": {
+        "value": "1 hour",
+        "label": "From client call to sendable proposal"
+      },
+      "questions": {
+        "value": "≤ 9",
+        "label": "Questions to scope a whole project"
+      },
+      "artifacts": {
+        "value": "12",
+        "label": "Artifacts your client and your devs both use"
+      }
     }
   },
-  "deliverables": {
-    "kicker": "What you get",
-    "title": "Twelve artifacts. Not twelve paragraphs of chat.",
-    "body": "Every stage produces a structured, editable, versioned document — the same set an engineering team would spend weeks assembling by hand.",
-    "free": "Free",
-    "pro": "Pro",
-    "items": {
+  "pain": {
+    "kicker": "The problem",
+    "title": "Scoping is the most expensive unpaid work you do.",
+    "body": "Scoping eats a week of your most expensive engineer's time — often on a deal that never signs. Meanwhile the client is comparing you against five other bids."
+  },
+  "how": {
+    "kicker": "How it works",
+    "title": "Three steps, one afternoon.",
+    "body": "You already have the client's answers. Archivato does the week of work that normally comes after.",
+    "steps": {
+      "interview": {
+        "title": "Run the interview",
+        "body": "Run the AI interview with your client's answers (≤ 9 questions)."
+      },
+      "package": {
+        "title": "Get the package",
+        "body": "Get the full package: requirements, architecture, database, API, cost estimate, roadmap."
+      },
+      "send": {
+        "title": "Send it, then build it",
+        "body": "Send the client a polished share link — and hand your devs a runnable scaffold the day they sign."
+      }
+    }
+  },
+  "value": {
+    "kicker": "Two audiences, one run",
+    "title": "One document. Both audiences.",
+    "body": "The run that convinces the client is the same run your team builds from. Nothing gets rewritten in between — and nothing gets lost between the proposal and the repo.",
+    "tagline": "One document. Both audiences.",
+    "client": {
+      "title": "For your client",
+      "items": [
+        "A clear, structured proposal they can actually read",
+        "A hosting cost estimate at three usage scales",
+        "A shareable read-only link — no account needed",
+        "Their scope, in writing, before anyone argues about it"
+      ]
+    },
+    "team": {
+      "title": "For your team",
+      "items": [
+        "OpenAPI spec for the endpoints you just quoted",
+        "SQL DDL and ER diagrams for the schema",
+        "A Postman collection to test against",
+        "A runnable scaffold — API and client — on day one"
+      ]
+    }
+  },
+  "proof": {
+    "kicker": "See it",
+    "title": "This is what your client receives.",
+    "body": "Real output from a real run — not a mockup. Open the whole package and read it the way your client would.",
+    "cta": "See a real scoping package",
+    "shots": {
       "requirements": {
         "title": "Requirements",
-        "body": "Functional and non-functional requirements, user roles, and the flows between them — traceable back to your interview answers."
+        "caption": "The scope, in writing: functional, non-functional, roles, and the rules you'll be held to."
       },
       "architecture": {
         "title": "System architecture",
-        "body": "An architecture pattern, a justified tech stack, and the services that make it up. Ask \"why this?\" on any choice and get the rationale, tradeoffs, and alternatives."
-      },
-      "database": {
-        "title": "Database schema",
-        "body": "Entities, columns, types, and relations — as an ER diagram and as runnable PostgreSQL DDL."
-      },
-      "diagrams": {
-        "title": "Diagrams & canvas",
-        "body": "ER, architecture, and per-endpoint sequence diagrams, plus an interactive canvas. Export to Mermaid, Draw.io, SVG, PNG, or PDF."
-      },
-      "vision": {
-        "title": "Product vision",
-        "body": "The PM's view of your idea: problem, target users, value proposition, and success metrics — ready to put in front of a stakeholder."
-      },
-      "api": {
-        "title": "REST API design",
-        "body": "Endpoints, request and response schemas, and status codes — with an interactive OpenAPI explorer and a Postman collection."
-      },
-      "review": {
-        "title": "AI architect review",
-        "body": "Your design, scored on security, scalability, performance, and cost, with findings per category and a critical-issues callout."
-      },
-      "roadmap": {
-        "title": "Implementation roadmap",
-        "body": "Phases, milestones, and tasks with effort estimates — the plan you actually build against."
+        "caption": "The system you're proposing to build — with the reasoning behind every choice."
       },
       "cost": {
-        "title": "Hosting cost estimate",
-        "body": "A projected monthly bill across 8 providers at 100, 1,000, and 10,000 users, with the cheapest option per scale. Calculated, not guessed."
-      },
-      "threat": {
-        "title": "Threat model",
-        "body": "A STRIDE security analysis of your design — every threat with its component, severity, and a concrete mitigation."
-      },
-      "qa": {
-        "title": "Test & QA plan",
-        "body": "A testing strategy with named test cases grouped by type — unit, integration, e2e, security, performance, and acceptance."
-      },
-      "scaffold": {
-        "title": "Code scaffold",
-        "body": "A runnable NestJS + Prisma backend generated from your design — download the ZIP or push it straight to a new GitHub repo."
-      }
-    }
-  },
-  "problem": {
-    "kicker": "The problem",
-    "title": "Going from idea to a real architecture is where projects stall.",
-    "body": "Founders and teams know what they want to build — but turning that into requirements, a database, an API, and a defensible architecture is slow, manual, and easy to get wrong.",
-    "items": {
-      "blank": {
-        "title": "The blank-page problem",
-        "body": "You have the idea, but staring at an empty doc — requirements, schema, endpoints — is where momentum dies. Most people never get past it."
-      },
-      "slow": {
-        "title": "Weeks of back-and-forth",
-        "body": "Scoping meetings, spec drafts, diagram tools, review cycles. It takes weeks to reach a design a team can actually build from."
-      },
-      "costly": {
-        "title": "Expensive to get wrong",
-        "body": "A weak schema or a missed non-functional requirement surfaces in production. Rework, hiring a consultant, or rebuilding costs real time and money."
-      }
-    }
-  },
-  "solution": {
-    "kicker": "The solution",
-    "title": "One sentence in. A full, editable system design out.",
-    "body": "Archivato runs a short adaptive interview, then generates every artifact an engineering team would actually build from — each one structured, versioned, and yours to edit.",
-    "items": {
-      "interview": {
-        "title": "It interviews you",
-        "body": "A short, adaptive AI interview clarifies goals, users, rules, scale, and tech — then waits for you to confirm before anything is generated."
-      },
-      "design": {
-        "title": "It designs the system",
-        "body": "Requirements, architecture, database schema, and a REST API — with diagrams and an interactive canvas — each stage building on the last."
-      },
-      "ship": {
-        "title": "It gets you ready to ship",
-        "body": "A scored architect review, an implementation roadmap, refine-by-chat, and export to JSON, Markdown, OpenAPI, or a scaffolded repo."
+        "title": "Cost estimate",
+        "caption": "What it costs to run at 100, 1,000 and 10,000 users — before you put a number in the proposal."
       }
     },
-    "pipelineNote": "One idea flows through the pipeline",
-    "pipeline": {
-      "idea": "Idea",
-      "interview": "Interview",
-      "requirements": "Requirements",
-      "system": "System",
-      "database": "Database",
-      "api": "API",
-      "review": "Review",
-      "export": "Export"
-    }
+    "placeholder": "Screenshot slot"
   },
   "pricing": {
     "kicker": "Pricing",
-    "title": "Simple, honest pricing.",
-    "body": "Start free with your first project. Upgrade to Pro when you need the API design, AI review, roadmap, and export.",
+    "title": "Priced against one lost week.",
+    "body": "A single week of a senior engineer's scoping time costs more than a year of this.",
     "perMonth": "/mo",
     "freePrice": "Free",
     "mostPopular": "Most popular",
-    "billedAnnually": "billed ${{price}}/yr",
-    "cycle": {
-      "label": "Billing cadence",
-      "monthly": "Monthly",
-      "annual": "Annual",
-      "save": "Save {{pct}}%"
-    },
-    "free": {
-      "name": "Free",
-      "tagline": "Everything you need to shape a first idea into a real spec.",
-      "cta": "Start for free",
+    "comingSoon": "Coming soon",
+    "starter": {
+      "name": "Starter",
+      "tagline": "Scope one project and judge the output for yourself.",
+      "cta": "Start free",
       "features": [
-        "1 project",
-        "Adaptive AI interview → requirements",
-        "System & database design",
-        "Diagrams & interactive canvas",
-        "Product Vision"
+        "1 design per month",
+        "Full interview, requirements and architecture",
+        "Shareable client link",
+        "\"Built with Archivato\" watermark on shared links"
       ]
     },
-    "pro": {
-      "name": "Pro",
-      "tagline": "The full studio — design, review, plan, and export, for up to 5 projects.",
-      "cta": "Go Pro",
+    "team": {
+      "name": "Team",
+      "tagline": "For the shop that bids every week.",
+      "cta": "Try it free on your next project",
       "features": [
-        "Up to 5 projects",
-        "REST API design (endpoints & schemas)",
-        "AI Architect Review — security, scalability, performance & cost",
-        "Implementation roadmap with effort estimates",
-        "Interactive OpenAPI / Swagger explorer",
-        "Refine by chat — every change versioned",
-        "Export to JSON, Markdown & OpenAPI"
+        "Unlimited designs",
+        "All exports — OpenAPI, SQL, Postman",
+        "No watermark on client links",
+        "Runnable code scaffold",
+        "Cost estimates and implementation roadmap"
+      ]
+    },
+    "agency": {
+      "name": "Agency",
+      "tagline": "For teams that put their own name on the proposal.",
+      "cta": "Coming soon",
+      "features": [
+        "Multiple seats for your team",
+        "White-label branding on client links",
+        "Your logo on the proposal, not ours"
       ]
     }
   },
-  "faq": {
-    "kicker": "FAQ",
-    "title": "Questions, answered.",
-    "items": {
-      "q1": {
-        "q": "Is this just another AI chatbot?",
-        "a": "No. Archivato is an architecture engine. Instead of a wall of chat text, it produces structured, versioned, editable artifacts — requirements, schema, API, review, roadmap — the exact things a team builds from."
-      },
-      "q2": {
-        "q": "Do I need to be technical to use it?",
-        "a": "No. You describe your idea in plain language and answer a short interview. Archivato handles the technical translation into requirements, database, and API design — which you can then edit or hand to a developer."
-      },
-      "q3": {
-        "q": "What do I actually get out of it?",
-        "a": "A complete, editable system design: a requirements document, system architecture, database schema with diagrams, a REST API, a scored architect review, and an implementation roadmap — exportable to JSON, Markdown, OpenAPI, or a scaffolded repo."
-      },
-      "q4": {
-        "q": "What's the difference between Free and Pro?",
-        "a": "Free covers one project through the interview, requirements, system and database design, and Product Vision. Pro unlocks the API design, AI review, roadmap, cost estimate, and export — for up to five projects."
-      },
-      "q5": {
-        "q": "Can I edit what the AI generates?",
-        "a": "Yes. Every artifact is directly editable through structured forms — not free text — and you can refine the whole design by chat. Every change is versioned so you can compare and restore any point."
-      },
-      "q6": {
-        "q": "Which languages are supported?",
-        "a": "The interface is available in English and Arabic (with full right-to-left support), and the interview adapts its questions to the language of your idea."
-      }
-    }
-  },
-  "waitlist": {
-    "kicker": "Get early access",
-    "title": "Join the waitlist.",
-    "body": "Be first to turn your next idea into a complete system design. Drop your email and we'll let you know the moment your spot opens.",
-    "placeholder": "you@company.com",
-    "cta": "Join waitlist",
-    "successNew": "You're on the list — we'll be in touch soon.",
-    "successExisting": "You're already on the list — hang tight!",
-    "invalid": "Please enter a valid email address.",
-    "privacy": "No spam. One email when it's your turn. Unsubscribe anytime."
+  "finalCta": {
+    "kicker": "Your next bid",
+    "title": "Your next client call is a scoping package waiting to happen.",
+    "body": "Run it through Archivato and send the proposal while the meeting is still fresh.",
+    "primary": "Try it free on your next project",
+    "secondary": "See a real scoping package"
   },
   "footer": {
-    "tagline": "Turn a business idea into a complete software system design — not a chatbot, an architecture engine.",
-    "start": "Start building",
-    "explore": "Explore",
+    "tagline": "Turn a client call into a complete scoping package — requirements, architecture, cost, and a proposal your client can read — in an hour, not a week.",
+    "start": "Try it free",
+    "explore": "Product",
     "account": "Account",
     "legal": "Legal",
     "links": {
-      "problem": "Problem",
-      "solution": "Solution",
-      "deliverables": "What you get",
+      "pain": "The problem",
+      "how": "How it works",
+      "value": "What you get",
+      "proof": "See it",
       "pricing": "Pricing",
-      "faq": "FAQ",
       "signIn": "Sign in",
       "createAccount": "Create account",
       "dashboard": "Dashboard",
       "privacy": "Privacy Policy",
       "terms": "Terms of Service"
     },
-    "rights": "© {{year}} Archivato AI Builder",
-    "tagshort": "AI Software Architecture Generator"
+    "rights": "© {{year}} Archivato",
+    "tagshort": "Client call in. Proposal out."
   }
 }

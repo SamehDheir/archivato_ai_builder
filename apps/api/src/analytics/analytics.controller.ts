@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { redactSharePath, redactShareReferrer } from '@archivato/shared';
 import { AnalyticsService } from './analytics.service';
 import { TrackEventDto } from './dto/track-event.dto';
 import { resolveCountryFromRequest } from '../common/geo';
@@ -15,6 +16,7 @@ import { resolveCountryFromRequest } from '../common/geo';
 /** Anonymous visitor cookie (1-year, httpOnly) — scopes unique-visitor counts. */
 const VISITOR_COOKIE = 'archivato_vid';
 const VISITOR_COOKIE_MAX_AGE = 365 * 24 * 60 * 60 * 1000;
+
 
 /**
  * Public analytics beacon. The web fires `POST /analytics/track` on each page
@@ -36,8 +38,15 @@ export class AnalyticsController {
     const visitorId = this.ensureVisitorId(req, res);
     await this.analytics.recordSafe({
       type: 'pageview',
-      path: dto.path.slice(0, 1024),
-      referrer: dto.referrer ? dto.referrer.slice(0, 1024) : null,
+      // Share tokens are bearer credentials and must never be stored (see
+      // `redactSharePath`). The web beacon already redacts; this route is public
+      // and unauthenticated, so its body is attacker-chosen — redact again here.
+      path: redactSharePath(dto.path.slice(0, 1024)),
+      // A visitor navigating away from a share page sends that page's URL —
+      // token and all — as the referrer, so it gets the same treatment.
+      referrer: dto.referrer
+        ? redactShareReferrer(dto.referrer.slice(0, 1024))
+        : null,
       visitorId,
       country: resolveCountryFromRequest(req),
     });

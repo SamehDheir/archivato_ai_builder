@@ -188,6 +188,9 @@ export function ExportView({ sessionId }: { sessionId: string }) {
       </div>
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
 
+      {/* The public share link used to live here, but it's free on every plan
+          while this whole tab is Pro — it moved to the project header, where a
+          free owner can actually reach it. */}
       <ScaffoldView sessionId={sessionId} />
     </div>
   );

@@ -1,4 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { isStale } from '@archivato/shared';
 import { RoadmapService } from './roadmap.service';
 import { InMemoryProjectRoadmapRepository } from './in-memory-roadmap.repository';
 import { RoadmapPlannerAgent } from '../llm/agents/roadmap-planner.agent';
@@ -98,6 +99,13 @@ function makeHarness(): Harness {
   };
 }
 
+/**
+ * The revision marker is `generatedAt`, at millisecond resolution. Against a real
+ * provider two generations are seconds apart; with the mock they can land in the
+ * same millisecond, so a test that regenerates back-to-back has to step the clock.
+ */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /** Run the whole pipeline up to (but not including) the roadmap. */
 async function pipeline(h: Harness): Promise<string> {
   const { sessionId } = await h.interview.start(IDEA);
@@ -158,6 +166,33 @@ describe('RoadmapService', () => {
         expect(m.tasks.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('stamps the design revision it was built from, and goes stale with it', async () => {
+    const h = makeHarness();
+    const sessionId = await pipeline(h);
+
+    /** The design revisions as they stand right now. */
+    const current = async () => ({
+      requirements: (await h.requirements.get(sessionId)).generatedAt,
+      systemDesign: (await h.systemDesign.get(sessionId)).generatedAt,
+      databaseDesign: (await h.databaseDesign.get(sessionId)).generatedAt,
+      apiDesign: (await h.apiDesign.get(sessionId)).generatedAt,
+    });
+
+    const roadmap = await h.service.generate(sessionId);
+    expect(roadmap.sourceStamp).toBeTruthy();
+    expect(isStale('roadmap', roadmap, await current())).toBe(false);
+
+    // What a chat refine does to the design chain — and what it does NOT do to
+    // the roadmap, which is the bug: it is left describing the previous design.
+    await sleep(2);
+    await h.systemDesign.generate(sessionId);
+
+    expect(isStale('roadmap', roadmap, await current())).toBe(true);
+    // Regenerating re-stamps it against the new design.
+    const fresh = await h.service.generate(sessionId);
+    expect(isStale('roadmap', fresh, await current())).toBe(false);
   });
 
   it('prefers a valid LLM roadmap when the provider conforms', async () => {

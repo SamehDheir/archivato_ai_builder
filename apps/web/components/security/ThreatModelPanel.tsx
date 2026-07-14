@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ShieldAlert } from 'lucide-react';
-import type { ThreatModel } from '@archivato/shared';
+import type { ThreatModel, UpstreamRevisions } from '@archivato/shared';
 import { threatModelApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ThreatModelView } from '@/components/security/ThreatModelView';
+import { StaleNotice } from '@/components/project/StaleNotice';
 import { useToast } from '@/components/shared/toast';
 
 /**
@@ -19,10 +20,13 @@ import { useToast } from '@/components/shared/toast';
 export function ThreatModelPanel({
   sessionId,
   reloadKey,
+  revisions,
 }: {
   sessionId: string;
   /** Bump to refetch (e.g. after a restore). */
   reloadKey: number;
+  /** Current design revisions — a model of an older design is stale. */
+  revisions: UpstreamRevisions;
 }) {
   const toast = useToast();
   const { t } = useTranslation('stages');
@@ -85,6 +89,13 @@ export function ThreatModelPanel({
 
   return (
     <div className="space-y-3">
+      <StaleNotice
+        stage="threat-model"
+        artifact={model}
+        revisions={revisions}
+        busy={busy}
+        onRegenerate={generate}
+      />
       <ThreatModelView model={model} />
       <Button variant="secondary" onClick={generate} disabled={busy}>
         {busy ? t('threat.working') : t('threat.regenerate')}

@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_FILTER } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { validateEnv } from './config/env.validation';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { LlmContextInterceptor } from './common/llm-context.interceptor';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
@@ -22,6 +23,8 @@ import { ThreatModelModule } from './threat-model/threat-model.module';
 import { QaPlanModule } from './qa-plan/qa-plan.module';
 import { ExportModule } from './export/export.module';
 import { ScaffoldModule } from './scaffold/scaffold.module';
+import { ShareModule } from './share/share.module';
+import { ProjectsModule } from './projects/projects.module';
 import { ChatModule } from './chat/chat.module';
 import { JobsModule } from './jobs/jobs.module';
 import { StreamModule } from './stream/stream.module';
@@ -81,6 +84,10 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     ExportModule,
     // Code scaffolding: runnable NestJS + Prisma backend (ZIP + push to GitHub).
     ScaffoldModule,
+    // Public share links: a read-only page for a completed design.
+    ShareModule,
+    // The dashboard's read model: each scoping's pipeline progress + share state.
+    ProjectsModule,
     // Slice 10: post-generation AI chat (refine the design in natural language).
     ChatModule,
     // Async pipeline generation (BullMQ/Redis): enqueue + poll job status.
@@ -108,6 +115,10 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     // Global error handling: structured logging + optional Sentry, generic 500s.
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // Attribution for LLM usage metering: makes the caller (user/session/stage)
+    // ambiently available to the provider seam. Must run after the auth guard so
+    // `req.user` is populated — interceptors do.
+    { provide: APP_INTERCEPTOR, useClass: LlmContextInterceptor },
   ],
 })
 export class AppModule {}

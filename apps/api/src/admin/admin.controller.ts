@@ -10,11 +10,13 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import type {
-  AdminStats,
-  AdminTraffic,
-  AdminUsersPage,
-  AuthUser,
+import {
+  hasPermission,
+  type AdminLlmUsage,
+  type AdminStats,
+  type AdminTraffic,
+  type AdminUsersPage,
+  type AuthUser,
 } from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionGuard } from '../auth/permission.guard';
@@ -46,14 +48,35 @@ export class AdminController {
     return this.admin.getTraffic();
   }
 
-  /** Paginated users with plan + project count. */
+  /**
+   * LLM token spend (30 days) — by stage, model, agent, and heaviest users.
+   * The heaviest-spender rows are labelled with an email only for a caller who
+   * also holds `admin:users:read`; otherwise they stay opaque ids.
+   */
+  @Get('llm-usage')
+  llmUsage(@CurrentUser() me: AuthUser): Promise<AdminLlmUsage> {
+    return this.admin.getLlmUsage(
+      hasPermission(me.permissions, 'admin:users:read'),
+    );
+  }
+
+  /**
+   * Paginated users with plan + project count, and — for a caller who also holds
+   * `admin:analytics` — the lifetime AI spend each user has cost us. Spend is an
+   * analytics grant, so a directory-only role gets the rows without the costs.
+   */
   @RequirePermissions('admin:users:read')
   @Get('users')
   users(
+    @CurrentUser() me: AuthUser,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<AdminUsersPage> {
-    return this.admin.getUsers(Number(page) || 1, Number(pageSize) || 20);
+    return this.admin.getUsers(
+      Number(page) || 1,
+      Number(pageSize) || 20,
+      hasPermission(me.permissions, 'admin:analytics'),
+    );
   }
 
   /** Promote/demote a user (never your own account — avoids self-lockout). */

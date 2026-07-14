@@ -4,17 +4,28 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowRight,
+  Building2,
+  Check,
   Compass,
   Download,
   LayoutGrid,
+  Link2,
   List,
   MoreVertical,
   Pencil,
   PlayCircle,
+  Send,
   Sparkles,
   Trash2,
 } from 'lucide-react';
-import type { InterviewStatus, ProjectScale, ProjectSummary } from '@archivato/shared';
+import {
+  clientLinkState,
+  projectProgress,
+  type ClientLinkState,
+  type InterviewStatus,
+  type ProjectOverview,
+  type ProjectScale,
+} from '@archivato/shared';
 import { STARTER_IDEAS } from '@/lib/starter-ideas';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -61,7 +72,7 @@ const STATUS_VARIANT: Record<
 };
 
 /** A project's display label: the user-set title, else the raw idea. */
-const displayName = (p: ProjectSummary): string => p.title?.trim() || p.idea;
+const displayName = (p: ProjectOverview): string => p.title?.trim() || p.idea;
 
 /** Shared props for the per-project actions. */
 interface CardActions {
@@ -69,6 +80,9 @@ interface CardActions {
   onOpen: () => void;
   onDelete: () => void;
   onRename: (title: string) => void;
+  onSetClient: (clientName: string) => void;
+  /** Mint-if-needed and copy the public client link. Resolves false on failure. */
+  onCopyLink: () => Promise<boolean>;
   onExport: (format: ExportFormat) => void;
 }
 
@@ -89,14 +103,18 @@ export function ProjectsDashboard({
   setIndustry,
   scale,
   setScale,
+  clientName,
+  setClientName,
   onStart,
   onOpen,
   onDelete,
   onRename,
+  onSetClient,
+  onCopyLink,
   onExport,
   onOpenExample,
 }: {
-  projects: ProjectSummary[];
+  projects: ProjectOverview[];
   creating: boolean;
   setCreating: (value: boolean) => void;
   busy: boolean;
@@ -107,10 +125,14 @@ export function ProjectsDashboard({
   setIndustry: (value: string) => void;
   scale: ProjectScale | '';
   setScale: (value: ProjectScale | '') => void;
+  clientName: string;
+  setClientName: (value: string) => void;
   onStart: (e: React.FormEvent) => void;
   onOpen: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
   onRename: (sessionId: string, title: string) => void;
+  onSetClient: (sessionId: string, clientName: string) => void;
+  onCopyLink: (sessionId: string) => Promise<boolean>;
   onExport: (sessionId: string, format: ExportFormat) => void;
   /** Open the read-only Example project (a finished sample, no quota impact). */
   onOpenExample: () => void;
@@ -128,11 +150,13 @@ export function ProjectsDashboard({
     }
   };
 
-  const actionsFor = (p: ProjectSummary): CardActions => ({
+  const actionsFor = (p: ProjectOverview): CardActions => ({
     busy,
     onOpen: () => onOpen(p.sessionId),
     onDelete: () => onDelete(p.sessionId),
     onRename: (title) => onRename(p.sessionId, title),
+    onSetClient: (value) => onSetClient(p.sessionId, value),
+    onCopyLink: () => onCopyLink(p.sessionId),
     onExport: (format) => onExport(p.sessionId, format),
   });
 
@@ -169,8 +193,13 @@ export function ProjectsDashboard({
                 ? t('projects.startFirst')
                 : t('projects.newTitle')}
             </CardTitle>
+            {/* On an empty account this is the only thing on screen, so it has to
+                teach the workflow — bring the call's answers, run the interview,
+                send the proposal — not describe the pipeline's internals. */}
             <p className="text-sm text-muted-foreground">
-              {t('projects.formHelp')}
+              {projects.length === 0
+                ? t('projects.emptyHelp')
+                : t('projects.formHelp')}
             </p>
           </CardHeader>
           <CardContent>
@@ -191,6 +220,17 @@ export function ProjectsDashboard({
                   value={idea}
                   onChange={(e) => setIdea(e.target.value)}
                   required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="clientName">{t('projects.clientLabel')}</Label>
+                <Input
+                  id="clientName"
+                  dir="auto"
+                  placeholder={t('projects.clientPlaceholder')}
+                  value={clientName}
+                  maxLength={120}
+                  onChange={(e) => setClientName(e.target.value)}
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -341,7 +381,7 @@ function ContinueBanner({
   busy,
   onOpen,
 }: {
-  project: ProjectSummary;
+  project: ProjectOverview;
   busy: boolean;
   onOpen: () => void;
 }) {
@@ -408,21 +448,23 @@ function ViewToggle({
 }
 
 /**
- * A per-project kebab menu: Rename (inline), Export (JSON/Markdown/OpenAPI, for
- * confirmed projects), and Delete. Rendered as a sibling of the card's open
- * button (never nested) so clicks don't open the project. Self-manages open
- * state + close-on-outside/Escape.
+ * A per-project kebab menu: Rename + Set client (both inline), Export
+ * (JSON/Markdown/OpenAPI, for confirmed projects), and Delete. Rendered as a
+ * sibling of the card's open button (never nested) so clicks don't open the
+ * project. Self-manages open state + close-on-outside/Escape.
  */
 function ProjectMenu({
   project,
   busy,
   onDelete,
   onRename,
+  onSetClient,
   onExport,
-}: { project: ProjectSummary } & Omit<CardActions, 'onOpen'>) {
+}: { project: ProjectOverview } & Omit<CardActions, 'onOpen' | 'onCopyLink'>) {
   const { t } = useTranslation('dashboard');
   const [open, setOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
+  /** Which label is being edited inline — both are one-line text, so one editor. */
+  const [editing, setEditing] = useState<'title' | 'client' | null>(null);
   const [value, setValue] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -444,18 +486,27 @@ function ProjectMenu({
 
   function close() {
     setOpen(false);
-    setRenaming(false);
+    setEditing(null);
   }
 
-  function startRename() {
-    setValue(project.title ?? project.idea);
-    setRenaming(true);
+  function startEdit(field: 'title' | 'client') {
+    setValue(
+      field === 'title'
+        ? (project.title ?? project.idea)
+        : (project.clientName ?? ''),
+    );
+    setEditing(field);
   }
 
-  function submitRename() {
+  function submitEdit() {
     const next = value.trim();
+    const field = editing;
     close();
-    if (next !== (project.title ?? '')) onRename(next);
+    if (field === 'title') {
+      if (next !== (project.title ?? '')) onRename(next);
+    } else if (field === 'client') {
+      if (next !== (project.clientName ?? '')) onSetClient(next);
+    }
   }
 
   const confirmed = project.status === 'confirmed';
@@ -479,18 +530,23 @@ function ProjectMenu({
           role="menu"
           className="absolute end-0 top-full z-30 mt-1 w-52 rounded-md border border-border bg-card p-1 shadow-md"
         >
-          {renaming ? (
+          {editing ? (
             <div className="p-1">
               <Input
                 autoFocus
                 dir="auto"
                 value={value}
                 maxLength={120}
-                aria-label={t('actions.rename')}
+                placeholder={
+                  editing === 'client' ? t('projects.clientPlaceholder') : undefined
+                }
+                aria-label={
+                  editing === 'title' ? t('actions.rename') : t('actions.setClient')
+                }
                 onChange={(e) => setValue(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') submitRename();
-                  if (e.key === 'Escape') setRenaming(false);
+                  if (e.key === 'Enter') submitEdit();
+                  if (e.key === 'Escape') setEditing(null);
                 }}
                 className="h-8 text-sm"
               />
@@ -499,18 +555,31 @@ function ProjectMenu({
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2"
-                  onClick={() => setRenaming(false)}
+                  onClick={() => setEditing(null)}
                 >
                   {t('actions.cancel')}
                 </Button>
-                <Button size="sm" className="h-7 px-2" onClick={submitRename}>
+                <Button size="sm" className="h-7 px-2" onClick={submitEdit}>
                   {t('actions.save')}
                 </Button>
               </div>
             </div>
           ) : (
             <>
-              <MenuItem icon={Pencil} label={t('actions.rename')} onClick={startRename} />
+              <MenuItem
+                icon={Pencil}
+                label={t('actions.rename')}
+                onClick={() => startEdit('title')}
+              />
+              <MenuItem
+                icon={Building2}
+                label={
+                  project.clientName
+                    ? t('actions.changeClient')
+                    : t('actions.setClient')
+                }
+                onClick={() => startEdit('client')}
+              />
               {confirmed && (
                 <>
                   <div className="my-1 h-px bg-border" />
@@ -583,47 +652,174 @@ function MenuItem({
   );
 }
 
-/** A single project tile on the dashboard grid. */
+/**
+ * The pipeline rail: one segment per stage, filled as its artifact appears.
+ *
+ * Derived from artifact *existence* (`projectProgress`), never from a stored
+ * counter — the artifacts are the truth, and a version restore can rewind them.
+ * A free-tier scoping legitimately stops at 4/6 (the API design and review are
+ * Pro), so a partly-filled rail is a normal resting state, not a stalled one.
+ */
+function PipelineRail({ project }: { project: ProjectOverview }) {
+  const { t } = useTranslation('dashboard');
+  const progress = projectProgress(project.status, project.artifacts);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+        <span>{t('pipeline.label')}</span>
+        <span className="tabular-nums">
+          {t('pipeline.count', {
+            done: progress.completed,
+            total: progress.total,
+          })}
+        </span>
+      </div>
+      <div
+        className="flex gap-1"
+        role="img"
+        aria-label={t('pipeline.count', {
+          done: progress.completed,
+          total: progress.total,
+        })}
+      >
+        {progress.steps.map(({ step, done }) => (
+          <span
+            key={step}
+            title={t(`pipeline.step.${step}`)}
+            className={cn(
+              'h-1.5 flex-1 rounded-full transition-colors',
+              done ? 'bg-primary' : 'bg-muted',
+            )}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** "Sent to client" — the card's headline fact once a link exists. */
+function SentBadge() {
+  const { t } = useTranslation('dashboard');
+  return (
+    // `default` is the success-toned pill in this Badge (green surface).
+    <Badge variant="default" className="gap-1">
+      <Send className="h-3 w-3" />
+      {t('card.sent')}
+    </Badge>
+  );
+}
+
+/** The client this scoping is for. Absent until the owner names one. */
+function ClientLine({ clientName }: { clientName: string }) {
+  return (
+    <p
+      dir="auto"
+      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      title={clientName}
+    >
+      <Building2 className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{clientName}</span>
+    </p>
+  );
+}
+
+/**
+ * The card's primary action: put the link in the owner's clipboard.
+ *
+ * The three states come from `clientLinkState` — and `locked` is the one that
+ * matters: the API mints only once the database design exists, so offering the
+ * button earlier would hand the user a 409 they can do nothing about. It is
+ * disabled with the reason, not hidden, so the path stays discoverable.
+ */
+function CopyLinkButton({
+  state,
+  busy,
+  onCopyLink,
+}: {
+  state: ClientLinkState;
+  busy: boolean;
+  onCopyLink: () => Promise<boolean>;
+}) {
+  const { t } = useTranslation('dashboard');
+  const [copied, setCopied] = useState(false);
+  const [working, setWorking] = useState(false);
+  const locked = state === 'locked';
+
+  async function copy() {
+    setWorking(true);
+    try {
+      if (await onCopyLink()) {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      }
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <Button
+      variant={state === 'sent' ? 'secondary' : 'default'}
+      size="sm"
+      className="h-7 gap-1.5 px-2 text-xs"
+      disabled={locked || busy || working}
+      title={locked ? t('card.copyLocked') : t('card.copyLink')}
+      onClick={copy}
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5" />
+      ) : (
+        <Link2 className="h-3.5 w-3.5" />
+      )}
+      {copied ? t('card.copied') : t('card.copyLink')}
+    </Button>
+  );
+}
+
+/** A single scoping tile on the dashboard grid. */
 function ProjectCard({
   project,
   busy,
   onOpen,
   onDelete,
   onRename,
+  onSetClient,
+  onCopyLink,
   onExport,
-}: { project: ProjectSummary } & CardActions) {
+}: { project: ProjectOverview } & CardActions) {
   const { t } = useTranslation('dashboard');
-  const pct = Math.round(project.completeness * 100);
   return (
-    <div className="group relative">
+    <div className="group relative rounded-lg border border-border bg-card shadow-sm transition-all duration-150 hover:border-primary/60 hover:shadow-md focus-within:border-primary/60">
+      {/* The open-button holds only the identity + progress. The actions below sit
+          OUTSIDE it — nesting a button inside a button is invalid HTML, and a
+          "copy link" click that also opened the project would be a trap. */}
       <button
         type="button"
         onClick={onOpen}
         disabled={busy}
-        className="flex w-full flex-col rounded-lg border border-border bg-card p-4 text-start shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
+        className="flex w-full flex-col rounded-t-lg p-4 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
       >
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2 pe-8">
           <Badge variant={STATUS_VARIANT[project.status]}>
             {t(`status.${project.status}`)}
           </Badge>
+          {project.shared && <SentBadge />}
         </div>
         <p
           dir="auto"
-          className="line-clamp-2 pe-8 text-sm font-semibold"
+          className="line-clamp-2 text-sm font-semibold"
           title={displayName(project)}
         >
           {displayName(project)}
         </p>
-        <div className="mt-auto pt-3">
-          {project.status !== 'confirmed' && (
-            <>
-              <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
-                <span>{t('projects.completeness')}</span>
-                <span>{pct}%</span>
-              </div>
-              <Progress value={pct} className="h-1.5" />
-            </>
-          )}
+        {project.clientName && (
+          <div className="mt-1">
+            <ClientLine clientName={project.clientName} />
+          </div>
+        )}
+        <div className="mt-auto w-full pt-3">
+          <PipelineRail project={project} />
           <p className="mt-2 text-[11px] text-muted-foreground">
             {t('projects.updated', {
               date: new Date(project.updatedAt).toLocaleDateString(),
@@ -631,11 +827,21 @@ function ProjectCard({
           </p>
         </div>
       </button>
+
+      <div className="flex items-center gap-2 border-t border-border/60 px-4 py-2">
+        <CopyLinkButton
+          state={clientLinkState(project)}
+          busy={busy}
+          onCopyLink={onCopyLink}
+        />
+      </div>
+
       <ProjectMenu
         project={project}
         busy={busy}
         onDelete={onDelete}
         onRename={onRename}
+        onSetClient={onSetClient}
         onExport={onExport}
       />
     </div>
@@ -649,47 +855,61 @@ function ProjectRow({
   onOpen,
   onDelete,
   onRename,
+  onSetClient,
+  onCopyLink,
   onExport,
-}: { project: ProjectSummary } & CardActions) {
+}: { project: ProjectOverview } & CardActions) {
   const { t } = useTranslation('dashboard');
-  const pct = Math.round(project.completeness * 100);
+  const progress = projectProgress(project.status, project.artifacts);
   return (
-    <div className="group relative">
+    <div className="group relative flex items-center gap-3 rounded-lg border border-border bg-card py-3 pe-12 ps-4 shadow-sm transition-all duration-150 hover:border-primary/60 hover:shadow-md focus-within:border-primary/60">
       <button
         type="button"
         onClick={onOpen}
         disabled={busy}
-        className="flex w-full items-center gap-3 rounded-lg border border-border bg-card py-3 pe-12 ps-4 text-start shadow-sm transition-all duration-150 hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
+        className="flex min-w-0 flex-1 items-center gap-3 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
       >
         <Badge variant={STATUS_VARIANT[project.status]} className="shrink-0">
           {t(`status.${project.status}`)}
         </Badge>
-        <span
-          dir="auto"
-          className="min-w-0 flex-1 truncate text-sm font-medium"
-          title={displayName(project)}
-        >
-          {displayName(project)}
+        <span className="min-w-0 flex-1">
+          <span
+            dir="auto"
+            className="block truncate text-sm font-medium"
+            title={displayName(project)}
+          >
+            {displayName(project)}
+          </span>
+          {project.clientName && <ClientLine clientName={project.clientName} />}
         </span>
-        {project.status !== 'confirmed' && (
-          <span className="hidden shrink-0 items-center gap-2 sm:flex">
-            <Progress value={pct} className="h-1.5 w-20" />
-            <span className="w-9 text-end text-[11px] tabular-nums text-muted-foreground">
-              {pct}%
-            </span>
+        {project.shared && (
+          <span className="hidden shrink-0 sm:block">
+            <SentBadge />
           </span>
         )}
-        <span className="hidden shrink-0 whitespace-nowrap text-[11px] text-muted-foreground md:inline">
-          {t('projects.updated', {
-            date: new Date(project.updatedAt).toLocaleDateString(),
-          })}
+        <span className="hidden shrink-0 items-center gap-2 sm:flex">
+          <Progress value={progress.percent} className="h-1.5 w-20" />
+          <span className="w-9 text-end text-[11px] tabular-nums text-muted-foreground">
+            {t('pipeline.count', {
+              done: progress.completed,
+              total: progress.total,
+            })}
+          </span>
         </span>
       </button>
+
+      <CopyLinkButton
+        state={clientLinkState(project)}
+        busy={busy}
+        onCopyLink={onCopyLink}
+      />
+
       <ProjectMenu
         project={project}
         busy={busy}
         onDelete={onDelete}
         onRename={onRename}
+        onSetClient={onSetClient}
         onExport={onExport}
       />
     </div>

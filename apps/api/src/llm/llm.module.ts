@@ -9,6 +9,9 @@ import { MockLlmProvider } from './mock-llm.provider';
 import { ClaudeLlmProvider } from './claude-llm.provider';
 import { GroqLlmProvider } from './groq-llm.provider';
 import { AzureOpenAiLlmProvider } from './azure-openai-llm.provider';
+import { UsageTrackingLlmProvider } from './usage-tracking-llm.provider';
+import { LlmUsageModule } from './usage/llm-usage.module';
+import { LlmUsageService } from './usage/llm-usage.service';
 
 /**
  * Build a provider by kind. Kept separate so both the default provider and the
@@ -54,6 +57,36 @@ export function selectProviderKind(
   return 'mock';
 }
 
+/** Env vars that mean a real provider is available and paid for. */
+const REAL_PROVIDER_KEYS = [
+  'GROQ_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'AZURE_OPENAI_API_KEY',
+] as const;
+
+/**
+ * The names of the real-provider keys that are set, when the resolved provider
+ * is nonetheless `mock`. Empty when that isn't the case (nothing to warn about).
+ *
+ * A forced `mock` while a real key is sitting right there is almost always a
+ * stale env var rather than a choice — and it is *invisible*: every agent has a
+ * deterministic fallback, so the pipeline still produces artifacts (templated
+ * ones), and the usage meter honestly records $0. The symptom is "the AI spend
+ * report doesn't account for anything", which reads as a broken feature.
+ *
+ * The trap that caused it: `@prisma/client` loads the REPO-ROOT `.env` into
+ * `process.env` when it is imported, and `process.env` outranks `apps/api/.env`
+ * inside ConfigModule — so a stray `LLM_PROVIDER=mock` in the root file wins
+ * over a perfectly good `GROQ_API_KEY` in the API's own env.
+ */
+export function mockOverriddenKeys(
+  kind: string,
+  read: (key: string) => string | undefined,
+): string[] {
+  if (kind !== 'mock') return [];
+  return REAL_PROVIDER_KEYS.filter((key) => read(key)?.trim());
+}
+
 /**
  * The interview can still be pinned independently via INTERVIEW_LLM_PROVIDER;
  * otherwise it follows the same one-switch resolution as every other agent.
@@ -69,6 +102,25 @@ export function selectInterviewKind(
 }
 
 /**
+ * Announce the resolved provider — and shout when it is `mock` despite a real
+ * key being configured, because that failure mode is otherwise silent.
+ */
+function announce(kind: string, name: string, label: string, config: ConfigService): void {
+  const logger = new Logger('LlmModule');
+  logger.log(`${label} LLM provider: ${name}`);
+
+  const ignored = mockOverriddenKeys(kind, (key) => config.get<string>(key));
+  if (ignored.length > 0) {
+    logger.warn(
+      `${label} is on the MOCK provider even though ${ignored.join(', ')} is set. ` +
+        'Every agent will emit deterministic template output and AI spend will ' +
+        'record $0. Unset LLM_PROVIDER — check the repo-root .env too: ' +
+        '@prisma/client loads it into process.env, which outranks apps/api/.env.',
+    );
+  }
+}
+
+/**
  * Wires the active providers from env. Setting GROQ_API_KEY flips the WHOLE
  * pipeline (every design agent + the interview) to real AI on the free Groq;
  * AZURE_OPENAI_API_KEY does the same at a lower priority;
@@ -79,25 +131,33 @@ export function selectInterviewKind(
  */
 @Global()
 @Module({
+  imports: [LlmUsageModule],
   providers: [
     {
       provide: LLM_PROVIDER,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService): LlmProvider => {
+      inject: [ConfigService, LlmUsageService],
+      useFactory: (
+        config: ConfigService,
+        usage: LlmUsageService,
+      ): LlmProvider => {
         const kind = selectProviderKind(
           config.get<string>('LLM_PROVIDER'),
           config.get<string>('GROQ_API_KEY'),
           config.get<string>('AZURE_OPENAI_API_KEY'),
         );
         const provider = createProvider(kind, config);
-        new Logger('LlmModule').log(`Agent LLM provider: ${provider.name}`);
-        return provider;
+        announce(kind, provider.name, 'Agent', config);
+        // Every agent talks to the metered wrapper, never the raw provider.
+        return new UsageTrackingLlmProvider(provider, usage);
       },
     },
     {
       provide: INTERVIEW_LLM_PROVIDER,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService): LlmProvider => {
+      inject: [ConfigService, LlmUsageService],
+      useFactory: (
+        config: ConfigService,
+        usage: LlmUsageService,
+      ): LlmProvider => {
         const kind = selectInterviewKind(
           config.get<string>('INTERVIEW_LLM_PROVIDER'),
           config.get<string>('LLM_PROVIDER'),
@@ -105,8 +165,8 @@ export function selectInterviewKind(
           config.get<string>('AZURE_OPENAI_API_KEY'),
         );
         const provider = createProvider(kind, config);
-        new Logger('LlmModule').log(`Interview LLM provider: ${provider.name}`);
-        return provider;
+        announce(kind, provider.name, 'Interview', config);
+        return new UsageTrackingLlmProvider(provider, usage);
       },
     },
   ],

@@ -239,6 +239,10 @@ model InterviewSession {
   idea            String
   /// Optional user-set display name; the UI falls back to `idea` when null.
   title           String?
+  /// The end client this scoping is for (optional, owner-set). A label for the
+  /// owner's dashboard only: it is NOT part of the idea, so it never reaches an
+  /// agent prompt and never crosses onto the public share page.
+  clientName      String?
   industry        String?
   scale           String?
   preferredStack  String?
@@ -263,11 +267,26 @@ model InterviewSession {
   qaPlan              QaPlan?
   chatMessages        ChatMessage[]
   versions            ProjectVersion[]
+  shareLink           ShareLink?
   // Support tickets a customer optionally linked to this project.
   supportTickets      SupportTicket[]
 
   @@index([userId])
   @@map("interview_sessions")
+}
+
+// Public share link. At most one per session (revoking deletes the row, so
+// re-sharing mints a fresh token and the old link dies for good). The token is
+// the only credential — it must stay unguessable (32 random bytes, base64url).
+model ShareLink {
+  sessionId    String           @id
+  session      InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  token        String           @unique
+  viewCount    Int              @default(0)
+  lastViewedAt DateTime?
+  createdAt    DateTime         @default(now())
+
+  @@map("share_links")
 }
 
 // Project version history (Slice 12). Each modification snapshots every artifact
@@ -435,6 +454,40 @@ model AnalyticsEvent {
   @@index([type, createdAt])
   @@index([createdAt])
   @@map("analytics_events")
+}
+
+// --- LLM usage metering (margin protection) -----------------------------------
+
+// One row per model call made through the LlmProvider seam — which agent ran, for
+// which stage/user/session, how many tokens, and what it cost. The mock provider
+// records zero-token rows too, so the call graph is still visible offline.
+//
+// Deliberately stores NO prompt or completion CONTENT — only counts — so the
+// table is safe to expose to a role that holds `admin:analytics` but has no
+// project access. `costUsd` is NULL when the model has no price in the shared
+// catalog (an unknown model must never read as free). No FK: append-only, and it
+// must outlive the user/session it refers to.
+model LlmUsage {
+  id                     String   @id @default(uuid())
+  provider               String // 'mock' | 'claude' | 'groq' | 'azure'
+  model                  String
+  agent                  String? // AgentRole
+  stage                  String // LlmUsageStage
+  userId                 String?
+  sessionId              String?
+  promptTokens           Int      @default(0)
+  completionTokens       Int      @default(0)
+  cachedPromptTokens     Int      @default(0)
+  cacheWritePromptTokens Int      @default(0)
+  costUsd                Float?
+  // False when the provider call threw (timeout, 4xx/5xx, unparseable JSON).
+  ok                     Boolean  @default(true)
+  durationMs             Int      @default(0)
+  createdAt              DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("llm_usage")
 }
 
 // --- Customer Support Center --------------------------------------------------

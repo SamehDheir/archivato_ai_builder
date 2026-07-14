@@ -6,10 +6,11 @@ import {
   BadRequestException,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 
-function mockHost(): {
+function mockHost(originalUrl = '/api/thing'): {
   host: ArgumentsHost;
   res: { status: jest.Mock; json: jest.Mock };
 } {
@@ -17,7 +18,7 @@ function mockHost(): {
     status: jest.fn().mockReturnThis(),
     json: jest.fn().mockReturnThis(),
   };
-  const req = { method: 'POST', originalUrl: '/api/thing' };
+  const req = { method: 'POST', originalUrl };
   const host = {
     switchToHttp: () => ({ getResponse: () => res, getRequest: () => req }),
   } as unknown as ArgumentsHost;
@@ -63,5 +64,21 @@ describe('AllExceptionsFilter', () => {
       message: 'teapot',
     });
     expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it('never logs a share token — the URL param IS the credential', () => {
+    const token = 'kHhK1Zt3s6vQ9wXyZ0aBcDeFgHiJkLmNoPqRsTuVwXy';
+    const spy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    const { host } = mockHost(`/api/shared/${token}`);
+    filter.catch(new Error('boom'), host);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const line = String(spy.mock.calls[0][0]);
+    expect(line).not.toContain(token);
+    expect(line).toContain('/api/shared/[token]');
+    spy.mockRestore();
   });
 });

@@ -2,7 +2,6 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AgentRole,
   type ApiDesign,
-  type ApiEndpoint,
   type ApiModule,
   type DatabaseDesign,
   type Entity,

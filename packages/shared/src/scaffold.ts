@@ -19,7 +19,24 @@
 
 import type { SystemDesign } from './system-design';
 import type { DatabaseDesign, Entity, EntityColumn } from './database-design';
-import type { ApiDesign, ApiEndpoint, ApiModule, SchemaField } from './api-design';
+import type { ApiDesign, ApiModule } from './api-design';
+import {
+  assignHandlers,
+  camel,
+  controllerBase,
+  dedupe,
+  fieldKind,
+  httpMethod,
+  kebab,
+  mapName,
+  oneLine,
+  pascal,
+  pascalMethod,
+  prismaProvider,
+  safePath,
+  uniquifyNames,
+  type Handler,
+} from './scaffold.util';
 
 /** A single generated file: a repo-relative path and its full text contents. */
 export interface ScaffoldFile {
@@ -34,13 +51,34 @@ export interface ScaffoldInput {
   apiDesign: ApiDesign;
 }
 
+/**
+ * What to generate: the NestJS backend, the Next.js frontend, or both as one
+ * npm-workspaces monorepo (`apps/api` + `apps/web`).
+ */
+export type ScaffoldTarget = 'backend' | 'frontend' | 'fullstack';
+
+export const SCAFFOLD_TARGETS: readonly ScaffoldTarget[] = [
+  'backend',
+  'frontend',
+  'fullstack',
+] as const;
+
+/** The default when a caller doesn't say: the whole runnable app. */
+export const DEFAULT_SCAFFOLD_TARGET: ScaffoldTarget = 'fullstack';
+
 /** Manifest returned by the scaffold API (file list + count). */
 export interface ScaffoldManifest {
   sessionId: string;
   generatedAt: string;
+  target: ScaffoldTarget;
+  /** Provider the deployment artifacts target (the cost recommendation by default). */
+  provider: string;
   fileCount: number;
   files: ScaffoldFile[];
 }
+
+/** The port the generated frontend dev-serves on (the backend takes 3000). */
+export const FRONTEND_DEV_PORT = 3001;
 
 /** A user's GitHub connection state (no token material). */
 export interface GithubConnectionStatus {
@@ -59,17 +97,6 @@ export interface GithubPushResult {
   /** The branch the scaffold was committed to. */
   branch: string;
 }
-
-/** Fields the server manages — never accepted in a request DTO. */
-const SERVER_MANAGED = new Set([
-  'id',
-  'created_at',
-  'updated_at',
-  'createdat',
-  'updatedat',
-  'password_hash',
-  'passwordhash',
-]);
 
 /**
  * Build the full backend scaffold as a flat, sorted list of files.
@@ -98,23 +125,6 @@ export function buildBackendScaffold(input: ScaffoldInput): ScaffoldFile[] {
 
   // Stable order so output is deterministic (and diffs are clean).
   return files.sort((a, b) => a.path.localeCompare(b.path));
-}
-
-/**
- * Ensure the derived key (via `keyOf`) is unique across items by suffixing the
- * `name` of later collisions (" 2", " 3", …). Works for any item with a `name`.
- */
-function uniquifyNames<T extends { name: string }>(
-  items: T[],
-  keyOf: (item: T) => string,
-): T[] {
-  const counts = new Map<string, number>();
-  return items.map((item) => {
-    const key = keyOf(item).toLowerCase();
-    const seen = counts.get(key) ?? 0;
-    counts.set(key, seen + 1);
-    return seen === 0 ? item : { ...item, name: `${item.name} ${seen + 1}` };
-  });
 }
 
 // ── Prisma schema ────────────────────────────────────────────────────────────
@@ -159,7 +169,7 @@ function renderModel(entity: Entity): string {
     lines.push('  ' + renderField(col, forcePrimary));
   });
 
-  lines.push(`\n  @@map("${entity.name}")`);
+  lines.push(`\n  @@map("${mapName(entity.name)}")`);
   lines.push('}');
   return lines.join('\n');
 }
@@ -177,7 +187,7 @@ function renderField(col: EntityColumn, forcePrimary = false): string {
     else if (type === 'Int') attrs.push('@default(autoincrement())');
   }
   if (col.unique && !isPrimary) attrs.push('@unique');
-  if (field !== col.name) attrs.push(`@map("${col.name}")`);
+  if (field !== col.name) attrs.push(`@map("${mapName(col.name)}")`);
 
   // A promoted `id` can't be optional (an @id field must be required).
   const suffix = isPrimary ? '' : optional;
@@ -187,15 +197,6 @@ function renderField(col: EntityColumn, forcePrimary = false): string {
     line += ` // FK → ${col.references.entity}.${col.references.column}`;
   }
   return line;
-}
-
-function prismaProvider(databaseType: string): string {
-  const t = (databaseType || '').toLowerCase();
-  if (t.includes('mysql') || t.includes('maria')) return 'mysql';
-  if (t.includes('sqlite')) return 'sqlite';
-  if (t.includes('sqlserver') || t.includes('mssql')) return 'sqlserver';
-  if (t.includes('mongo')) return 'mongodb';
-  return 'postgresql';
 }
 
 function prismaType(raw: string): string {
@@ -244,71 +245,11 @@ function moduleFiles(mod: ApiModule): ScaffoldFile[] {
   return files;
 }
 
-interface Handler {
-  endpoint: ApiEndpoint;
-  name: string;
-  /** Path relative to the controller base, e.g. ':id' or '' for the root. */
-  subPath: string;
-  /** Path params in order, e.g. ['id']. */
-  params: string[];
-  /** DTO class name when the endpoint takes a request body, else null. */
-  dtoName: string | null;
-  dtoFields: SchemaField[];
-}
-
-function assignHandlers(endpoints: ApiEndpoint[]): Handler[] {
-  const used = new Set<string>();
-  return endpoints.map((endpoint) => {
-    const subPath = relativePath(endpoint.path);
-    const params = [...subPath.matchAll(/:(\w+)/g)].map((m) => m[1]);
-
-    let name = baseHandlerName(endpoint.method, params.length > 0);
-    let unique = name;
-    let n = 2;
-    while (used.has(unique)) unique = `${name}${n++}`;
-    used.add(unique);
-    name = unique;
-
-    const takesBody =
-      ['POST', 'PUT', 'PATCH'].includes(endpoint.method) &&
-      dtoFields(endpoint.requestSchema).length > 0;
-
-    return {
-      endpoint,
-      name,
-      subPath,
-      params,
-      dtoName: takesBody ? `${pascal(name)}Dto` : null,
-      dtoFields: takesBody ? dtoFields(endpoint.requestSchema) : [],
-    };
-  });
-}
-
-function dtoFields(schema: SchemaField[]): SchemaField[] {
-  return schema.filter((f) => !SERVER_MANAGED.has(f.name.toLowerCase()));
-}
-
-function baseHandlerName(method: string, hasId: boolean): string {
-  switch (method) {
-    case 'GET':
-      return hasId ? 'findOne' : 'findAll';
-    case 'POST':
-      return 'create';
-    case 'PUT':
-    case 'PATCH':
-      return 'update';
-    case 'DELETE':
-      return 'remove';
-    default:
-      return 'handle';
-  }
-}
-
 function renderModuleFile(cls: string): string {
   return [
     `import { Module } from '@nestjs/common';`,
-    `import { ${cls}Controller } from './${kebabFromClass(cls)}.controller';`,
-    `import { ${cls}Service } from './${kebabFromClass(cls)}.service';`,
+    `import { ${cls}Controller } from './${kebab(cls)}.controller';`,
+    `import { ${cls}Service } from './${kebab(cls)}.service';`,
     '',
     '@Module({',
     `  controllers: [${cls}Controller],`,
@@ -351,7 +292,11 @@ function renderControllerFile(
     const pathArg = h.subPath ? `'${h.subPath}'` : '';
     methods.push(
       [
-        `  // ${h.endpoint.method} ${h.endpoint.path} — ${h.endpoint.summary}`,
+        // oneLine: a newline in a designed summary would end this comment and
+        // leave the rest of it sitting in the class body as code.
+        `  // ${oneLine(
+          `${httpMethod(h.endpoint.method)} ${safePath(h.endpoint.path)} — ${h.endpoint.summary}`,
+        )}`,
         `  @${dec}(${pathArg})`,
         `  ${h.name}(${args.join(', ')}): Promise<unknown> {`,
         `    return this.service.${h.name}(${callArgs});`,
@@ -426,11 +371,14 @@ function renderDtoFile(h: Handler): string {
       validators.add('IsOptional');
       decs.push('  @IsOptional()');
     }
-    const v = validatorFor(f.type);
-    validators.add(v.name);
-    decs.push(`  @${v.name}()`);
-    const opt = f.required ? '' : '?';
-    fieldLines.push(`${decs.join('\n')}\n  ${camel(f.name)}${opt}: ${v.ts};`);
+    const kind = fieldKind(f.type);
+    validators.add(kind.validator);
+    decs.push(`  @${kind.validator}()`);
+    // `!`, not bare: a required field with no initializer fails TS's
+    // strictPropertyInitialization (TS2564) and the project would not compile.
+    // It's the same definite-assignment convention Nest DTOs use everywhere.
+    const mark = f.required ? '!' : '?';
+    fieldLines.push(`${decs.join('\n')}\n  ${camel(f.name)}${mark}: ${kind.ts};`);
   }
 
   const importLine = validators.size
@@ -438,19 +386,6 @@ function renderDtoFile(h: Handler): string {
     : '';
 
   return `${importLine}export class ${h.dtoName} {\n${fieldLines.join('\n\n')}\n}\n`;
-}
-
-function validatorFor(rawType: string): { name: string; ts: string } {
-  const t = (rawType || '').toLowerCase();
-  if (/(^| )(int|integer|serial|bigint|smallint)/.test(t))
-    return { name: 'IsInt', ts: 'number' };
-  if (/(decimal|numeric|float|double|real|money)/.test(t))
-    return { name: 'IsNumber', ts: 'number' };
-  if (/(bool)/.test(t)) return { name: 'IsBoolean', ts: 'boolean' };
-  if (/(timestamp|datetime|^date$|^date )/.test(t))
-    return { name: 'IsDateString', ts: 'string' };
-  if (/(json)/.test(t)) return { name: 'IsObject', ts: 'Record<string, unknown>' };
-  return { name: 'IsString', ts: 'string' };
 }
 
 // ── Framework + root files ───────────────────────────────────────────────────
@@ -469,12 +404,29 @@ function frameworkFiles(api: ApiDesign): ScaffoldFile[] {
   const appModule = [
     `import { Module } from '@nestjs/common';`,
     `import { PrismaModule } from './prisma/prisma.module';`,
+    `import { HealthController } from './health.controller';`,
     moduleImports,
     '',
     '@Module({',
     `  imports: [PrismaModule${moduleList ? ', ' + moduleList : ''}],`,
+    '  controllers: [HealthController],',
     '})',
     'export class AppModule {}',
+    '',
+  ].join('\n');
+
+  // Every host wants a health check, and pointing one at a route that doesn't
+  // exist (a 404) is how a perfectly good deploy gets marked unhealthy forever.
+  const health = [
+    `import { Controller, Get } from '@nestjs/common';`,
+    '',
+    `@Controller('health')`,
+    'export class HealthController {',
+    '  @Get()',
+    '  check(): { status: string } {',
+    `    return { status: 'ok' };`,
+    '  }',
+    '}',
     '',
   ].join('\n');
 
@@ -486,6 +438,12 @@ function frameworkFiles(api: ApiDesign): ScaffoldFile[] {
     'async function bootstrap() {',
     '  const app = await NestFactory.create(AppModule);',
     '  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));',
+    '  // The generated frontend runs on a different origin, so the browser needs',
+    '  // this to call the API at all. Lock WEB_ORIGIN down in production.',
+    '  app.enableCors({',
+    `    origin: process.env.WEB_ORIGIN ?? 'http://localhost:${FRONTEND_DEV_PORT}',`,
+    '    credentials: true,',
+    '  });',
     `  app.setGlobalPrefix('api');`,
     '  await app.listen(process.env.PORT ? Number(process.env.PORT) : 3000);',
     '}',
@@ -522,6 +480,7 @@ function frameworkFiles(api: ApiDesign): ScaffoldFile[] {
   return [
     { path: 'src/app.module.ts', content: appModule },
     { path: 'src/main.ts', content: main },
+    { path: 'src/health.controller.ts', content: health },
     { path: 'src/prisma/prisma.service.ts', content: prismaService },
     { path: 'src/prisma/prisma.module.ts', content: prismaModule },
   ];
@@ -595,6 +554,8 @@ function rootFiles(input: ScaffoldInput): ScaffoldFile[] {
         '# Copy to .env and set your database connection string.',
         `DATABASE_URL="${exampleDbUrl(input.databaseDesign.databaseType)}"`,
         'PORT=3000',
+        '# Origin allowed to call this API from a browser (the generated frontend).',
+        `WEB_ORIGIN=http://localhost:${FRONTEND_DEV_PORT}`,
         '',
       ].join('\n'),
     },
@@ -663,63 +624,5 @@ function exampleDbUrl(databaseType: string): string {
   }
 }
 
-// ── Path / casing helpers ────────────────────────────────────────────────────
-
-/** Strip the leading `/api` and surrounding slashes from a designed path. */
-function stripApi(p: string): string {
-  return (p || '').replace(/^\/?api/i, '').replace(/^\/+|\/+$/g, '');
-}
-
-/** The controller base path (no leading slash), e.g. `/api/users` → `users`. */
-function controllerBase(basePath: string, slug: string): string {
-  const base = stripApi(basePath);
-  return base || slug;
-}
-
-/**
- * An endpoint's path relative to its module base — the arg to `@Get(...)`.
- * `/api/users/:id` (base `/api/users`) → `:id`; `/api/users` → ``.
- */
-function relativePath(endpointPath: string): string {
-  const segments = stripApi(endpointPath).split('/').filter(Boolean);
-  // Drop the first segment (the resource, already the controller base) and keep
-  // the remainder (ids / sub-resources). This keeps nested paths intact.
-  return segments.slice(1).join('/');
-}
-
-function words(s: string): string[] {
-  return (s || '')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[^a-zA-Z0-9]+/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-function pascal(s: string): string {
-  const w = words(s);
-  if (w.length === 0) return 'Resource';
-  return w.map((x) => x[0].toUpperCase() + x.slice(1).toLowerCase()).join('');
-}
-
-function camel(s: string): string {
-  const p = pascal(s);
-  return p ? p[0].toLowerCase() + p.slice(1) : p;
-}
-
-function kebab(s: string): string {
-  const w = words(s);
-  return w.length ? w.map((x) => x.toLowerCase()).join('-') : 'resource';
-}
-
-function kebabFromClass(cls: string): string {
-  return kebab(cls);
-}
-
-function pascalMethod(method: string): string {
-  return method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
-}
-
-function dedupe(arr: string[]): string[] {
-  return [...new Set(arr)];
-}
+// Path / casing helpers live in `scaffold.util.ts` — shared with the frontend
+// builder so both derive identical names from the same design.

@@ -9,6 +9,8 @@
  * deterministic fallback, so it always yields a complete, useful plan.
  */
 
+import type { DerivedArtifact } from './freshness';
+
 export type TestType =
   | 'unit'
   | 'integration'
@@ -47,7 +49,7 @@ export interface TestSuite {
   cases: TestCase[];
 }
 
-export interface QaPlan {
+export interface QaPlan extends DerivedArtifact {
   sessionId: string;
   generatedAt: string;
   /** One-paragraph overview of the testing approach. */

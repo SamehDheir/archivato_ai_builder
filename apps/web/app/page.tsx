@@ -1,5 +1,5 @@
-import { PLANS, planPriceForCycle } from '@archivato/shared';
 import { LandingPage } from '@/components/marketing/LandingPage';
+import { TEAM_PRICE } from '@/lib/landing';
 import { siteDescription, siteName, siteUrl } from '@/lib/site';
 
 /**
@@ -10,96 +10,56 @@ import { siteDescription, siteName, siteUrl } from '@/lib/site';
  * so would never exist in the HTML a crawler reads. The content is English for
  * the same reason the rest of the machine-facing output is (see `lib/site.ts`).
  *
- * The FAQ entries must stay in sync with `locales/en/marketing.json` → `faq`:
- * Google requires that answers marked up as FAQPage are also visible on the page.
+ * There is no `FAQPage` block any more: the page no longer has an FAQ section,
+ * and Google requires that answers marked up as FAQPage are **visible on the
+ * page**. Marking up copy that isn't rendered is a structured-data violation,
+ * not a free ranking signal.
+ *
+ * Prices mirror `lib/landing.ts` — the tiers being validated on discovery calls
+ * — not `PLANS` in the billing package. See the note in that file.
  */
+const price = TEAM_PRICE.replace(/[^0-9.]/g, '');
+
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@graph': [
+  '@type': 'SoftwareApplication',
+  '@id': `${siteUrl}#app`,
+  name: siteName,
+  applicationCategory: 'BusinessApplication',
+  applicationSubCategory: 'Client scoping and proposal generation',
+  operatingSystem: 'Web',
+  url: siteUrl,
+  description: siteDescription,
+  inLanguage: ['en', 'ar'],
+  audience: {
+    '@type': 'BusinessAudience',
+    name: 'Software development companies, agencies and dev shops',
+  },
+  featureList: [
+    'AI client-scoping interview (9 questions or fewer)',
+    'Requirements document from the client call',
+    'System architecture with justified technology choices',
+    'Hosting cost estimate at three usage scales',
+    'Client-ready shareable proposal link',
+    'Implementation roadmap',
+    'OpenAPI spec, SQL DDL and Postman collection',
+    'Runnable code scaffold',
+  ],
+  offers: [
+    { '@type': 'Offer', name: 'Starter', price: '0', priceCurrency: 'USD' },
     {
-      '@type': 'SoftwareApplication',
-      '@id': `${siteUrl}#app`,
-      name: siteName,
-      applicationCategory: 'DeveloperApplication',
-      applicationSubCategory: 'Software architecture design',
-      operatingSystem: 'Web',
-      url: siteUrl,
-      description: siteDescription,
-      inLanguage: ['en', 'ar'],
-      featureList: [
-        'Adaptive AI requirements interview',
-        'System architecture design',
-        'Database schema design with ER diagrams',
-        'REST API design with OpenAPI export',
-        'Scored AI architect review (security, scalability, performance, cost)',
-        'Implementation roadmap',
-        'Hosting cost estimator',
-        'STRIDE threat model',
-        'Test / QA plan',
-        'Backend code scaffold with GitHub push',
-      ],
-      offers: [
-        {
-          '@type': 'Offer',
-          name: PLANS.free.name,
-          price: String(PLANS.free.priceUsd),
-          priceCurrency: 'USD',
-        },
-        {
-          '@type': 'Offer',
-          name: PLANS.pro.name,
-          price: String(PLANS.pro.priceUsd),
-          priceCurrency: 'USD',
-          priceSpecification: {
-            '@type': 'UnitPriceSpecification',
-            price: String(PLANS.pro.priceUsd),
-            priceCurrency: 'USD',
-            billingDuration: 1,
-            billingIncrement: 1,
-            unitCode: 'MON',
-          },
-        },
-        {
-          '@type': 'Offer',
-          name: `${PLANS.pro.name} (annual)`,
-          price: String(planPriceForCycle(PLANS.pro, 'annual')),
-          priceCurrency: 'USD',
-        },
-      ],
-    },
-    {
-      '@type': 'FAQPage',
-      '@id': `${siteUrl}#faq`,
-      mainEntity: [
-        [
-          'Is this just another AI chatbot?',
-          'No. Archivato is an architecture engine. Instead of a wall of chat text, it produces structured, versioned, editable artifacts — requirements, schema, API, review, roadmap — the exact things a team builds from.',
-        ],
-        [
-          'Do I need to be technical to use it?',
-          'No. You describe your idea in plain language and answer a short interview. Archivato handles the technical translation into requirements, database, and API design — which you can then edit or hand to a developer.',
-        ],
-        [
-          'What do I actually get out of it?',
-          'A complete, editable system design: a requirements document, system architecture, database schema with diagrams, a REST API, a scored architect review, and an implementation roadmap — exportable to JSON, Markdown, OpenAPI, or a scaffolded repo.',
-        ],
-        [
-          "What's the difference between Free and Pro?",
-          'Free covers one project through the interview, requirements, system and database design, and Product Vision. Pro unlocks the API design, AI review, roadmap, cost estimate, and export — for up to five projects.',
-        ],
-        [
-          'Can I edit what the AI generates?',
-          'Yes. Every artifact is directly editable through structured forms — not free text — and you can refine the whole design by chat. Every change is versioned so you can compare and restore any point.',
-        ],
-        [
-          'Which languages are supported?',
-          'The interface is available in English and Arabic (with full right-to-left support), and the interview adapts its questions to the language of your idea.',
-        ],
-      ].map(([question, answer]) => ({
-        '@type': 'Question',
-        name: question,
-        acceptedAnswer: { '@type': 'Answer', text: answer },
-      })),
+      '@type': 'Offer',
+      name: 'Team',
+      price,
+      priceCurrency: 'USD',
+      priceSpecification: {
+        '@type': 'UnitPriceSpecification',
+        price,
+        priceCurrency: 'USD',
+        billingDuration: 1,
+        billingIncrement: 1,
+        unitCode: 'MON',
+      },
     },
   ],
 };

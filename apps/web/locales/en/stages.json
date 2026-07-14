@@ -162,8 +162,30 @@
   },
   "scaffold": {
     "title": "Generate code",
-    "intro": "Turn this design into a runnable NestJS + Prisma backend — a real starter repo with your Prisma schema, modules, controllers, and validated DTOs.",
+    "intro": "Turn this design into a runnable app — a NestJS + Prisma API with your schema, modules and validated DTOs, and a Next.js client with a typed API client and CRUD pages.",
     "note": "Service methods are stubs for you to implement. Review the Prisma schema before running a migration.",
+    "targetLabel": "What to generate",
+    "target": {
+      "fullstack": "Full app",
+      "backend": "Backend only",
+      "frontend": "Frontend only"
+    },
+    "targetHint": {
+      "fullstack": "API + client in one repo",
+      "backend": "NestJS + Prisma",
+      "frontend": "Next.js + Tailwind"
+    },
+    "providerLabel": "Deploy to",
+    "providerAuto": "Recommended for this design",
+    "providerHint": "Ships a Dockerfile, docker-compose, a GitHub Actions workflow, and this provider's config. Defaults to the best value your cost estimate can actually be hosted on.",
+    "provider": {
+      "render": "Render",
+      "flyio": "Fly.io",
+      "railway": "Railway",
+      "heroku": "Heroku",
+      "digitalocean": "DigitalOcean",
+      "vercel": "Vercel (client only)"
+    },
     "downloadZip": "Download ZIP",
     "preparing": "Preparing…",
     "githubTitle": "Push to GitHub",
@@ -184,6 +206,12 @@
     "pushing": "Pushing…",
     "success": "Pushed to {{repo}}",
     "view": "Open repository"
+  },
+  "stale": {
+    "title": "Your design has changed since this was generated",
+    "description": "This was built from an earlier version of the design, so parts of it may no longer match.",
+    "regenerate": "Regenerate",
+    "working": "Working…"
   },
   "roadmap": {
     "title": "Implementation Roadmap",
@@ -447,5 +475,21 @@
       "endpointPath": "{{label}}: endpoint {{n}} needs a path.",
       "moduleLabel": "Module {{n}}"
     }
+  },
+  "share": {
+    "title": "Share a public link",
+    "intro": "Publish a read-only page of this design that anyone can open — no account needed. The link is unguessable, unlisted, and you can revoke it at any time.",
+    "create": "Create public link",
+    "creating": "Creating…",
+    "created": "Public link created",
+    "copy": "Copy link",
+    "copied": "Copied",
+    "revoke": "Revoke",
+    "revoked": "Public link revoked",
+    "revokeTitle": "Revoke this public link?",
+    "revokeDesc": "The link stops working immediately for everyone you sent it to. Sharing again creates a new link — the old one stays dead.",
+    "revokeConfirm": "Revoke link",
+    "views": "{{n}} views",
+    "failed": "Something went wrong. Try again."
   }
 }

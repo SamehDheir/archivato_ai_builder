@@ -8,6 +8,8 @@
 import type { AccountRole, AuthProvider } from './auth';
 import type { SubscriptionPlan } from './billing';
 import type { InterviewStatus } from './interview';
+// Type-only, so the admin ↔ llm-usage import pair is erased at compile time.
+import type { UserAiSpend } from './llm-usage';
 import type { Permission } from './permissions';
 
 /** The kinds of analytics events we record. */
@@ -86,6 +88,17 @@ export interface AdminUserRow {
   plan: SubscriptionPlan;
   projectCount: number;
   createdAt: string;
+  /**
+   * Lifetime AI spend attributable to this user — what they cost us in model
+   * calls, next to what they pay us (`plan`).
+   *
+   * `null` when the caller does NOT hold `admin:analytics`. Spend is an analytics
+   * question; a role granted only `admin:users:read` runs the user directory and
+   * must not be handed the cost book as a side effect. (This is the mirror image
+   * of the rule on `AdminLlmUsage.topUsers`, where a caller without
+   * `admin:users:read` sees spend but not the emails behind it.)
+   */
+  aiSpend: UserAiSpend | null;
 }
 
 /** Paginated users list for the admin table. */

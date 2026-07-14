@@ -1,0 +1,46 @@
+# CI for the monorepo: lint + unit tests + builds on every push/PR to the
+# integration branches. Everything runs offline — with no LLM / billing / mail
+# keys the API resolves its mock providers, so the agents fall back to their
+# deterministic builds and nothing reaches a paid service.
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint · unit tests · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Full install (not --omit=optional): next's platform SWC binaries are
+      # optional deps, so omitting optionals would break the web build. The
+      # geoip-lite postinstall cost is acceptable on GitHub's network.
+      - run: npm ci
+
+      # Shared package first — the api consumes its built dist.
+      - run: npm run build:shared
+      # Prisma client types are required by the api's build and tests.
+      - run: npm run prisma:generate --workspace @archivato/api
+
+      - run: npm run lint --workspace @archivato/api
+      - run: npm run lint --workspace @archivato/web
+
+      - run: npm run test:api
+      - run: npm run test:web
+
+      - run: npm run build --workspace @archivato/api
+      - run: npm run build --workspace @archivato/web

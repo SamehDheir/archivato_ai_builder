@@ -66,4 +66,24 @@ export async function loadAppNamespaces(): Promise<void> {
   }
 }
 
+/**
+ * Register the English namespaces the **public share page** needs (the artifact
+ * views' `stages` chrome + the page's own `share` copy). Its own tier rather than
+ * `loadAppNamespaces()`: a share link is a cold entry point for someone who has
+ * never seen the product, and it has no business downloading the admin console's
+ * copy to render a design. `SharedProjectView` awaits this before its first
+ * render, so the page never flashes raw keys.
+ */
+export async function loadShareNamespaces(): Promise<void> {
+  if (i18n.hasResourceBundle('en', 'share')) return;
+  try {
+    const { shareResources } = await import('./resources.share');
+    for (const [ns, bundle] of Object.entries(shareResources)) {
+      i18n.addResourceBundle('en', ns, bundle, true, true);
+    }
+  } catch {
+    /* t() falls back to keys */
+  }
+}
+
 export default i18n;

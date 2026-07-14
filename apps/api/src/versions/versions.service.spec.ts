@@ -1,9 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import type {
   ApiDesign,
-  DatabaseDesign,
   RequirementDocument,
-  ReviewReport,
   SystemDesign,
 } from '@archivato/shared';
 import { VersionsService } from './versions.service';
@@ -18,8 +16,6 @@ const SID = 's1';
 const requirements = { sessionId: SID, functional: [] } as unknown as RequirementDocument;
 const systemDesign = { sessionId: SID } as unknown as SystemDesign;
 const apiDesign = { sessionId: SID } as unknown as ApiDesign;
-const dbDesign = { sessionId: SID } as unknown as DatabaseDesign;
-const review = { sessionId: SID } as unknown as ReviewReport;
 
 function makeService() {
   const reqRepo = new InMemoryRequirementDocumentRepository();

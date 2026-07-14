@@ -21,6 +21,12 @@ export interface Formatters {
   dateTime: (value: string | number | Date) => string;
   /** Plain integer/decimal with locale grouping. */
   number: (value: number) => string;
+  /**
+   * A USD amount. Sums under $1 keep sub-cent precision — a single LLM call
+   * costs fractions of a cent, and rounding those to `$0.00` would make the
+   * whole spend view read as free.
+   */
+  usd: (value: number) => string;
   /** ISO-3166-1 alpha-2 country code → localized name (falls back to the code). */
   country: (code: string) => string;
 }
@@ -36,6 +42,15 @@ export function useFormat(): Formatters {
       timeStyle: 'short',
     });
     const n = new Intl.NumberFormat(tag);
+    const money = new Intl.NumberFormat(tag, {
+      style: 'currency',
+      currency: 'USD',
+    });
+    const smallMoney = new Intl.NumberFormat(tag, {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 4,
+    });
     // Keep region names in the active locale's script (not forced to Latin).
     const regions = new Intl.DisplayNames(locale === 'ar' ? 'ar' : 'en', {
       type: 'region',
@@ -44,6 +59,7 @@ export function useFormat(): Formatters {
       date: (v) => d.format(new Date(v)),
       dateTime: (v) => dt.format(new Date(v)),
       number: (v) => n.format(v),
+      usd: (v) => (Math.abs(v) >= 1 || v === 0 ? money : smallMoney).format(v),
       country: (code) => {
         try {
           return regions.of(code.toUpperCase()) ?? code;

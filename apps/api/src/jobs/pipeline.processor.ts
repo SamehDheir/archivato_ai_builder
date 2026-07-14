@@ -1,7 +1,8 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
-import type { PipelineStageName } from '@archivato/shared';
+import { normalizeUsageStage, type PipelineStageName } from '@archivato/shared';
+import { runWithLlmContext } from '../llm/usage/llm-usage.context';
 import { RequirementsService } from '../requirements/requirements.service';
 import { SystemDesignService } from '../system-design/system-design.service';
 import { DatabaseDesignService } from '../database-design/database-design.service';
@@ -31,10 +32,19 @@ export class PipelineProcessor extends WorkerHost {
   }
 
   async process(job: Job<GenerateJobData>): Promise<unknown> {
-    const { sessionId, stage } = job.data;
+    const { sessionId, stage, userId } = job.data;
     this.logger.log(`Generating ${stage} for session ${sessionId} (job ${job.id})`);
     await job.updateProgress(10);
-    const result = await this.run(stage, sessionId);
+    // The worker has no HTTP request, so the global interceptor can't attribute
+    // its LLM usage — establish the same context from the job payload instead.
+    const result = await runWithLlmContext(
+      {
+        userId: userId ?? null,
+        sessionId,
+        stage: normalizeUsageStage(stage),
+      },
+      () => this.run(stage, sessionId),
+    );
     // Record a new project version capturing this modification.
     await this.versions.snapshot(sessionId, `generate ${stage}`);
     await job.updateProgress(100);
