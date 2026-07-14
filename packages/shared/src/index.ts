@@ -18,6 +18,7 @@ export * from './decision-explanation';
 export * from './database-design';
 export * from './api-design';
 export * from './mock-response';
+export * from './freshness';
 export * from './review';
 export * from './threat-model';
 export * from './qa-plan';

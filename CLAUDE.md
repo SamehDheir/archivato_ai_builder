@@ -157,6 +157,38 @@ tsconfig and never needs shared's `dist`.
   controller and is not in version snapshots. `product-vision` needs only the
   confirmed interview; `roadmap` and `cost-estimate` need the full pipeline
   (import the upstream design stores, 409 until the API design exists).
+- **Derived-artifact freshness (`freshness.ts`).** Because the standalone stages
+  hang off the design without gating it, **nothing regenerated them** when the
+  design changed: a chat refine rebuilds requirements → system → database → API
+  (+ review), and the user was then shown a roadmap / cost estimate / threat model
+  / QA plan describing a design that no longer existed — with no indication
+  anything was wrong. An edit (the editors **autosave**) or a version **restore**
+  did the same. Fix: at generation time each derived artifact records the exact
+  upstream revisions it was built from (**`sourceStamp`**, via `upstreamStamp()`);
+  the web rebuilds that stamp from the current design and renders `StaleNotice`
+  (warning + one-click regenerate) above any artifact where `isStale()` — no new
+  API surface, since `ProjectStages` already holds every design artifact. Pure,
+  runtime-free, shared by API and web. **Migration-free**: these tables store the
+  artifact as `data Json`, so an optional field on the *type* is the whole change
+  (the JSON-artifact convention below). Four things not to undo:
+  1. **Compare for equality, not recency.** "Stale if an upstream is *newer*"
+     misses a **restore**, which rewinds the design to an *older* revision under a
+     newer roadmap — nothing is newer, yet the roadmap is wrong.
+  2. **`generatedAt` is the revision marker** because every write path moves it —
+     an agent run sets it, and `save()` (the editors) stamps a fresh one per edit.
+  3. **An unstamped artifact is never stale.** Pre-existing rows carry no stamp
+     and we cannot know their source; nagging every old project to re-run a
+     **billed, Pro, LLM** stage on a guess would be worse than the bug.
+  4. **`DERIVED_STAGE_SOURCES` mirrors each service's real `generate()` inputs** —
+     the **cost estimate never reads the requirements** (it derives a workload from
+     the designs), so editing a requirement must not flag it. Change a service's
+     inputs ⇒ change its entry.
+
+  The banner lives on the tab that renders the artifact (Radix **unmounts inactive
+  `TabsContent`**, so a stale *dot on the tab bar* would need the four panels'
+  fetches lifted into the parent — deliberately not done). It's sufficient: exports
+  and version snapshots don't carry these artifacts, so the tab is the only place a
+  stale one can be seen.
 - **Cost Estimator (`cost-estimate`).** A standalone, Pro-only stage that
   projects a **ballpark monthly hosting bill** across 8 providers (AWS,
   DigitalOcean, Railway, Render, Vercel, Cloudflare, Fly.io, Heroku) at 100 /

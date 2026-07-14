@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flag } from 'lucide-react';
-import type { ProjectRoadmap } from '@archivato/shared';
+import type { ProjectRoadmap, UpstreamRevisions } from '@archivato/shared';
 import { roadmapApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { RoadmapView } from '@/components/roadmap/RoadmapView';
+import { StaleNotice } from '@/components/project/StaleNotice';
 import { useToast } from '@/components/shared/toast';
 
 /**
@@ -19,10 +20,13 @@ import { useToast } from '@/components/shared/toast';
 export function RoadmapPanel({
   sessionId,
   reloadKey,
+  revisions,
 }: {
   sessionId: string;
   /** Bump to refetch (e.g. after a restore). */
   reloadKey: number;
+  /** Current design revisions — a roadmap built from an older one is stale. */
+  revisions: UpstreamRevisions;
 }) {
   const toast = useToast();
   const { t } = useTranslation('stages');
@@ -85,6 +89,13 @@ export function RoadmapPanel({
 
   return (
     <div className="space-y-3">
+      <StaleNotice
+        stage="roadmap"
+        artifact={roadmap}
+        revisions={revisions}
+        busy={busy}
+        onRegenerate={generate}
+      />
       <RoadmapView roadmap={roadmap} />
       <Button variant="secondary" onClick={generate} disabled={busy}>
         {busy ? t('roadmap.working') : t('roadmap.regenerate')}

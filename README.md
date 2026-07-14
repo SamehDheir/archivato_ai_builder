@@ -61,7 +61,10 @@ chain of structured artifacts — each one grounded in the previous:
 | **Export & Scaffold** | JSON / Markdown / OpenAPI (JSON+YAML) / SQL DDL / Postman / zip — plus a **runnable app scaffold**: a NestJS + Prisma API, a Next.js client (typed API client + CRUD pages), or both as one workspace (ZIP or one-click push to GitHub) |
 
 Around the pipeline: **chat refinement** (amend requirements, downstream stages
-regenerate consistently), **version history** with diff + restore, **live SSE
+regenerate consistently — and the derived artifacts that don't, like the roadmap
+or cost estimate, are **flagged stale with one-click regenerate** rather than
+quietly describing a design that changed), **version history** with diff +
+restore, **live SSE
 generation console**, **public share links** (a read-only page of a finished
 design that anyone can open — no account), full **auth** (email + Google/GitHub
 OAuth), **billing** (Free/Pro via Paddle or an offline mock), a **customer
@@ -249,7 +252,9 @@ readiness, 503 when degraded).
 ## Roadmap
 
 - Lifecycle email (welcome / abandoned interview / upgrade nudge)
-- Cascade chat refinement into the standalone stages (roadmap, threat model, QA plan, cost)
+- Cascade regeneration into the standalone stages (they are flagged stale today,
+  with one-click regenerate — auto-cascading would re-bill four LLM stages on
+  every refine, so it needs a cost decision first)
 - Deployment artifact stage (Dockerfile / compose / provider config)
 - Dedicated worker process + BullMQ retries/backoff
 

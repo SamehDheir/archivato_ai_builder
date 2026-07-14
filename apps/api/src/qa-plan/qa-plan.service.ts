@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { QaPlan } from '@archivato/shared';
+import { upstreamStamp, type QaPlan } from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -89,7 +89,15 @@ export class QaPlanService {
       apiDesign,
     });
 
-    return this.plans.upsert(plan);
+    return this.plans.upsert({
+      ...plan,
+      sourceStamp: upstreamStamp('qa-plan', {
+        requirements: requirements.generatedAt,
+        systemDesign: systemDesign.generatedAt,
+        databaseDesign: databaseDesign.generatedAt,
+        apiDesign: apiDesign.generatedAt,
+      }),
+    });
   }
 
   async get(sessionId: string): Promise<QaPlan> {

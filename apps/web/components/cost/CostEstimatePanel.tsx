@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Coins } from 'lucide-react';
-import type { CostEstimate } from '@archivato/shared';
+import type { CostEstimate, UpstreamRevisions } from '@archivato/shared';
 import { costEstimateApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { CostView } from '@/components/cost/CostView';
+import { StaleNotice } from '@/components/project/StaleNotice';
 import { useToast } from '@/components/shared/toast';
 
 /**
@@ -19,10 +20,13 @@ import { useToast } from '@/components/shared/toast';
 export function CostEstimatePanel({
   sessionId,
   reloadKey,
+  revisions,
 }: {
   sessionId: string;
   /** Bump to refetch (e.g. after a restore). */
   reloadKey: number;
+  /** Current design revisions — an estimate priced off an older one is stale. */
+  revisions: UpstreamRevisions;
 }) {
   const toast = useToast();
   const { t } = useTranslation('stages');
@@ -85,6 +89,13 @@ export function CostEstimatePanel({
 
   return (
     <div className="space-y-3">
+      <StaleNotice
+        stage="cost-estimate"
+        artifact={estimate}
+        revisions={revisions}
+        busy={busy}
+        onRegenerate={generate}
+      />
       <CostView estimate={estimate} />
       <Button variant="secondary" onClick={generate} disabled={busy}>
         {busy ? t('cost.working') : t('cost.regenerate')}

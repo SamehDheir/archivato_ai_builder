@@ -11,6 +11,8 @@
 
 /** The user scales we project a monthly bill at. */
 export const COST_USER_SCALES = [100, 1000, 10000] as const;
+import type { DerivedArtifact } from './freshness';
+
 export type CostUserScale = (typeof COST_USER_SCALES)[number];
 
 /** Providers we estimate. `etc.` is covered by the breadth of these eight. */
@@ -73,7 +75,7 @@ export interface CostWorkload {
   architecture: string;
 }
 
-export interface CostEstimate {
+export interface CostEstimate extends DerivedArtifact {
   sessionId: string;
   generatedAt: string;
   workload: CostWorkload;

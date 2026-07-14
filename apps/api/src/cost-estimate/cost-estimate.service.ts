@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { estimateCosts, type CostEstimate } from '@archivato/shared';
+import { estimateCosts, upstreamStamp, type CostEstimate } from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -92,7 +92,17 @@ export class CostEstimateService {
       }),
     };
 
-    return this.estimates.upsert(estimate);
+    // The design revision this estimate was derived from — the UI compares it
+    // against the current design to flag an estimate that describes an older one.
+    // Note the requirements are absent on purpose: this stage never reads them.
+    return this.estimates.upsert({
+      ...estimate,
+      sourceStamp: upstreamStamp('cost-estimate', {
+        systemDesign: systemDesign.generatedAt,
+        databaseDesign: databaseDesign.generatedAt,
+        apiDesign: apiDesign.generatedAt,
+      }),
+    });
   }
 
   async get(sessionId: string): Promise<CostEstimate> {

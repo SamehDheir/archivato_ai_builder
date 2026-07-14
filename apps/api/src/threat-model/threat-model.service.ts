@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { ThreatModel } from '@archivato/shared';
+import { upstreamStamp, type ThreatModel } from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -91,7 +91,15 @@ export class ThreatModelService {
       apiDesign,
     });
 
-    return this.models.upsert(model);
+    return this.models.upsert({
+      ...model,
+      sourceStamp: upstreamStamp('threat-model', {
+        requirements: requirements.generatedAt,
+        systemDesign: systemDesign.generatedAt,
+        databaseDesign: databaseDesign.generatedAt,
+        apiDesign: apiDesign.generatedAt,
+      }),
+    });
   }
 
   async get(sessionId: string): Promise<ThreatModel> {

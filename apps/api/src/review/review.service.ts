@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { ReviewReport } from '@archivato/shared';
+import { upstreamStamp, type ReviewReport } from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -88,7 +88,15 @@ export class ReviewService {
       apiDesign,
     });
 
-    return this.reports.upsert(report);
+    return this.reports.upsert({
+      ...report,
+      sourceStamp: upstreamStamp('review', {
+        requirements: requirements.generatedAt,
+        systemDesign: systemDesign.generatedAt,
+        databaseDesign: databaseDesign.generatedAt,
+        apiDesign: apiDesign.generatedAt,
+      }),
+    });
   }
 
   async get(sessionId: string): Promise<ReviewReport> {

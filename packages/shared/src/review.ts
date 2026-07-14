@@ -6,6 +6,8 @@
  * suggestions.
  */
 
+import type { DerivedArtifact } from './freshness';
+
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
 export interface ReviewFinding {
@@ -22,7 +24,7 @@ export interface ReviewScores {
   cost: number;
 }
 
-export interface ReviewReport {
+export interface ReviewReport extends DerivedArtifact {
   sessionId: string;
   generatedAt: string;
   /** Holistic 0–100 assessment across all dimensions. */

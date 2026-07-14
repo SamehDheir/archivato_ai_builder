@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowRight,
@@ -34,6 +34,7 @@ import type {
   RequirementsSummary,
   ReviewReport,
   SystemDesign,
+  UpstreamRevisions,
 } from '@archivato/shared';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,7 @@ import { RoadmapPanel } from '@/components/roadmap/RoadmapPanel';
 import { CostEstimatePanel } from '@/components/cost/CostEstimatePanel';
 import { ThreatModelPanel } from '@/components/security/ThreatModelPanel';
 import { QaPlanPanel } from '@/components/qa/QaPlanPanel';
+import { StaleNotice } from '@/components/project/StaleNotice';
 import { ExportView } from '@/components/project/ExportView';
 import { OpenApiView } from '@/components/design/OpenApiView';
 import { ChatPanel } from '@/components/project/ChatPanel';
@@ -204,6 +206,21 @@ export function ProjectStages({
   // Set right before an autosave updates a parent artifact, so the artifact-change
   // effect below doesn't mistake the autosave for a restore and close the editor.
   const skipEditingResetRef = useRef(false);
+
+  /**
+   * The design revision each derived artifact (review, roadmap, cost, threat, QA)
+   * is measured against. A refine, an edit, or a restore moves these, and anything
+   * generated from an older revision is then flagged stale where it's rendered.
+   */
+  const revisions: UpstreamRevisions = useMemo(
+    () => ({
+      requirements: doc?.generatedAt,
+      systemDesign: design?.generatedAt,
+      databaseDesign: dbDesign?.generatedAt,
+      apiDesign: apiDesign?.generatedAt,
+    }),
+    [doc, design, dbDesign, apiDesign],
+  );
 
   /**
    * Navigate to a tab, applying the freemium gate: a free user reaching for a
@@ -547,6 +564,13 @@ export function ProjectStages({
               />
             ) : (
               <>
+                <StaleNotice
+                  stage="review"
+                  artifact={review}
+                  revisions={revisions}
+                  busy={busy}
+                  onRegenerate={onGenerateReview}
+                />
                 <ReviewView report={review} />
                 <StageActions
                   busy={busy}
@@ -560,22 +584,38 @@ export function ProjectStages({
 
           {/* Roadmap (standalone, gated on the full pipeline) */}
           <TabsContent value="roadmap" className="mt-4">
-            <RoadmapPanel sessionId={sessionId} reloadKey={versionsReload} />
+            <RoadmapPanel
+              sessionId={sessionId}
+              reloadKey={versionsReload}
+              revisions={revisions}
+            />
           </TabsContent>
 
           {/* Cost Estimator (standalone, gated on the full pipeline) */}
           <TabsContent value="cost" className="mt-4">
-            <CostEstimatePanel sessionId={sessionId} reloadKey={versionsReload} />
+            <CostEstimatePanel
+              sessionId={sessionId}
+              reloadKey={versionsReload}
+              revisions={revisions}
+            />
           </TabsContent>
 
           {/* Threat Model (standalone STRIDE analysis, gated on the full pipeline) */}
           <TabsContent value="threat" className="mt-4">
-            <ThreatModelPanel sessionId={sessionId} reloadKey={versionsReload} />
+            <ThreatModelPanel
+              sessionId={sessionId}
+              reloadKey={versionsReload}
+              revisions={revisions}
+            />
           </TabsContent>
 
           {/* Test / QA Plan (standalone, gated on the full pipeline) */}
           <TabsContent value="qa" className="mt-4">
-            <QaPlanPanel sessionId={sessionId} reloadKey={versionsReload} />
+            <QaPlanPanel
+              sessionId={sessionId}
+              reloadKey={versionsReload}
+              revisions={revisions}
+            />
           </TabsContent>
 
           {/* Export */}

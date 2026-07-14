@@ -196,6 +196,12 @@
     "success": "Pushed to {{repo}}",
     "view": "Open repository"
   },
+  "stale": {
+    "title": "Your design has changed since this was generated",
+    "description": "This was built from an earlier version of the design, so parts of it may no longer match.",
+    "regenerate": "Regenerate",
+    "working": "Working…"
+  },
   "roadmap": {
     "title": "Implementation Roadmap",
     "totalEstimate": "Total estimate:",

@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlaskConical } from 'lucide-react';
-import type { QaPlan } from '@archivato/shared';
+import type { QaPlan, UpstreamRevisions } from '@archivato/shared';
 import { qaPlanApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { QaPlanView } from '@/components/qa/QaPlanView';
+import { StaleNotice } from '@/components/project/StaleNotice';
 import { useToast } from '@/components/shared/toast';
 
 /**
@@ -19,10 +20,13 @@ import { useToast } from '@/components/shared/toast';
 export function QaPlanPanel({
   sessionId,
   reloadKey,
+  revisions,
 }: {
   sessionId: string;
   /** Bump to refetch (e.g. after a restore). */
   reloadKey: number;
+  /** Current design revisions — a plan written against an older one is stale. */
+  revisions: UpstreamRevisions;
 }) {
   const toast = useToast();
   const { t } = useTranslation('stages');
@@ -85,6 +89,13 @@ export function QaPlanPanel({
 
   return (
     <div className="space-y-3">
+      <StaleNotice
+        stage="qa-plan"
+        artifact={plan}
+        revisions={revisions}
+        busy={busy}
+        onRegenerate={generate}
+      />
       <QaPlanView plan={plan} />
       <Button variant="secondary" onClick={generate} disabled={busy}>
         {busy ? t('qa.working') : t('qa.regenerate')}
