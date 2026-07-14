@@ -44,7 +44,7 @@ export class JobsController {
       userId: user.id,
       meta: { stage },
     });
-    return this.jobs.enqueue(sessionId, stage);
+    return this.jobs.enqueue(sessionId, stage, user.id);
   }
 
   /** Poll a job's status (and result once completed). */

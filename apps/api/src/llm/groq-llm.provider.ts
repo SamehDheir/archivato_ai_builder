@@ -6,6 +6,7 @@ import type {
   LlmCompleteOptions,
 } from './llm-provider.interface';
 import { parseJsonFromLlm } from './json.util';
+import { readOpenAiUsage, type OpenAiStyleUsage } from './openai-usage';
 
 const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 const DEFAULT_MAX_TOKENS = 2048;
@@ -24,7 +25,7 @@ export class GroqLlmProvider implements LlmProvider {
 
   private readonly logger = new Logger(GroqLlmProvider.name);
   private readonly apiKey: string;
-  private readonly defaultModel: string;
+  readonly defaultModel: string;
 
   constructor(config: ConfigService) {
     const apiKey = config.get<string>('GROQ_API_KEY');
@@ -54,8 +55,9 @@ export class GroqLlmProvider implements LlmProvider {
     options: LlmCompleteOptions | undefined,
     jsonMode: boolean,
   ): Promise<string> {
+    const model = options?.model ?? this.defaultModel;
     const payload: Record<string, unknown> = {
-      model: options?.model ?? this.defaultModel,
+      model,
       max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
       temperature: options?.temperature ?? 0.7,
       messages: this.buildMessages(messages, options?.system),
@@ -79,7 +81,9 @@ export class GroqLlmProvider implements LlmProvider {
 
     const data = (await res.json()) as {
       choices?: { message?: { content?: string } }[];
+      usage?: OpenAiStyleUsage;
     };
+    options?.onUsage?.({ model, usage: readOpenAiUsage(data.usage) });
     return data.choices?.[0]?.message?.content ?? '';
   }
 

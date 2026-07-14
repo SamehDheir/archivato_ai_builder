@@ -26,6 +26,7 @@ import { useFormat } from '@/lib/i18n/format';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AdminUsersTable } from '@/components/admin/AdminUsersTable';
+import { LlmUsagePanel } from '@/components/admin/LlmUsagePanel';
 
 /**
  * SuperAdmin dashboard: real product KPIs (users, projects, subscriptions),
@@ -247,6 +248,9 @@ export function AdminDashboard() {
           </Card>
         </div>
       )}
+
+      {/* AI spend — what the model providers cost us */}
+      <LlmUsagePanel />
 
       {/* Users table */}
       <div className="mt-4">

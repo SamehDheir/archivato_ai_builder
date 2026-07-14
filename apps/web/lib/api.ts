@@ -1,5 +1,6 @@
 import type {
   AccountRole,
+  AdminLlmUsage,
   AdminStats,
   AdminTraffic,
   AdminUsersPage,
@@ -636,6 +637,8 @@ export const adminApi = {
   stats: () => request<AdminStats>('/admin/stats'),
   /** Traffic detail (daily series + top pages/referrers). */
   traffic: () => request<AdminTraffic>('/admin/traffic'),
+  /** LLM token spend (30d) — by stage, model, agent, heaviest users. */
+  llmUsage: () => request<AdminLlmUsage>('/admin/llm-usage'),
   /** Paginated users with plan + project count. */
   users: (page = 1, pageSize = 20) =>
     request<AdminUsersPage>(`/admin/users?page=${page}&pageSize=${pageSize}`),

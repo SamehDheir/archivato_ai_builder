@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_FILTER } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { validateEnv } from './config/env.validation';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { LlmContextInterceptor } from './common/llm-context.interceptor';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
@@ -111,6 +112,10 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     // Global error handling: structured logging + optional Sentry, generic 500s.
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // Attribution for LLM usage metering: makes the caller (user/session/stage)
+    // ambiently available to the provider seam. Must run after the auth guard so
+    // `req.user` is populated — interceptors do.
+    { provide: APP_INTERCEPTOR, useClass: LlmContextInterceptor },
   ],
 })
 export class AppModule {}

@@ -31,6 +31,7 @@ export * from './auth';
 export * from './permissions';
 export * from './billing';
 export * from './admin';
+export * from './llm-usage';
 export * from './chat';
 export * from './support';
 export * from './kb';

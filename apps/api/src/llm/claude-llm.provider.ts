@@ -24,7 +24,7 @@ export class ClaudeLlmProvider implements LlmProvider {
 
   private readonly logger = new Logger(ClaudeLlmProvider.name);
   private readonly client: Anthropic;
-  private readonly defaultModel: string;
+  readonly defaultModel: string;
 
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
@@ -64,6 +64,22 @@ export class ClaudeLlmProvider implements LlmProvider {
         role: m.role as 'user' | 'assistant',
         content: m.content,
       })),
+    });
+
+    // Anthropic reports the UNCACHED remainder in `input_tokens` and the cache
+    // tokens separately — sum them so `promptTokens` is the true prompt size.
+    const usage = response.usage;
+    const cachedPromptTokens = usage?.cache_read_input_tokens ?? 0;
+    const cacheWritePromptTokens = usage?.cache_creation_input_tokens ?? 0;
+    options?.onUsage?.({
+      model,
+      usage: {
+        promptTokens:
+          (usage?.input_tokens ?? 0) + cachedPromptTokens + cacheWritePromptTokens,
+        completionTokens: usage?.output_tokens ?? 0,
+        cachedPromptTokens,
+        cacheWritePromptTokens,
+      },
     });
 
     return response.content

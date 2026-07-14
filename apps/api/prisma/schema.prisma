@@ -452,6 +452,40 @@ model AnalyticsEvent {
   @@map("analytics_events")
 }
 
+// --- LLM usage metering (margin protection) -----------------------------------
+
+// One row per model call made through the LlmProvider seam — which agent ran, for
+// which stage/user/session, how many tokens, and what it cost. The mock provider
+// records zero-token rows too, so the call graph is still visible offline.
+//
+// Deliberately stores NO prompt or completion CONTENT — only counts — so the
+// table is safe to expose to a role that holds `admin:analytics` but has no
+// project access. `costUsd` is NULL when the model has no price in the shared
+// catalog (an unknown model must never read as free). No FK: append-only, and it
+// must outlive the user/session it refers to.
+model LlmUsage {
+  id                     String   @id @default(uuid())
+  provider               String // 'mock' | 'claude' | 'groq' | 'azure'
+  model                  String
+  agent                  String? // AgentRole
+  stage                  String // LlmUsageStage
+  userId                 String?
+  sessionId              String?
+  promptTokens           Int      @default(0)
+  completionTokens       Int      @default(0)
+  cachedPromptTokens     Int      @default(0)
+  cacheWritePromptTokens Int      @default(0)
+  costUsd                Float?
+  // False when the provider call threw (timeout, 4xx/5xx, unparseable JSON).
+  ok                     Boolean  @default(true)
+  durationMs             Int      @default(0)
+  createdAt              DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("llm_usage")
+}
+
 // --- Customer Support Center --------------------------------------------------
 //
 // A professional ticketing system with an embedded AI Support Assistant.

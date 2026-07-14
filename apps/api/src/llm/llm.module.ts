@@ -9,6 +9,9 @@ import { MockLlmProvider } from './mock-llm.provider';
 import { ClaudeLlmProvider } from './claude-llm.provider';
 import { GroqLlmProvider } from './groq-llm.provider';
 import { AzureOpenAiLlmProvider } from './azure-openai-llm.provider';
+import { UsageTrackingLlmProvider } from './usage-tracking-llm.provider';
+import { LlmUsageModule } from './usage/llm-usage.module';
+import { LlmUsageService } from './usage/llm-usage.service';
 
 /**
  * Build a provider by kind. Kept separate so both the default provider and the
@@ -79,11 +82,15 @@ export function selectInterviewKind(
  */
 @Global()
 @Module({
+  imports: [LlmUsageModule],
   providers: [
     {
       provide: LLM_PROVIDER,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService): LlmProvider => {
+      inject: [ConfigService, LlmUsageService],
+      useFactory: (
+        config: ConfigService,
+        usage: LlmUsageService,
+      ): LlmProvider => {
         const kind = selectProviderKind(
           config.get<string>('LLM_PROVIDER'),
           config.get<string>('GROQ_API_KEY'),
@@ -91,13 +98,17 @@ export function selectInterviewKind(
         );
         const provider = createProvider(kind, config);
         new Logger('LlmModule').log(`Agent LLM provider: ${provider.name}`);
-        return provider;
+        // Every agent talks to the metered wrapper, never the raw provider.
+        return new UsageTrackingLlmProvider(provider, usage);
       },
     },
     {
       provide: INTERVIEW_LLM_PROVIDER,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService): LlmProvider => {
+      inject: [ConfigService, LlmUsageService],
+      useFactory: (
+        config: ConfigService,
+        usage: LlmUsageService,
+      ): LlmProvider => {
         const kind = selectInterviewKind(
           config.get<string>('INTERVIEW_LLM_PROVIDER'),
           config.get<string>('LLM_PROVIDER'),
@@ -106,7 +117,7 @@ export function selectInterviewKind(
         );
         const provider = createProvider(kind, config);
         new Logger('LlmModule').log(`Interview LLM provider: ${provider.name}`);
-        return provider;
+        return new UsageTrackingLlmProvider(provider, usage);
       },
     },
   ],

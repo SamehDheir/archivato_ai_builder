@@ -405,6 +405,59 @@ tsconfig and never needs shared's `dist`.
   json_object`** for guaranteed JSON (the structured-output path for the default
   real-AI provider). The deterministic fallbacks are a **resilience layer, not
   mock data** — they only run when no LLM is configured or the model fails.
+- **LLM usage metering (`llm/usage`) — margin protection.** Every model call made
+  through the `LlmProvider` seam is recorded: provider, model, **agent**, stage,
+  user, session, tokens, cost, ok/failed, duration. One `llm_usage` row per call
+  (repo pattern; append-only, **no FK**, so it outlives the user/session). It stores
+  **counts only — never prompt or completion content** — so a role holding just
+  `admin:analytics` (no project access) can safely report on it.
+  - **Cost is deterministic — no billing API, no LLM.** `estimateLlmCostUsd()` in
+    `@archivato/shared` (`llm-usage.ts`, runtime-free/tested) prices a call off a
+    per-model catalog (`MODEL_PRICING`, list prices, longest-prefix match so a dated
+    snapshot id prices off its base model), applying the cache-read (0.1×) and
+    cache-write (1.25×) multipliers. **An unlisted model returns `null`, not 0** —
+    it records tokens with a null cost and the admin totals surface it as
+    `unpricedCalls`, because a blank $0.00 next to real traffic is worse than
+    useless in a tool whose whole job is margin protection. Prices drift: **edit
+    the table** when a provider changes them.
+  - **Capture seam = a decorator, not 4 edits.** `UsageTrackingLlmProvider` wraps
+    whichever provider `LlmModule` resolved, so agents are untouched and there is
+    exactly one place that turns a call into a row. Tokens come *out* of a provider
+    via an **`options.onUsage` callback** (an API-local extension of
+    `LlmCompleteOptions`, never sent to a model) — **not** a "usage of the last
+    call" field, which the concurrent pipeline would scramble. Claude's
+    `input_tokens` is the *uncached remainder*, so the adapter sums it with the
+    cache tokens; the OpenAI-shaped providers (Groq/Azure) already report the total
+    (`openai-usage.ts`). A **failed call is still recorded** — the case that matters
+    is a `completeJson` whose model call *succeeded* and whose JSON then failed to
+    parse: we were billed for those tokens even though the agent fell back to its
+    deterministic path. No usage report at all (mock, or a request that died before
+    a response) ⇒ nothing was billed ⇒ **$0, not "unknown"**.
+  - **Attribution = `AsyncLocalStorage`, established in exactly 2 places.** The
+    provider can see the model but has no idea *who* asked; threading a caller
+    through 14 agents and a dozen services would be a wide, invasive change. So
+    `llm-usage.context.ts` carries `{userId, sessionId, stage}` ambiently:
+    **`LlmContextInterceptor`** (global `APP_INTERCEPTOR`) covers every HTTP route
+    (incl. SSE stream, chat refine, explain, support AI) — it must **subscribe to
+    `next.handle()` INSIDE `als.run()`**, because Nest *defers* the route handler
+    until subscription and wrapping the call alone would run it outside the store
+    (there's a test that fails if you regress this); and **`PipelineProcessor`**
+    re-establishes the same context from the job payload, since a BullMQ worker has
+    no request (`GenerateJobData` gained an optional `userId`). Stage = the explicit
+    `:stage` param (jobs/stream) else the **first path segment after `/api`**;
+    anything unrecognized normalizes to `other`. `BaseAgent.think*` stamps
+    `agent: this.role` — one edit, all 14 agents attributed.
+  - **Metering is best-effort, always.** `LlmUsageService.record` swallows its own
+    failures and the decorator fires it without awaiting: a metering outage costs a
+    row, never the artifact the user already paid for (in tokens *and* wall-clock).
+  - **Admin.** `GET /admin/llm-usage` (`admin:analytics`) → 30-day totals + 7-day,
+    daily cost/token series, and breakdowns by stage / model / agent / heaviest
+    user. The heaviest-spender rows are labelled with an **email only for a caller
+    who also holds `admin:users:read`** — spend is an analytics question, "which
+    email spent it" is a user-directory one, and an analytics-only role must not be
+    handed the email list as a side effect. Web: `LlmUsagePanel` on `/admin`
+    (i18n `admin.llm.*`, EN+AR) + `useFormat().usd()` (sub-cent precision below $1 —
+    rounding a fraction-of-a-cent call to `$0.00` would make spend read as free).
 - **Provider selection** (`llm.module.ts`): `LLM_PROVIDER=mock|claude|groq|azure`
   forces it for all agents; else `GROQ_API_KEY` present → groq for everything;
   else `AZURE_OPENAI_API_KEY` present → azure; else mock. **Groq keeps priority

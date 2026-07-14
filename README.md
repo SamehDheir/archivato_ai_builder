@@ -101,6 +101,12 @@ activates with a key.
   offline. Fallbacks are a resilience layer, not mock data.
 - **Async + streaming generation:** BullMQ (Redis) job queue, plus an SSE
   "narration" console that streams a human-readable account of each artifact.
+- **LLM usage metering:** every model call is recorded (tokens, latency, and a
+  deterministic cost from a per-model price catalog) and attributed to the user,
+  session, pipeline stage, and agent that caused it — surfaced as an AI-spend
+  panel in `/admin`. Only counts are stored, never prompt or completion content;
+  a model with no catalog price records tokens with an *unknown* cost rather than
+  a misleading $0.
 - **Three independent authorization axes:** ownership (`SessionOwnerGuard`),
   entitlement (`ProGuard` / plan), and RBAC (`PermissionGuard` over a
   code-defined permission catalog with DB-managed roles).

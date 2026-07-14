@@ -3,6 +3,7 @@ import {
   PLANS,
   SUPER_ADMIN_ROLE_KEY,
   type AccountRole,
+  type AdminLlmUsage,
   type AdminStats,
   type AdminTraffic,
   type AdminUserRow,
@@ -14,6 +15,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { USER_REPOSITORY, type UserRepository } from '../auth/user.repository';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { LlmUsageService } from '../llm/usage/llm-usage.service';
 import { RoleService } from '../roles/role.service';
 import type { AnalyticsEvent } from '../analytics/analytics-event.entity';
 
@@ -44,7 +46,39 @@ export class AdminService {
     private readonly analytics: AnalyticsService,
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
     private readonly roles: RoleService,
+    private readonly llmUsage: LlmUsageService,
   ) {}
+
+  /**
+   * LLM spend over the last 30 days. `LlmUsageService` does the aggregation; this
+   * only labels the `topUsers` rows with an email, because the usage module has no
+   * business reading the user directory (and this read-model already does).
+   *
+   * `withUserLabels` is the caller's `admin:users:read` grant. Spend is an
+   * analytics question, but "which email spent it" is a user-directory one — a
+   * role holding only `admin:analytics` still sees the heaviest spenders, by
+   * opaque id. It does not get handed the email list as a side effect.
+   */
+  async getLlmUsage(withUserLabels: boolean): Promise<AdminLlmUsage> {
+    const report = await this.llmUsage.report();
+    const ids = report.topUsers.map((u) => u.key);
+    if (!withUserLabels || ids.length === 0) return report;
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, email: true },
+    });
+    const emails = new Map(users.map((u) => [u.id, u.email] as const));
+
+    return {
+      ...report,
+      topUsers: report.topUsers.map((u) => ({
+        // A deleted account keeps its usage rows (no FK) — label it, don't drop it.
+        ...u,
+        label: emails.get(u.key) ?? 'deleted account',
+      })),
+    };
+  }
 
   /** Headline KPIs + 30-day signup/pageview trend series. */
   async getStats(): Promise<AdminStats> {

@@ -24,13 +24,17 @@ export class JobsService {
   ) {}
 
   /** Enqueue a generation job for one stage and return its initial status. */
-  async enqueue(sessionId: string, stage: string): Promise<JobStatus> {
+  async enqueue(
+    sessionId: string,
+    stage: string,
+    userId?: string,
+  ): Promise<JobStatus> {
     if (!PIPELINE_STAGES.includes(stage as PipelineStageName)) {
       throw new BadRequestException(`Unknown pipeline stage "${stage}".`);
     }
     const job = await this.queue.add(
       GENERATE_JOB,
-      { sessionId, stage: stage as PipelineStageName },
+      { sessionId, stage: stage as PipelineStageName, userId },
       {
         // Keep finished jobs around briefly so the client can poll the result.
         removeOnComplete: { age: 3600, count: 1000 },

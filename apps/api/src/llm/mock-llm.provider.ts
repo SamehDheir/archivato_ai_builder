@@ -27,6 +27,7 @@ export type MockResponder = (
 @Injectable()
 export class MockLlmProvider implements LlmProvider {
   readonly name = 'mock';
+  readonly defaultModel = 'mock';
 
   private responder: MockResponder;
   private readonly queue: string[] = [];

@@ -77,7 +77,29 @@
       "Bash(git checkout *)",
       "Bash(curl -s -o /dev/null http://127.0.0.1:3000/)",
       "Bash(curl -s -o /tmp/og-share.png -w \"http=%{http_code} type=%{content_type} bytes=%{size_download}\\\\n\" http://127.0.0.1:3000/ogprobe/opengraph-image)",
-      "Bash(NEXT_SKIP_STANDALONE=1 npm run build --workspace @archivato/web)"
+      "Bash(NEXT_SKIP_STANDALONE=1 npm run build --workspace @archivato/web)",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "WebSearch",
+      "PowerShell(npx tsc -p \"apps/api/tsconfig.build.json\" --noEmit 2>&1)",
+      "PowerShell(npx tsc -p \"apps/api/tsconfig.json\" --noEmit 2>&1)",
+      "PowerShell(npm run test --workspace @archivato/api -- src/llm 2>&1)",
+      "PowerShell(npm run lint --workspace @archivato/api 2>&1)",
+      "PowerShell(npm run test:web 2>&1)",
+      "PowerShell(npx tsc -p \"apps/web/tsconfig.json\" --noEmit 2>&1)",
+      "PowerShell(npm run test --workspace @archivato/api -- src/common/llm-context 2>&1)",
+      "PowerShell($p = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue; if \\($p\\) { \"API already listening on 3001 \\(pid $\\($p.OwningProcess\\)\\)\" } else { \"port 3001 free\" })",
+      "PowerShell($env:NODE_ENV=\"\"; npm run dev:api 2>&1 | Tee-Object -FilePath \"$env:TEMP\\\\claude\\\\d--portoflio-Archivato-AI-Builder\\\\0d203122-19fc-4289-9079-a15f44843ca3\\\\scratchpad\\\\api.log\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")",
+      "Bash(node -e \"console.log\\(require\\('./apps/api/package.json'\\).scripts['start:dev']\\)\")",
+      "PowerShell($env:LLM_PROVIDER='groq'; npm run dev:api 2>&1)",
+      "Bash(tail -20 \"/c/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/0d203122-19fc-4289-9079-a15f44843ca3/tasks/bk1s2c1bq.output\")",
+      "Read(//c/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/0d203122-19fc-4289-9079-a15f44843ca3/tasks/**)",
+      "PowerShell(Set-Location \"d:\\\\portoflio\\\\Archivato AI Builder\"; $env:LLM_PROVIDER='groq'; npm run dev:api 2>&1)",
+      "PowerShell(Set-Location \"d:\\\\portoflio\\\\Archivato AI Builder\"; \"ambient LLM_PROVIDER: [$env:LLM_PROVIDER]\"; node -e \"console.log\\('node sees:', JSON.stringify\\(process.env.LLM_PROVIDER\\)\\)\")",
+      "Bash(sleep 6; cat \"/c/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/0d203122-19fc-4289-9079-a15f44843ca3/tasks/beo85fihy.output\" | tail -3)",
+      "Bash(cd \"d:/portoflio/Archivato AI Builder\"; echo \"--- boot log \\(mock run\\) mail provider ---\"; grep -oE \"Mail provider: \\\\w+\" \"/c/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/0d203122-19fc-4289-9079-a15f44843ca3/scratchpad/api.log\" | head -1; echo \"--- MAIL/RESEND keys per file ---\"; echo \"root:     $\\(grep -cE '^\\(RESEND_API_KEY|MAIL_PROVIDER\\)' .env\\)\"; echo \"apps/api: $\\(grep -cE '^\\(RESEND_API_KEY|MAIL_PROVIDER\\)' apps/api/.env\\)\"; grep -oE \"^\\(RESEND_API_KEY|MAIL_PROVIDER|SUPER_ADMIN_EMAIL\\)\" apps/api/.env | tr '\\\\n' ' ')",
+      "Read(//c/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/0d203122-19fc-4289-9079-a15f44843ca3/scratchpad/**)"
     ]
   }
 }
