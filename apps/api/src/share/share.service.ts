@@ -6,12 +6,39 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { ShareLink, SharedProject } from '@archivato/shared';
+import type {
+  ApiDesign,
+  DatabaseDesign,
+  RequirementDocument,
+  ReviewReport,
+  ShareLink,
+  SharedProject,
+  SystemDesign,
+} from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
 } from '../interview/interview-session.repository';
-import { ExportService } from '../export/export.service';
+import {
+  REQUIREMENT_DOCUMENT_REPOSITORY,
+  type RequirementDocumentRepository,
+} from '../requirements/requirement-document.repository';
+import {
+  SYSTEM_DESIGN_REPOSITORY,
+  type SystemDesignRepository,
+} from '../system-design/system-design.repository';
+import {
+  DATABASE_DESIGN_REPOSITORY,
+  type DatabaseDesignRepository,
+} from '../database-design/database-design.repository';
+import {
+  API_DESIGN_REPOSITORY,
+  type ApiDesignRepository,
+} from '../api-design/api-design.repository';
+import {
+  REVIEW_REPORT_REPOSITORY,
+  type ReviewReportRepository,
+} from '../review/review-report.repository';
 import {
   SHARE_LINK_REPOSITORY,
   type ShareLinkRepository,
@@ -19,6 +46,16 @@ import {
 
 /** 32 bytes of CSPRNG entropy — the token is the only credential on the link. */
 const TOKEN_BYTES = 32;
+
+/** The artifacts a session has produced, gated to the shareable floor. */
+interface ShareableDesign {
+  requirements: RequirementDocument;
+  systemDesign: SystemDesign;
+  databaseDesign: DatabaseDesign;
+  /** Pro-only stages — absent on a design shared from the free tier. */
+  apiDesign: ApiDesign | null;
+  review: ReviewReport | null;
+}
 
 @Injectable()
 export class ShareService {
@@ -29,7 +66,16 @@ export class ShareService {
     private readonly links: ShareLinkRepository,
     @Inject(INTERVIEW_SESSION_REPOSITORY)
     private readonly sessions: InterviewSessionRepository,
-    private readonly exports: ExportService,
+    @Inject(REQUIREMENT_DOCUMENT_REPOSITORY)
+    private readonly requirements: RequirementDocumentRepository,
+    @Inject(SYSTEM_DESIGN_REPOSITORY)
+    private readonly systemDesigns: SystemDesignRepository,
+    @Inject(DATABASE_DESIGN_REPOSITORY)
+    private readonly databaseDesigns: DatabaseDesignRepository,
+    @Inject(API_DESIGN_REPOSITORY)
+    private readonly apiDesigns: ApiDesignRepository,
+    @Inject(REVIEW_REPORT_REPOSITORY)
+    private readonly reviews: ReviewReportRepository,
   ) {}
 
   /** The owner's current link for a session, or null when nothing is shared. */
@@ -39,16 +85,18 @@ export class ShareService {
   }
 
   /**
-   * Mint a public link for a completed design. Idempotent: an existing link is
-   * returned as-is, so "Share" never silently invalidates a link the owner has
-   * already sent out (rotating is `revoke` + `create`).
+   * Mint a public link. Idempotent: an existing link is returned as-is, so
+   * "Share" never silently invalidates a link the owner has already sent out
+   * (rotating is `revoke` + `create`).
    *
-   * `ExportService.bundle` supplies the gate for free — it 409s unless the
-   * pipeline is complete through the API design, so a half-built project can
-   * never be shared.
+   * **Free on every plan.** This used to reuse `ExportService.bundle()` for its
+   * gate, which inherited export's "complete through the API design" rule — and
+   * the API design is Pro-only, so pairing that gate with a free route would have
+   * produced a button that always 409s. Sharing therefore gates on its own floor
+   * (`readDesign`) and is *not* a subset of export any more.
    */
   async create(sessionId: string): Promise<ShareLink> {
-    await this.exports.bundle(sessionId);
+    await this.readDesign(sessionId);
 
     // `createIfAbsent` is what actually guarantees idempotency (a double-submit
     // would otherwise collide on the sessionId PK); this read just avoids burning
@@ -82,12 +130,12 @@ export class ShareService {
 
     // Independent reads, so don't pay for them serially — this is the one route
     // built to absorb a link going viral.
-    const [session, bundle] = await Promise.all([
+    const [session, design] = await Promise.all([
       this.sessions.findById(link.sessionId),
       // The design can regress out from under a live link (e.g. a version restore
-      // drops the API design). A link holder gets "gone", not the 409 the owner
-      // would see — they can't act on it and shouldn't learn why.
-      this.exports.bundle(link.sessionId).catch((e: unknown) => {
+      // rewinds past the database design). A link holder gets "gone", not the 409
+      // the owner would see — they can't act on it and shouldn't learn why.
+      this.readDesign(link.sessionId).catch((e: unknown) => {
         if (e instanceof ConflictException || e instanceof NotFoundException) {
           return null;
         }
@@ -95,7 +143,7 @@ export class ShareService {
       }),
     ]);
 
-    if (!session || !bundle) {
+    if (!session || !design) {
       throw new NotFoundException('This share link is not available.');
     }
 
@@ -113,11 +161,51 @@ export class ShareService {
       title: session.title ?? session.input.idea,
       sharedAt: link.createdAt.toISOString(),
       idea: session.input,
-      requirements: { ...bundle.requirements, sessionId: token },
-      systemDesign: { ...bundle.systemDesign, sessionId: token },
-      databaseDesign: { ...bundle.databaseDesign, sessionId: token },
-      apiDesign: { ...bundle.apiDesign, sessionId: token },
-      review: bundle.review ? { ...bundle.review, sessionId: token } : null,
+      requirements: { ...design.requirements, sessionId: token },
+      systemDesign: { ...design.systemDesign, sessionId: token },
+      databaseDesign: { ...design.databaseDesign, sessionId: token },
+      apiDesign: design.apiDesign
+        ? { ...design.apiDesign, sessionId: token }
+        : null,
+      review: design.review ? { ...design.review, sessionId: token } : null,
+    };
+  }
+
+  /**
+   * The shareable artifacts, or a 409/404 explaining why there aren't any.
+   *
+   * The floor is the **database design** — precisely what the Free plan can
+   * generate. Below it there is no system to show; above it, the API design and
+   * the review are Pro stages that a free owner simply won't have, so they are
+   * optional rather than required.
+   */
+  private async readDesign(sessionId: string): Promise<ShareableDesign> {
+    const session = await this.sessions.findById(sessionId);
+    if (!session) {
+      throw new NotFoundException(`Interview session ${sessionId} not found.`);
+    }
+
+    const [requirements, systemDesign, databaseDesign, apiDesign, review] =
+      await Promise.all([
+        this.requirements.findBySessionId(sessionId),
+        this.systemDesigns.findBySessionId(sessionId),
+        this.databaseDesigns.findBySessionId(sessionId),
+        this.apiDesigns.findBySessionId(sessionId),
+        this.reviews.findBySessionId(sessionId),
+      ]);
+
+    if (!requirements || !systemDesign || !databaseDesign) {
+      throw new ConflictException(
+        'Generate the design through the database design before sharing.',
+      );
+    }
+
+    return {
+      requirements,
+      systemDesign,
+      databaseDesign,
+      apiDesign: apiDesign ?? null,
+      review: review ?? null,
     };
   }
 }

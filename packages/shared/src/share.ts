@@ -1,11 +1,12 @@
 /**
- * Public share links — a read-only, unauthenticated view of a completed design.
+ * Public share links — a read-only, unauthenticated view of a generated design.
  *
- * The owner (Pro) mints an unguessable token for a session; anyone holding the
- * link can read the design chain + review, but nothing else: no interview
- * transcript (the user's own words about their business), no owner identity, no
- * session id. The public payload below is the *entire* contract — if a field
- * isn't here, a link holder cannot see it.
+ * The owner (**any plan** — this is the product's organic loop, so it is
+ * deliberately not paywalled) mints an unguessable token for a session; anyone
+ * holding the link can read the design chain + review, but nothing else: no
+ * interview transcript (the user's own words about their business), no owner
+ * identity, no session id. The public payload below is the *entire* contract —
+ * if a field isn't here, a link holder cannot see it.
  */
 
 import type { RequirementDocument } from './requirements';
@@ -28,6 +29,11 @@ export interface ShareLink {
  * What a link holder receives. Deliberately does NOT carry the session id, the
  * owner, or the interview history — only the artifacts the design chain
  * produced, plus the display name the owner chose.
+ *
+ * The design chain **through the database design** is required — that is exactly
+ * what the Free plan generates, and it is the floor below which a shared page has
+ * nothing to show. Everything past it is Pro, so a free owner's link legitimately
+ * carries `apiDesign: null` / `review: null` and the page renders what exists.
  */
 export interface SharedProject {
   token: string;
@@ -39,8 +45,9 @@ export interface SharedProject {
   requirements: RequirementDocument;
   systemDesign: SystemDesign;
   databaseDesign: DatabaseDesign;
-  apiDesign: ApiDesign;
-  /** Present only if the owner ran the AI review. */
+  /** Pro-only stage — null on a design the owner shared from the free tier. */
+  apiDesign: ApiDesign | null;
+  /** Present only if the owner ran the AI review (Pro). */
   review: ReviewReport | null;
 }
 

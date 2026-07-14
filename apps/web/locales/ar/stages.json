@@ -175,6 +175,17 @@
       "backend": "NestJS + Prisma",
       "frontend": "Next.js + Tailwind"
     },
+    "providerLabel": "النشر إلى",
+    "providerAuto": "المُوصى به لهذا التصميم",
+    "providerHint": "يُرفق ملف Dockerfile وdocker-compose وسير عمل GitHub Actions وإعدادات هذا المزوّد. الافتراضي هو الأفضل قيمةً من بين المزوّدين الذين يمكن استضافة تطبيقك عليهم فعليًا.",
+    "provider": {
+      "render": "Render",
+      "flyio": "Fly.io",
+      "railway": "Railway",
+      "heroku": "Heroku",
+      "digitalocean": "DigitalOcean",
+      "vercel": "Vercel (الواجهة فقط)"
+    },
     "downloadZip": "تنزيل ZIP",
     "preparing": "جارٍ التحضير…",
     "githubTitle": "رفع إلى GitHub",

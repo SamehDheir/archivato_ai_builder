@@ -255,6 +255,15 @@ tsconfig and never needs shared's `dist`.
     endpoint, over a single `apiFetch` in `lib/api-client.ts`) + a page per
     module: list wired to the collection GET, a create form from the POST body
     schema, and a detail/edit page from GET/:id + PUT/:id.
+  - **"It compiles" is only true if you RUN the compiler on the output.** Both
+    halves are verified by generating a project from a hostile design and running
+    `tsc` (api **and** web) + `next build` on it. That is not ceremony — it is the
+    only reason three shipped bugs were caught: required DTO fields were emitted as
+    `email: string` (fails **`strictPropertyInitialization`/TS2564** — the backend
+    scaffold had **never** compiled for any DTO with a required field; it's `!` now),
+    `qs()` took a `Record` an interface can't satisfy, and the item type came from
+    the detail response instead of the richest one. Re-run it after touching a
+    builder.
   - **Correctness over richness** (same bar as the backend — the output must
     compile, and it's verified by actually running `tsc` + `next build` on it):
     item fields are **all optional** (they come from the *designed* response
@@ -287,6 +296,38 @@ tsconfig and never needs shared's `dist`.
     comment. Not cross-tenant (it's your own design, on your own machine), which
     is why it's a *correctness* guarantee first — but don't hand-roll a fourth
     path of design-text-into-source without one of these.
+
+  - **Deployment artifacts (`scaffold.deploy.ts`).** Every scaffold also ships a
+    **Dockerfile per app + `docker-compose.yml` + a GitHub Actions workflow +
+    `DEPLOY.md`**, plus a real provider config where one honestly exists:
+    `render.yaml`, `fly.toml`, `railway.json`, `Procfile`+`app.json`,
+    `.do/app.yaml`, `vercel.json` (`DEPLOY_CONFIGURED`). Deterministic, no LLM.
+    Generated in **`scaffold.compose.ts`, not the two builders** — only that layer
+    knows the final layout (`apps/api/` vs the repo root), and a Dockerfile has to
+    point at the app it actually builds. `?provider=`/`{provider}` (`@IsIn` → 400
+    on junk); omit it for the default.
+    - **AWS and Cloudflare deliberately get NO config.** A real AWS deploy is
+      account-specific infra (a CDK/Terraform stack) and Cloudflare's compute is
+      **Workers, which a long-lived NestJS server doesn't run on at all**. They
+      fall back to the Docker path (which genuinely works) and DEPLOY.md says so.
+      Shipping an unrun CDK stack would be the confidently-wrong output this repo
+      refuses everywhere else.
+    - **The default provider is NOT `estimate.recommended`.** `recommendedProvider()`
+      takes the cheapest among **`DEPLOY_CONFIGURED`**, because the estimator prices
+      all eight as if any could host the design and on small workloads picks
+      **Cloudflare** (infeasible, above) or AWS — so inheriting it would hand every
+      user the Docker fallback instead of the config this stage exists to produce.
+      *(The estimator recommending an infeasible host is its own bug, in its own
+      stage — deliberately not papered over here.)*
+    - Three traps, each of which broke a real deploy and now has a test: the web
+      `CMD` must bind **`${PORT:-3001}`** (Render/Heroku *assign* the port; a
+      hardcoded one is a container nothing can reach); `healthCheckPath` must point
+      at a route that **exists** (the generated backend gained
+      `health.controller.ts` → `/api/health`, else Render 404s it unhealthy
+      forever); and Render's `WEB_ORIGIN` must **not** use `fromService: property:
+      host` — that yields a bare hostname with no scheme, and CORS compares full
+      origins, so every browser request would be blocked. Also: `NEXT_PUBLIC_*` is
+      inlined at **build** time, so it's a Docker build **arg**, never a runtime env.
 
   The `ScaffoldService` reuses `ExportService.bundle()` (so it inherits the
   "pipeline complete through API design" 409 gate). Owner-guarded + `ProGuard`
@@ -321,18 +362,39 @@ tsconfig and never needs shared's `dist`.
   from the API origin) → connected state (`login` + Disconnect) → push with no
   token; a **"use a token instead"** toggle keeps the PAT path. i18n'd
   `stages.scaffold.*` (EN+AR).
-- **Public share links (`share`).** A read-only page for a **finished** design that
-  anyone can open with no account — the product's organic loop. One `share_links`
-  row per session (repo pattern; `sessionId` PK, unique `token`, `viewCount`).
+- **Public share links (`share`).** A read-only page for a design that anyone can
+  open with no account — the product's organic loop. One `share_links` row per
+  session (repo pattern; `sessionId` PK, unique `token`, `viewCount`).
   The token is **32 CSPRNG bytes base64url** and is the link's only credential.
   Owner routes (`/share/:sessionId`, `JwtAuthGuard + SessionOwnerGuard`): `GET`
-  (link or null), `POST` (mint — **`ProGuard`**), `DELETE` (revoke). **Only minting
-  is Pro-gated** — a downgraded user must still be able to see and kill a link they
-  already published. `create` is **idempotent** (sharing twice never invalidates a
-  link already sent out); **revoke is a hard delete**, so the token dies for good
-  and re-sharing mints a new one (there is no "pause"). The pipeline gate is free:
-  `ShareService` reuses **`ExportService.bundle()`**, which 409s until the API
-  design exists.
+  (link or null), `POST` (mint), `DELETE` (revoke). `create` is **idempotent**
+  (sharing twice never invalidates a link already sent out); **revoke is a hard
+  delete**, so the token dies for good and re-sharing mints a new one (there is no
+  "pause").
+  - **Sharing is FREE on every plan — do not re-gate it.** It was originally
+    Pro-only and that was backwards on two counts: the public page is what brings
+    *new* visitors in, so paywalling it taxed exactly the free users doing our
+    marketing; and it was unreachable anyway — the button lived in the (Pro)
+    Export tab and the route's gate came from `ExportService.bundle()`, which 409s
+    until the **API design** exists, itself a Pro stage. So a free plan + a Pro
+    gate on the pipeline would just be a button that always 409s. Three things had
+    to move together, and all three must stay moved: no `ProGuard` on the mint
+    route, share owns its **own gate** (`ShareService.readDesign` — its own reads
+    of the design stores, 409 until the **database design** exists, which is
+    exactly the free tier's floor), and the control sits in the **project header**,
+    not in Export. Share is therefore **no longer a subset of export** and
+    `ShareModule` imports the upstream design stores directly (the roadmap/cost
+    precedent) rather than `ExportModule`/`BillingModule`. **Export stays Pro** —
+    that's the deliverable the customer keeps; the link is the one they hand out.
+  - **`SharedProject.apiDesign` and `.review` are nullable** because of the above:
+    both are Pro stages, so a free owner's link legitimately carries neither and
+    the page renders the design it has (the tab and the stat tile disappear). Every
+    consumer must tolerate that — the public page, **`generateMetadata`**, and the
+    **OG card** (`ShareOgFacts.endpoints` is optional). Show *nothing* rather than
+    `0 endpoints`: a zero reads as a claim about the design instead of about the
+    plan that generated it. Losing only the API design is likewise **not** a
+    regression any more (a live link keeps working and drops the tab); the 404 case
+    is a design that rewinds *below* the database design.
   - **The public payload IS the security boundary.** `GET /shared/:token`
     (separate `SharePublicController`, so a token can never collide with a session
     id on the route table) returns strictly `SharedProject` (`@archivato/shared`):
@@ -341,8 +403,8 @@ tsconfig and never needs shared's `dist`.
     even the session id**. Every artifact is stamped with `sessionId`, so the
     projection **overwrites it with the token** — an internal id that addresses
     owner-scoped routes has no business on a public page. A design that later
-    regresses (a version restore drops the API design) 404s rather than surfacing
-    the 409 a stranger couldn't act on.
+    regresses below the shareable floor (a version restore rewinds past the
+    database design) 404s rather than surfacing the 409 a stranger couldn't act on.
   - **The token is a bearer credential — never write it down.** It is the whole
     security boundary, so it must not land in any store with a *different* access
     model than the link itself. Two sinks would have leaked it and both are now
@@ -378,7 +440,9 @@ tsconfig and never needs shared's `dist`.
     and admin console's copy. `SystemDesignView` gets `interactive={false}` (Explain
     calls an owner-scoped API). The **not-found state is server-rendered English**:
     it must render without the lazy chunk. Owner controls: `ShareLinkCard` in the
-    Export tab (create/copy/views/revoke; 402 → `useUpgrade`).
+    **project header** (`ProjectStages`, rendered once `dbDesign` exists — the same
+    floor the API mints against): create/copy/views/revoke, with no upgrade path,
+    since there is no 402 to catch any more.
 - **Streaming generation (`stream`) — the "narration layer".** A live alternative
   to the poll-based `/jobs` path for the 5 pipeline stages. `GET /stream/:sessionId/:stage`
   is a Nest **`@Sse()`** endpoint (owner-guarded by the same `SessionOwnerGuard`,
@@ -457,8 +521,10 @@ tsconfig and never needs shared's `dist`.
   users get a free plan on first access.
 - **Freemium feature gate.** Beyond the project *count* cap, the pipeline itself
   is tiered: **Free covers interview → requirements → system design → database
-  design** (plus Product Vision); **Pro is required to generate the API design
-  and everything after it — AI review, roadmap, cost estimate, and export.**
+  design** (plus Product Vision, **plus the public share link** — see `share`:
+  the growth loop is deliberately unpaywalled); **Pro is required to generate the
+  API design and everything after it — AI review, roadmap, cost estimate, and
+  export.**
   Enforced by `BillingService.assertPro(userId)` (throws **402**
   `code:'upgrade_required'`) and a reusable **`ProGuard`** (exported by
   `BillingModule`) applied to the Pro-only generate routes

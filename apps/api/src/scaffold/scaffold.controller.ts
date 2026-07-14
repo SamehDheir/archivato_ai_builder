@@ -36,7 +36,7 @@ export class ScaffoldController {
     @Param('sessionId') sessionId: string,
     @Query() query: ScaffoldQueryDto,
   ): Promise<ScaffoldManifest> {
-    return this.scaffold.manifest(sessionId, query.target);
+    return this.scaffold.manifest(sessionId, query.target, query.provider);
   }
 
   /** Download the scaffold as a .zip archive. */
@@ -46,7 +46,7 @@ export class ScaffoldController {
     @Query() query: ScaffoldQueryDto,
     @Res() res: Response,
   ): Promise<void> {
-    const buffer = await this.scaffold.zip(sessionId, query.target);
+    const buffer = await this.scaffold.zip(sessionId, query.target, query.provider);
     res.set({
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="scaffold-${sessionId}.zip"`,

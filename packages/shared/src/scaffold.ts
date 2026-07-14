@@ -32,6 +32,7 @@ import {
   oneLine,
   pascal,
   pascalMethod,
+  prismaProvider,
   safePath,
   uniquifyNames,
   type Handler,
@@ -70,6 +71,8 @@ export interface ScaffoldManifest {
   sessionId: string;
   generatedAt: string;
   target: ScaffoldTarget;
+  /** Provider the deployment artifacts target (the cost recommendation by default). */
+  provider: string;
   fileCount: number;
   files: ScaffoldFile[];
 }
@@ -194,15 +197,6 @@ function renderField(col: EntityColumn, forcePrimary = false): string {
     line += ` // FK → ${col.references.entity}.${col.references.column}`;
   }
   return line;
-}
-
-function prismaProvider(databaseType: string): string {
-  const t = (databaseType || '').toLowerCase();
-  if (t.includes('mysql') || t.includes('maria')) return 'mysql';
-  if (t.includes('sqlite')) return 'sqlite';
-  if (t.includes('sqlserver') || t.includes('mssql')) return 'sqlserver';
-  if (t.includes('mongo')) return 'mongodb';
-  return 'postgresql';
 }
 
 function prismaType(raw: string): string {
@@ -380,8 +374,11 @@ function renderDtoFile(h: Handler): string {
     const kind = fieldKind(f.type);
     validators.add(kind.validator);
     decs.push(`  @${kind.validator}()`);
-    const opt = f.required ? '' : '?';
-    fieldLines.push(`${decs.join('\n')}\n  ${camel(f.name)}${opt}: ${kind.ts};`);
+    // `!`, not bare: a required field with no initializer fails TS's
+    // strictPropertyInitialization (TS2564) and the project would not compile.
+    // It's the same definite-assignment convention Nest DTOs use everywhere.
+    const mark = f.required ? '!' : '?';
+    fieldLines.push(`${decs.join('\n')}\n  ${camel(f.name)}${mark}: ${kind.ts};`);
   }
 
   const importLine = validators.size
@@ -407,12 +404,29 @@ function frameworkFiles(api: ApiDesign): ScaffoldFile[] {
   const appModule = [
     `import { Module } from '@nestjs/common';`,
     `import { PrismaModule } from './prisma/prisma.module';`,
+    `import { HealthController } from './health.controller';`,
     moduleImports,
     '',
     '@Module({',
     `  imports: [PrismaModule${moduleList ? ', ' + moduleList : ''}],`,
+    '  controllers: [HealthController],',
     '})',
     'export class AppModule {}',
+    '',
+  ].join('\n');
+
+  // Every host wants a health check, and pointing one at a route that doesn't
+  // exist (a 404) is how a perfectly good deploy gets marked unhealthy forever.
+  const health = [
+    `import { Controller, Get } from '@nestjs/common';`,
+    '',
+    `@Controller('health')`,
+    'export class HealthController {',
+    '  @Get()',
+    '  check(): { status: string } {',
+    `    return { status: 'ok' };`,
+    '  }',
+    '}',
     '',
   ].join('\n');
 
@@ -466,6 +480,7 @@ function frameworkFiles(api: ApiDesign): ScaffoldFile[] {
   return [
     { path: 'src/app.module.ts', content: appModule },
     { path: 'src/main.ts', content: main },
+    { path: 'src/health.controller.ts', content: health },
     { path: 'src/prisma/prisma.service.ts', content: prismaService },
     { path: 'src/prisma/prisma.module.ts', content: prismaModule },
   ];

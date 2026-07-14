@@ -175,6 +175,17 @@
       "backend": "NestJS + Prisma",
       "frontend": "Next.js + Tailwind"
     },
+    "providerLabel": "Deploy to",
+    "providerAuto": "Recommended for this design",
+    "providerHint": "Ships a Dockerfile, docker-compose, a GitHub Actions workflow, and this provider's config. Defaults to the best value your cost estimate can actually be hosted on.",
+    "provider": {
+      "render": "Render",
+      "flyio": "Fly.io",
+      "railway": "Railway",
+      "heroku": "Heroku",
+      "digitalocean": "DigitalOcean",
+      "vercel": "Vercel (client only)"
+    },
     "downloadZip": "Download ZIP",
     "preparing": "Preparing…",
     "githubTitle": "Push to GitHub",

@@ -81,7 +81,12 @@ export interface ShareOgFacts {
   architecture: string;
   services: number;
   tables: number;
-  endpoints: number;
+  /**
+   * Absent when the owner shared from the free tier (the API design is a Pro
+   * stage). The tile is then dropped rather than shown as `0` — a "0 endpoints"
+   * unfurl would advertise the design as gutted when it's merely unfinished.
+   */
+  endpoints?: number;
 }
 
 /**
@@ -99,7 +104,9 @@ export function shareOgImage(facts: ShareOgFacts) {
     { label: 'Architecture', value: facts.architecture.replace(/_/g, ' ') },
     { label: 'Services', value: String(facts.services) },
     { label: 'Tables', value: String(facts.tables) },
-    { label: 'Endpoints', value: String(facts.endpoints) },
+    ...(facts.endpoints === undefined
+      ? []
+      : [{ label: 'Endpoints', value: String(facts.endpoints) }]),
   ];
 
   return new ImageResponse(

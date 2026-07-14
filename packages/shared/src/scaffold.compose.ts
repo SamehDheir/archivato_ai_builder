@@ -9,6 +9,11 @@
  */
 
 import {
+  estimateCosts,
+  type CostProviderId,
+  type ProviderEstimate,
+} from './cost-estimate';
+import {
   buildBackendScaffold,
   DEFAULT_SCAFFOLD_TARGET,
   FRONTEND_DEV_PORT,
@@ -18,6 +23,7 @@ import {
   type ScaffoldTarget,
 } from './scaffold';
 import { buildFrontendScaffold } from './scaffold.frontend';
+import { buildDeploymentFiles, hasDeployConfig } from './scaffold.deploy';
 
 /** Package names of the two workspaces (set by each builder's package.json). */
 const API_PKG = 'generated-backend';
@@ -33,19 +39,74 @@ export function normalizeScaffoldTarget(
     : DEFAULT_SCAFFOLD_TARGET;
 }
 
+/**
+ * The default deploy target: the best-value provider **that can actually host
+ * this app**. Same pure `estimateCosts()` the Cost tab runs, on the same inputs
+ * — so the dollar figures behind the choice are the ones the user was shown.
+ *
+ * Why it isn't simply `estimate.recommended`: the estimator prices all eight
+ * providers as if any of them could run the design, and on a small workload the
+ * cheapest is often **Cloudflare** — whose compute is Workers, which a long-lived
+ * NestJS server does not run on at all — or **AWS**, which needs account-specific
+ * infrastructure. Defaulting to either would hand every user a Docker fallback
+ * instead of the deploy config this stage exists to produce. So we take the
+ * cheapest among the providers we can emit a real, runnable config for.
+ *
+ * (The estimator recommending an infeasible host is its own bug, in its own
+ * stage. This function does not paper over it — it only refuses to inherit it.)
+ */
+export function recommendedProvider(input: ScaffoldInput): CostProviderId {
+  const endpoints = (input.apiDesign?.modules ?? []).reduce(
+    (n, m) => n + (m.endpoints?.length ?? 0),
+    0,
+  );
+  const estimate = estimateCosts({
+    sessionId: '',
+    services: input.systemDesign?.services?.length ?? 0,
+    entities: input.databaseDesign?.entities?.length ?? 0,
+    endpoints,
+    databaseType: input.databaseDesign?.databaseType ?? 'PostgreSQL',
+    architecture: input.systemDesign?.architecture ?? 'monolith',
+  });
+
+  const monthlyTotal = (p: ProviderEstimate) =>
+    p.costs.reduce((sum, c) => sum + c.monthlyUsd, 0);
+
+  const deployable = estimate.providers.filter((p) => hasDeployConfig(p.provider));
+  if (!deployable.length) return estimate.recommended;
+
+  return deployable.reduce((best, p) =>
+    monthlyTotal(p) < monthlyTotal(best) ? p : best,
+  ).provider;
+}
+
 /** Build the scaffold for `target` as a flat, sorted list of files. */
 export function buildScaffold(
   input: ScaffoldInput,
   target: ScaffoldTarget = DEFAULT_SCAFFOLD_TARGET,
+  options: { provider?: CostProviderId } = {},
 ): ScaffoldFile[] {
-  if (target === 'backend') return buildBackendScaffold(input);
-  if (target === 'frontend') return buildFrontendScaffold(input);
+  const provider = options.provider ?? recommendedProvider(input);
+  // Deployment artifacts are generated HERE, not inside the two builders: only
+  // this layer knows the final layout (`apps/api/` vs the repo root), and a
+  // Dockerfile has to point at the app it actually builds.
+  const deployment = buildDeploymentFiles(input, target, provider);
 
-  const files = [
-    ...rootFiles(input),
-    ...prefixed(buildBackendScaffold(input), 'apps/api/'),
-    ...prefixed(buildFrontendScaffold(input), 'apps/web/'),
-  ];
+  const files =
+    target === 'fullstack'
+      ? [
+          ...rootFiles(input),
+          ...prefixed(buildBackendScaffold(input), 'apps/api/'),
+          ...prefixed(buildFrontendScaffold(input), 'apps/web/'),
+          ...deployment,
+        ]
+      : [
+          ...(target === 'backend'
+            ? buildBackendScaffold(input)
+            : buildFrontendScaffold(input)),
+          ...deployment,
+        ];
+
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 

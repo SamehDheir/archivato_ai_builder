@@ -75,4 +75,21 @@ describe('SharedProjectView', () => {
     expect(screen.getByText('tab.system')).toBeInTheDocument();
     expect(screen.queryByText('tab.review')).not.toBeInTheDocument();
   });
+
+  // Sharing is free, but the API design and the review are Pro stages — so a link
+  // minted by a free owner carries neither, and the page must still stand up.
+  it('renders a free-tier design with no API design', async () => {
+    render(
+      <SharedProjectView
+        project={{ ...project, apiDesign: null, review: null }}
+      />,
+    );
+
+    await screen.findByRole('heading', { name: 'HomeHelper', level: 1 });
+    expect(screen.getByText('tab.database')).toBeInTheDocument();
+    expect(screen.queryByText('tab.api')).not.toBeInTheDocument();
+    // A "0 endpoints" tile would read as a claim about the design, not the plan.
+    expect(screen.queryByText('stat.endpoints')).not.toBeInTheDocument();
+    expect(screen.getByText('stat.tables')).toBeInTheDocument();
+  });
 });

@@ -1,7 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ShareService } from './share.service';
 import { InMemoryShareLinkRepository } from './in-memory-share-link.repository';
-import { ExportService } from '../export/export.service';
 import { InterviewService } from '../interview/interview.service';
 import { InMemoryInterviewSessionRepository } from '../interview/in-memory-interview-session.repository';
 import { RequirementsService } from '../requirements/requirements.service';
@@ -35,6 +34,7 @@ interface Harness {
   apiDesign: ApiDesignService;
   sessions: InMemoryInterviewSessionRepository;
   apiDesigns: InMemoryApiDesignRepository;
+  databaseDesigns: InMemoryDatabaseDesignRepository;
   share: ShareService;
 }
 
@@ -80,18 +80,14 @@ function makeHarness(): Harness {
     apiRepo,
     new ApiDesignerAgent(mock),
   );
-  const exports = new ExportService(
+  const share = new ShareService(
+    new InMemoryShareLinkRepository(),
     sessionRepo,
     docRepo,
     sysRepo,
     dbRepo,
     apiRepo,
     reviewRepo,
-  );
-  const share = new ShareService(
-    new InMemoryShareLinkRepository(),
-    sessionRepo,
-    exports,
   );
   return {
     interview,
@@ -101,6 +97,7 @@ function makeHarness(): Harness {
     apiDesign,
     sessions: sessionRepo,
     apiDesigns: apiRepo,
+    databaseDesigns: dbRepo,
     share,
   };
 }
@@ -117,11 +114,17 @@ async function confirmedSession(h: Harness): Promise<string> {
   return sessionId;
 }
 
-async function fullPipeline(h: Harness): Promise<string> {
+/** Everything a **Free** owner can generate: no API design, no review. */
+async function freePipeline(h: Harness): Promise<string> {
   const sessionId = await confirmedSession(h);
   await h.requirements.generate(sessionId);
   await h.systemDesign.generate(sessionId);
   await h.databaseDesign.generate(sessionId);
+  return sessionId;
+}
+
+async function fullPipeline(h: Harness): Promise<string> {
+  const sessionId = await freePipeline(h);
   await h.apiDesign.generate(sessionId);
   return sessionId;
 }
@@ -133,15 +136,32 @@ describe('ShareService', () => {
     await expect(h.share.get(sessionId)).resolves.toBeNull();
   });
 
-  it('refuses to share a design that is not complete through the API design', async () => {
+  it('refuses to share a design that has not reached the database design', async () => {
     const h = makeHarness();
     const sessionId = await confirmedSession(h);
     await h.requirements.generate(sessionId);
-    // No system/database/API design yet.
+    // No system or database design yet — nothing worth putting on a public page.
     await expect(h.share.create(sessionId)).rejects.toBeInstanceOf(
       ConflictException,
     );
     await expect(h.share.get(sessionId)).resolves.toBeNull();
+  });
+
+  // The whole point of the free tier here: the API design and the review are Pro
+  // stages, so a free owner will never have them — sharing must not require them.
+  it('shares a free-tier design (no API design, no review)', async () => {
+    const h = makeHarness();
+    const sessionId = await freePipeline(h);
+
+    const { token } = await h.share.create(sessionId);
+    const shared = await h.share.view(token);
+
+    expect(shared.requirements.sessionId).toBe(token);
+    expect(shared.systemDesign.services.length).toBeGreaterThan(0);
+    expect(shared.databaseDesign.entities.length).toBeGreaterThan(0);
+    expect(shared.apiDesign).toBeNull();
+    expect(shared.review).toBeNull();
+    expect(JSON.stringify(shared)).not.toContain(sessionId);
   });
 
   it('mints an unguessable token and is idempotent', async () => {
@@ -173,7 +193,7 @@ describe('ShareService', () => {
     expect(shared.token).toBe(token);
     expect(shared.title).toBe(IDEA.idea); // untitled project falls back to the idea
     expect(shared.systemDesign.services.length).toBeGreaterThan(0);
-    expect(shared.apiDesign.modules.length).toBeGreaterThan(0);
+    expect(shared.apiDesign?.modules.length).toBeGreaterThan(0);
     expect(shared.review).toBeNull(); // review was never run
 
     // The public payload must not carry the session id or the owner.
@@ -220,14 +240,28 @@ describe('ShareService', () => {
     await expect(h.share.view(token)).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('404s (not 409s) a link whose design regressed', async () => {
+  it('404s (not 409s) a link whose design regressed below the shareable floor', async () => {
     const h = makeHarness();
     const sessionId = await fullPipeline(h);
     const { token } = await h.share.create(sessionId);
 
-    // e.g. a version restore dropped the API design out from under the link.
-    await h.apiDesigns.deleteBySessionId(sessionId);
+    // e.g. a version restore rewound past the database design.
+    await h.databaseDesigns.deleteBySessionId(sessionId);
 
     await expect(h.share.view(token)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  // Losing only the API design is *not* a regression any more — it's just what a
+  // free-tier design looks like, so the link keeps working and drops the tab.
+  it('keeps serving a link whose API design was dropped', async () => {
+    const h = makeHarness();
+    const sessionId = await fullPipeline(h);
+    const { token } = await h.share.create(sessionId);
+
+    await h.apiDesigns.deleteBySessionId(sessionId);
+
+    await expect(h.share.view(token)).resolves.toMatchObject({
+      apiDesign: null,
+    });
   });
 });

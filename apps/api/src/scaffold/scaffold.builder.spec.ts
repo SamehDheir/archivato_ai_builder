@@ -136,7 +136,11 @@ describe('buildBackendScaffold', () => {
     expect(dto).toBeDefined();
     expect(dto).toContain('export class CreateDto');
     expect(dto).toContain('@IsString()');
-    expect(dto).toContain('email: string;');
+    // Definite assignment: a bare `email: string;` fails TS's
+    // strictPropertyInitialization (TS2564), and the generated project — whose one
+    // promise is that it compiles — would not build. Verified by running `tsc` on
+    // the output, which is how this was caught.
+    expect(dto).toContain('email!: string;');
     expect(dto).toContain('@IsOptional()');
     expect(dto).toContain('age?: number;');
     // The server-managed `id` must not appear as a DTO field.

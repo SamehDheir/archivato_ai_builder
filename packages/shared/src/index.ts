@@ -29,6 +29,7 @@ export * from './export';
 export * from './share';
 export * from './scaffold';
 export * from './scaffold.frontend';
+export * from './scaffold.deploy';
 export * from './scaffold.compose';
 export * from './auth';
 export * from './permissions';

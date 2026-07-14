@@ -56,6 +56,7 @@ import { CostEstimatePanel } from '@/components/cost/CostEstimatePanel';
 import { ThreatModelPanel } from '@/components/security/ThreatModelPanel';
 import { QaPlanPanel } from '@/components/qa/QaPlanPanel';
 import { StaleNotice } from '@/components/project/StaleNotice';
+import { ShareLinkCard } from '@/components/project/ShareLinkCard';
 import { ExportView } from '@/components/project/ExportView';
 import { OpenApiView } from '@/components/design/OpenApiView';
 import { ChatPanel } from '@/components/project/ChatPanel';
@@ -288,6 +289,11 @@ export function ProjectStages({
           <CheckCircle2 className="h-4 w-4" />
           <AlertTitle className="mb-0">{t('confirmed')}</AlertTitle>
         </Alert>
+
+        {/* Sharing is free on every plan, so it sits in the header rather than in
+            the (Pro) Export tab. Shown once there's a design worth reading — the
+            same floor the API mints against. */}
+        {dbDesign && <ShareLinkCard sessionId={sessionId} />}
 
         {stream && (
           <StreamingConsole stage={stream.stage} view={stream.view} />

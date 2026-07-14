@@ -59,14 +59,16 @@ chain of structured artifacts — each one grounded in the previous:
 | **QA Plan** | Test strategy + concrete test cases by type |
 | **Diagrams & Canvas** | Architecture, ER, per-endpoint sequence flows; editable canvas |
 | **Export & Scaffold** | JSON / Markdown / OpenAPI (JSON+YAML) / SQL DDL / Postman / zip — plus a **runnable app scaffold**: a NestJS + Prisma API, a Next.js client (typed API client + CRUD pages), or both as one workspace (ZIP or one-click push to GitHub) |
+| **Deployment** | Every scaffold ships a Dockerfile, `docker-compose.yml`, a GitHub Actions workflow, and the config for the provider your cost estimate says is the best value it can actually run on (Render / Fly.io / Railway / Heroku / DigitalOcean / Vercel) |
 
 Around the pipeline: **chat refinement** (amend requirements, downstream stages
 regenerate consistently — and the derived artifacts that don't, like the roadmap
 or cost estimate, are **flagged stale with one-click regenerate** rather than
 quietly describing a design that changed), **version history** with diff +
 restore, **live SSE
-generation console**, **public share links** (a read-only page of a finished
-design that anyone can open — no account), full **auth** (email + Google/GitHub
+generation console**, **public share links** (a read-only page of the design that
+anyone can open — no account, and free on every plan: it's the organic loop, so
+it is deliberately not paywalled), full **auth** (email + Google/GitHub
 OAuth), **billing** (Free/Pro via Paddle or an offline mock), a **customer
 support center** with a three-layer AI assistant + knowledge base, **RBAC** for
 staff consoles, **admin analytics**, and a bilingual UI (**English + Arabic,
@@ -79,9 +81,9 @@ RTL-safe**).
 | Projects | 1 | 5 |
 | Interview → Requirements → System → Database design | ✅ | ✅ |
 | Product Vision | ✅ | ✅ |
+| Public share link (read-only page of the design so far) | ✅ | ✅ |
 | API design, AI review, roadmap, cost, threat model, QA plan | — | ✅ |
 | Export formats + code scaffold + API docs/mock server | — | ✅ |
-| Public share link for a finished design | — | ✅ |
 
 Billing runs **offline in mock mode by default** (instant upgrade, no charge),
 so the entire funnel is demoable with zero setup; Paddle (Merchant-of-Record)
@@ -255,7 +257,6 @@ readiness, 503 when degraded).
 - Cascade regeneration into the standalone stages (they are flagged stale today,
   with one-click regenerate — auto-cascading would re-bill four LLM stages on
   every refine, so it needs a cost decision first)
-- Deployment artifact stage (Dockerfile / compose / provider config)
 - Dedicated worker process + BullMQ retries/backoff
 
 ## License

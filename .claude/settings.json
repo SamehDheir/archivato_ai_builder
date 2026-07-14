@@ -134,7 +134,13 @@
       "Bash(curl -s -o /dev/null -w \"api /health/ready -> %{http_code}\\\\n\" http://127.0.0.1:3001/health/ready)",
       "Bash(curl -s -o /dev/null -w \"api /admin/llm-usage \\(unauth, expect 401\\) -> %{http_code}\\\\n\" http://127.0.0.1:3001/api/admin/llm-usage)",
       "Bash(curl -s -o /dev/null -w \"api /admin/users  \\(unauth, expect 401\\) -> %{http_code}\\\\n\" http://127.0.0.1:3001/api/admin/users)",
-      "Bash(NEXT_DIST_DIR=.next-perf NEXT_SKIP_STANDALONE=1 npm run build --workspace @archivato/web)"
+      "Bash(NEXT_DIST_DIR=.next-perf NEXT_SKIP_STANDALONE=1 npm run build --workspace @archivato/web)",
+      "Bash(python -c \"import yaml; print\\('pyyaml ok'\\)\")",
+      "Bash(npm ls *)",
+      "Bash(\"../../node_modules/.bin/prisma\" generate *)",
+      "Bash(\"../../node_modules/.bin/tsc\" --noEmit -p tsconfig.json)",
+      "Bash(echo \"GENERATED API TSC EXIT: $?\")",
+      "PowerShell(npx tsc --noEmit -p apps/web/tsconfig.json)"
     ]
   }
 }

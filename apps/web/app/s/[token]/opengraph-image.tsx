@@ -26,7 +26,8 @@ export default async function ShareOpengraphImage({
     architecture: project.systemDesign.architecture,
     services: project.systemDesign.services.length,
     tables: project.databaseDesign.entities.length,
-    endpoints: project.apiDesign.modules.reduce(
+    // Undefined (not 0) on a free-tier share — the API design is a Pro stage.
+    endpoints: project.apiDesign?.modules.reduce(
       (n, m) => n + m.endpoints.length,
       0,
     ),

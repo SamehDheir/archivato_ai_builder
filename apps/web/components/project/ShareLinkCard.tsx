@@ -4,18 +4,23 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Copy, Eye, Globe, Link2, Trash2 } from 'lucide-react';
 import { sharePath, type ShareLink } from '@archivato/shared';
-import { ApiError, shareApi } from '@/lib/api';
+import { shareApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/shared/toast';
 import { useConfirm } from '@/components/shared/confirm-dialog';
-import { useUpgrade } from '@/components/billing/upgrade-dialog';
 
 /**
- * "Share a public link" — mints an unguessable, read-only URL for the finished
- * design that anyone can open without an account. Lives in the Export tab
- * because that's where the project's *deliverables* are, and minting is Pro-gated
- * exactly like the rest of export (a 402 opens the upgrade modal in place).
+ * "Share a public link" — mints an unguessable, read-only URL for the design that
+ * anyone can open without an account.
+ *
+ * **Free on every plan, and deliberately not inside the Export tab.** It used to
+ * live there, Pro-gated alongside the exports — which meant the only users who
+ * could hand out a link were the ones already paying, and a free user couldn't
+ * even *reach* the control (the Export tab needs an API design, a Pro stage).
+ * Sharing is the product's organic loop, so it now sits in the project header
+ * where every owner can see it, and the API mints a link as soon as the database
+ * design exists (`dbDesign` here mirrors that gate).
  *
  * Revoke is deliberately a hard delete: the old URL 404s forever and re-sharing
  * mints a fresh token. There is no "pause".
@@ -24,7 +29,6 @@ export function ShareLinkCard({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation('stages');
   const toast = useToast();
   const confirm = useConfirm();
-  const openUpgrade = useUpgrade();
 
   const [link, setLink] = useState<ShareLink | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,24 +62,12 @@ export function ShareLinkCard({ sessionId }: { sessionId: string }) {
     try {
       setLink(await shareApi.create(sessionId));
       toast({ title: t('share.created'), variant: 'success' });
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 402) {
-        const upgraded = await openUpgrade({ feature: t('share.title') });
-        if (upgraded) {
-          try {
-            setLink(await shareApi.create(sessionId));
-            toast({ title: t('share.created'), variant: 'success' });
-          } catch {
-            toast({ title: t('share.failed'), variant: 'error' });
-          }
-        }
-      } else {
-        toast({ title: t('share.failed'), variant: 'error' });
-      }
+    } catch {
+      toast({ title: t('share.failed'), variant: 'error' });
     } finally {
       setBusy(false);
     }
-  }, [sessionId, openUpgrade, t, toast]);
+  }, [sessionId, t, toast]);
 
   async function copy() {
     if (!url) return;
@@ -105,7 +97,7 @@ export function ShareLinkCard({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <section className="mt-8 border-t pt-6">
+    <section className="rounded-lg border bg-muted/30 p-4">
       <h3 className="flex items-center gap-2 text-sm font-semibold">
         <Globe className="h-4 w-4" />
         {t('share.title')}

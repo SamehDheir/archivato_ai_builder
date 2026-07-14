@@ -25,6 +25,7 @@ import type {
   ProjectStructure,
   ScaffoldManifest,
   ScaffoldTarget,
+  CostProviderId,
   GithubPushResult,
   GithubConnectionStatus,
   ProductVision,
@@ -919,19 +920,29 @@ export async function fetchSharedProject(
   }
 }
 
-/** `?target=…`, omitted entirely when the caller wants the server's default. */
-function targetQuery(target?: ScaffoldTarget): string {
-  return target ? `?target=${target}` : '';
+/**
+ * `?target=…&provider=…`. Each is omitted entirely when the caller wants the
+ * server's default — for `provider`, that's the Cost Estimator's recommendation
+ * for this design, which the client has no reason to compute for itself.
+ */
+function scaffoldQuery(target?: ScaffoldTarget, provider?: CostProviderId): string {
+  const params = new URLSearchParams();
+  if (target) params.set('target', target);
+  if (provider) params.set('provider', provider);
+  const query = params.toString();
+  return query ? `?${query}` : '';
 }
 
 export const scaffoldApi = {
   /** File manifest (paths + contents) of the generated code. */
-  manifest: (sessionId: string, target?: ScaffoldTarget) =>
-    request<ScaffoldManifest>(`/scaffold/${sessionId}${targetQuery(target)}`),
+  manifest: (sessionId: string, target?: ScaffoldTarget, provider?: CostProviderId) =>
+    request<ScaffoldManifest>(
+      `/scaffold/${sessionId}${scaffoldQuery(target, provider)}`,
+    ),
 
   /** The scaffold as a downloadable .zip Blob. */
-  zip: (sessionId: string, target?: ScaffoldTarget) =>
-    requestBlob(`/scaffold/${sessionId}/zip${targetQuery(target)}`),
+  zip: (sessionId: string, target?: ScaffoldTarget, provider?: CostProviderId) =>
+    requestBlob(`/scaffold/${sessionId}/zip${scaffoldQuery(target, provider)}`),
 
   /**
    * Create a GitHub repo and push the scaffold. Omit `token` to use the stored
@@ -944,6 +955,7 @@ export const scaffoldApi = {
       repoName: string;
       isPrivate?: boolean;
       target?: ScaffoldTarget;
+      provider?: CostProviderId;
     },
   ) =>
     request<GithubPushResult>(`/scaffold/${sessionId}/github`, {

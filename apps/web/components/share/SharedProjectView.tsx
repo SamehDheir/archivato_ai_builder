@@ -37,7 +37,12 @@ const TABS: { value: ShareTab; icon: LucideIcon }[] = [
   { value: 'review', icon: ClipboardCheck },
 ];
 
-/** Design facts worth putting above the fold — the "this is real" proof. */
+/**
+ * Design facts worth putting above the fold — the "this is real" proof. The
+ * endpoint count is dropped rather than shown as 0 when the owner shared from the
+ * free tier (no API design): a zero here would read as "this design has no API",
+ * which is a claim about the design rather than about the plan that made it.
+ */
 function stats(project: SharedProject) {
   return [
     {
@@ -46,13 +51,17 @@ function stats(project: SharedProject) {
     },
     { key: 'services' as const, value: project.systemDesign.services.length },
     { key: 'tables' as const, value: project.databaseDesign.entities.length },
-    {
-      key: 'endpoints' as const,
-      value: project.apiDesign.modules.reduce(
-        (n, m) => n + m.endpoints.length,
-        0,
-      ),
-    },
+    ...(project.apiDesign
+      ? [
+          {
+            key: 'endpoints' as const,
+            value: project.apiDesign.modules.reduce(
+              (n, m) => n + m.endpoints.length,
+              0,
+            ),
+          },
+        ]
+      : []),
   ];
 }
 
@@ -88,6 +97,17 @@ export function SharedProjectView({ project }: { project: SharedProject }) {
 function SharedProjectContent({ project }: { project: SharedProject }) {
   const { t } = useTranslation('share');
 
+  // Both trailing stages are Pro. A free owner's link carries neither, and the
+  // page simply renders the design it does have rather than an empty tab.
+  const has: Record<ShareTab, boolean> = {
+    requirements: true,
+    system: true,
+    database: true,
+    api: !!project.apiDesign,
+    review: !!project.review,
+  };
+  const tiles = stats(project);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
       <header className="space-y-4">
@@ -107,8 +127,12 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
           </p>
         </div>
 
-        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {stats(project).map(({ key, value }) => (
+        <dl
+          className={`grid grid-cols-2 gap-3 ${
+            tiles.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'
+          }`}
+        >
+          {tiles.map(({ key, value }) => (
             <div key={key} className="rounded-lg border bg-card p-3">
               <dt className="text-xs text-muted-foreground">
                 {t(`stat.${key}`)}
@@ -127,9 +151,8 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
         <CardContent className="p-5">
           <Tabs defaultValue="system">
             <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto md:flex-wrap md:overflow-visible">
-              {TABS.map(({ value, icon: Icon }) => (
-                // The review is optional — the owner may never have run it.
-                (value !== 'review' || project.review) && (
+              {TABS.filter(({ value }) => has[value]).map(
+                ({ value, icon: Icon }) => (
                   <TabsTrigger
                     key={value}
                     value={value}
@@ -138,8 +161,8 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
                     <Icon className="h-3.5 w-3.5" />
                     {t(`tab.${value}`)}
                   </TabsTrigger>
-                )
-              ))}
+                ),
+              )}
             </TabsList>
 
             <TabsContent value="requirements" className="mt-4">
@@ -156,9 +179,11 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
             <TabsContent value="database" className="mt-4">
               <DatabaseDesignView design={project.databaseDesign} />
             </TabsContent>
-            <TabsContent value="api" className="mt-4">
-              <ApiDesignView design={project.apiDesign} />
-            </TabsContent>
+            {project.apiDesign && (
+              <TabsContent value="api" className="mt-4">
+                <ApiDesignView design={project.apiDesign} />
+              </TabsContent>
+            )}
             {project.review && (
               <TabsContent value="review" className="mt-4">
                 <ReviewView report={project.review} />

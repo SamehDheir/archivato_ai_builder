@@ -9,9 +9,10 @@
  * planning estimates, not quotes.
  */
 
+import type { DerivedArtifact } from './freshness';
+
 /** The user scales we project a monthly bill at. */
 export const COST_USER_SCALES = [100, 1000, 10000] as const;
-import type { DerivedArtifact } from './freshness';
 
 export type CostUserScale = (typeof COST_USER_SCALES)[number];
 
@@ -343,6 +344,23 @@ function providerCostAtScale(
  * provider and scale. Pure function (no I/O, no randomness) so it's identical on
  * every run and unit-testable.
  */
+/** Every provider we price — the source for validating a provider id. */
+export const COST_PROVIDER_IDS: readonly CostProviderId[] = [
+  'aws',
+  'digitalocean',
+  'railway',
+  'render',
+  'vercel',
+  'cloudflare',
+  'flyio',
+  'heroku',
+];
+
+/** Display name for a provider id (falls back to the id itself). */
+export function costProviderName(id: CostProviderId): string {
+  return PRICING.find((p) => p.id === id)?.name ?? id;
+}
+
 export function estimateCosts(
   input: CostEstimateInput,
 ): Omit<CostEstimate, 'sessionId' | 'generatedAt'> {

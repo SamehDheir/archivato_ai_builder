@@ -35,15 +35,20 @@ export async function generateMetadata({
 
   const { project } = result;
   const title = `${project.title} — a system design by ${siteName}`;
-  const endpoints = project.apiDesign.modules.reduce(
+  // The API design is a Pro stage, so a free owner's link carries none. Drop the
+  // clause rather than unfurling "0 endpoints", which would read as a claim about
+  // the design instead of the plan it was generated on.
+  const endpoints = project.apiDesign?.modules.reduce(
     (n, m) => n + m.endpoints.length,
     0,
   );
   const description =
-    `${project.systemDesign.architecture.replace(/_/g, ' ')} · ` +
-    `${project.systemDesign.services.length} services · ` +
-    `${project.databaseDesign.entities.length} tables · ` +
-    `${endpoints} endpoints — generated from one sentence.`;
+    [
+      project.systemDesign.architecture.replace(/_/g, ' '),
+      `${project.systemDesign.services.length} services`,
+      `${project.databaseDesign.entities.length} tables`,
+      ...(endpoints === undefined ? [] : [`${endpoints} endpoints`]),
+    ].join(' · ') + ' — generated from one sentence.';
 
   const url = `${siteUrl}/s/${params.token}`;
   return {

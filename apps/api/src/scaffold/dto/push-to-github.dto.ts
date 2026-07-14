@@ -7,7 +7,12 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { SCAFFOLD_TARGETS, type ScaffoldTarget } from '@archivato/shared';
+import {
+  COST_PROVIDER_IDS,
+  SCAFFOLD_TARGETS,
+  type CostProviderId,
+  type ScaffoldTarget,
+} from '@archivato/shared';
 
 /**
  * Push-to-GitHub request. If `token` (a PAT) is supplied it is used once,
@@ -42,4 +47,12 @@ export class PushToGithubDto {
   @IsOptional()
   @IsIn(SCAFFOLD_TARGETS as readonly string[])
   target?: ScaffoldTarget;
+
+  /**
+   * Provider the deployment artifacts target. Omit to use the one the Cost
+   * Estimator recommends for this design.
+   */
+  @IsOptional()
+  @IsIn(COST_PROVIDER_IDS as readonly string[])
+  provider?: CostProviderId;
 }

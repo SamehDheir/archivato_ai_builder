@@ -121,6 +121,20 @@ export function uniquifyNames<T extends { name: string }>(
   });
 }
 
+/**
+ * The Prisma datasource provider for a designed database type. Shared with the
+ * deployment builder so the container it starts can't drift from the schema the
+ * app expects to connect to.
+ */
+export function prismaProvider(databaseType: string): string {
+  const t = (databaseType || '').toLowerCase();
+  if (t.includes('mysql') || t.includes('maria')) return 'mysql';
+  if (t.includes('sqlite')) return 'sqlite';
+  if (t.includes('sqlserver') || t.includes('mssql')) return 'sqlserver';
+  if (t.includes('mongo')) return 'mongodb';
+  return 'postgresql';
+}
+
 // ── Type mapping ─────────────────────────────────────────────────────────────
 
 /** The TypeScript type a designed field type maps to. */

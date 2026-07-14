@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Code2, Download, GitBranch, ExternalLink, Check } from 'lucide-react';
-import type {
-  GithubConnectionStatus,
-  GithubPushResult,
-  ScaffoldTarget,
+import {
+  DEPLOY_CONFIGURED,
+  type CostProviderId,
+  type GithubConnectionStatus,
+  type GithubPushResult,
+  type ScaffoldTarget,
 } from '@archivato/shared';
 import { scaffoldApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -14,6 +16,14 @@ import { Input } from '@/components/ui/input';
 
 /** The whole app first — it's the default, and the reason to be on this tab. */
 const TARGETS: ScaffoldTarget[] = ['fullstack', 'backend', 'frontend'];
+
+/**
+ * `''` = let the server pick, which means the Cost Estimator's recommendation for
+ * this design. That's the default on purpose: the point of the deployment stage is
+ * that the provider the cost tab called best value is the one you get a config for,
+ * so the user shouldn't have to remember it and re-pick it here.
+ */
+type ProviderChoice = '' | CostProviderId;
 
 /** Default repo name per target — a sensible, editable starting point. */
 const REPO_NAMES: Record<ScaffoldTarget, string> = {
@@ -45,6 +55,7 @@ export function ScaffoldView({ sessionId }: { sessionId: string }) {
   const [busy, setBusy] = useState<null | 'zip' | 'github' | 'connect'>(null);
   const [error, setError] = useState<string | null>(null);
   const [target, setTarget] = useState<ScaffoldTarget>('fullstack');
+  const [provider, setProvider] = useState<ProviderChoice>('');
   // Tracks the target unless the user has typed their own name.
   const [repoName, setRepoName] = useState(REPO_NAMES.fullstack);
   const [repoNameEdited, setRepoNameEdited] = useState(false);
@@ -105,7 +116,7 @@ export function ScaffoldView({ sessionId }: { sessionId: string }) {
     setBusy('zip');
     setError(null);
     try {
-      const blob = await scaffoldApi.zip(sessionId, target);
+      const blob = await scaffoldApi.zip(sessionId, target, provider || undefined);
       downloadBlob(`${REPO_NAMES[target]}-${sessionId}.zip`, blob);
     } catch (e) {
       setError(msg(e));
@@ -158,6 +169,8 @@ export function ScaffoldView({ sessionId }: { sessionId: string }) {
         repoName,
         isPrivate,
         target,
+        // Omitted → the server uses the cost-recommended provider.
+        ...(provider ? { provider } : {}),
         // Only send a PAT when using the fallback; otherwise use the stored connection.
         ...(useTokenFallback ? { token } : {}),
       });
@@ -218,6 +231,33 @@ export function ScaffoldView({ sessionId }: { sessionId: string }) {
             </button>
           );
         })}
+      </div>
+
+      {/* Where it deploys. The default defers to the Cost Estimator, so the
+          provider it called best value is the one you get a config for. */}
+      <div className="mt-4">
+        <label
+          htmlFor="scaffold-provider"
+          className="text-xs font-medium text-muted-foreground"
+        >
+          {t('scaffold.providerLabel')}
+        </label>
+        <select
+          id="scaffold-provider"
+          value={provider}
+          onChange={(e) => setProvider(e.target.value as ProviderChoice)}
+          className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        >
+          <option value="">{t('scaffold.providerAuto')}</option>
+          {DEPLOY_CONFIGURED.map((id) => (
+            <option key={id} value={id}>
+              {t(`scaffold.provider.${id}`)}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-muted-foreground" dir="auto">
+          {t('scaffold.providerHint')}
+        </p>
       </div>
 
       <div className="mt-3">
