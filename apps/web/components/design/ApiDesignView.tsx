@@ -74,7 +74,7 @@ function EndpointRow({ endpoint }: { endpoint: ApiEndpoint }) {
         </span>
         <span className="font-mono text-sm">{endpoint.path}</span>
         <span className="ms-auto flex flex-wrap gap-1">
-          {endpoint.statusCodes.map((c) => (
+          {(endpoint.statusCodes ?? []).map((c) => (
             <Badge variant="secondary" key={c}>
               {c}
             </Badge>
@@ -85,8 +85,8 @@ function EndpointRow({ endpoint }: { endpoint: ApiEndpoint }) {
         {endpoint.summary}
       </div>
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
-        <SchemaList label={t('api.request')} fields={endpoint.requestSchema} />
-        <SchemaList label={t('api.response')} fields={endpoint.responseSchema} />
+        <SchemaList label={t('api.request')} fields={endpoint.requestSchema ?? []} />
+        <SchemaList label={t('api.response')} fields={endpoint.responseSchema ?? []} />
       </div>
     </div>
   );

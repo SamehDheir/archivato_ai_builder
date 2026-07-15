@@ -76,9 +76,30 @@ export function buildMarkdown(bundle: ExportBundle): string {
   blank();
   h(3, 'Services');
   for (const svc of s.services) {
-    li(`**${svc.name}** — ${svc.responsibility}${svc.dependencies.length ? ` (depends on: ${svc.dependencies.join(', ')})` : ''}`);
+    const size = svc.complexity ? ` [${svc.complexity}]` : '';
+    li(`**${svc.name}**${size} — ${svc.responsibility}${svc.dependencies.length ? ` (depends on: ${svc.dependencies.join(', ')})` : ''}`);
   }
   blank();
+  if (s.phasedArchitecture) {
+    h(3, 'Phased plan');
+    li(`**MVP** — ${s.phasedArchitecture.mvp}`);
+    li(`**Growth path** — ${s.phasedArchitecture.growthPath}`);
+    li(`**Migration notes** — ${s.phasedArchitecture.migrationNotes}`);
+    blank();
+  }
+  if (s.buildVsBuy?.length) {
+    h(3, 'Build vs. buy');
+    for (const b of s.buildVsBuy) {
+      const service = b.suggestedService ? ` (${b.suggestedService})` : '';
+      li(`**${b.capability}** — ${b.recommendation}${service}: ${b.rationale}`);
+    }
+    blank();
+  }
+  if (s.constraintCompliance?.length) {
+    h(3, 'Constraint compliance');
+    for (const c of s.constraintCompliance) li(`**${c.constraint}** — ${c.howAddressed}`);
+    blank();
+  }
 
   // ── Database design ──
   const d = bundle.databaseDesign;

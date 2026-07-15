@@ -172,6 +172,33 @@ describe('ApiDesignService', () => {
     expect(design.sessionId).toBe(sessionId);
   });
 
+  it('normalizes a partial LLM endpoint so array fields never persist as undefined', async () => {
+    const h = makeHarness();
+    const sessionId = await upstream(h);
+    await h.databaseDesign.generate(sessionId);
+
+    // A conforming-but-partial endpoint: no method, no path, no statusCodes, no
+    // request/response schema. All must be coerced or the view/OpenAPI/scaffold
+    // builders get undefined.
+    h.mock.enqueueJson({
+      modules: [
+        {
+          name: 'Appointments',
+          basePath: '/api/appointments',
+          endpoints: [{ summary: 'list' }],
+        },
+      ],
+    });
+
+    const design = await h.service.generate(sessionId);
+    const ep = design.modules[0].endpoints[0];
+    expect(ep.method).toBe('GET');
+    expect(ep.path).toBe('/api/appointments');
+    expect(Array.isArray(ep.statusCodes)).toBe(true);
+    expect(Array.isArray(ep.requestSchema)).toBe(true);
+    expect(Array.isArray(ep.responseSchema)).toBe(true);
+  });
+
   it('get() returns a stored design and 404s otherwise', async () => {
     const h = makeHarness();
     const sessionId = await upstream(h);

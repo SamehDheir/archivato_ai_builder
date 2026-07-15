@@ -253,26 +253,99 @@ export const EXAMPLE_SYSTEM_DESIGN: SystemDesign = {
       name: 'Catalog',
       responsibility: 'Services, pricing, and provider availability.',
       dependencies: [],
+      complexity: 'M',
+      complexityRationale: 'Read-heavy but must model availability accurately.',
     },
     {
       name: 'Booking',
       responsibility: 'Creating, rescheduling, and cancelling bookings; slot locking.',
       dependencies: ['Catalog', 'Payments'],
+      complexity: 'XL',
+      complexityRationale: 'The core flow: transactional slot locking plus reschedule/cancel across two dependencies.',
     },
     {
       name: 'Payments',
       responsibility: 'Authorization, capture, refunds, and provider payouts.',
       dependencies: [],
+      complexity: 'L',
+      complexityRationale: 'Money movement and payouts through an external processor.',
     },
     {
       name: 'Reviews',
       responsibility: 'Ratings and reviews for completed bookings.',
       dependencies: ['Booking'],
+      complexity: 'S',
+      complexityRationale: 'Straightforward CRUD gated on a completed booking.',
     },
     {
       name: 'Notifications',
       responsibility: 'Email and push reminders for bookings and job status.',
       dependencies: ['Booking'],
+      complexity: 'M',
+      complexityRationale: 'Multiple channels and delivery timing, but bought infrastructure.',
+    },
+  ],
+  buildVsBuy: [
+    {
+      capability: 'auth',
+      recommendation: 'build',
+      rationale:
+        'Email/password with JWT + refresh tokens is a solved problem; a managed identity provider is only worth it for enterprise SSO.',
+      impact: 'Build: a few days and no per-user fee.',
+    },
+    {
+      capability: 'payments',
+      recommendation: 'buy',
+      suggestedService: 'Stripe',
+      rationale:
+        'Never build a payment processor — PCI scope, fraud, and payouts are enormous. Stripe keeps card data off our servers and handles payouts.',
+      impact: 'Buy: removes months of PCI work; ~2.9% + fixed fee per transaction.',
+    },
+    {
+      capability: 'notifications',
+      recommendation: 'buy',
+      suggestedService: 'Resend (email) + Firebase Cloud Messaging (push)',
+      rationale:
+        'Deliverability and templating are a specialty; a transactional provider gets reliable delivery from day one.',
+      impact: 'Buy: avoids deliverability tuning; pay per message above a free tier.',
+    },
+    {
+      capability: 'maps_geo',
+      recommendation: 'buy',
+      suggestedService: 'Google Maps Platform',
+      rationale:
+        'Geocoding customer addresses and matching them to a service area needs licensed map data.',
+      impact: 'Buy: no map-data licensing; pay per request above a free tier.',
+    },
+    {
+      capability: 'search',
+      recommendation: 'build',
+      rationale:
+        'PostgreSQL full-text search covers catalog browse and filtering at launch scale.',
+      impact: 'Build: uses the database we already run, no extra cost.',
+    },
+  ],
+  phasedArchitecture: {
+    mvp: 'A modular monolith covering catalog, booking, payments, and reviews on one deployment with managed PostgreSQL and Redis — enough to serve the launch metro area.',
+    growthPath:
+      'As booking volume climbs toward 10,000 concurrent customers, extract Booking and Payments into independently deployable services and add read replicas plus a dedicated availability cache.',
+    migrationNotes:
+      'Module boundaries (catalog/booking/payments/reviews) are already enforced in-process, so extraction is a deployment change rather than a rewrite.',
+  },
+  constraintCompliance: [
+    {
+      constraint: 'Web-first launch; mobile app to follow.',
+      howAddressed:
+        'A Next.js web client only; the REST API is mobile-ready for a later native app.',
+    },
+    {
+      constraint: 'Payments delegated to a third-party PCI-compliant processor.',
+      howAddressed: 'Stripe handles cards and payouts; no card data touches our servers.',
+    },
+    {
+      constraint: 'Single metro area at launch.',
+      howAddressed:
+        'A single-region deployment; multi-region expansion is deferred (see out of scope).',
     },
   ],
 };

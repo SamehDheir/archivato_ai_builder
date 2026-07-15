@@ -180,7 +180,8 @@
       "PowerShell(Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction Stop; \"killed PID $_\" } catch { \"no proc $_\" } }; Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -lt \\(Get-Date\\).AddMinutes\\(-1\\) } | Select-Object Id,StartTime | Format-Table -AutoSize)",
       "Bash(xargs grep -l \"summary: null\")",
       "Bash(echo \"---exit $?---\")",
-      "Bash(echo \"web-tsc-done exit=$?\")"
+      "Bash(echo \"web-tsc-done exit=$?\")",
+      "Bash(echo \"web-tsc exit=$?\")"
     ],
     "additionalDirectories": [
       "\\tmp"

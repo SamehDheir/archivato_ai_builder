@@ -139,4 +139,39 @@ describe('SystemDesignService', () => {
     await service.generate(sessionId);
     expect((await service.get(sessionId)).sessionId).toBe(sessionId);
   });
+
+  it('save() carries over R8 analysis and restores module complexity by name', async () => {
+    const { interview, requirements, service } = makeHarness();
+    const sessionId = await confirm(interview);
+    await requirements.generate(sessionId);
+    const generated = await service.generate(sessionId);
+
+    expect(generated.buildVsBuy?.length).toBeGreaterThan(0);
+    expect(generated.services.every((s) => !!s.complexity)).toBe(true);
+
+    // The structured editor sends architecture/rationale/techStack/services only
+    // — no complexity, no R8 analysis fields (mirrors the real editor Draft).
+    const edited = {
+      architecture: generated.architecture,
+      architectureRationale: 'Edited rationale',
+      techStack: generated.techStack,
+      services: generated.services.map((s) => ({
+        name: s.name,
+        responsibility: s.responsibility,
+        dependencies: s.dependencies,
+      })),
+    };
+
+    const saved = await service.save(sessionId, edited);
+
+    expect(saved.architectureRationale).toBe('Edited rationale');
+    // The R8 design-level analysis survives an edit that didn't touch it.
+    expect(saved.buildVsBuy).toEqual(generated.buildVsBuy);
+    expect(saved.constraintCompliance).toEqual(generated.constraintCompliance);
+    // Per-module complexity is restored by matching the service name.
+    for (const s of saved.services) {
+      const prior = generated.services.find((g) => g.name === s.name);
+      expect(s.complexity).toBe(prior?.complexity);
+    }
+  });
 });

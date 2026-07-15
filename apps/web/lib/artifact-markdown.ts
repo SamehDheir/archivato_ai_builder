@@ -149,12 +149,42 @@ export function systemDesignToMarkdown(design: SystemDesign): string {
       const deps = svc.dependencies.length
         ? ` (depends on: ${svc.dependencies.join(', ')})`
         : '';
-      li(`**${svc.name}** — ${svc.responsibility}${deps}`);
+      const size = svc.complexity ? ` [${svc.complexity}]` : '';
+      li(`**${svc.name}**${size} — ${svc.responsibility}${deps}`);
     }
   } else {
     li('_None_');
   }
   blank();
+
+  if (design.phasedArchitecture) {
+    h(2, 'Phased plan');
+    li(`**MVP** — ${design.phasedArchitecture.mvp}`);
+    li(`**Growth path** — ${design.phasedArchitecture.growthPath}`);
+    li(`**Migration notes** — ${design.phasedArchitecture.migrationNotes}`);
+    blank();
+  }
+
+  if (design.buildVsBuy?.length) {
+    h(2, 'Build vs. buy');
+    out.push('| Capability | Decision | Rationale |', '| --- | --- | --- |');
+    for (const b of design.buildVsBuy) {
+      const detail = b.suggestedService
+        ? `${b.suggestedService} — ${b.rationale}`
+        : b.rationale;
+      out.push(`| ${cell(b.capability)} | ${cell(b.recommendation)} | ${cell(detail)} |`);
+    }
+    blank();
+  }
+
+  if (design.constraintCompliance?.length) {
+    h(2, 'Constraint compliance');
+    out.push('| Constraint | How addressed |', '| --- | --- |');
+    for (const c of design.constraintCompliance) {
+      out.push(`| ${cell(c.constraint)} | ${cell(c.howAddressed)} |`);
+    }
+    blank();
+  }
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
 }

@@ -153,8 +153,13 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
 
         <Collapsible icon={Network} title={t('appendix.architecture')}>
           {/* `interactive` off: "Explain this decision" calls an owner-scoped API,
-              which a link holder has no session for. */}
-          <SystemDesignView design={project.systemDesign} interactive={false} />
+              which a link holder has no session for. `buildVsBuyFirst`: the
+              build-vs-buy plan is the most client-readable part, so it leads. */}
+          <SystemDesignView
+            design={project.systemDesign}
+            interactive={false}
+            buildVsBuyFirst
+          />
         </Collapsible>
 
         <Collapsible icon={DatabaseIcon} title={t('appendix.database')}>

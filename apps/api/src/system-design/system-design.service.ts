@@ -61,6 +61,9 @@ export class SystemDesignService {
       idea: session.input.idea,
       intent: session.intent,
       requirements,
+      // Slots ground the design in the deal's constraints (budget/timeline/scale)
+      // — a derived cache, possibly absent on legacy/plan-mode runs, so tolerated.
+      slots: session.slots ?? undefined,
     });
 
     return this.designs.upsert(design);
@@ -109,8 +112,26 @@ export class SystemDesignService {
         'Generate the system design before editing it.',
       );
     }
+    // The structured editor doesn't touch the R8 analysis (build-vs-buy, phased
+    // architecture, constraint compliance) or a module's complexity, so an edit
+    // must not wipe them — carry the design-level fields over when omitted, and
+    // restore each service's complexity from the stored design by name.
+    const priorByName = new Map(existing.services.map((s) => [s.name, s]));
+    const services = edited.services.map((s) => {
+      const prior = priorByName.get(s.name);
+      return {
+        ...s,
+        complexity: s.complexity ?? prior?.complexity,
+        complexityRationale: s.complexityRationale ?? prior?.complexityRationale,
+      };
+    });
     return this.designs.upsert({
       ...edited,
+      services,
+      buildVsBuy: edited.buildVsBuy ?? existing.buildVsBuy,
+      phasedArchitecture: edited.phasedArchitecture ?? existing.phasedArchitecture,
+      constraintCompliance:
+        edited.constraintCompliance ?? existing.constraintCompliance,
       sessionId,
       generatedAt: new Date().toISOString(),
     });

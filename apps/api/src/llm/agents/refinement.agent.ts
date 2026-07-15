@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AgentRole,
+  significantTokens,
   type FunctionalRequirement,
   type IntentAnalysis,
   type NonFunctionalRequirement,
@@ -230,17 +231,6 @@ function isNowInScope(phrase: string, functionalText: string[]): boolean {
 }
 
 /** Distinct lower-cased words of length ≥4 (drops filler like "the", "and"). */
-function significantTokens(text: string): string[] {
-  return [
-    ...new Set(
-      text
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((tkn) => tkn.length >= 4),
-    ),
-  ];
-}
-
 function truncateTitle(text: string): string {
   const trimmed = text.trim();
   return trimmed.length <= 60 ? trimmed : `${trimmed.slice(0, 57)}…`;

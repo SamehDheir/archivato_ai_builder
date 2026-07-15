@@ -2,9 +2,11 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AgentRole,
   type ApiDesign,
+  type ApiEndpoint,
   type ApiModule,
   type DatabaseDesign,
   type Entity,
+  type HttpMethod,
   type IntentAnalysis,
   type RequirementDocument,
   type SchemaField,
@@ -72,7 +74,16 @@ export class ApiDesignerAgent extends BaseAgent {
         this.buildPrompt(ctx),
       );
       if (this.isValid(raw)) {
-        return { ...(raw as ApiDesign), sessionId, generatedAt };
+        // `isValid` only guarantees `endpoints` is an array — a conforming-but-
+        // partial endpoint can omit statusCodes/requestSchema/responseSchema,
+        // which persist as `undefined` and crash every consumer (the view's
+        // `.statusCodes.map`, the OpenAPI/export builders). Coerce to a complete
+        // shape here.
+        return {
+          sessionId,
+          generatedAt,
+          modules: (raw.modules as ApiModule[]).map(normalizeModule),
+        };
       }
       this.logger.debug('API design malformed; using deterministic build.');
     } catch (err) {
@@ -128,6 +139,49 @@ export class ApiDesignerAgent extends BaseAgent {
 
     return { sessionId, generatedAt, modules };
   }
+}
+
+// ── LLM-output normalization ──────────────────────────────────────────────
+
+const HTTP_METHODS: readonly HttpMethod[] = [
+  'GET',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+];
+
+/** Coerce a possibly-partial LLM module to a complete, safe-to-render shape. */
+function normalizeModule(m: ApiModule): ApiModule {
+  return {
+    name: m.name,
+    basePath: m.basePath,
+    endpoints: Array.isArray(m.endpoints)
+      ? m.endpoints.map((e) => normalizeEndpoint(e, m.basePath))
+      : [],
+  };
+}
+
+/**
+ * Guarantee an endpoint is complete — a partial LLM endpoint (missing method,
+ * path, or an array field) would otherwise flow undefined into the view and the
+ * OpenAPI/scaffold builders (which build string literals + path keys from them).
+ */
+function normalizeEndpoint(e: ApiEndpoint, basePath: string): ApiEndpoint {
+  const method =
+    typeof e.method === 'string' &&
+    (HTTP_METHODS as readonly string[]).includes(e.method.toUpperCase())
+      ? (e.method.toUpperCase() as HttpMethod)
+      : 'GET';
+  return {
+    ...e,
+    method,
+    path: typeof e.path === 'string' && e.path.trim() ? e.path : basePath,
+    summary: typeof e.summary === 'string' ? e.summary : '',
+    requestSchema: Array.isArray(e.requestSchema) ? e.requestSchema : [],
+    responseSchema: Array.isArray(e.responseSchema) ? e.responseSchema : [],
+    statusCodes: Array.isArray(e.statusCodes) ? e.statusCodes : [],
+  };
 }
 
 // ── deterministic helpers ─────────────────────────────────────────────────

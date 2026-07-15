@@ -31,6 +31,34 @@
     "architecture": "Architecture",
     "techStack": "Tech stack",
     "services": "Services",
+    "buildVsBuy": {
+      "title": "Build vs. buy",
+      "capability": "Capability",
+      "decision": "Decision",
+      "rationale": "Recommendation",
+      "build": "Build",
+      "buy": "Buy",
+      "cap": {
+        "auth": "Authentication",
+        "payments": "Payments",
+        "notifications": "Notifications",
+        "file_storage": "File storage",
+        "maps_geo": "Maps & location",
+        "search": "Search"
+      }
+    },
+    "phased": {
+      "title": "Phased plan",
+      "lead": "The scale ambition runs ahead of the initial budget and timeline, so the build is phased rather than over-built on day one.",
+      "mvp": "MVP",
+      "growth": "Growth path",
+      "migration": "Migration notes"
+    },
+    "compliance": {
+      "title": "Constraint compliance",
+      "constraint": "Constraint",
+      "howAddressed": "How it's addressed"
+    },
     "col": {
       "layer": "Layer",
       "technology": "Technology",

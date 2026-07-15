@@ -806,6 +806,60 @@ tsconfig and never needs shared's `dist`.
     `requirements.{executiveSummary,outOfScope,assumptionsAndOpenQuestions,
     impactIfWrong}` + `share.appendix.requirements` (EN+AR). Owner page shows all
     sections (`audience="full"`) with IDs demoted to muted mono reference text.
+- **System Design = constraint-aware, priceable architecture (R8).** The System
+  Architect now reads the interview's **constraint slots** (`SystemDesignContext.slots`
+  — `budget_range`/`timeline`/`scale_expectations`/`constraints`/`existing_assets`,
+  threaded through `SystemDesignService.generate` from `session.slots`, possibly
+  absent) and emits four additive, optional fields on `SystemDesign`
+  (`@archivato/shared`, all back-compat so old rows/plan-mode render fine):
+  1. **`buildVsBuy[]`** (`{capability, recommendation:'build'|'buy', suggestedService?,
+     rationale, impact}`) — a build-vs-buy call over a **closed** capability set
+     (`BUILD_VS_BUY_CAPABILITIES` = auth/payments/notifications/file_storage/maps_geo/
+     search; `isBuildVsBuyCapability` guards it). The fallback source is a static
+     `BUILD_VS_BUY_TABLE` (code, not LLM) keyed by an `applies` regex over the
+     requirement haystack — **auth is always included** (role names like "Customer"
+     don't surface as auth keywords). "Buy" picks are generic well-knowns (Stripe,
+     Twilio/Resend, S3/R2, Google Maps/Mapbox); payments is always "buy", search/auth
+     "build".
+  2. **Module `complexity` (`S|M|L|XL`) + `complexityRationale`** on each
+     `ServiceModule` — deterministic heuristic = related-requirement count + fan-out
+     (dependencies) + a `domainWeight` bump for intrinsically heavy domains
+     (payments/search/geo). **Every module always carries one** (the LLM path is
+     backfilled by `ensureComplexity`, the fallback derives it).
+  3. **`phasedArchitecture` (`{mvp, growthPath, migrationNotes}`) — CONDITIONAL.**
+     Present **iff `hasScaleConflict`**: stated **large scale** (`LARGE_SCALE` regex
+     over the `scale_expectations` slot or haystack) **AND** a **tight budget or
+     timeline** (`TIGHT_BUDGET`/`TIGHT_TIMELINE` over those slots). Its presence is a
+     pure function of the (deterministic) conflict test on BOTH paths — `normalize()`
+     **gates a model-supplied phased block off** when there's no conflict, and
+     backfills one when there is. Empty slots (plan mode) ⇒ no conflict ⇒ omitted.
+  4. **`constraintCompliance[]` (`{constraint, howAddressed}`)** — passthrough of the
+     `constraints` slot + `requirements.constraints` (deduped), each mapped to a
+     `howAddressed` line. Empty array when no constraints.
+  - **Constraint-grounded rationale + simplicity bias.** The prompt makes every major
+    decision cite the relevant constraint and NAME the rejected alternative and why it
+    loses; under a tight budget/timeline the architect prefers the **simplest**
+    architecture (`inferArchitecture` pins to `modular_monolith` when tight, even past
+    scale words — the phased plan captures the growth path). Budget/timeline are
+    **context only — referenced qualitatively ("the tight timeline"), never the exact
+    figure/date** (the R7 precedent; scale MAY be named).
+  - **Haystack excludes budget/timeline/scale slots** (a budget like "we can pay $5k"
+    would trip the payments/maps keyword detectors) but folds in
+    business_domain/core_workflows/data_entities/integrations/existing_assets.
+  - **Traceability + downstream compat preserved.** Requirement IDs, the module
+    structure, the Mermaid builders, and the **"Explain this decision"** mechanism all
+    read unchanged fields; API-design + cost-estimate read only `services`/`techStack`/
+    `architecture`, untouched. Persistence is the JSON-blob convention (migration-free).
+    `SystemDesignService.save` carries the R8 analysis over from the stored design (the
+    structured editor's `Draft` doesn't include it) and **restores each module's
+    complexity by name** so an edit can't wipe it.
+  - **Web.** `SystemDesignView` renders complexity badges on the service cards, a
+    build-vs-buy table, the phased block (when present), and a constraint-compliance
+    table at the end; a **`buildVsBuyFirst`** prop leads the share appendix with
+    build-vs-buy (the most client-readable part) while the owner page keeps it after
+    the services. i18n `stages.system.{buildVsBuy,phased,compliance}.*` (EN+AR). The
+    markdown exporters (web `systemDesignToMarkdown` + api `markdown.builder`) and the
+    example fixture (`EXAMPLE_SYSTEM_DESIGN`) carry all four sections.
 - **Gating:** each stage refuses to generate until its upstream artifacts exist
   (interview must be `confirmed`); returns 409/404 accordingly.
 - **Ownership:** pipeline routes are `@UseGuards(JwtAuthGuard, SessionOwnerGuard)`.
