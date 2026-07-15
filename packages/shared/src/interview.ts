@@ -5,7 +5,7 @@
  * any design work begins.
  */
 
-/** The five interview phases, matching the spec (A→E). */
+/** The interview phases, in ask order. */
 export enum InterviewPhase {
   /** A — main goal & users. */
   Understanding = 'understanding',
@@ -17,6 +17,12 @@ export enum InterviewPhase {
   Scale = 'scale',
   /** E — SQL/NoSQL, monolith/microservices. */
   Technical = 'technical',
+  /**
+   * F — the commercial frame a scoping needs: budget and timeline. New in the
+   * client-scoping pivot (R6); the interview now closes the deal-shaping gaps a
+   * dev shop has to fill, not just the technical ones.
+   */
+  Commercial = 'commercial',
 }
 
 export const INTERVIEW_PHASE_ORDER: readonly InterviewPhase[] = [
@@ -25,6 +31,7 @@ export const INTERVIEW_PHASE_ORDER: readonly InterviewPhase[] = [
   InterviewPhase.Features,
   InterviewPhase.Scale,
   InterviewPhase.Technical,
+  InterviewPhase.Commercial,
 ] as const;
 
 /** Requirement completeness required before the interview can be confirmed. */
@@ -63,6 +70,68 @@ export interface InterviewQuestion {
 export interface InterviewExchange {
   question: InterviewQuestion;
   answer: string;
+}
+
+// ── Slot-filling model (R6) ──────────────────────────────────────────────────
+//
+// The interview is a **slot-filling scoping session**, not a blind question
+// generator: a fixed catalog of the facts a dev shop needs to scope a client
+// project, each of which the interviewer tries to fill from the conversation.
+//
+// The slot snapshot is a **derived cache** — the transcript (`history[]`) stays
+// the single source of truth, and slots are always re-derivable from it. The
+// catalog itself (descriptions + client-question templates) lives server-side in
+// the interview module; only the value shapes and the key list are shared,
+// because the web renders the filled slots at the confirmation gate.
+
+/** The scoping facts the interview tries to fill. Stable order (rendering + prompts). */
+export const SLOT_KEYS = [
+  'business_domain',
+  'target_users_roles',
+  'core_workflows',
+  'data_entities',
+  'integrations',
+  'scale_expectations',
+  'constraints',
+  'budget_range',
+  'timeline',
+  'existing_assets',
+] as const;
+
+export type SlotKey = (typeof SLOT_KEYS)[number];
+
+/** How sure we are of a slot value: stated outright vs read between the lines. */
+export type SlotConfidence = 'high' | 'low';
+
+/** Where a slot value came from — an explicit answer, or the model's inference. */
+export type SlotSource = 'explicit' | 'inferred';
+
+/**
+ * A filled slot. `{ value, confidence, source }` is the persisted shape; the
+ * optional `na*` fields mark a slot the model judged irrelevant for this domain
+ * (so it neither nags for it nor treats it as an open question).
+ */
+export interface SlotValue {
+  value: string;
+  confidence: SlotConfidence;
+  source: SlotSource;
+  /** True when the model judged this slot not applicable to this project. */
+  na?: boolean;
+  /** Why it's not applicable (only meaningful with `na`). */
+  naReason?: string;
+}
+
+/** The filled-slot snapshot. Absent keys are simply unfilled. */
+export type SlotMap = Partial<Record<SlotKey, SlotValue>>;
+
+/**
+ * A gap the owner couldn't answer — recorded (never re-asked) so it can be
+ * forwarded to the end client. `questionForClient` is a ready-to-send question.
+ */
+export interface OpenQuestion {
+  /** The slot this question would fill (a `SlotKey`, kept as a string for JSON). */
+  slotKey: string;
+  questionForClient: string;
 }
 
 /** The Product Analyst's structured read of a raw idea (Intent Analysis stage). */
@@ -124,4 +193,12 @@ export interface InterviewState {
   currentQuestion: InterviewQuestion | null;
   /** Present once the gate is reached. */
   summary: RequirementsSummary | null;
+  /**
+   * The derived slot snapshot (R6). Always present (possibly empty — a pure
+   * plan-mode/offline run fills no slots). The confirmation gate renders these,
+   * marking inferred values so the owner can correct them.
+   */
+  slots: SlotMap;
+  /** Gaps to forward to the end client (empty when there are none). */
+  openQuestions: OpenQuestion[];
 }

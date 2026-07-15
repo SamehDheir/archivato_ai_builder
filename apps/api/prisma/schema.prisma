@@ -252,6 +252,10 @@ model InterviewSession {
   pendingQuestion Json? // the question awaiting an answer (adaptive interview)
   coverage        Float    @default(0)
   summary         Json?
+  /// Derived slot snapshot (R6) — a cache over `history`, never authoritative.
+  slots           Json? // SlotMap
+  /// Gaps to forward to the end client (OpenQuestion[]).
+  openQuestions   Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

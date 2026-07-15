@@ -31,6 +31,8 @@ function seed(
     pendingQuestion: null,
     coverage: 0,
     summary: null,
+    slots: null,
+    openQuestions: null,
     createdAt: now,
     updatedAt: now,
   });

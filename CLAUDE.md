@@ -717,13 +717,56 @@ tsconfig and never needs shared's `dist`.
   version with JSON mode). Native `fetch`, no SDK. Targets chat deployments
   (gpt-4o/4.1/35-turbo) — the o-series reasoning models reject `temperature` and
   want `max_completion_tokens`.
-- **Interview shape.** Kept **short: ≤ 9 questions** (`MAX_ADAPTIVE_QUESTIONS`,
-  and `QUESTION_PLAN` is 9 long so the 90% gate closes by Q9). Questions may carry
-  `options` + `multiple` on `InterviewQuestion` — the web renders tap-to-pick
-  chips/checkboxes; the answer stays a **string** the client composes (picks +
-  free-text detail), so the `answer` DTO/state machine are unchanged. The
-  adaptive interviewer may also return `options`/`multiple` (mapped in
-  `tryAdaptive`); plan questions ship curated options for scale/tech/features.
+- **Interview shape.** Kept **short: ≤ 9 questions** (`MAX_ADAPTIVE_QUESTIONS`).
+  Questions may carry `options` + `multiple` on `InterviewQuestion` — the web
+  renders tap-to-pick chips/checkboxes; the answer stays a **string** the client
+  composes (picks + free-text detail), so the `answer` DTO/state machine are
+  unchanged. The adaptive interviewer may also return `options`/`multiple` (mapped
+  in `tryAdaptive`); plan questions ship curated options for scale/tech/features.
+- **Slot-filling scoping interview (R6).** The interview is a **slot-filling
+  session**, not a blind question generator: a fixed catalog of the facts a dev
+  shop needs to scope a client bid (`SLOT_KEYS` in `@archivato/shared`;
+  `SLOT_CATALOG` — descriptions + `askClientTemplate` — server-side in
+  `interview/slots.ts`). Each adaptive turn (1) **extracts** slot values from the
+  latest answer (`source: explicit|inferred`, `confidence`), (2) records a gap the
+  owner couldn't answer as an **`openQuestion`** to forward to the client (instead
+  of re-asking), (3) asks the single most important **missing** slot, in the
+  project's own vocabulary. `budget_range` + `timeline` are new to scope and must
+  be filled-or-open-questioned before `done`. Non-negotiables:
+  - **The transcript (`history[]`) stays the source of truth.** `slots` /
+    `openQuestions` on the session are a **derived cache**, always re-derivable
+    from history — never authoritative over it. Both are nullable Json
+    (**migration-free** convention; `20260715140000_add_interview_slots`).
+  - **Merge is guardrailed** (`mergeSlots`, pure/tested): a later **explicit**
+    value beats an earlier **inferred** one, *never* the reverse; a turn that fills
+    one slot never drops the others. `reconcileOpenQuestions` drops a question only
+    once its slot is answered **explicitly** (an inference is a guess that still
+    needs client confirmation). LLM slot JSON is untrusted → `sanitizeSlots` /
+    `sanitizeOpenQuestions` allowlist via `isSlotKey` (also closes the
+    computed-key prototype-pollution path).
+  - **All existing guardrails are untouched** — `MAX 9` cap, `MIN 3` floor,
+    coverage clamp, positional plan fallback, phase validation. **Plan (offline/
+    mock) mode fills no slots**, and downstream tolerates empty `slots`/
+    `openQuestions` everywhere. Two known offline gaps, both accepted: the cap
+    short-circuit skips extraction on the *final* answer, and the appended
+    `budget`/`timeline` plan questions (`InterviewPhase.Commercial`) sit past the
+    9-cap so a pure-plan run never reaches them.
+  - **Notes-first mode** (`start` `notes?`, `NOTES_ENTRY_ID`): pasted call notes
+    become `history[0]` (labelled to the prompt as call notes), then the **same**
+    `advance()` loop runs — no parallel path. The first adaptive turn extracts many
+    slots at once; in plan mode the notes are just answer #0 and the plan continues
+    from position 1.
+  - **Confirmation gate** exposes `slots` + `openQuestions` on `InterviewState`.
+    The web `SlotReview` renders filled slots (inferred ones flagged
+    "understood from your answers — correct?") + a **"Questions for your client"**
+    copy-to-clipboard list. Editing a slot (`PATCH /interview/:id/slots`, owner-
+    guarded, `editSlot`) **appends a correction to the transcript** and marks the
+    slot `explicit`/`high` — the snapshot follows the transcript, never the reverse;
+    refused once `confirmed`.
+  - **Downstream (R6 scope = plumb only):** `openQuestions` rides onto
+    `RequirementDocument.openQuestions` (`requirements.service` → agent, attached on
+    both LLM + deterministic paths) and renders as an "Open questions for the
+    client" section. Deeper requirements-agent use is R7.
 - **Gating:** each stage refuses to generate until its upstream artifacts exist
   (interview must be `confirmed`); returns 409/404 accordingly.
 - **Ownership:** pipeline routes are `@UseGuards(JwtAuthGuard, SessionOwnerGuard)`.
@@ -1464,3 +1507,4 @@ browser suite is ever reintroduced: never call an unbounded `textContent()` /
 - **Ask before making architectural decisions.**
 - After each slice, run `/security-review` + `/code-review` and fix findings.
 - Keep `README.md` + this file updated per slice.
+- Do not add any extra comments, only edit the important comments.

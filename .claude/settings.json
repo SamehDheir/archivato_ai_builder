@@ -161,7 +161,24 @@
       "Bash(grep -n \"\\\\`export\\\\`, \\\\`share\\\\`, \\\\`chat\\\\`, \\\\`jobs\\\\`\\\\|export.\\\\`, .\\\\`share\" CLAUDE.md)",
       "Bash(curl -s -o /dev/null -w \"health=%{http_code} projects=%{http_code}\\\\n\" http://localhost:3001/health -o /dev/null)",
       "Bash(curl -s -o /dev/null -w \"projects\\(auth-gated\\)=%{http_code}\\\\n\" http://localhost:3001/api/projects)",
-      "Bash(node -e \"const s=require\\('./packages/shared/dist/index.js'\\); console.log\\('shouldWatermarkShare\\(free\\)=', s.shouldWatermarkShare\\('free'\\), '| \\(pro\\)=', s.shouldWatermarkShare\\('pro'\\)\\); const p=s.projectProgress\\('confirmed',{requirements:true,systemDesign:true,databaseDesign:true,apiDesign:false,review:false}\\); console.log\\('progress free-tier:', p.completed+'/'+p.total, 'next='+p.nextStep\\);\")"
+      "Bash(node -e \"const s=require\\('./packages/shared/dist/index.js'\\); console.log\\('shouldWatermarkShare\\(free\\)=', s.shouldWatermarkShare\\('free'\\), '| \\(pro\\)=', s.shouldWatermarkShare\\('pro'\\)\\); const p=s.projectProgress\\('confirmed',{requirements:true,systemDesign:true,databaseDesign:true,apiDesign:false,review:false}\\); console.log\\('progress free-tier:', p.completed+'/'+p.total, 'next='+p.nextStep\\);\")",
+      "Bash(grep -rhnE \"^\\\\s*//\" apps/api/src apps/web packages/shared/src --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -rhnE \"\\\\S+\\\\s+//\\\\s\" apps/api/src apps/web packages/shared/src --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -rhnE \"/\\\\*\" apps/api/src apps/web packages/shared/src --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -rhnE \"^\\\\s*//\" apps/api/src packages/shared/src --include=\"*.ts\")",
+      "Bash(grep -vE \"//\\\\s*\\(eslint|@ts|TODO|FIXME|https?:\\)\")",
+      "Bash(shuf)",
+      "Bash(grep -rhnE \"^\\\\s*//\\\\s*\\(Imports?|Constructor|Getters?|Setters?|Dependencies|Inject\\(ed\\)?|Return\\(s\\)?|Loop|Variables?|Helper functions?|Types?|Interfaces?|Exports?\\)\\\\s*$\" apps --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -rhnE \"^\\\\s*//\\\\s*\\(Imports?|Constructor|Getters?|Setters?|Dependencies|Inject\\(ed\\)?|Return\\(s\\)?|Loop|Variables?|Helper functions?|Types?|Interfaces?|Exports?\\)\\\\s*$\" apps packages --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -rhnE \"^\\\\s*//\" apps/web/components apps/web/app apps/web/lib --include=\"*.tsx\" --include=\"*.ts\")",
+      "Bash(grep -rnE \"^\\\\s*//\\\\s*\\(const|let|var|return|if\\\\s*\\\\\\(|for\\\\s*\\\\\\(|while\\\\s*\\\\\\(|function |import |export |await |console\\\\.|await \\)\" apps/api/src apps/web/components apps/web/app apps/web/lib packages/shared/src --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -vE \"//\\\\s*\\(if you|if the|if a|if it|return\\(s|ed| the| a| an| to| null| nothing| value| early\\)|const\\(ant\\)?ly|import\\(ant|s|ed\\)?|export\\(s|ed\\)? |for \\(a|the|each|every|now|clarity|example\\)|let\\(s| the| it| us\\)?\\\\b|var\\(y|ies|iable\\)\\)\")",
+      "Bash(grep -rnE \"^\\\\s*/\\\\*\\\\*\" apps/api/src apps/web packages/shared/src --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -rhA1 -E \"^\\\\s*/\\\\*\\\\*\\\\s*$\" apps/api/src packages/shared/src --include=\"*.ts\")",
+      "Bash(grep -rncE \"^\\\\s*//\\\\s*[─-]{2,}|^\\\\s*//.*[─]{3,}|^\\\\s*//\\\\s*-{3,}\" apps/api/src apps/web packages/shared/src --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -rnE \"//.*Slice\\\\s+[0-9]|\\\\*.*Slice\\\\s+[0-9]\" apps/api/src packages/shared/src --include=\"*.ts\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction Stop; \"killed PID $_\" } catch { \"no proc $_\" } }; Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -lt \\(Get-Date\\).AddMinutes\\(-1\\) } | Select-Object Id,StartTime | Format-Table -AutoSize)",
+      "Bash(xargs grep -l \"summary: null\")"
     ],
     "additionalDirectories": [
       "\\tmp"

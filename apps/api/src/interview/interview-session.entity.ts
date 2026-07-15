@@ -3,8 +3,10 @@ import type {
   InterviewQuestion,
   InterviewStatus,
   IntentAnalysis,
+  OpenQuestion,
   RequirementsSummary,
   ProjectIdeaInput,
+  SlotMap,
 } from '@archivato/shared';
 
 /**
@@ -37,6 +39,14 @@ export interface InterviewSession {
   /** Latest requirement-coverage estimate, 0..1 (drives the progress bar). */
   coverage: number;
   summary: RequirementsSummary | null;
+  /**
+   * The derived slot snapshot (R6) — a cache over `history`, never authoritative
+   * over it. Null on legacy rows and pure plan-mode runs; consumers must tolerate
+   * that (an absent snapshot reads as "no slots filled").
+   */
+  slots: SlotMap | null;
+  /** Gaps to forward to the client, accumulated as the interview couldn't fill them. */
+  openQuestions: OpenQuestion[] | null;
   createdAt: Date;
   updatedAt: Date;
 }

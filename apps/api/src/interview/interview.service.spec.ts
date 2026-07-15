@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   HttpException,
   NotFoundException,
@@ -318,6 +319,171 @@ describe('InterviewService', () => {
     expect(s.currentQuestion?.id).toBe('b1');
     // …and coverage did not drop back to the length ratio (2/11 ≈ 0.18).
     expect(s.completeness).toBe(0.5);
+  });
+
+  // ── R6: slot-filling scoping interview ────────────────────────────────────
+
+  /** A mock that scripts interviewer turns (intent analysis just echoes). */
+  function scriptedInterview(
+    turns: Record<string, unknown>[],
+  ): MockLlmProvider {
+    const mock = new MockLlmProvider();
+    let turn = 0;
+    mock.setResponder((messages) => {
+      const text = messages.map((m) => m.content).join('\n');
+      if (!text.includes('NEXT question')) {
+        return JSON.stringify({ provider: 'mock' }); // intent → fallback
+      }
+      const decision = turns[Math.min(turn, turns.length - 1)];
+      turn += 1;
+      return JSON.stringify(decision);
+    });
+    return mock;
+  }
+
+  it('notes-first: seeds the transcript with the notes and continues the plan from position 1', async () => {
+    const svc = makeService(); // echo → plan fallback (no slots in plan mode)
+    const state = await svc.start(
+      IDEA,
+      null,
+      null,
+      'Client wants a booking app. Budget ~$15k, needs it in about 2 months.',
+    );
+
+    // The notes are the first transcript entry, labelled as call notes.
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0].question.id).toBe('call-notes');
+    expect(state.history[0].answer).toContain('booking app');
+    // The linear plan continues from position 1 (a2), not a1.
+    expect(state.currentQuestion?.id).toBe('a2');
+    // Plan mode fills no slots — downstream tolerates that.
+    expect(state.slots).toEqual({});
+    expect(state.openQuestions).toEqual([]);
+  });
+
+  it("records an unknown answer as a client question and does NOT re-ask it", async () => {
+    const svc = makeService(
+      scriptedInterview([
+        {
+          done: false,
+          coverage: 0.3,
+          phase: 'commercial',
+          question: 'What budget does the client have in mind?',
+        },
+        {
+          done: false,
+          coverage: 0.5,
+          phase: 'business_logic',
+          question: 'Which core workflows matter most?',
+          openQuestions: [
+            {
+              slotKey: 'budget_range',
+              questionForClient: 'What budget do you have in mind for this?',
+            },
+          ],
+        },
+      ]),
+    );
+    const { sessionId } = await svc.start(IDEA);
+
+    const asked = await svc.getState(sessionId);
+    expect(asked.currentQuestion?.prompt).toContain('budget');
+
+    // The owner hasn't discussed budget with their client yet.
+    const next = await svc.answer(
+      sessionId,
+      "I don't know — haven't discussed it with the client yet.",
+    );
+
+    // It's recorded to forward to the client…
+    expect(next.openQuestions.map((q) => q.slotKey)).toContain('budget_range');
+    // …and the interview moves on rather than re-asking about budget.
+    expect(next.currentQuestion?.prompt).toContain('workflows');
+    expect(next.currentQuestion?.prompt).not.toContain('budget');
+  });
+
+  it('exposes filled slots + open questions on the confirmation payload', async () => {
+    const svc = makeService(
+      scriptedInterview([
+        {
+          done: false,
+          coverage: 0.3,
+          phase: 'understanding',
+          question: 'Who are the users?',
+          slots: {
+            business_domain: {
+              value: 'clinic booking',
+              confidence: 'high',
+              source: 'explicit',
+            },
+          },
+        },
+        { done: false, coverage: 0.5, phase: 'features', question: 'Workflows?' },
+        { done: false, coverage: 0.7, phase: 'scale', question: 'Scale?' },
+        {
+          done: true,
+          coverage: 0.95,
+          slots: {
+            timeline: { value: '~2 months', confidence: 'low', source: 'inferred' },
+          },
+          openQuestions: [
+            { slotKey: 'budget_range', questionForClient: 'What is the budget?' },
+          ],
+        },
+      ]),
+    );
+    const { sessionId } = await svc.start(IDEA);
+    for (let i = 0; i < 6; i++) {
+      const s = await svc.getState(sessionId);
+      if (s.status !== 'collecting') break;
+      await svc.answer(sessionId, `answer ${i}`);
+    }
+
+    const state = await svc.getState(sessionId);
+    expect(state.status).toBe('awaiting_confirmation');
+    // Slots accumulated across turns (explicit + a final inferred one).
+    expect(state.slots.business_domain?.value).toBe('clinic booking');
+    expect(state.slots.timeline?.source).toBe('inferred');
+    // The unanswered gap is on the confirmation payload for the client.
+    expect(state.openQuestions.map((q) => q.slotKey)).toContain('budget_range');
+  });
+
+  it('editSlot appends a correction to the transcript and marks the slot explicit', async () => {
+    const svc = makeService(); // plan mode — no slots to start
+    const { sessionId } = await svc.start(IDEA);
+    await answerAll(svc, sessionId);
+    const before = await svc.getState(sessionId);
+    expect(before.status).toBe('awaiting_confirmation');
+    const historyLen = before.history.length;
+
+    const after = await svc.editSlot(sessionId, 'budget_range', '  $12k  ');
+
+    // The snapshot reflects the correction as an explicit, high-confidence value.
+    expect(after.slots.budget_range).toEqual({
+      value: '$12k',
+      confidence: 'high',
+      source: 'explicit',
+    });
+    // The transcript — the source of truth — grew by exactly one correction turn.
+    expect(after.history).toHaveLength(historyLen + 1);
+    const correction = after.history[after.history.length - 1];
+    expect(correction.question.id).toBe('correction:budget_range');
+    expect(correction.answer).toBe('$12k');
+  });
+
+  it('editSlot rejects an unknown slot, and a locked (confirmed) session', async () => {
+    const svc = makeService();
+    const { sessionId } = await svc.start(IDEA);
+    await answerAll(svc, sessionId);
+
+    await expect(
+      svc.editSlot(sessionId, 'not_a_slot', 'x'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    await svc.confirm(sessionId);
+    await expect(
+      svc.editSlot(sessionId, 'budget_range', '$5k'),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });
 

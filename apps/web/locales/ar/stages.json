@@ -8,6 +8,7 @@
     "businessRules": "قواعد العمل",
     "constraints": "القيود",
     "assumptions": "الافتراضات",
+    "openQuestions": "أسئلة مفتوحة للعميل",
     "col": {
       "id": "المعرّف",
       "requirement": "المتطلب",

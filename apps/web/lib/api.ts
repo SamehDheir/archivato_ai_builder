@@ -185,8 +185,12 @@ export const interviewApi = {
   /** The signed-in user's projects, most recently updated first. */
   list: () => request<ProjectSummary[]>('/interview'),
 
-  /** Start a scoping. `clientName` is the owner's label — never part of the idea. */
-  start: (input: ProjectIdeaInput & { clientName?: string }) =>
+  /**
+   * Start a scoping. `clientName` is the owner's label (never part of the idea);
+   * `notes` is optional call-notes text for notes-first mode (becomes the first
+   * transcript entry, then the normal interview runs).
+   */
+  start: (input: ProjectIdeaInput & { clientName?: string; notes?: string }) =>
     request<InterviewState>('/interview', {
       method: 'POST',
       body: JSON.stringify(input),
@@ -201,6 +205,13 @@ export const interviewApi = {
   confirm: (sessionId: string) =>
     request<InterviewState>(`/interview/${sessionId}/confirm`, {
       method: 'POST',
+    }),
+
+  /** Correct a slot at the confirmation gate (appends a correction to the transcript). */
+  editSlot: (sessionId: string, slotKey: string, value: string) =>
+    request<InterviewState>(`/interview/${sessionId}/slots`, {
+      method: 'PATCH',
+      body: JSON.stringify({ slotKey, value }),
     }),
 
   get: (sessionId: string) =>

@@ -8,6 +8,7 @@
     "businessRules": "Business rules",
     "constraints": "Constraints",
     "assumptions": "Assumptions",
+    "openQuestions": "Open questions for the client",
     "col": {
       "id": "ID",
       "requirement": "Requirement",

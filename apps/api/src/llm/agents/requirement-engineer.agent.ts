@@ -6,6 +6,7 @@ import {
   type IntentAnalysis,
   type InterviewExchange,
   type NonFunctionalRequirement,
+  type OpenQuestion,
   type RequirementDocument,
   type RequirementsSummary,
   type UserRole,
@@ -19,6 +20,13 @@ export interface RequirementContext {
   intent: IntentAnalysis | null;
   history: InterviewExchange[];
   summary: RequirementsSummary;
+  /**
+   * Gaps the owner couldn't answer during the slot-filling interview (R6),
+   * carried through so the document can render an "Assumptions & Open Questions"
+   * section. Deeper use by the agent is a later task (R7); here it is plumbed
+   * through onto the artifact only.
+   */
+  openQuestions?: OpenQuestion[];
 }
 
 /**
@@ -59,12 +67,21 @@ export class RequirementEngineerAgent extends BaseAgent {
     ctx: RequirementContext,
   ): Promise<RequirementDocument> {
     const generatedAt = new Date().toISOString();
+    // The open questions come straight from the interview's slot pass — not from
+    // the model — so they're attached to the artifact on BOTH paths (LLM output
+    // doesn't carry them, and deeper agent use is R7's job).
+    const openQuestions = ctx.openQuestions ?? [];
     try {
       const raw = await this.thinkJson<Partial<RequirementDocument>>(
         this.buildPrompt(ctx),
       );
       if (this.isValid(raw)) {
-        return { ...(raw as RequirementDocument), sessionId, generatedAt };
+        return {
+          ...(raw as RequirementDocument),
+          sessionId,
+          generatedAt,
+          openQuestions,
+        };
       }
       this.logger.debug('Requirement doc malformed; using deterministic build.');
     } catch (err) {
@@ -162,6 +179,7 @@ export class RequirementEngineerAgent extends BaseAgent {
       businessRules,
       constraints: summary.constraints,
       assumptions: summary.assumptions,
+      openQuestions: ctx.openQuestions ?? [],
     };
   }
 }

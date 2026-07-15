@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Ban,
   Gauge,
+  HelpCircle,
   Lightbulb,
   ListChecks,
   Scale,
@@ -304,6 +305,18 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
         tone="cyan"
         items={doc.assumptions}
       />
+      {/* Gaps the owner couldn't answer during the interview (R6) — questions to
+          take back to the client. Optional: old rows / plan-mode runs won't have
+          any, so the section only appears when there is something to show. */}
+      {(doc.openQuestions?.length ?? 0) > 0 && (
+        <ListSection
+          title={t('requirements.openQuestions')}
+          count={doc.openQuestions!.length}
+          icon={HelpCircle}
+          tone="amber"
+          items={doc.openQuestions!.map((q) => q.questionForClient)}
+        />
+      )}
     </div>
   );
 }

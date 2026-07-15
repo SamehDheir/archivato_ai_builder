@@ -8,9 +8,11 @@ import {
   Check,
   Compass,
   Download,
+  FileText,
   LayoutGrid,
   Link2,
   List,
+  ListChecks,
   MoreVertical,
   Pencil,
   PlayCircle,
@@ -105,6 +107,8 @@ export function ProjectsDashboard({
   setScale,
   clientName,
   setClientName,
+  notes,
+  setNotes,
   onStart,
   onOpen,
   onDelete,
@@ -127,6 +131,8 @@ export function ProjectsDashboard({
   setScale: (value: ProjectScale | '') => void;
   clientName: string;
   setClientName: (value: string) => void;
+  notes: string;
+  setNotes: (value: string) => void;
   onStart: (e: React.FormEvent) => void;
   onOpen: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
@@ -140,6 +146,14 @@ export function ProjectsDashboard({
   const { t } = useTranslation('dashboard');
   const showForm = creating || projects.length === 0;
   const [view, setView] = useState<ProjectsView>(readStoredView);
+  // How the owner seeds the interview: answer step by step, or paste call notes.
+  const [mode, setMode] = useState<'steps' | 'notes'>('steps');
+
+  const chooseMode = (next: 'steps' | 'notes') => {
+    setMode(next);
+    // Leaving notes mode must not smuggle stale notes into a step-by-step start.
+    if (next === 'steps') setNotes('');
+  };
 
   const changeView = (next: ProjectsView) => {
     setView(next);
@@ -204,13 +218,17 @@ export function ProjectsDashboard({
           </CardHeader>
           <CardContent>
             <form className="space-y-3" onSubmit={onStart}>
-              <StarterIdeas
-                onPick={(next) => {
-                  setIdea(next.idea);
-                  setIndustry(next.industry);
-                  setScale(next.scale);
-                }}
-              />
+              <ModeToggle mode={mode} onChange={chooseMode} />
+
+              {mode === 'steps' && (
+                <StarterIdeas
+                  onPick={(next) => {
+                    setIdea(next.idea);
+                    setIndustry(next.industry);
+                    setScale(next.scale);
+                  }}
+                />
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="idea">{t('projects.ideaLabel')}</Label>
                 <Textarea
@@ -222,6 +240,24 @@ export function ProjectsDashboard({
                   required
                 />
               </div>
+
+              {mode === 'notes' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="notes">{t('projects.notesLabel')}</Label>
+                  <Textarea
+                    id="notes"
+                    dir="auto"
+                    rows={8}
+                    maxLength={20000}
+                    placeholder={t('projects.notesPlaceholder')}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t('projects.notesHint')}
+                  </p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="clientName">{t('projects.clientLabel')}</Label>
                 <Input
@@ -407,6 +443,51 @@ function ContinueBanner({
         <ArrowRight className="h-4 w-4 rtl:-scale-x-100" />
       </span>
     </button>
+  );
+}
+
+/**
+ * How the owner seeds the interview: answer step by step, or paste the notes
+ * from their client call. Notes-first isn't a separate flow — the notes become
+ * the first transcript turn and the same interview runs, extracting slots from
+ * them up front.
+ */
+function ModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: 'steps' | 'notes';
+  onChange: (mode: 'steps' | 'notes') => void;
+}) {
+  const { t } = useTranslation('dashboard');
+  const options: {
+    value: 'steps' | 'notes';
+    icon: typeof ListChecks;
+    label: string;
+  }[] = [
+    { value: 'steps', icon: ListChecks, label: t('projects.modeSteps') },
+    { value: 'notes', icon: FileText, label: t('projects.modeNotes') },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {options.map(({ value, icon: Icon, label }) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onChange(value)}
+          aria-pressed={mode === value}
+          className={cn(
+            'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            mode === value
+              ? 'border-primary bg-primary/10 font-medium text-foreground'
+              : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+          )}
+        >
+          <Icon className="h-4 w-4" />
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 

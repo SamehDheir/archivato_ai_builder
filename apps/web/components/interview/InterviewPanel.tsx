@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SummaryView } from "@/components/interview/SummaryView";
+import { SlotReview } from "@/components/interview/SlotReview";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
@@ -23,12 +24,15 @@ export function InterviewPanel({
   error,
   onAnswer,
   onConfirm,
+  onEditSlot,
 }: {
   state: InterviewState;
   busy: boolean;
   error: string | null;
   onAnswer: (text: string) => void;
   onConfirm: () => void;
+  /** Correct a filled slot at the confirmation gate (appends to the transcript). */
+  onEditSlot: (slotKey: string, value: string) => void;
 }) {
   const { t } = useTranslation("interview");
   const question = state.currentQuestion;
@@ -226,7 +230,15 @@ export function InterviewPanel({
             <Alert variant="info" className="mb-3">
               <AlertDescription>{t("summaryHelp")}</AlertDescription>
             </Alert>
-            <SummaryView summary={state.summary} />
+            <SlotReview
+              slots={state.slots ?? {}}
+              openQuestions={state.openQuestions ?? []}
+              busy={busy}
+              onEditSlot={onEditSlot}
+            />
+            <div className="mt-4">
+              <SummaryView summary={state.summary} />
+            </div>
             <div className="mt-4 flex gap-2">
               <Button variant="success" onClick={onConfirm} disabled={busy}>
                 {busy ? t("confirming") : t("confirm")}

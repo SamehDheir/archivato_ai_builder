@@ -5,7 +5,9 @@ import type {
   InterviewQuestion,
   InterviewStatus,
   IntentAnalysis,
+  OpenQuestion,
   RequirementsSummary,
+  SlotMap,
 } from '@archivato/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { InterviewSession } from './interview-session.entity';
@@ -35,6 +37,8 @@ export class PrismaInterviewSessionRepository
         pendingQuestion: toJson(session.pendingQuestion),
         coverage: session.coverage,
         summary: toJson(session.summary),
+        slots: toJson(session.slots),
+        openQuestions: toJson(session.openQuestions),
       },
     });
     return toEntity(row);
@@ -73,6 +77,8 @@ export class PrismaInterviewSessionRepository
         pendingQuestion: toJson(session.pendingQuestion),
         coverage: session.coverage,
         summary: toJson(session.summary),
+        slots: toJson(session.slots),
+        openQuestions: toJson(session.openQuestions),
       },
     });
     return toEntity(row);
@@ -106,6 +112,8 @@ function toEntity(row: {
   pendingQuestion: Prisma.JsonValue;
   coverage: number;
   summary: Prisma.JsonValue;
+  slots: Prisma.JsonValue;
+  openQuestions: Prisma.JsonValue;
   createdAt: Date;
   updatedAt: Date;
 }): InterviewSession {
@@ -127,6 +135,8 @@ function toEntity(row: {
       (row.pendingQuestion as unknown as InterviewQuestion | null) ?? null,
     coverage: row.coverage ?? 0,
     summary: (row.summary as RequirementsSummary | null) ?? null,
+    slots: (row.slots as SlotMap | null) ?? null,
+    openQuestions: (row.openQuestions as unknown as OpenQuestion[] | null) ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

@@ -3,6 +3,8 @@
  * stage, produced from a confirmed interview. Structured JSON (spec Step 3).
  */
 
+import type { OpenQuestion } from './interview';
+
 export type RequirementPriority = 'must' | 'should' | 'could';
 
 export interface FunctionalRequirement {
@@ -43,4 +45,11 @@ export interface RequirementDocument {
   businessRules: BusinessRule[];
   constraints: string[];
   assumptions: string[];
+  /**
+   * Gaps the owner couldn't answer during the interview, carried through from the
+   * slot-filling pass (R6) so the document can surface an "Assumptions & Open
+   * Questions" section. Optional — old rows and plan-mode runs won't have it, so
+   * every consumer must tolerate its absence.
+   */
+  openQuestions?: OpenQuestion[];
 }

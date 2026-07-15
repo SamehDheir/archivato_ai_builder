@@ -48,6 +48,8 @@ export class RequirementsService {
       intent: session.intent,
       history: session.history,
       summary: session.summary,
+      // Carry the interview's open questions onto the requirements artifact.
+      openQuestions: session.openQuestions ?? [],
     });
 
     return this.docs.upsert(doc);

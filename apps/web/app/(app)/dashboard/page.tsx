@@ -111,6 +111,8 @@ export default function Home() {
   const [industry, setIndustry] = useState('');
   const [scale, setScale] = useState<ProjectScale | ''>('');
   const [clientName, setClientName] = useState('');
+  // Notes-first mode: pasted call notes seed the interview as its first turn.
+  const [notes, setNotes] = useState('');
 
   // Generated artifacts.
   const [doc, setDoc] = useState<RequirementDocument | null>(null);
@@ -428,6 +430,7 @@ export default function Home() {
         industry: industry || undefined,
         scale: scale || undefined,
         clientName: clientName.trim() || undefined,
+        notes: notes.trim() || undefined,
       });
       setState(next);
       setCreating(false);
@@ -450,6 +453,15 @@ export default function Home() {
   async function handleAnswer(text: string) {
     if (!state) return;
     const next = await run(() => interviewApi.answer(state.sessionId, text));
+    if (next) setState(next);
+  }
+
+  /** Correct a slot at the confirmation gate (appends a correction to the transcript). */
+  async function handleEditSlot(slotKey: string, value: string) {
+    if (!state) return;
+    const next = await run(() =>
+      interviewApi.editSlot(state.sessionId, slotKey, value),
+    );
     if (next) setState(next);
   }
 
@@ -539,6 +551,7 @@ export default function Home() {
     setIndustry('');
     setScale('');
     setClientName('');
+    setNotes('');
     setError(null);
   }
 
@@ -863,6 +876,8 @@ export default function Home() {
                 setScale={setScale}
                 clientName={clientName}
                 setClientName={setClientName}
+                notes={notes}
+                setNotes={setNotes}
                 onStart={handleStart}
                 onOpen={openProject}
                 onDelete={handleDeleteProject}
@@ -914,6 +929,7 @@ export default function Home() {
                 error={error}
                 onAnswer={handleAnswer}
                 onConfirm={handleConfirm}
+                onEditSlot={handleEditSlot}
               />
             </>
           )}
