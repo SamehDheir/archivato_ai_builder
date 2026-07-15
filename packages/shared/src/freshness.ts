@@ -46,10 +46,13 @@ export type UpstreamKey =
   | 'apiDesign';
 
 /**
- * What each derived stage actually reads — mirrors the `generate()` of each
- * service, and the difference matters: the **cost estimate never reads the
- * requirements** (it derives a workload from the designs), so editing a
- * requirement must not nag the user to re-run it.
+ * What each derived stage's freshness tracks — mirrors the design inputs each
+ * `generate()` derives its OUTPUT from, and the difference matters: the **cost
+ * estimate's figures derive only from the designs**, so a requirement edit must
+ * not nag the user to re-run it. (R9's cost service does read the requirement
+ * doc, but only for the budget warning's out-of-scope *hint* — a boolean not
+ * worth flagging a whole deterministic estimate stale over — so `requirements`
+ * is intentionally omitted here.)
  */
 export const DERIVED_STAGE_SOURCES: Readonly<Record<DerivedStage, readonly UpstreamKey[]>> =
   {

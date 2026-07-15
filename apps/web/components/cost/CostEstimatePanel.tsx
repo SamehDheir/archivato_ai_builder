@@ -21,12 +21,18 @@ export function CostEstimatePanel({
   sessionId,
   reloadKey,
   revisions,
+  weeklyRate,
+  onSaveWeeklyRate,
 }: {
   sessionId: string;
   /** Bump to refetch (e.g. after a restore). */
   reloadKey: number;
   /** Current design revisions — an estimate priced off an older one is stale. */
   revisions: UpstreamRevisions;
+  /** The owner's internal weekly rate (owner-only pricing). */
+  weeklyRate?: number | null;
+  /** Persist a new weekly rate — enables the owner-only suggested price. */
+  onSaveWeeklyRate?: (rate: number | null) => Promise<void>;
 }) {
   const toast = useToast();
   const { t } = useTranslation('stages');
@@ -96,7 +102,11 @@ export function CostEstimatePanel({
         busy={busy}
         onRegenerate={generate}
       />
-      <CostView estimate={estimate} />
+      <CostView
+        estimate={estimate}
+        weeklyRate={weeklyRate}
+        onSaveWeeklyRate={onSaveWeeklyRate}
+      />
       <Button variant="secondary" onClick={generate} disabled={busy}>
         {busy ? t('cost.working') : t('cost.regenerate')}
       </Button>

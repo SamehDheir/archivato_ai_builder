@@ -181,7 +181,8 @@
       "Bash(xargs grep -l \"summary: null\")",
       "Bash(echo \"---exit $?---\")",
       "Bash(echo \"web-tsc-done exit=$?\")",
-      "Bash(echo \"web-tsc exit=$?\")"
+      "Bash(echo \"web-tsc exit=$?\")",
+      "Bash(grep -n \"Cost Estimator \\(\\\\`cost-estimate\\\\`\\)\" CLAUDE.md)"
     ],
     "additionalDirectories": [
       "\\tmp"

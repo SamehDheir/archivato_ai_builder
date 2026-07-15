@@ -156,6 +156,37 @@
     "cheapest": "cheapest",
     "perMonth": "/mo",
     "usersLabel": "{{n}} users",
+    "infra": {
+      "title": "Infrastructure estimate"
+    },
+    "effort": {
+      "title": "Build effort",
+      "range": "{{min}}–{{max}} person-weeks",
+      "weeks": "{{min}}–{{max}} wks",
+      "note": "A planning estimate derived from module complexity and build-vs-buy — not a quote."
+    },
+    "price": {
+      "internal": "Internal — not shown to your client",
+      "rateLabel": "Your weekly rate (USD)",
+      "ratePlaceholder": "e.g. 2000",
+      "save": "Save rate",
+      "saving": "Saving…"
+    },
+    "budget": {
+      "over": "The estimated build cost (~{{estimatedLowUsd}}) is about {{overPct}}% over the stated budget ({{budgetMaxUsd}}).",
+      "severity": {
+        "warning": "Budget risk",
+        "critical": "Budget conflict"
+      },
+      "mvpHint": "Consider proposing the phased MVP to fit the first release into budget.",
+      "outOfScopeHint": "Review the out-of-scope list — trimming scope can close the gap."
+    },
+    "services": {
+      "title": "Service subscriptions",
+      "subtitle": "Third-party services this design buys instead of building — billed separately from hosting.",
+      "usageBased": "usage-based",
+      "unknown": "unknown"
+    },
     "col": {
       "provider": "Provider"
     },

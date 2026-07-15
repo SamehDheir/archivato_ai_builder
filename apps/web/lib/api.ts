@@ -223,7 +223,7 @@ export const interviewApi = {
    */
   update: (
     sessionId: string,
-    patch: { title?: string; clientName?: string },
+    patch: { title?: string; clientName?: string; weeklyRate?: number | null },
   ) =>
     request<ProjectSummary>(`/interview/${sessionId}`, {
       method: 'PATCH',

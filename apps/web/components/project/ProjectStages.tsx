@@ -163,6 +163,8 @@ export function ProjectStages({
   onRefined,
   onRestored,
   onUpgraded,
+  weeklyRate,
+  onSaveWeeklyRate,
 }: {
   sessionId: string;
   summary: RequirementsSummary | null;
@@ -196,6 +198,10 @@ export function ProjectStages({
   onRestored: (snapshot: ProjectSnapshot) => void;
   /** Called after a successful in-place upgrade so the parent can refresh the plan. */
   onUpgraded?: () => void;
+  /** The owner's internal weekly rate for the cost page's suggested price. */
+  weeklyRate?: number | null;
+  /** Persist a new weekly rate (owner-only). */
+  onSaveWeeklyRate?: (rate: number | null) => Promise<void>;
 }) {
   // `tab` is controlled by the parent (so the Project Wizard can navigate to a
   // stage); `setTab` is just an alias to the parent's setter.
@@ -603,6 +609,8 @@ export function ProjectStages({
               sessionId={sessionId}
               reloadKey={versionsReload}
               revisions={revisions}
+              weeklyRate={weeklyRate}
+              onSaveWeeklyRate={onSaveWeeklyRate}
             />
           </TabsContent>
 

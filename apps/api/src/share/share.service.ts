@@ -220,7 +220,9 @@ export class ShareService {
       vision: design.vision ? { ...design.vision, sessionId: token } : null,
       requirements: { ...design.requirements, sessionId: token },
       costEstimate: design.costEstimate
-        ? { ...design.costEstimate, sessionId: token }
+        ? // `budgetWarning` is OWNER-ONLY (a deal risk, not for the client's
+          // eyes): strip it server-side so it can never reach the public page.
+          { ...design.costEstimate, sessionId: token, budgetWarning: null }
         : null,
       roadmap: design.roadmap ? { ...design.roadmap, sessionId: token } : null,
       systemDesign: { ...design.systemDesign, sessionId: token },

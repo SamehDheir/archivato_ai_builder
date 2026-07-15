@@ -1,4 +1,8 @@
-import { estimateCosts } from '@archivato/shared';
+import {
+  buildEffortEstimate,
+  buildServiceCostLines,
+  estimateCosts,
+} from '@archivato/shared';
 import type {
   ApiDesign,
   CostEstimate,
@@ -1165,4 +1169,10 @@ export const EXAMPLE_COST_ESTIMATE: CostEstimate = {
     databaseType: EXAMPLE_DATABASE_DESIGN.databaseType,
     architecture: EXAMPLE_SYSTEM_DESIGN.architecture,
   }),
+  // R9: effort + service subscriptions are derived from the same design via the
+  // pure builders, so the example can never drift from the numbers it shows. The
+  // budget warning is owner-only, so the read-only tour omits it.
+  effort: buildEffortEstimate(EXAMPLE_SYSTEM_DESIGN),
+  serviceSubscriptions: buildServiceCostLines(EXAMPLE_SYSTEM_DESIGN),
+  budgetWarning: null,
 };

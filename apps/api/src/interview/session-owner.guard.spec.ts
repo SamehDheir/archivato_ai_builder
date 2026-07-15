@@ -25,6 +25,7 @@ function seed(
     input: { idea: 'idea' },
     title: null,
     clientName: null,
+    weeklyRate: null,
     status: 'collecting',
     intent: null,
     history: [],

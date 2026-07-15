@@ -175,6 +175,12 @@ export interface ProjectSummary {
   status: InterviewStatus;
   /** 0..1 requirement completeness (drives a small progress indicator). */
   completeness: number;
+  /**
+   * The owner's internal weekly rate (USD/person-week) for pricing this project
+   * (R9). **Owner-only** — used to compute a suggested price on the authenticated
+   * cost page; it is NEVER part of the public share payload.
+   */
+  weeklyRate?: number | null;
   /** ISO timestamp of the last change, for "most recently worked on" ordering. */
   updatedAt: string;
 }

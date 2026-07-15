@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 /**
  * Partial update of a project's owner-facing labels (`PATCH /interview/:id`).
@@ -23,4 +23,14 @@ export class UpdateProjectDto {
   @IsString()
   @MaxLength(120, { message: 'Keep the client name under 120 characters.' })
   clientName?: string;
+
+  /**
+   * The owner's internal weekly rate for pricing (USD/person-week). Owner-only —
+   * `null` clears it, a number sets it, omitted leaves it. Never shown to clients.
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1_000_000)
+  weeklyRate?: number | null;
 }

@@ -974,6 +974,14 @@ export default function Home() {
               onRefined={handleRefined}
               onRestored={handleRestored}
               onUpgraded={refreshProjects}
+              weeklyRate={
+                projects.find((p) => p.sessionId === state.sessionId)?.weeklyRate ??
+                null
+              }
+              onSaveWeeklyRate={async (rate) => {
+                await interviewApi.update(state.sessionId, { weeklyRate: rate });
+                await refreshProjects();
+              }}
             />
           )}
         </div>

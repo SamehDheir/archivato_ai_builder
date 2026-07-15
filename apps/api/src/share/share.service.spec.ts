@@ -278,6 +278,13 @@ describe('ShareService', () => {
       cheapestByScale: {},
       recommended: 'render',
       disclaimer: 'Ballpark.',
+      // OWNER-ONLY: a budget warning must never reach the public payload.
+      budgetWarning: {
+        severity: 'critical',
+        messageKey: 'cost.budget.over',
+        values: { estimatedLowUsd: 14400, budgetMaxUsd: 5000, overPct: 188 },
+        links: { mvpPhase: false, outOfScope: false },
+      },
     });
 
     const shared = await h.share.view((await h.share.create(sessionId)).token);
@@ -286,6 +293,9 @@ describe('ShareService', () => {
     expect(shared.vision?.vision).toBe('A booking system for clinics.');
     expect(shared.roadmap?.totalEstimate).toBe('~10 wks');
     expect(shared.costEstimate?.recommended).toBe('render');
+    // The owner-only budget warning is stripped server-side.
+    expect(shared.costEstimate?.budgetWarning).toBeNull();
+    expect(JSON.stringify(shared)).not.toContain('188');
 
     // The internal session id must not ride out on any of them.
     expect(shared.vision?.sessionId).toBe(token);

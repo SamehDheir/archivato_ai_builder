@@ -84,6 +84,9 @@ export class ProjectsService {
           clientName: session.clientName ?? undefined,
           status: session.status,
           completeness: Math.round(session.coverage * 100) / 100,
+          // Owner-only: this list is owner-scoped, and the cost page reads it to
+          // compute a suggested price. It never crosses onto a public page.
+          weeklyRate: session.weeklyRate ?? null,
           updatedAt: session.updatedAt.toISOString(),
           artifacts,
           // Only *whether* a link exists. The token is a bearer credential — the

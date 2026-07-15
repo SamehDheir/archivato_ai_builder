@@ -199,10 +199,13 @@ tsconfig and never needs shared's `dist`.
   3. **An unstamped artifact is never stale.** Pre-existing rows carry no stamp
      and we cannot know their source; nagging every old project to re-run a
      **billed, Pro, LLM** stage on a guess would be worse than the bug.
-  4. **`DERIVED_STAGE_SOURCES` mirrors each service's real `generate()` inputs** —
-     the **cost estimate never reads the requirements** (it derives a workload from
-     the designs), so editing a requirement must not flag it. Change a service's
-     inputs ⇒ change its entry.
+  4. **`DERIVED_STAGE_SOURCES` mirrors the design inputs each service derives its
+     *output* from** — the **cost estimate's figures come only from the designs**,
+     so editing a requirement must not flag it. Change a service's design inputs ⇒
+     change its entry. (Subtlety: R9's cost service *does* read the requirement doc,
+     but only for the budget warning's out-of-scope **hint** — a boolean not worth
+     flagging a whole deterministic estimate stale over — so `requirements` stays
+     out of the cost stamp on purpose.)
 
   The banner lives on the tab that renders the artifact (Radix **unmounts inactive
   `TabsContent`**, so a stale *dot on the tab bar* would need the four panels'
@@ -220,6 +223,51 @@ tsconfig and never needs shared's `dist`.
   best-value recommendation. Stable across runs (unit-testable, offline). The
   service only reads system/database/API designs; the estimate is a labeled
   planning figure, not a quote.
+- **Project economics — effort + budget + service subscriptions (R9).** The cost
+  stage grew from "monthly hosting bill" into full project economics, still
+  **100% deterministic (zero LLM calls)** — all new math is pure functions in
+  `@archivato/shared` (`effort.ts`), reproducible and unit-tested. Additive: the
+  existing `estimateCosts()` infra output is untouched for downstream/export
+  compatibility. Three additive, optional fields on `CostEstimate`:
+  1. **`effort: EffortEstimate`** (client-facing) — `buildEffortEstimate(design)`
+     turns R8 module **complexity** (S/M/L/XL → person-week ranges via the tunable
+     `EFFORT_MODEL` constant) + **build-vs-buy** into a person-week range. A "buy"
+     capability collapses its matching module to integration-only work
+     (`buyIntegrationFactor` 0.25×; a flat 0.5–1 wk line when it maps to no module);
+     "build" keeps full weight. Fixed items layer on the build subtotal (project
+     setup 1 wk flat, QA 20%, DevOps 1 wk flat, buffer 15%). **Everything rounds to
+     0.5 wk.** A module with no complexity defaults to M.
+  2. **`serviceSubscriptions: ServiceCostLine[]`** (client-facing) — one monthly SaaS
+     line per build-vs-buy "buy" from the static `SERVICE_COST_HINTS` table; unknown
+     price ⇒ `null` + `usage-based`/`unknown`, **never a misleading $0** (the LLM-
+     metering convention). When a target market is known, the payments line carries a
+     regional PSP fee note from `REGIONAL_SERVICES` (`resolveRegion`) — **dormant for
+     now**, since no `target_market` slot exists yet (it degrades to no note, tested
+     via the pure builder).
+  3. **`budgetWarning: BudgetWarning | null`** — **OWNER-ONLY.** `buildBudgetCheck`
+     warns only when `budget_range` parses (`parseBudget` is tolerant: "$5k",
+     "5000-8000", Arabic numerals; **null, never a guess, on junk**) AND `effortMax ×
+     REFERENCE_RATES.lowUsd` exceeds the budget top by **>25%**; `links` point at the
+     R8 phased MVP + R7 out-of-scope when they exist. **The share `view()` strips it
+     to `null` server-side** (same enforcement as any owner-only field — the payload
+     IS the security boundary; a security test asserts it never reaches the public
+     page).
+  - **Owner pricing input.** An optional nullable **`weeklyRate`** on the session
+    (Prisma `Float?` + migration `20260715160000_add_weekly_rate`; entity + both
+    repos + `UpdateProjectDto` + `ProjectSummary`, owner-scoped). Set via `PATCH
+    /interview/:id`; the authenticated cost page computes a **suggested price** range
+    (`computeSuggestedPrice` = effort × rate) labeled *"internal — not shown to your
+    client"*. **The share page never receives `weeklyRate` or the price** (it's on the
+    session, never projected; the price is computed only where the rate exists). The
+    owner's JSON download namespaces them under `internal: {...}`.
+  - **Rendering.** `CostView` gains owner-only props (`weeklyRate` + `onSaveWeeklyRate`,
+    threaded dashboard→ProjectStages→CostEstimatePanel); owner order = effort →
+    suggested price → budget warning → infra → service subscriptions. The **share
+    page passes neither prop** and its payload carries no `budgetWarning`, so it shows
+    only effort + infra + service subscriptions. i18n `stages.cost.{effort,price,
+    budget,services,infra}.*` (EN+AR, Arabic numerals via `useFormat`). The example
+    fixture derives `effort`/`serviceSubscriptions` from the same builders so it can't
+    drift.
 - **Threat model (`threat-model`).** A standalone **Pro** stage: a **STRIDE**
   security analysis of the generated design (Spoofing/Tampering/Repudiation/Info
   Disclosure/DoS/Elevation of Privilege), each threat with a component, severity,

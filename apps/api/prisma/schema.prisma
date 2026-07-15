@@ -243,6 +243,9 @@ model InterviewSession {
   /// owner's dashboard only: it is NOT part of the idea, so it never reaches an
   /// agent prompt and never crosses onto the public share page.
   clientName      String?
+  /// Owner-only internal weekly rate (USD/person-week) for pricing (R9). Never
+  /// shown to clients / never crosses onto the public share page.
+  weeklyRate      Float?
   industry        String?
   scale           String?
   preferredStack  String?

@@ -54,7 +54,7 @@ chain of structured artifacts — each one grounded in the previous:
 | **API Design** | REST endpoints per module with schemas + interactive API docs and a working mock server |
 | **AI Architect Review** | Scored review across security / scalability / performance / cost with findings |
 | **Roadmap** | Phased implementation plan |
-| **Cloud Cost Estimator** | Deterministic monthly bill across 8 providers at 100 / 1k / 10k users |
+| **Project Economics** | Deterministic monthly hosting bill across 8 providers (100 / 1k / 10k users), plus a person-week **effort estimate**, third-party **service subscriptions**, an owner-only **budget reality check**, and an owner-only suggested price from your weekly rate |
 | **Threat Model** | STRIDE security analysis with severities + mitigations |
 | **QA Plan** | Test strategy + concrete test cases by type |
 | **Diagrams & Canvas** | Architecture, ER, per-endpoint sequence flows; editable canvas |

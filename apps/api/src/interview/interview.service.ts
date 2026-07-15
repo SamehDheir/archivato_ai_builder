@@ -114,6 +114,7 @@ export class InterviewService {
       input,
       title: null,
       clientName: blankToNull(clientName),
+      weeklyRate: null,
       status: 'collecting',
       intent: await this.analyzeIntent(input),
       history: [],
@@ -194,12 +195,16 @@ export class InterviewService {
    */
   async update(
     sessionId: string,
-    patch: { title?: string; clientName?: string },
+    patch: { title?: string; clientName?: string; weeklyRate?: number | null },
   ): Promise<ProjectSummary> {
     const session = await this.require(sessionId);
     if (patch.title !== undefined) session.title = blankToNull(patch.title);
     if (patch.clientName !== undefined) {
       session.clientName = blankToNull(patch.clientName);
+    }
+    // undefined = untouched; null = clear; a number sets the rate.
+    if (patch.weeklyRate !== undefined) {
+      session.weeklyRate = patch.weeklyRate ?? null;
     }
     await this.repo.save(session);
     return this.toSummary(session);
@@ -285,6 +290,7 @@ export class InterviewService {
       clientName: s.clientName ?? undefined,
       status: s.status,
       completeness: round2(s.coverage),
+      weeklyRate: s.weeklyRate ?? null,
       updatedAt: s.updatedAt.toISOString(),
     };
   }

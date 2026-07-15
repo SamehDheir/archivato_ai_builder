@@ -27,6 +27,11 @@ export interface InterviewSession {
    * a prompt or onto the public share page.
    */
   clientName: string | null;
+  /**
+   * The owner's internal weekly rate (USD/person-week) for pricing this project
+   * (R9). Owner-only — never crosses onto the public share page.
+   */
+  weeklyRate: number | null;
   status: InterviewStatus;
   intent: IntentAnalysis | null;
   /** Answered questions, in the order they were asked. */
