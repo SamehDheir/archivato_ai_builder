@@ -2,9 +2,13 @@
   "requirements": {
     "title": "Requirement Document",
     "meta": "{{functional}} functional · {{nonFunctional}} non-functional · {{roles}} roles · generated {{date}}",
+    "executiveSummary": "Executive summary",
     "functional": "Functional requirements",
     "nonFunctional": "Non-functional requirements",
     "roles": "User roles",
+    "outOfScope": "Out of scope",
+    "assumptionsAndOpenQuestions": "Assumptions & open questions",
+    "impactIfWrong": "If this is wrong:",
     "businessRules": "Business rules",
     "constraints": "Constraints",
     "assumptions": "Assumptions",

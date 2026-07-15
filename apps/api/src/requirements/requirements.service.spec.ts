@@ -81,6 +81,54 @@ describe('RequirementsService', () => {
     expect(typeof doc.generatedAt).toBe('string');
   });
 
+  it('carries the interview open questions into the document (R6/R7 plumbing)', async () => {
+    const sessionId = await confirmedSession(interview);
+    const session = await sessionRepo.findById(sessionId);
+    session!.openQuestions = [
+      { slotKey: 'integrations', questionForClient: 'Which payment provider?' },
+    ];
+    await sessionRepo.save(session!);
+
+    const doc = await service.generate(sessionId);
+
+    expect(doc.openQuestions).toEqual([
+      { slotKey: 'integrations', questionForClient: 'Which payment provider?' },
+    ]);
+    const folded = (doc.assumptionsAndOpenQuestions ?? [])
+      .map((a) => a.assumption)
+      .join('\n');
+    expect(folded).toContain('Which payment provider?');
+  });
+
+  it('save() preserves the generated narrative sections it does not edit', async () => {
+    const sessionId = await confirmedSession(interview);
+    const session = await sessionRepo.findById(sessionId);
+    session!.openQuestions = [
+      { slotKey: 'integrations', questionForClient: 'Which payment provider?' },
+    ];
+    await sessionRepo.save(session!);
+    const generated = await service.generate(sessionId);
+    expect(generated.executiveSummary).toBeTruthy();
+
+    const saved = await service.save(sessionId, {
+      functional: [
+        { id: 'FR-1', title: 'Edited', description: 'x', priority: 'must' },
+      ],
+      nonFunctional: [],
+      roles: [],
+      businessRules: [],
+      constraints: [],
+      assumptions: [],
+    });
+
+    expect(saved.executiveSummary).toBe(generated.executiveSummary);
+    expect(saved.outOfScope).toEqual(generated.outOfScope);
+    expect(saved.openQuestions).toEqual(generated.openQuestions);
+    expect(saved.assumptionsAndOpenQuestions).toEqual(
+      generated.assumptionsAndOpenQuestions,
+    );
+  });
+
   it('prefers a valid LLM document when the provider conforms', async () => {
     const sessionId = await confirmedSession(interview);
 

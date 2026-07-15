@@ -2,9 +2,13 @@
   "requirements": {
     "title": "مستند المتطلبات",
     "meta": "{{functional}} وظيفي · {{nonFunctional}} غير وظيفي · {{roles}} أدوار · تم التوليد {{date}}",
+    "executiveSummary": "الملخّص التنفيذي",
     "functional": "المتطلبات الوظيفية",
     "nonFunctional": "المتطلبات غير الوظيفية",
     "roles": "أدوار المستخدمين",
+    "outOfScope": "خارج النطاق",
+    "assumptionsAndOpenQuestions": "الافتراضات والأسئلة المفتوحة",
+    "impactIfWrong": "إذا كان هذا غير صحيح:",
     "businessRules": "قواعد العمل",
     "constraints": "القيود",
     "assumptions": "الافتراضات",

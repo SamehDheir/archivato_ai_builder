@@ -47,7 +47,7 @@ chain of structured artifacts — each one grounded in the previous:
 
 | Artifact | Description |
 | --- | --- |
-| **Requirement Document** | Functional/non-functional requirements, roles, business rules, constraints |
+| **Requirement Document** | A client-facing scoping artifact: plain-language executive summary, user-outcome functional requirements, roles, out-of-scope (scope-creep guard), assumptions & open questions — plus the technical non-functional requirements, business rules, and constraints |
 | **Product Vision** | PM-style vision derived from the interview |
 | **System Design** | Architecture pattern, tech stack, service modules — with per-decision "Explain this" rationale |
 | **Database Design** | Entities, columns, keys, relationships + ER diagram (Mermaid, exportable to Draw.io/SVG/PNG/PDF) |

@@ -4,6 +4,7 @@ import {
   type FunctionalRequirement,
   type IntentAnalysis,
   type NonFunctionalRequirement,
+  type OutOfScopeItem,
   type RequirementDocument,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
@@ -74,11 +75,18 @@ export class RefinementAgent extends BaseAgent {
       }>(this.buildPrompt(ctx));
       if (this.isValid(raw?.document)) {
         return {
-          document: {
-            ...(raw!.document as RequirementDocument),
-            sessionId,
-            generatedAt,
-          },
+          document: reconcileNarrative(
+            {
+              // Spread the current doc first so the model's amended arrays win but
+              // any section it omitted (the R7 narrative fields — executive
+              // summary, out-of-scope, assumptions & open questions) is preserved.
+              ...ctx.current,
+              ...(raw!.document as RequirementDocument),
+              sessionId,
+              generatedAt,
+            },
+            ctx.current,
+          ),
           summary:
             raw!.summary?.trim() ||
             `Applied your change: “${ctx.instruction}”.`,
@@ -152,19 +160,85 @@ export class RefinementAgent extends BaseAgent {
       );
     }
 
-    const document: RequirementDocument = {
-      ...current,
-      sessionId,
-      generatedAt,
-      functional,
-      nonFunctional,
-    };
+    const document = reconcileNarrative(
+      {
+        ...current,
+        sessionId,
+        generatedAt,
+        functional,
+        nonFunctional,
+      },
+      current,
+    );
 
     return {
       document,
       summary: `${changes.join(' ')} Regenerated the system, database, and API designs to match.`,
     };
   }
+}
+
+/**
+ * Keep the refined document's client-facing narrative (R7) coherent:
+ *  - the refine prompt never asks for the executive summary / out-of-scope /
+ *    assumptions, so an empty value from the model must NOT blank out a section
+ *    it wasn't touching — fall back to the pre-refine document;
+ *  - drop any out-of-scope item the refine just brought INTO scope, so the
+ *    document can't both promise and exclude the same capability.
+ */
+function reconcileNarrative(
+  doc: RequirementDocument,
+  current: RequirementDocument,
+): RequirementDocument {
+  const outOfScopeSource = doc.outOfScope?.length
+    ? doc.outOfScope
+    : current.outOfScope;
+  return {
+    ...doc,
+    executiveSummary: doc.executiveSummary?.trim() || current.executiveSummary,
+    outOfScope: pruneInScope(outOfScopeSource, doc.functional),
+    assumptionsAndOpenQuestions: doc.assumptionsAndOpenQuestions?.length
+      ? doc.assumptionsAndOpenQuestions
+      : current.assumptionsAndOpenQuestions,
+  };
+}
+
+/** Remove out-of-scope items now covered by a functional requirement. */
+function pruneInScope(
+  outOfScope: OutOfScopeItem[] | undefined,
+  functional: FunctionalRequirement[],
+): OutOfScopeItem[] | undefined {
+  if (!outOfScope?.length) return outOfScope;
+  const functionalText = functional.map((f) =>
+    `${f.title} ${f.description}`.toLowerCase(),
+  );
+  return outOfScope.filter((item) => !isNowInScope(item.item, functionalText));
+}
+
+/**
+ * True when an out-of-scope phrase is now covered by a functional requirement.
+ * Conservative on purpose (≥2 shared significant tokens AND ≥60% of the phrase's
+ * tokens) so an unrelated feature doesn't wrongly prune a real exclusion.
+ */
+function isNowInScope(phrase: string, functionalText: string[]): boolean {
+  const tokens = significantTokens(phrase);
+  if (tokens.length < 2) return false;
+  return functionalText.some((text) => {
+    const hits = tokens.filter((tkn) => text.includes(tkn)).length;
+    return hits >= 2 && hits / tokens.length >= 0.6;
+  });
+}
+
+/** Distinct lower-cased words of length ≥4 (drops filler like "the", "and"). */
+function significantTokens(text: string): string[] {
+  return [
+    ...new Set(
+      text
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((tkn) => tkn.length >= 4),
+    ),
+  ];
 }
 
 function truncateTitle(text: string): string {

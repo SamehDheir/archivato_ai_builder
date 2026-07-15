@@ -48,7 +48,10 @@ export class RequirementsService {
       intent: session.intent,
       history: session.history,
       summary: session.summary,
-      // Carry the interview's open questions onto the requirements artifact.
+      // Carry the interview's slot snapshot + open questions onto the agent so it
+      // can seed the executive summary / out-of-scope and fold the gaps into the
+      // assumptions (R6/R7). Both tolerate absence (plan-mode fills neither).
+      slots: session.slots ?? undefined,
       openQuestions: session.openQuestions ?? [],
     });
 
@@ -82,6 +85,14 @@ export class RequirementsService {
     }
     return this.docs.upsert({
       ...edited,
+      // The narrative / interview-derived sections (R6/R7) are not part of the
+      // structured editor, so an edit must not wipe them: carry them over from
+      // the generated document. `openQuestions` in particular is derived from the
+      // interview, never user-authored here.
+      executiveSummary: existing.executiveSummary,
+      outOfScope: existing.outOfScope,
+      assumptionsAndOpenQuestions: existing.assumptionsAndOpenQuestions,
+      openQuestions: existing.openQuestions,
       sessionId,
       generatedAt: new Date().toISOString(),
     });

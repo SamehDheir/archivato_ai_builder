@@ -172,6 +172,99 @@ export function domainFollowUps(domain: string | null | undefined): string[] {
   return [];
 }
 
+/**
+ * Capabilities a buyer typically expects in a given domain but that clients
+ * routinely forget to ask for — the raw material for the Requirement Document's
+ * "Out of scope" section (R7). Naming them explicitly is what protects a dev shop
+ * from a mid-build "but obviously it does X" argument.
+ *
+ * Kept in code (not left to the model) for the same reason as `DOMAIN_FOLLOW_UPS`:
+ * a given domain always surfaces the same known high-value exclusions, testable
+ * and editable. Used by the requirement engineer's deterministic fallback, and as
+ * a prompt hint on the LLM path. Matched loosely against the analysed domain.
+ */
+export const DOMAIN_COMMON_SCOPE: Record<string, string[]> = {
+  'e-commerce': [
+    'Multi-currency and multi-language storefront',
+    'Marketplace / multi-vendor selling',
+    'Loyalty points or a rewards program',
+    'Subscription or recurring-order billing',
+    'Native mobile apps (iOS / Android)',
+  ],
+  marketplace: [
+    'In-app messaging between the two sides',
+    'Automated dispute resolution / escrow',
+    'Identity or background verification of providers',
+    'Native mobile apps (iOS / Android)',
+    'Multi-currency payouts',
+  ],
+  'booking/reservations': [
+    'Real-time waitlists and automatic slot backfill',
+    'Group or recurring bookings',
+    'Deposits, partial payments, or split billing',
+    'Native mobile apps (iOS / Android)',
+    'Calendar sync (Google / Outlook)',
+  ],
+  'delivery/logistics': [
+    'Live GPS tracking of drivers on a map',
+    'Automated route optimization',
+    'In-app chat between customer and driver',
+    'Cash-on-delivery reconciliation',
+    'Native driver and customer mobile apps',
+  ],
+  'saas-internal-tool': [
+    'Single sign-on (SSO / SAML)',
+    'A public or third-party API',
+    'White-labelling per customer tenant',
+    'Advanced analytics dashboards and custom reports',
+    'A native mobile app',
+  ],
+  education: [
+    'Live video classes / virtual classrooms',
+    'Proctored exams or plagiarism detection',
+    'Certificates and accreditation issuance',
+    'Native mobile apps (iOS / Android)',
+    'Offline course access',
+  ],
+  healthcare: [
+    'Telemedicine / live video consultations',
+    'Insurance claims and billing integration',
+    'Integration with external EHR / lab systems',
+    'Native patient and clinician mobile apps',
+    'Regulatory certification (e.g. HIPAA/GDPR attestation)',
+  ],
+};
+
+/**
+ * A domain-agnostic set of commonly-expected-but-often-unrequested capabilities,
+ * used when the analysed domain doesn't match a `DOMAIN_COMMON_SCOPE` bucket — so
+ * the "Out of scope" section is never empty.
+ */
+export const GENERIC_COMMON_SCOPE: string[] = [
+  'Native mobile apps (iOS / Android)',
+  'Multi-language / localization',
+  'Advanced analytics and custom reporting',
+  'Third-party / public API access',
+  'Single sign-on (SSO)',
+  'Offline support',
+];
+
+/**
+ * The commonly-expected-but-unrequested capabilities for an analysed domain,
+ * falling back to `GENERIC_COMMON_SCOPE` when the domain isn't one we have a table
+ * for. Loose matching mirrors `domainFollowUps`.
+ */
+export function domainCommonScope(domain: string | null | undefined): string[] {
+  if (domain) {
+    const d = domain.toLowerCase();
+    for (const [key, items] of Object.entries(DOMAIN_COMMON_SCOPE)) {
+      const k = key.toLowerCase();
+      if (d.includes(k) || k.includes(d) || sharesToken(d, k)) return items;
+    }
+  }
+  return GENERIC_COMMON_SCOPE;
+}
+
 /** Loose match so "online store" ↔ "e-commerce" style near-misses still connect. */
 function sharesToken(a: string, b: string): boolean {
   const tokens = (s: string) => s.split(/[^a-z]+/).filter((t) => t.length >= 4);

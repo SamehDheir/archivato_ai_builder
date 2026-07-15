@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   ChevronDown,
   ClipboardCheck,
+  ClipboardList,
   Coins,
   Compass,
   Database as DatabaseIcon,
@@ -103,7 +104,10 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
         title={t('section.scope.title')}
         lead={t('section.scope.lead')}
       >
-        <RequirementDocumentView doc={project.requirements} />
+        {/* Client audience: executive summary, functional requirements, roles,
+            out-of-scope and assumptions. The technical requirements (NFRs,
+            business rules, constraints) live in the appendix below. */}
+        <RequirementDocumentView doc={project.requirements} audience="client" />
       </Section>
 
       {costEstimate && (
@@ -137,6 +141,15 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
             {t('appendix.lead')}
           </p>
         </div>
+
+        <Collapsible icon={ClipboardList} title={t('appendix.requirements')}>
+          {/* The developer-facing requirements: non-functional, business rules,
+              constraints. The client block above already showed the rest. */}
+          <RequirementDocumentView
+            doc={project.requirements}
+            audience="technical"
+          />
+        </Collapsible>
 
         <Collapsible icon={Network} title={t('appendix.architecture')}>
           {/* `interactive` off: "Explain this decision" calls an owner-scoped API,

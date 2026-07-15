@@ -61,6 +61,8 @@ export const EXAMPLE_SUMMARY: RequirementsSummary = {
 export const EXAMPLE_REQUIREMENTS: RequirementDocument = {
   sessionId: SESSION_ID,
   generatedAt: GENERATED_AT,
+  executiveSummary:
+    'HomeHelper is an on-demand marketplace for local home services, built for homeowners who need a trusted provider and the independent providers who serve them. Customers browse services, book a guaranteed time slot, pay securely online, and rate the work afterward, while providers manage their availability and jobs in one place. The result is a dependable booking experience that fills provider calendars and gives the operator a clean, disputes-and-payouts view of the whole marketplace. It launches web-first in a single city, ready to expand as demand grows.',
   functional: [
     {
       id: 'FR-1',
@@ -166,6 +168,45 @@ export const EXAMPLE_REQUIREMENTS: RequirementDocument = {
   assumptions: [
     'Providers are independent contractors.',
     'Bookings are typically made 1–7 days ahead.',
+  ],
+  outOfScope: [
+    {
+      item: 'Native mobile apps (iOS / Android)',
+      reason: 'Web-first at launch; a mobile app can follow once demand is proven.',
+    },
+    {
+      item: 'In-app chat between customer and provider',
+      reason: 'Coordination happens by phone at launch to keep the first release small.',
+    },
+    {
+      item: 'Real-time GPS tracking of providers',
+      reason: 'Not needed for scheduled home visits; bookings are by time slot, not live dispatch.',
+    },
+    {
+      item: 'Multi-city / multi-region expansion',
+      reason: 'Launching in a single metro area first; geography is a later phase.',
+    },
+    {
+      item: 'Provider background-check integration',
+      reason: 'Vetting is manual at launch; an automated check can be added later.',
+    },
+  ],
+  assumptionsAndOpenQuestions: [
+    {
+      assumption: 'Providers are independent contractors, not employees.',
+      impactIfWrong:
+        'Payouts, tax handling, and the payments model would need to change.',
+    },
+    {
+      assumption: 'Bookings are typically made 1–7 days ahead, not instantly on demand.',
+      impactIfWrong:
+        'A same-day, live-dispatch flow would change the availability and notification design.',
+    },
+    {
+      assumption:
+        "Assumed a sensible default pending the client's answer: which payout schedule do providers expect (weekly, per-job)?",
+      impactIfWrong: 'Scope, timeline, or cost may change once the client confirms.',
+    },
   ],
 };
 

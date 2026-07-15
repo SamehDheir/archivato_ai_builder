@@ -1,4 +1,8 @@
-import type { ExportBundle } from '@archivato/shared';
+import type {
+  ExportBundle,
+  RequirementAssumption,
+  RequirementDocument,
+} from '@archivato/shared';
 
 /**
  * Renders the full pipeline as a single Markdown document. Pure and
@@ -21,18 +25,35 @@ export function buildMarkdown(bundle: ExportBundle): string {
   // ── Requirements ──
   const r = bundle.requirements;
   h(2, 'Requirements');
+  if (r.executiveSummary) {
+    h(3, 'Executive summary');
+    p(r.executiveSummary);
+  }
   h(3, 'Functional');
   for (const fr of r.functional) {
     li(`**${fr.id}** (${fr.priority}) — ${fr.title}: ${fr.description}`);
   }
   blank();
-  h(3, 'Non-functional');
-  for (const nfr of r.nonFunctional) li(`**${nfr.id}** [${nfr.category}] — ${nfr.description}`);
-  blank();
   h(3, 'Roles');
   for (const role of r.roles) {
     li(`**${role.name}** — ${role.description}${role.permissions.length ? ` (${role.permissions.join(', ')})` : ''}`);
   }
+  blank();
+  if (r.outOfScope?.length) {
+    h(3, 'Out of scope');
+    for (const o of r.outOfScope) li(o.reason ? `${o.item} — ${o.reason}` : o.item);
+    blank();
+  }
+  const assumptionItems = mergeAssumptionItems(r);
+  if (assumptionItems.length) {
+    h(3, 'Assumptions & open questions');
+    for (const a of assumptionItems) {
+      li(a.impactIfWrong ? `${a.assumption} _(if wrong: ${a.impactIfWrong})_` : a.assumption);
+    }
+    blank();
+  }
+  h(3, 'Non-functional');
+  for (const nfr of r.nonFunctional) li(`**${nfr.id}** [${nfr.category}] — ${nfr.description}`);
   blank();
   if (r.businessRules.length) {
     h(3, 'Business rules');
@@ -42,11 +63,6 @@ export function buildMarkdown(bundle: ExportBundle): string {
   if (r.constraints.length) {
     h(3, 'Constraints');
     for (const c of r.constraints) li(c);
-    blank();
-  }
-  if (r.assumptions.length) {
-    h(3, 'Assumptions');
-    for (const a of r.assumptions) li(a);
     blank();
   }
 
@@ -138,4 +154,26 @@ export function buildMarkdown(bundle: ExportBundle): string {
   }
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+}
+
+/**
+ * The requirement document's assumptions for export: the structured R7 list plus
+ * any legacy flat assumption / interview open question it doesn't already cover —
+ * so nothing is silently dropped when the two lists diverge on the LLM path.
+ */
+function mergeAssumptionItems(r: RequirementDocument): RequirementAssumption[] {
+  const structured = r.assumptionsAndOpenQuestions ?? [];
+  const seen = structured.map((a) => a.assumption.toLowerCase());
+  const covered = (text: string) =>
+    seen.some((s) => s.includes(text.toLowerCase()));
+  const flat = r.assumptions
+    .filter((a) => !covered(a))
+    .map((assumption) => ({ assumption, impactIfWrong: '' }));
+  const fromOpenQuestions = structured.length
+    ? []
+    : (r.openQuestions ?? []).map((q) => ({
+        assumption: q.questionForClient,
+        impactIfWrong: '',
+      }));
+  return [...structured, ...flat, ...fromOpenQuestions];
 }

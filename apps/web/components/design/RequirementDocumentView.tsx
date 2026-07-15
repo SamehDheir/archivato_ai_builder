@@ -2,16 +2,17 @@
 
 import { useTranslation } from 'react-i18next';
 import {
+  AlertTriangle,
   Ban,
+  FileText,
   Gauge,
-  HelpCircle,
   Lightbulb,
   ListChecks,
   Scale,
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import type { RequirementDocument } from '@archivato/shared';
+import type { RequirementAssumption, RequirementDocument } from '@archivato/shared';
 import { cn } from '@/lib/utils';
 import { requirementsToMarkdown } from '@/lib/artifact-markdown';
 import { Badge } from '@/components/ui/badge';
@@ -100,46 +101,99 @@ function TonePill({ tone, children }: { tone: Tone; children: React.ReactNode })
   );
 }
 
-export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
+/**
+ * Which slice of the document to render.
+ *
+ * - `full` (owner page + example tour): every section, with the document header.
+ * - `client` (share page, "What's included"): the business-facing sections only —
+ *   executive summary, functional requirements, roles, out-of-scope and
+ *   assumptions. A non-technical buyer never sees NFRs, business rules, or
+ *   constraints here.
+ * - `technical` (share page appendix): only the developer-facing sections —
+ *   non-functional requirements, business rules and constraints.
+ *
+ * The header (title + download) shows only in `full`; on the share page the
+ * surrounding section/collapsible provides the heading.
+ */
+export type RequirementAudience = 'full' | 'client' | 'technical';
+
+export function RequirementDocumentView({
+  doc,
+  audience = 'full',
+}: {
+  doc: RequirementDocument;
+  audience?: RequirementAudience;
+}) {
   const { t } = useTranslation('stages');
+  const showHeader = audience === 'full';
+  const showClient = audience !== 'technical';
+  const showTechnical = audience !== 'client';
+
+  // Assumptions & open questions: prefer the R7 structured field; fall back to
+  // the flat `assumptions` list + interview `openQuestions` for older documents.
+  const assumptionItems: RequirementAssumption[] = doc.assumptionsAndOpenQuestions
+    ?.length
+    ? doc.assumptionsAndOpenQuestions
+    : [
+        ...doc.assumptions.map((assumption) => ({ assumption, impactIfWrong: '' })),
+        ...(doc.openQuestions ?? []).map((q) => ({
+          assumption: q.questionForClient,
+          impactIfWrong: '',
+        })),
+      ];
+
   return (
     <div>
       {/* Document header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-semibold tracking-tight">
-            {t('requirements.title')}
-          </h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {t('requirements.meta', {
-              functional: doc.functional.length,
-              nonFunctional: doc.nonFunctional.length,
-              roles: doc.roles.length,
-              date: new Date(doc.generatedAt).toLocaleString(),
-            })}
+      {showHeader && (
+        <>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold tracking-tight">
+                {t('requirements.title')}
+              </h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t('requirements.meta', {
+                  functional: doc.functional.length,
+                  nonFunctional: doc.nonFunctional.length,
+                  roles: doc.roles.length,
+                  date: new Date(doc.generatedAt).toLocaleString(),
+                })}
+              </p>
+            </div>
+            <ArtifactDownload
+              basename={`requirements-${doc.sessionId}`}
+              formats={[
+                {
+                  label: 'Markdown',
+                  ext: 'md',
+                  mime: 'text/markdown',
+                  build: () => requirementsToMarkdown(doc),
+                },
+                {
+                  label: 'JSON',
+                  ext: 'json',
+                  mime: 'application/json',
+                  build: () => JSON.stringify(doc, null, 2),
+                },
+              ]}
+            />
+          </div>
+          <Separator className="mt-3" />
+        </>
+      )}
+
+      {/* 1) Executive summary — plain-language, for the client. */}
+      {showClient && doc.executiveSummary && (
+        <Section title={t('requirements.executiveSummary')} icon={FileText}>
+          <p className="text-sm leading-relaxed" dir="auto">
+            {doc.executiveSummary}
           </p>
-        </div>
-        <ArtifactDownload
-          basename={`requirements-${doc.sessionId}`}
-          formats={[
-            {
-              label: 'Markdown',
-              ext: 'md',
-              mime: 'text/markdown',
-              build: () => requirementsToMarkdown(doc),
-            },
-            {
-              label: 'JSON',
-              ext: 'json',
-              mime: 'application/json',
-              build: () => JSON.stringify(doc, null, 2),
-            },
-          ]}
-        />
-      </div>
+        </Section>
+      )}
 
-      <Separator className="mt-3" />
-
+      {/* 2) Functional requirements. */}
+      {showClient && (
       <Section
         title={t('requirements.functional')}
         count={doc.functional.length}
@@ -186,135 +240,185 @@ export function RequirementDocumentView({ doc }: { doc: RequirementDocument }) {
           <Empty />
         )}
       </Section>
+      )}
 
-      <Section
-        title={t('requirements.nonFunctional')}
-        count={doc.nonFunctional.length}
-        icon={Gauge}
-        tone="violet"
-      >
-        {doc.nonFunctional.length ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">{t('requirements.col.id')}</TableHead>
-                <TableHead className="w-36">
-                  {t('requirements.col.category')}
-                </TableHead>
-                <TableHead>{t('requirements.col.requirement')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {doc.nonFunctional.map((nfr) => (
-                <TableRow key={nfr.id}>
-                  <TableCell className="align-top font-mono text-xs text-muted-foreground">
-                    {nfr.id}
-                  </TableCell>
-                  <TableCell className="align-top">
-                    <TonePill tone={NFR_CATEGORY_TONE[nfr.category?.toLowerCase()] ?? 'blue'}>
-                      {nfr.category}
-                    </TonePill>
-                  </TableCell>
-                  <TableCell className="text-sm">{nfr.description}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <Empty />
-        )}
-      </Section>
-
-      <Section
-        title={t('requirements.roles')}
-        count={doc.roles.length}
-        icon={Users}
-        tone="emerald"
-      >
-        {doc.roles.length ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {doc.roles.map((role) => (
-              <Card
-                key={role.name}
-                className="border-l-2 border-l-emerald-500/60"
-              >
-                <CardContent className="p-4">
-                  <div className="font-semibold">{role.name}</div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {role.description}
-                  </p>
-                  {role.permissions.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {role.permissions.map((p) => (
-                        <Badge variant="secondary" key={p}>
-                          {p}
-                        </Badge>
-                      ))}
+      {/* 3) Roles & permissions — who can do what. */}
+      {showClient && (
+        <Section
+          title={t('requirements.roles')}
+          count={doc.roles.length}
+          icon={Users}
+          tone="emerald"
+        >
+          {doc.roles.length ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {doc.roles.map((role) => (
+                <Card
+                  key={role.name}
+                  className="border-l-2 border-l-emerald-500/60"
+                >
+                  <CardContent className="p-4">
+                    <div className="font-semibold" dir="auto">
+                      {role.name}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Empty />
-        )}
-      </Section>
-
-      <Section
-        title={t('requirements.businessRules')}
-        count={doc.businessRules.length}
-        icon={Scale}
-        tone="amber"
-      >
-        {doc.businessRules.length ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">{t('requirements.col.id')}</TableHead>
-                <TableHead>{t('requirements.col.rule')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {doc.businessRules.map((br) => (
-                <TableRow key={br.id}>
-                  <TableCell className="align-top font-mono text-xs text-muted-foreground">
-                    {br.id}
-                  </TableCell>
-                  <TableCell className="text-sm">{br.description}</TableCell>
-                </TableRow>
+                    <p className="mt-1 text-sm text-muted-foreground" dir="auto">
+                      {role.description}
+                    </p>
+                    {role.permissions.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {role.permissions.map((p) => (
+                          <Badge variant="secondary" key={p}>
+                            {p}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <Empty />
-        )}
-      </Section>
+            </div>
+          ) : (
+            <Empty />
+          )}
+        </Section>
+      )}
 
-      <ListSection
-        title={t('requirements.constraints')}
-        count={doc.constraints.length}
-        icon={Ban}
-        tone="rose"
-        items={doc.constraints}
-      />
-      <ListSection
-        title={t('requirements.assumptions')}
-        count={doc.assumptions.length}
-        icon={Lightbulb}
-        tone="cyan"
-        items={doc.assumptions}
-      />
-      {/* Gaps the owner couldn't answer during the interview (R6) — questions to
-          take back to the client. Optional: old rows / plan-mode runs won't have
-          any, so the section only appears when there is something to show. */}
-      {(doc.openQuestions?.length ?? 0) > 0 && (
-        <ListSection
-          title={t('requirements.openQuestions')}
-          count={doc.openQuestions!.length}
-          icon={HelpCircle}
+      {/* 4) Out of scope — what the price does NOT include (scope-creep guard). */}
+      {showClient && (doc.outOfScope?.length ?? 0) > 0 && (
+        <Section
+          title={t('requirements.outOfScope')}
+          count={doc.outOfScope!.length}
+          icon={Ban}
+          tone="rose"
+        >
+          <ul className="space-y-2 text-sm">
+            {doc.outOfScope!.map((item, i) => (
+              <li key={i} className="flex gap-2">
+                <Ban className="mt-0.5 h-4 w-4 shrink-0 text-rose-500/70" />
+                <span dir="auto">
+                  {item.item}
+                  {item.reason && (
+                    <span className="text-muted-foreground"> — {item.reason}</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {/* 5) Assumptions & open questions — each with its impact if wrong. */}
+      {showClient && assumptionItems.length > 0 && (
+        <Section
+          title={t('requirements.assumptionsAndOpenQuestions')}
+          count={assumptionItems.length}
+          icon={Lightbulb}
+          tone="cyan"
+        >
+          <ul className="space-y-2 text-sm">
+            {assumptionItems.map((a, i) => (
+              <li key={i} className="rounded-lg border border-border/60 p-3">
+                <div dir="auto">{a.assumption}</div>
+                {a.impactIfWrong && (
+                  <div className="mt-1 text-xs text-muted-foreground" dir="auto">
+                    <span className="font-medium">
+                      {t('requirements.impactIfWrong')}
+                    </span>{' '}
+                    {a.impactIfWrong}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {/* 6) Technical sections — for the dev team (hidden from the client block). */}
+      {showTechnical && (
+        <Section
+          title={t('requirements.nonFunctional')}
+          count={doc.nonFunctional.length}
+          icon={Gauge}
+          tone="violet"
+        >
+          {doc.nonFunctional.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">
+                    {t('requirements.col.id')}
+                  </TableHead>
+                  <TableHead className="w-36">
+                    {t('requirements.col.category')}
+                  </TableHead>
+                  <TableHead>{t('requirements.col.requirement')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {doc.nonFunctional.map((nfr) => (
+                  <TableRow key={nfr.id}>
+                    <TableCell className="align-top font-mono text-xs text-muted-foreground">
+                      {nfr.id}
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <TonePill
+                        tone={NFR_CATEGORY_TONE[nfr.category?.toLowerCase()] ?? 'blue'}
+                      >
+                        {nfr.category}
+                      </TonePill>
+                    </TableCell>
+                    <TableCell className="text-sm">{nfr.description}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <Empty />
+          )}
+        </Section>
+      )}
+
+      {showTechnical && (
+        <Section
+          title={t('requirements.businessRules')}
+          count={doc.businessRules.length}
+          icon={Scale}
           tone="amber"
-          items={doc.openQuestions!.map((q) => q.questionForClient)}
+        >
+          {doc.businessRules.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">
+                    {t('requirements.col.id')}
+                  </TableHead>
+                  <TableHead>{t('requirements.col.rule')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {doc.businessRules.map((br) => (
+                  <TableRow key={br.id}>
+                    <TableCell className="align-top font-mono text-xs text-muted-foreground">
+                      {br.id}
+                    </TableCell>
+                    <TableCell className="text-sm">{br.description}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <Empty />
+          )}
+        </Section>
+      )}
+
+      {showTechnical && (
+        <ListSection
+          title={t('requirements.constraints')}
+          count={doc.constraints.length}
+          icon={AlertTriangle}
+          tone="amber"
+          items={doc.constraints}
         />
       )}
     </div>

@@ -763,10 +763,49 @@ tsconfig and never needs shared's `dist`.
     guarded, `editSlot`) **appends a correction to the transcript** and marks the
     slot `explicit`/`high` — the snapshot follows the transcript, never the reverse;
     refused once `confirmed`.
-  - **Downstream (R6 scope = plumb only):** `openQuestions` rides onto
-    `RequirementDocument.openQuestions` (`requirements.service` → agent, attached on
-    both LLM + deterministic paths) and renders as an "Open questions for the
-    client" section. Deeper requirements-agent use is R7.
+  - **Downstream:** `openQuestions` rides onto `RequirementDocument.openQuestions`
+    (`requirements.service` → agent, attached on both LLM + deterministic paths).
+    R6 plumbed it; **R7 (below) consumes it** — folding each gap into the
+    requirement document's "Assumptions & open questions".
+- **Requirement Document = a two-audience scoping artifact (R7).** The Requirement
+  Engineer now emits a **client-facing** document, not a bare requirements dump —
+  additive fields on `RequirementDocument` (`@archivato/shared`), all optional so
+  old rows/plan-mode runs render fine and every consumer tolerates absence: a
+  jargon-free **`executiveSummary`** (who it serves / what they can do / the
+  business outcome), **`outOfScope[]`** (`{item, reason?}` — a first-class
+  scope-creep guard, 3–6 capabilities NOT included), and
+  **`assumptionsAndOpenQuestions[]`** (`{assumption, impactIfWrong}` — the agent's
+  gap-filling assumptions **merged with** the interview's `openQuestions`, each
+  phrased as an assumed default). Section order (owner page + exporters + share
+  client block): exec summary → functional → roles → out-of-scope → assumptions →
+  then the technical sections (NFR/business rules/constraints). Non-negotiables:
+  - **Two audiences, one document.** The prompt bans jargon ("CRUD"/"endpoint"/
+    "schema"/"API") from the client sections and phrases functional reqs in the
+    **user-outcome voice** ("Customers can track their orders"), not "the system
+    shall". NFR/rules/constraints may be technical.
+  - **`budget_range` + `timeline` are context only — never printed.** The agent
+    gets the full slot snapshot but strips those two before the prompt; a test
+    asserts their values never appear in the document (they belong to roadmap/cost).
+  - **Out-of-scope has a deterministic source.** `DOMAIN_COMMON_SCOPE` /
+    `GENERIC_COMMON_SCOPE` (`interview/slots.ts`, code not model — the
+    `DOMAIN_FOLLOW_UPS` precedent) name the capabilities a buyer typically expects
+    but forgets to ask for; `domainCommonScope()` is the fallback's source and a
+    prompt hint on the LLM path, so the section is never empty (e.g. a delivery app
+    → "Live GPS tracking" listed as excluded).
+  - **Traceability is preserved.** FR/NFR/BR **ids stay stable and untouched** —
+    R7 changed structure and phrasing, not the ID scheme; the system-design stage
+    still reads requirement IDs. `normalize()` backfills any R7 section the model
+    skipped and always folds the open questions in; `save()` (the structured
+    editor) **carries the narrative sections over** (they aren't in the editor DTO,
+    so an edit must not wipe them), and `RefinementAgent` spreads `ctx.current`
+    first so a chat refine can't drop them either.
+  - **Share page (R3) split:** the client "What's included" block renders
+    `<RequirementDocumentView audience="client">` (exec summary + functional +
+    roles + out-of-scope + assumptions); NFR/business rules/constraints move to a
+    `audience="technical"` **Collapsible in the technical appendix**. i18n
+    `requirements.{executiveSummary,outOfScope,assumptionsAndOpenQuestions,
+    impactIfWrong}` + `share.appendix.requirements` (EN+AR). Owner page shows all
+    sections (`audience="full"`) with IDs demoted to muted mono reference text.
 - **Gating:** each stage refuses to generate until its upstream artifacts exist
   (interview must be `confirmed`); returns 409/404 accordingly.
 - **Ownership:** pipeline routes are `@UseGuards(JwtAuthGuard, SessionOwnerGuard)`.
