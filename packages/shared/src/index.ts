@@ -34,6 +34,7 @@ export * from './roadmap';
 export * from './cost-estimate';
 export * from './export';
 export * from './share';
+export * from './proposal';
 export * from './scaffold';
 export * from './scaffold.frontend';
 export * from './scaffold.deploy';

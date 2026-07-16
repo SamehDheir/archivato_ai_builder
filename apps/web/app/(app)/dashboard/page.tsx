@@ -543,8 +543,17 @@ export default function Home() {
         else if (stage === 'system-design') setDesign(await systemDesignApi.get(id));
       }),
     );
-    setVersionsReload((k) => k + 1);
-    toast({ title: t('toast.fixApplied'), variant: 'success' });
+    // This fires for all four R11 flows, and only one of them is a "fix": an
+    // acknowledge or a dismissal writes nothing, so saying "Fix applied" would tell
+    // the owner their document changed when it didn't. `artifactsTouched` is the
+    // honest test — it's empty exactly when nothing was written, which is also
+    // exactly when there's no new version to reload.
+    const changed = result.artifactsTouched.length > 0;
+    if (changed) setVersionsReload((k) => k + 1);
+    toast({
+      title: changed ? t('toast.fixApplied') : t('toast.findingResolved'),
+      variant: 'success',
+    });
   }
 
   /** Apply a restored version: replace every artifact with the snapshot's. */
@@ -712,16 +721,33 @@ export default function Home() {
    */
   const extendedArtifacts = state?.generateExtendedArtifacts ?? true;
 
-  /** Persist the extended-artifacts choice and reflect it locally. */
+  /**
+   * Persist the extended-artifacts choice and reflect it locally.
+   *
+   * Every other write on this page reports its own failure; this one must too. It's
+   * called from a checkbox, so a silent rejection would leave the box snapping back
+   * with no explanation — the owner would reasonably assume it saved.
+   */
   async function setExtendedArtifacts(value: boolean) {
     if (!state) return;
-    await interviewApi.update(state.sessionId, {
-      generateExtendedArtifacts: value,
-    });
-    // PATCH returns a ProjectSummary, not an InterviewState — mirror the change
-    // onto the state the toggle and the tabs both read.
-    setState({ ...state, generateExtendedArtifacts: value });
-    await refreshProjects();
+    try {
+      await interviewApi.update(state.sessionId, {
+        generateExtendedArtifacts: value,
+      });
+      // PATCH returns a ProjectSummary, not an InterviewState — mirror the change
+      // onto the state the toggle and the tabs both read. Only after the write
+      // succeeds, so the UI never shows a setting the server didn't take.
+      setState((prev) =>
+        prev ? { ...prev, generateExtendedArtifacts: value } : prev,
+      );
+      await refreshProjects();
+    } catch (e) {
+      toast({
+        title: t('toast.settingSaveFailed'),
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'error',
+      });
+    }
   }
 
   // ⌘K command palette: quick actions, jump to a project, or (in a confirmed
@@ -1034,6 +1060,10 @@ export default function Home() {
               onRefined={handleRefined}
               onRestored={handleRestored}
               onUpgraded={refreshProjects}
+              clientName={
+                projects.find((p) => p.sessionId === state.sessionId)?.clientName ??
+                null
+              }
               weeklyRate={
                 projects.find((p) => p.sessionId === state.sessionId)?.weeklyRate ??
                 null

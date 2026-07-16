@@ -100,10 +100,44 @@ describe('defaultExtendedArtifacts', () => {
 // ── the setting on a session ────────────────────────────────────────────────
 
 describe('generateExtendedArtifacts on a new project', () => {
-  it('starts ON before the gate, since no budget is known yet', async () => {
+  it('stores null ("not decided") and reads as ON before any budget is known', async () => {
     const { service, repo } = makeService();
     const { sessionId } = await service.start(IDEA);
-    expect((await repo.findById(sessionId))!.generateExtendedArtifacts).toBe(true);
+
+    // The stored marker stays null so the default keeps tracking the budget…
+    expect((await repo.findById(sessionId))!.generateExtendedArtifacts).toBeNull();
+    // …while the projection resolves it for the client.
+    expect((await service.getState(sessionId)).generateExtendedArtifacts).toBe(true);
+  });
+
+  it('tracks a budget corrected at the gate, until the owner decides', async () => {
+    // The bug this guards: the default used to be computed once and written at the
+    // gate, so correcting `budget_range` in the slot editor — directly above the
+    // toggle — could not move it.
+    const { service, repo } = makeService();
+    const sessionId = await toGate(service, repo);
+    expect((await service.getState(sessionId)).generateExtendedArtifacts).toBe(true);
+
+    // The owner corrects the budget at the gate to a small one.
+    await service.editSlot(sessionId, 'budget_range', '$3,000');
+    expect((await service.getState(sessionId)).generateExtendedArtifacts).toBe(false);
+
+    // Now they decide explicitly — from here the slot can't overrule them.
+    await service.update(sessionId, { generateExtendedArtifacts: true });
+    await service.editSlot(sessionId, 'budget_range', '$2,000');
+    expect((await service.getState(sessionId)).generateExtendedArtifacts).toBe(true);
+  });
+
+  it('pins the resolved value on confirm', async () => {
+    const { service, repo } = makeService();
+    const sessionId = await toGate(service, repo, budget('$4,000'));
+    expect((await repo.findById(sessionId))!.generateExtendedArtifacts).toBeNull();
+
+    await service.confirm(sessionId);
+
+    // A confirmed project carries an explicit answer rather than one that depends
+    // on re-parsing a sentence later.
+    expect((await repo.findById(sessionId))!.generateExtendedArtifacts).toBe(false);
   });
 
   it('derives OFF from a small budget at the gate', async () => {
@@ -164,16 +198,19 @@ describe('generateExtendedArtifacts on a new project', () => {
 // ── existing projects ───────────────────────────────────────────────────────
 
 describe('existing projects', () => {
-  it('are unaffected — an unset flag reads as ON', async () => {
+  it('are unaffected — a pre-R12 row was backfilled to an explicit ON', async () => {
     const { service, repo } = makeService();
     const { sessionId } = await service.start(IDEA);
 
-    // A row created before R12: the column's NOT NULL DEFAULT true is what
-    // backfills it, so a session that never saw the setting keeps every stage.
+    // How a pre-R12 row looks after the migrations: the first added the column
+    // NOT NULL DEFAULT true (backfilling every existing row to an explicit `true`),
+    // the second only made it nullable for new rows. So an old project carries a
+    // real `true`, not a derivation…
     const session = await repo.findById(sessionId);
     await repo.save({
       ...session!,
       generateExtendedArtifacts: true,
+      slots: budget('$500'), // …and a tiny budget cannot take its stages away.
     });
 
     expect((await service.getState(sessionId)).generateExtendedArtifacts).toBe(true);

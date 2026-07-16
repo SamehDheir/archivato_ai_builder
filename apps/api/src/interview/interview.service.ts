@@ -11,7 +11,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import {
   COMPLETENESS_THRESHOLD,
-  defaultExtendedArtifacts,
+  resolveExtendedArtifacts,
   INTERVIEW_MAX_QUESTIONS,
   INTERVIEW_PHASE_ORDER,
   InterviewPhase,
@@ -141,9 +141,11 @@ export class InterviewService {
       slots: null,
       openQuestions: null,
       fixLog: null,
-      // Starts on; `advance()` derives the real default from the stated budget once
-      // the interview reaches the gate (the budget slot isn't filled before then).
-      generateExtendedArtifacts: true,
+      proposalDrafts: null,
+      // Null = not decided: the budget-derived default applies on read, so the
+      // toggle at the gate keeps tracking a corrected budget until the owner
+      // touches it. `confirm()` pins whatever it lands on.
+      generateExtendedArtifacts: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -195,6 +197,14 @@ export class InterviewService {
     }
 
     session.status = 'confirmed';
+    // R12 — pin the extended-artifacts answer. Until now it could still be null
+    // ("not decided"), tracking the budget slot; confirming is the moment that stops
+    // being editable, so every confirmed project carries an explicit value instead
+    // of one that depends on re-parsing a sentence later.
+    session.generateExtendedArtifacts = resolveExtendedArtifacts(
+      session.generateExtendedArtifacts,
+      session.slots,
+    );
     await this.repo.save(session);
     return this.toState(session);
   }
@@ -324,7 +334,10 @@ export class InterviewService {
       status: s.status,
       completeness: round2(s.coverage),
       weeklyRate: s.weeklyRate ?? null,
-      generateExtendedArtifacts: s.generateExtendedArtifacts,
+      generateExtendedArtifacts: resolveExtendedArtifacts(
+        s.generateExtendedArtifacts,
+        s.slots,
+      ),
       // The per-month quota's meter: the client counts what was created this
       // period rather than what is owned (see `countInQuotaPeriod`).
       createdAt: s.createdAt.toISOString(),
@@ -409,13 +422,6 @@ export class InterviewService {
       session.status = 'awaiting_confirmation';
       session.summary = this.buildSummary(session);
       session.pendingQuestion = null;
-      // R12 — pick the extended-artifacts default from the stated budget, here and
-      // only here. It has to be at the gate: the budget slot doesn't exist at
-      // `start()`, and this is the last point before the owner is shown the toggle.
-      // It runs exactly once (`answer()` refuses a non-collecting session, so
-      // `advance()` can't fire again), which is what lets the owner's override
-      // survive — a later re-derivation would silently undo their choice.
-      session.generateExtendedArtifacts = defaultExtendedArtifacts(session.slots);
     } else {
       session.pendingQuestion = next.question;
     }
@@ -642,7 +648,12 @@ export class InterviewService {
       // filled slots + the questions-for-your-client list without a null check.
       slots: session.slots ?? {},
       openQuestions: session.openQuestions ?? [],
-      generateExtendedArtifacts: session.generateExtendedArtifacts,
+      // Derived on read while it's still null, so correcting `budget_range` at the
+      // gate moves the toggle — the whole point of the marker.
+      generateExtendedArtifacts: resolveExtendedArtifacts(
+        session.generateExtendedArtifacts,
+        session.slots,
+      ),
     };
   }
 }

@@ -16,7 +16,8 @@ architecture, database schema, REST API, review, and a runnable code scaffold.
 
 ```
 Idea → AI Interview → Requirements → System Design → Database Design →
-API Design → AI Review → Roadmap · Cost · Threat Model · QA Plan → Export / Scaffold
+API Design → AI Review → Roadmap · Cost · Threat Model · QA Plan →
+Proposal message · Export / Scaffold
 ```
 
 ---
@@ -58,6 +59,7 @@ chain of structured artifacts — each one grounded in the previous:
 | **Project Economics** | Deterministic monthly hosting bill across 8 providers (100 / 1k / 10k users), plus a person-week **effort estimate**, third-party **service subscriptions**, an owner-only **budget reality check**, and an owner-only suggested price from your weekly rate |
 | **Threat Model** | STRIDE security analysis with severities + mitigations — **opt-in per project**: small stated budgets default it off, and you can switch it on at any time |
 | **QA Plan** | Test strategy + concrete test cases by type — **opt-in per project**, alongside the threat model |
+| **Proposal message** | The covering message you actually submit with the bid — written from the scoping itself (what you understood, what's in scope, the effort range, the link), sized to the channel (**Upwork / Mostaql / email**), in **English or Arabic**. It never claims experience, a team size, or a portfolio, and it states a price only if you give it one — verbatim. Editable before you send, with your last 5 drafts kept |
 | **Diagrams & Canvas** | Architecture, ER, per-endpoint sequence flows; editable canvas |
 | **Export & Scaffold** | JSON / Markdown / OpenAPI (JSON+YAML) / SQL DDL / Postman / zip — plus a **runnable app scaffold**: a NestJS + Prisma API, a Next.js client (typed API client + CRUD pages), or both as one workspace (ZIP or one-click push to GitHub) |
 | **Deployment** | Every scaffold ships a Dockerfile, `docker-compose.yml`, a GitHub Actions workflow, and the config for the provider your cost estimate says is the best value it can actually run on (Render / Fly.io / Railway / Heroku / DigitalOcean / Vercel) |

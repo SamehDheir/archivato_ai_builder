@@ -7,6 +7,7 @@ import type {
   InterviewStatus,
   IntentAnalysis,
   OpenQuestion,
+  ProposalDraft,
   RequirementsSummary,
   SlotMap,
 } from '@archivato/shared';
@@ -42,6 +43,7 @@ export class PrismaInterviewSessionRepository
         slots: toJson(session.slots),
         openQuestions: toJson(session.openQuestions),
         fixLog: toJson(session.fixLog),
+        proposalDrafts: toJson(session.proposalDrafts),
         generateExtendedArtifacts: session.generateExtendedArtifacts,
       },
     });
@@ -91,6 +93,7 @@ export class PrismaInterviewSessionRepository
         slots: toJson(session.slots),
         openQuestions: toJson(session.openQuestions),
         fixLog: toJson(session.fixLog),
+        proposalDrafts: toJson(session.proposalDrafts),
         generateExtendedArtifacts: session.generateExtendedArtifacts,
       },
     });
@@ -129,7 +132,8 @@ function toEntity(row: {
   slots: Prisma.JsonValue;
   openQuestions: Prisma.JsonValue;
   fixLog: Prisma.JsonValue;
-  generateExtendedArtifacts: boolean;
+  proposalDrafts: Prisma.JsonValue;
+  generateExtendedArtifacts: boolean | null;
   createdAt: Date;
   updatedAt: Date;
 }): InterviewSession {
@@ -155,9 +159,11 @@ function toEntity(row: {
     slots: (row.slots as SlotMap | null) ?? null,
     openQuestions: (row.openQuestions as unknown as OpenQuestion[] | null) ?? null,
     fixLog: (row.fixLog as unknown as FixLogEntry[] | null) ?? null,
-    // The column is NOT NULL DEFAULT true, so `?? true` only guards a row read
-    // through a client generated before the migration.
-    generateExtendedArtifacts: row.generateExtendedArtifacts ?? true,
+    proposalDrafts:
+      (row.proposalDrafts as unknown as ProposalDraft[] | null) ?? null,
+    // Null is meaningful here (= not decided), so it must NOT be coerced — read it
+    // through `resolveExtendedArtifacts`, which applies the budget-derived default.
+    generateExtendedArtifacts: row.generateExtendedArtifacts,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

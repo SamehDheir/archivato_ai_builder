@@ -230,6 +230,8 @@
     "apiSaved": "تم حفظ تصميم API",
     "refined": "تم تحسين التصميم",
     "fixApplied": "تم تطبيق الإصلاح",
+    "findingResolved": "تم تحديث الملاحظة",
+    "settingSaveFailed": "تعذّر حفظ الإعداد",
     "restored": "تمت استعادة الـ scoping إلى الإصدار المحدد",
     "generated": "تم توليد {{stage}}",
     "generateFailed": "تعذّر توليد {{stage}}",

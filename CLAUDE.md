@@ -12,8 +12,9 @@ cost, findings per category, critical-issues callout). Three standalone
 artifacts hang off the confirmed session: **Product Vision** (PM view of the
 interview), **Roadmap** (phased implementation plan from the full design), and
 **Cost Estimator** (deterministic per-provider monthly hosting bill at 100/1k/10k
-users). Plus post-generation **chat refine**, **version history**,
-**diagrams/canvas**, **auth**.
+users). A **Proposal cover letter** then turns the finished scoping into the
+message the owner actually submits with the link. Plus post-generation
+**chat refine**, **version history**, **diagrams/canvas**, **auth**.
 
 ## Product positioning (2026 pivot)
 
@@ -168,7 +169,7 @@ tsconfig and never needs shared's `dist`.
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
-  `threat-model`, `qa-plan`, `export`, `share`, `projects`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
+  `threat-model`, `qa-plan`, `proposal`, `export`, `share`, `projects`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
   `billing`, `analytics`, `admin`, `support`, `notifications`, `roles`,
   `waitlist`).
   Modules export their repository token + service for downstream use.
@@ -404,10 +405,19 @@ tsconfig and never needs shared's `dist`.
      a guess" rule. Silently withholding a security analysis because we misread a
      sentence would be the worst failure here, and invisible. It reads the range's
      **top** so a "5k–12k" project (which can stretch to the assurance work) stays on.
-  2. **Derived once, at the confirmation gate**, inside `advance()` when it closes
-     the gate — `start()` has no budget slot yet, and `answer()` refuses a
-     non-collecting session, so `advance()` can't fire again. That's what lets the
-     owner's toggle survive: a later re-derivation would silently undo their choice.
+  2. **`null` on the column = "the owner hasn't decided"**, and that marker is the
+     whole design: `resolveExtendedArtifacts(stored, slots)` derives **on read**
+     while it's null, so the toggle tracks a `budget_range` the owner **corrects at
+     the gate** — `editSlot` sits directly above it. (The first cut wrote the derived
+     default to the row once, inside `advance()`; the toggle then couldn't react to
+     the correction, which broke the feature for exactly the user who bothered to
+     state a budget. Deriving on read deleted that code path rather than adding to
+     it.) A non-null value is the owner's explicit choice and no slot edit overrules
+     it; **`confirm()` pins one**, so every confirmed project carries a definite
+     answer instead of one that depends on re-parsing a sentence. Two migrations,
+     both needed: the first added the column `NOT NULL DEFAULT true` — which is what
+     **backfilled every pre-R12 row to an explicit `true`** — and the second dropped
+     the default + NOT NULL so only *new* rows start undecided.
   3. **Off ⇒ cleanly absent, never stale.** The artifacts are simply never
      generated, so `isStale()` reads a missing artifact as fresh — no new pipeline
      state, no new gating mechanic. `EXTENDED_TABS` are **hidden** from the nav (not
@@ -427,6 +437,93 @@ tsconfig and never needs shared's `dist`.
   `ProjectsService`'s artifact booleans don't cover them. The share page already had
   `?? null` + `{threatModel && …}` — because both are **Pro stages a free owner
   never has**, so R12 inherited that tolerance for free.
+- **Proposal cover letter (R13) — `proposal`.** The scoping package was complete
+  and the deal still wasn't submitted: the owner had a link and a blank message
+  box, and the covering message is what decides whether the link is ever opened.
+  This closes the loop. A standalone **Pro** stage (full-pipeline gate: 409 until
+  the API design exists) that writes the message a dev shop pastes into
+  Mostaql/Upwork/email *alongside* the link, generated from the scoping itself:
+  R7's `executiveSummary` + top capabilities, R9's deterministic effort range,
+  R10's phase-1 MVP statement, the `timeline` slot, and the share URL.
+  `ProposalWriterAgent` + a deterministic fallback (`buildFallbackProposal`, pure,
+  in `@archivato/shared/proposal.ts`). Nine things not to undo:
+  1. **The message is signed by the USER, not by us** — that is what makes it
+     different from every other agent's output. Hence `HONESTY_RULES` (shared,
+     embedded verbatim in the system prompt, **pinned by a test**): never past
+     experience, years in business, team size, portfolio, past clients,
+     credentials, or superlatives about the sender. An LLM writing a "cover
+     letter" reaches for that register by default — "with over a decade of
+     experience delivering…" — and every word of it would be invented, in a
+     document the owner signs and a buyer may check. The message speaks ONLY about
+     this proposal's content.
+  2. **The model never invents a price.** `includePrice` defaults **false**, and
+     the enforcement is *structural*: `ProposalControls` (the form) guards the
+     price behind the flag; the service resolves it into `ProposalInput`, where a
+     price is either **present or does not exist**. The prompt cannot leak a figure
+     it was never handed — so the test asserts the figure is absent from the
+     **prompt**, not that the model behaved. A stale value left in the form after
+     unticking the box is unreachable.
+  3. **The price is FREE TEXT, inserted verbatim** — not `{min, max, currency}`.
+     Prefilled from R9's `computeSuggestedPrice` × `weeklyRate` (formatted exactly
+     as the Cost tab shows it) and always editable. This market quotes in several
+     currencies and attaches terms ("fixed, 3 milestones") a structured shape can't
+     carry, and the owner's exact words are the one thing we must not re-derive.
+  4. **Ceilings are enforced in CODE, and truncation is never allowed.**
+     `PROPOSAL_CEILINGS` (one file): upwork 900 · mostaql 700 · email 1200 ·
+     generic 900 — platform realities, not style. Over the ceiling ⇒ **one** retry
+     quoting the real overshoot; still over ⇒ keep the **shorter** of the two and
+     show it with a warning chip. A message cut at 900 chars ends mid-thought, and
+     the owner — who asked for something ready to send — may not re-read it. Their
+     judgement about what to lose beats our substring. (The *fallback* composing a
+     shorter message via its `BUDGETS` ladder is not truncation: every rung is a
+     complete message that says less, and the link, the opted-in price, and the
+     closing question never fall off any rung.)
+  5. **Arabic output here is DELIBERATE, and is not the deferred GREEN item.**
+     Generated *artifacts* stay server-side English. This isn't an artifact — it's
+     the owner's outbound message to their client, and a Mostaql bid written in
+     English is a bid that loses. `CHANNEL_DEFAULT_LOCALE`: mostaql→ar, upwork→en,
+     email/generic→the project locale; always user-overridable.
+     **Known limit:** because the artifacts are English, the *offline fallback* in
+     Arabic mixes Arabic chrome with English scope text. The LLM path translates
+     naturally, so this only shows in mock/demo mode; fixing it properly is the
+     GREEN "Arabic generated artifacts" item — a deterministic fallback cannot
+     machine-translate.
+  6. **Drafts live on the SESSION** (`proposalDrafts Json?`, migration
+     `20260717120000_add_proposal_drafts`), capped at 5 by `appendProposalDraft` —
+     the R11 `fixLog` precedent, for the same reason: version snapshots rewind
+     design artifacts, and a restore must never rewind a message the owner already
+     sent. They are an **outbox, not an artifact**, so newest-first (unlike the
+     audit-log `appendFixLog`) and no table/repo of their own. The cap lives *in*
+     the helper because an uncapped JSON column grows one LLM-length message at a
+     time.
+  7. **Generating mints the share link** via the idempotent `ShareService.create`.
+     An owner asking for the message that says "the full scoping is here: <link>"
+     is unambiguously about to send it; `create` never rotates a link already in a
+     client's inbox, so the only alternative was a step existing purely to make the
+     code feel side-effect-free.
+  8. **Owner-only, end to end.** Nothing touches the public share payload — a
+     client must never learn how their vendor pitched them, what price was floated,
+     or which drafts were binned. There is no public counterpart to any of it.
+  9. **`session.clientName` is NOT defaulted server-side.** The web prefills the
+     form field from it and sends what the owner *confirmed*; a silent fallback
+     would add nothing but a path by which a dashboard label reaches a prompt
+     unseen. This keeps R5's invariant intact — no **design** agent reads it — with
+     the proposal writer as the one owner-confirmed exception, since the message is
+     addressed to that person.
+  Effort is recomputed with `buildEffortEstimate` (never read from a stored cost
+  estimate) so the owner can't quote a client a stale figure — the roadmap's rule.
+  API: `POST /proposal/:id/generate` (`ProGuard` + `THROTTLE_AI`) + `GET
+  /proposal/:id/drafts`, both owner-guarded. Metering is automatic (`thinkJson`
+  stamps `agent: proposal_writer`; the route's first path segment gives the stage).
+  **Web:** `ProposalModal` — the draft lands in an **editable textarea** (the
+  model's job is to kill the blank page, not to have the last word; copy takes what
+  is *on screen*), with a char counter vs the ceiling, "Try a different angle" (an
+  incrementing `variant`, which rotates the fallback's hook/closing too, so
+  regenerate changes something offline as well), and **the link shown separately**
+  because Upwork/Mostaql put links in their own field. Entry points: the project
+  header (once `apiDesign` exists) and the Export "Send to client" card (R12).
+  i18n `stages.proposal.*` + `project.proposal.*` (EN+AR); history keys use `{{n}}`,
+  not `count`, to dodge the Arabic CLDR-plural trap.
 - **Roadmap = effort-grounded phases (R10).** Additive/optional on `RoadmapPhase`:
   `moduleNames`, `weeksMin`/`weeksMax`, `isMvp`, `mvpStatement`, plus
   `alternativeRoadmaps` on the roadmap. The rule that holds it together:

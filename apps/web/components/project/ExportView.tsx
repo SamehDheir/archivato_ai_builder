@@ -7,6 +7,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  PenLine,
   Printer,
   Send,
   Users,
@@ -15,6 +16,7 @@ import { sharePath } from '@archivato/shared';
 import { exportApi, shareApi } from '@/lib/api';
 import { saveBlob, saveFile as download } from '@/lib/download';
 import { Button } from '@/components/ui/button';
+import { ProposalModal } from './ProposalModal';
 import { ScaffoldView } from './ScaffoldView';
 
 /** Opens the Markdown in a print window so the user can "Save as PDF". */
@@ -48,12 +50,29 @@ function printAsPdf(markdown: string) {
  * moves behind "More formats". **Nothing was removed** — every export that existed
  * is still one or two clicks away.
  */
-export function ExportView({ sessionId }: { sessionId: string }) {
+export function ExportView({
+  sessionId,
+  clientName,
+  suggestedPrice,
+}: {
+  sessionId: string;
+  /** Prefills the proposal message's client name (R5). */
+  clientName?: string | null;
+  /** Prefills the proposal message's price when a weekly rate is set (R9). */
+  suggestedPrice?: string | null;
+}) {
   const { t } = useTranslation('stages');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [writing, setWriting] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  // Radix unmounts an inactive TabsContent, so a pending "copied" reset would fire
+  // on an unmounted component. Clearing on unmount also stops a first click's timer
+  // from wiping the label a second click just set.
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
 
   async function run(kind: string, fn: () => Promise<void>) {
     setBusy(kind);
@@ -82,7 +101,8 @@ export function ExportView({ sessionId }: { sessionId: string }) {
       setShareUrl(url);
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 2000);
     });
   }
 
@@ -103,6 +123,12 @@ export function ExportView({ sessionId }: { sessionId: string }) {
               {copied
                 ? t('export.client.copied')
                 : label('client', t('export.client.cta'))}
+            </Button>
+            {/* R13 — the link alone is half a submission: someone still has to
+                write the message that carries it. */}
+            <Button variant="secondary" onClick={() => setWriting(true)}>
+              <PenLine />
+              {t('export.client.write')}
             </Button>
             {shareUrl && (
               <a
@@ -240,6 +266,15 @@ export function ExportView({ sessionId }: { sessionId: string }) {
       {/* The public share link also lives in the project header — it's free on
           every plan, while this whole tab is Pro. */}
       <ScaffoldView sessionId={sessionId} />
+
+      {writing && (
+        <ProposalModal
+          sessionId={sessionId}
+          clientName={clientName}
+          suggestedPrice={suggestedPrice}
+          onClose={() => setWriting(false)}
+        />
+      )}
     </div>
   );
 }

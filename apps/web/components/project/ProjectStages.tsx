@@ -17,6 +17,7 @@ import {
   Lock,
   MessageSquare,
   Network,
+  PenLine,
   Shapes,
   ShieldAlert,
   Sparkles,
@@ -24,6 +25,7 @@ import {
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
+import { buildEffortEstimate, computeSuggestedPrice } from '@archivato/shared';
 import type {
   ApiDesign,
   DatabaseDesign,
@@ -59,6 +61,7 @@ import { QaPlanPanel } from '@/components/qa/QaPlanPanel';
 import { StaleNotice } from '@/components/project/StaleNotice';
 import { ShareLinkCard } from '@/components/project/ShareLinkCard';
 import { ExportView } from '@/components/project/ExportView';
+import { ProposalModal } from '@/components/project/ProposalModal';
 import { OpenApiView } from '@/components/design/OpenApiView';
 import { ChatPanel } from '@/components/project/ChatPanel';
 import { VersionHistory } from '@/components/project/VersionHistory';
@@ -69,6 +72,7 @@ import { SummaryView } from '@/components/interview/SummaryView';
 import { ProductVisionPanel } from '@/components/product/ProductVisionPanel';
 import { useConfirm } from '@/components/shared/confirm-dialog';
 import { useUpgrade } from '@/components/billing/upgrade-dialog';
+import { useFormat } from '@/lib/i18n/format';
 
 /** The in-flight streaming generation: which stage + the accumulated console view. */
 export type StreamState = { stage: PipelineStageName; view: StreamView };
@@ -190,6 +194,7 @@ export function ProjectStages({
   onRefined,
   onRestored,
   onUpgraded,
+  clientName,
   weeklyRate,
   onSaveWeeklyRate,
   extendedArtifacts = true,
@@ -233,6 +238,8 @@ export function ProjectStages({
   onRestored: (snapshot: ProjectSnapshot) => void;
   /** Called after a successful in-place upgrade so the parent can refresh the plan. */
   onUpgraded?: () => void;
+  /** The end client this scoping is for (R5) — prefills the proposal message. */
+  clientName?: string | null;
   /** The owner's internal weekly rate for the cost page's suggested price. */
   weeklyRate?: number | null;
   /** Persist a new weekly rate (owner-only). */
@@ -250,8 +257,26 @@ export function ProjectStages({
   const setTab = onTabChange;
   const { t } = useTranslation('project');
   const openUpgrade = useUpgrade();
+  const { usd } = useFormat();
   // Which stage tab is currently in edit mode (null = viewing).
   const [editing, setEditing] = useState<TabKey | null>(null);
+  // R13 — the proposal message composer (owner-only; opens over the project).
+  const [writingProposal, setWritingProposal] = useState(false);
+
+  /**
+   * The owner's internal suggested price, formatted exactly as the Cost tab shows
+   * it, to prefill the proposal message. Null without a weekly rate — we never
+   * invent a figure, and the message simply carries no price.
+   *
+   * Derived here rather than read from the stored cost estimate for the same
+   * reason the roadmap does it: `buildEffortEstimate` is deterministic from the
+   * design, so it can't hand the owner a stale number to quote a client.
+   */
+  const suggestedPrice = useMemo(() => {
+    if (!design || !weeklyRate) return null;
+    const price = computeSuggestedPrice(buildEffortEstimate(design), weeklyRate);
+    return `${usd(price.min)} – ${usd(price.max)}`;
+  }, [design, weeklyRate, usd]);
   // Set right before an autosave updates a parent artifact, so the artifact-change
   // effect below doesn't mistake the autosave for a restore and close the editor.
   const skipEditingResetRef = useRef(false);
@@ -331,8 +356,13 @@ export function ProjectStages({
     if (!available[tab]) setTab('requirements');
     setEditing(null);
     onDirty(false);
+    // `extendedArtifacts` is in here because it feeds `available` (R12): if the
+    // threat/QA tabs are ever switched off while one of them is active, its trigger
+    // vanishes from the bar and the panel would be left rendered with nothing
+    // selected. No path does that today — the quiet action only switches them ON —
+    // but leaving the dep out makes that a silent trap for whoever adds one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, design, dbDesign, apiDesign]);
+  }, [doc, design, dbDesign, apiDesign, extendedArtifacts]);
 
   // Leaving a stage tab exits any open editor (the leave guard already ran in
   // the parent, so a confirmed switch discards the draft).
@@ -354,6 +384,28 @@ export function ProjectStages({
             the (Pro) Export tab. Shown once there's a design worth reading — the
             same floor the API mints against. */}
         {dbDesign && <ShareLinkCard sessionId={sessionId} />}
+
+        {/*
+          R13 — the step that was still manual. Everything above turns a client
+          call into a scoping; this turns the scoping into a submitted bid. It
+          sits beside the link because that is the pair the owner sends: a message
+          is what carries the link, and a link with no message is half a bid.
+
+          Gated on `apiDesign` — the same full-pipeline floor the API enforces. A
+          message whose credibility rests on "I scoped this properly" should not
+          be offered while the scoping is half-built.
+        */}
+        {apiDesign && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => setWritingProposal(true)}>
+              <PenLine className="h-4 w-4" />
+              {t('proposal.write')}
+            </Button>
+            <p className="text-xs text-muted-foreground" dir="auto">
+              {t('proposal.writeHint')}
+            </p>
+          </div>
+        )}
 
         {stream && (
           <StreamingConsole stage={stream.stage} view={stream.view} />
@@ -718,7 +770,11 @@ export function ProjectStages({
 
           {/* Export */}
           <TabsContent value="export" className="mt-4">
-            <ExportView sessionId={sessionId} />
+            <ExportView
+              sessionId={sessionId}
+              clientName={clientName}
+              suggestedPrice={suggestedPrice}
+            />
           </TabsContent>
 
           {/* API Docs (Swagger UI) */}
@@ -743,6 +799,15 @@ export function ProjectStages({
 
         {error && <p className="text-sm text-destructive">{error}</p>}
       </CardContent>
+
+      {writingProposal && (
+        <ProposalModal
+          sessionId={sessionId}
+          clientName={clientName}
+          suggestedPrice={suggestedPrice}
+          onClose={() => setWritingProposal(false)}
+        />
+      )}
     </Card>
   );
 }

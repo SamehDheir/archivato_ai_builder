@@ -5,6 +5,7 @@ import type {
   InterviewStatus,
   IntentAnalysis,
   OpenQuestion,
+  ProposalDraft,
   RequirementsSummary,
   ProjectIdeaInput,
   SlotMap,
@@ -63,14 +64,30 @@ export interface InterviewSession {
    */
   fixLog: FixLogEntry[] | null;
   /**
+   * The last 5 proposal cover messages written for this project (R13), newest
+   * first. Null until the owner writes one.
+   *
+   * **Owner-only** — this is the owner's outbox, not an artifact: it carries their
+   * price, their sender name, and what they chose to tell the client, and it is
+   * never projected onto the public share payload. It lives on the session for the
+   * same reason as `fixLog`: version snapshots rewind design artifacts, and a
+   * restore must not rewind messages the owner has already sent.
+   */
+  proposalDrafts: ProposalDraft[] | null;
+  /**
    * Whether this project generates the threat model + QA plan (R12).
    *
-   * Never null: the column defaults TRUE, so every row predating it keeps the
-   * behaviour it already had. A new project's default is derived from the stated
-   * budget **once, at the confirmation gate** (the budget slot isn't filled until
-   * the interview has run), and the owner can override it there or later.
+   * **`null` = the owner hasn't decided**, so the budget-derived default applies —
+   * read it through `resolveExtendedArtifacts(…, slots)`, never bare. That marker
+   * is what lets the toggle at the gate keep tracking a corrected `budget_range`
+   * until the owner touches it; once they do, this holds their choice and no slot
+   * edit can overrule it. `confirm()` pins a value, so every confirmed project has
+   * an explicit answer.
+   *
+   * Rows predating R12 were backfilled to `true`, so nothing already created
+   * changed behaviour.
    */
-  generateExtendedArtifacts: boolean;
+  generateExtendedArtifacts: boolean | null;
   createdAt: Date;
   updatedAt: Date;
 }

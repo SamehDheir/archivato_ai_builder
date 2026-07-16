@@ -20,7 +20,11 @@ import type {
   SystemDesign,
   ThreatModel,
 } from '@archivato/shared';
-import { redactReviewForShare, shouldWatermarkShare } from '@archivato/shared';
+import {
+  redactReviewForShare,
+  resolveExtendedArtifacts,
+  shouldWatermarkShare,
+} from '@archivato/shared';
 import { BillingService } from '../billing/billing.service';
 import {
   INTERVIEW_SESSION_REPOSITORY,
@@ -202,9 +206,13 @@ export class ShareService {
     // typically anonymous, and even a signed-in one is the wrong subject: whose
     // proposal this is decides whose brand is on it. Never a client-supplied flag.
     const plan = await this.billing.planFor(session.userId);
-    // Absent only on a session read through a pre-R12 client; the column defaults
-    // true, which is the behaviour every existing project already had.
-    const extended = session.generateExtendedArtifacts ?? true;
+    // `confirm()` pins this, and a shareable design implies a confirmed interview,
+    // so in practice the stored value is always explicit here — resolve anyway
+    // rather than assume, since the fallback is a pure function of the slots.
+    const extended = resolveExtendedArtifacts(
+      session.generateExtendedArtifacts,
+      session.slots,
+    );
 
     // Best-effort: a failed counter must never break the page.
     this.links.recordView(token).catch((e: unknown) => {
@@ -268,6 +276,12 @@ export class ShareService {
     if (!session) {
       throw new NotFoundException(`Interview session ${sessionId} not found.`);
     }
+    // R12 — resolved here as well as in `view()`; both are cheap pure calls, and
+    // this one is what keeps the two extra reads off the hot path.
+    const extended = resolveExtendedArtifacts(
+      session.generateExtendedArtifacts,
+      session.slots,
+    );
 
     const [
       requirements,
@@ -289,8 +303,11 @@ export class ShareService {
       this.visions.findBySessionId(sessionId),
       this.estimates.findBySessionId(sessionId),
       this.roadmaps.findBySessionId(sessionId),
-      this.threatModels.findBySessionId(sessionId),
-      this.qaPlans.findBySessionId(sessionId),
+      // R12 — a project that switched these off will have them nulled from the
+      // payload anyway, so don't pay for the reads. This is the one route built to
+      // absorb a link going viral.
+      extended ? this.threatModels.findBySessionId(sessionId) : null,
+      extended ? this.qaPlans.findBySessionId(sessionId) : null,
     ]);
 
     // The gate is unchanged: the design chain through the database design. The

@@ -187,6 +187,7 @@
         "selected_one": "{{count}} finding selected",
         "propose": "Propose fixes for selected",
         "clear": "Clear",
+        "limit": "You can fix up to {{max}} findings at once.",
         "select": "Select \"{{title}}\" for a batch fix"
       },
       "preview": {
@@ -314,7 +315,8 @@
       "body": "A read-only proposal page — vision, scope, cost and roadmap. No account needed to open it.",
       "cta": "Copy client link",
       "copied": "Link copied",
-      "preview": "Preview it"
+      "preview": "Preview it",
+      "write": "Write the message"
     },
     "team": {
       "title": "Hand off to your team",
@@ -673,5 +675,55 @@
     "revokeConfirm": "Revoke link",
     "views": "{{n}} views",
     "failed": "Something went wrong. Try again."
+  },
+  "proposal": {
+    "title": "Write the proposal message",
+    "subtitle": "Built from this scoping. Edit it before you send — it goes out under your name.",
+    "close": "Close",
+    "channel": {
+      "label": "Where are you sending it?",
+      "upwork": "Upwork",
+      "mostaql": "Mostaql",
+      "email": "Email",
+      "generic": "Anywhere else"
+    },
+    "language": {
+      "label": "Language",
+      "auto": "Auto ({{lang}})",
+      "en": "English",
+      "ar": "Arabic"
+    },
+    "clientName": "Client name",
+    "clientNamePlaceholder": "Who you are writing to",
+    "senderName": "From",
+    "senderNamePlaceholder": "Your name",
+    "companyNamePlaceholder": "Your company",
+    "hook": "Anything to weave in?",
+    "hookPlaceholder": "e.g. a line from their posting you want to answer",
+    "price": {
+      "include": "State a price in the message",
+      "placeholder": "e.g. $6,000 – $9,000",
+      "prefilled": "Prefilled from your weekly rate × the effort estimate. Edit it freely — this exact text is what goes in.",
+      "hint": "Written in exactly as you type it. Set a weekly rate on the Cost tab to prefill a suggestion."
+    },
+    "write": "Write the message",
+    "writing": "Writing…",
+    "draft": "Your message",
+    "regenerate": "Try a different angle",
+    "copy": "Copy message",
+    "copied": "Copied",
+    "overLength": "{{n}} characters over the {{channel}} limit. Trim it before sending — we won’t cut it for you, because a message cut mid-sentence is worse than a long one.",
+    "fallbackNote": "Written from a template — the AI was unavailable. It’s sendable, but worth a read.",
+    "link": {
+      "label": "Your client link",
+      "copy": "Copy link",
+      "preview": "Preview it"
+    },
+    "history": {
+      "toggle": "Earlier drafts",
+      "title": "Last {{n}} drafts",
+      "priced": "with price",
+      "over": "over limit"
+    }
   }
 }

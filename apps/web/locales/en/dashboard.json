@@ -230,6 +230,8 @@
     "apiSaved": "API design saved",
     "refined": "Design refined",
     "fixApplied": "Fix applied",
+    "findingResolved": "Finding updated",
+    "settingSaveFailed": "Couldn't save that setting",
     "restored": "Scoping restored to selected version",
     "generated": "{{stage}} generated",
     "generateFailed": "Could not generate {{stage}}",

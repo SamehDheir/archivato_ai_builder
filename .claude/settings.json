@@ -205,7 +205,12 @@
       "Bash(grep -rniE \"\\\\\\\\\\\\$19|\\\\\\\\\\\\$182|5 projects|1 project\\\\b|Free = 1|Pro \\\\\\(5\" README.md DEPLOY.md docs/*.md)",
       "Bash(grep -rnE \"\\\\\\\\\\\\$19\\\\b|182|projectQuota: 5\" apps/api/src apps/web packages/shared/src --include=*.ts --include=*.tsx --include=*.json)",
       "PowerShell($env:NEXT_DIST_DIR=\".next-perf\"; $env:NEXT_SKIP_STANDALONE=\"1\"; npm run build 2>&1 | Select-String -Pattern \"error|Error|✓ Compiled|Compiled successfully|Failed|warn\" | Select-Object -First 20)",
-      "PowerShell($env:NEXT_DIST_DIR=\".next-perf\"; $env:NEXT_SKIP_STANDALONE=\"1\"; npm run build 2>&1 | Select-String -Pattern \"error|Failed|Compiled successfully\" | Select-Object -First 8; Write-Output \"=== tsconfig untouched? ===\"; git diff --stat apps/web/tsconfig.json)"
+      "PowerShell($env:NEXT_DIST_DIR=\".next-perf\"; $env:NEXT_SKIP_STANDALONE=\"1\"; npm run build 2>&1 | Select-String -Pattern \"error|Failed|Compiled successfully\" | Select-Object -First 8; Write-Output \"=== tsconfig untouched? ===\"; git diff --stat apps/web/tsconfig.json)",
+      "Bash(sed -i \"s|'./packages/shared/dist/index.js'|'d:/portoflio/Archivato AI Builder/packages/shared/dist/index.js'|\" \"C:/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/5b0aff3d-f69b-49ff-a910-aa28a93dd8a4/scratchpad/sample.js\")",
+      "Bash(node \"C:/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/5b0aff3d-f69b-49ff-a910-aa28a93dd8a4/scratchpad/sample.js\")",
+      "Bash(grep -n \"product-vision\\\\`, \\\\`roadmap\\\\`\" CLAUDE.md)",
+      "Bash(python \"C:/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/5b0aff3d-f69b-49ff-a910-aa28a93dd8a4/scratchpad/claudemd.py\")",
+      "Bash(python \"C:/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/5b0aff3d-f69b-49ff-a910-aa28a93dd8a4/scratchpad/readme.py\")"
     ],
     "additionalDirectories": [
       "\\tmp"

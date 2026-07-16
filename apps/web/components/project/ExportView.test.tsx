@@ -7,6 +7,13 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+// `useLocale` is mocked rather than provided, because react-i18next is already
+// mocked out above — importing the real module would initialise i18next against a
+// stubbed `initReactI18next`. Same reason as ExampleProjectView/SharedProjectView.
+jest.mock('@/components/shared/i18n', () => ({
+  useLocale: () => ({ locale: 'en', setLocale: () => {} }),
+}));
+
 jest.mock('@/lib/api', () => ({
   exportApi: {
     all: jest.fn(),
@@ -19,6 +26,7 @@ jest.mock('@/lib/api', () => ({
     postman: jest.fn(),
   },
   shareApi: { create: jest.fn() },
+  proposalApi: { generate: jest.fn(), drafts: jest.fn().mockResolvedValue([]) },
 }));
 
 // The scaffold panel self-fetches; it isn't what these assertions are about.
@@ -40,6 +48,21 @@ describe('ExportView', () => {
     expect(
       screen.getByRole('button', { name: /export\.team\.cta/ }),
     ).toBeInTheDocument();
+  });
+
+  // R13 — the link is only half a submission; the message that carries it is the
+  // other half, so it sits in the same card rather than behind a format menu.
+  it('offers the proposal message beside the client link, and opens the composer', async () => {
+    render(<ExportView sessionId="s1" />);
+
+    const write = screen.getByRole('button', { name: /export\.client\.write/ });
+    expect(write).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await userEvent.click(write);
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('proposal.title')).toBeInTheDocument();
   });
 
   it('keeps every individual format reachable under "More formats"', async () => {

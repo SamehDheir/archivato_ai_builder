@@ -27,6 +27,8 @@ export enum AgentRole {
   QaPlanner = 'qa_planner',
   /** Drafts a targeted fix for a review finding, for the owner to approve (R11). */
   Patcher = 'patcher',
+  /** Writes the client-facing cover message that carries the scoping link (R13). */
+  ProposalWriter = 'proposal_writer',
 }
 
 /** A single turn in an LLM conversation. */

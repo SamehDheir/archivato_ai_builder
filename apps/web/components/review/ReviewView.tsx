@@ -41,6 +41,14 @@ const SEVERITY_CLASS: Record<Severity, string> = {
 /** Findings at these severities are surfaced in the Critical Issues callout. */
 const CRITICAL: Severity[] = ['high', 'critical'];
 
+/**
+ * How many findings one batch may draft a fix for. Mirrors `MAX_BATCH` in the
+ * API's `ProposeFixDto` — the server is the boundary, but letting the owner tick a
+ * sixth box only to be handed a class-validator error is a worse way to learn the
+ * limit than not being able to tick it.
+ */
+const MAX_BATCH = 5;
+
 function scoreClass(score: number): string {
   if (score >= 80) return 'text-success border-success';
   if (score >= 60) return 'text-warning border-warning';
@@ -277,6 +285,7 @@ export function ReviewView({
         <FixPreviewModal
           proposal={fix.proposal}
           busy={fix.busy}
+          error={fix.error}
           onApply={fix.apply}
           onClose={fix.discard}
         />
@@ -309,7 +318,6 @@ function useFixFlow({
   onFixApplied?: (result: FixResult) => void;
   onRegenerate?: () => void;
 }) {
-  const { t } = useTranslation('stages');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [proposal, setProposal] = useState<FixProposal | null>(null);
   const [busy, setBusy] = useState(false);
@@ -317,6 +325,26 @@ function useFixFlow({
   const [log, setLog] = useState<FixResult['fixLog']>([]);
   const [applied, setApplied] = useState(0);
   const [delta, setDelta] = useState<{ from: number; to: number } | null>(null);
+
+  // Load the existing log. It lives on the SESSION precisely so it outlives the
+  // report — a re-run replaces the review and a restore can rewind it — so it has
+  // to be fetched, not just accumulated from actions taken on this page. Without
+  // this an owner returning tomorrow sees no history at all.
+  useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
+    reviewApi
+      .fixLog(sessionId)
+      .then((entries) => {
+        if (!cancelled) setLog(entries);
+      })
+      // Best-effort: the log is a record of past work, not part of this render.
+      // Failing to load it must not break the report the owner came here for.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
 
   const overall = report.overallScore ?? report.scalabilityScore;
   // The score captured at the moment Re-run was pressed. A ref, not state, so the
@@ -343,7 +371,11 @@ function useFixFlow({
     // `resolved` is how many findings the action dealt with — a batch apply
     // resolves several at once, so counting actions would under-report it and the
     // re-run prompt would say "you applied 1 fix" after fixing three.
-    async (fn: () => Promise<FixResult>, resolved = 1) => {
+    //
+    // Returns whether it landed, because the caller has to know: closing the
+    // preview on a failure would throw away a draft the owner would have to pay
+    // for again.
+    async (fn: () => Promise<FixResult>, resolved = 1): Promise<boolean> => {
       setBusy(true);
       setError(null);
       try {
@@ -352,8 +384,10 @@ function useFixFlow({
         setApplied((n) => n + resolved);
         setDelta(null);
         onFixApplied?.(result);
+        return true;
       } catch (e) {
         fail(e);
+        return false;
       } finally {
         setBusy(false);
       }
@@ -379,10 +413,14 @@ function useFixFlow({
 
   const apply = useCallback(async () => {
     if (!sessionId || !proposal) return;
-    await run(
+    const ok = await run(
       () => reviewApi.applyFix(sessionId, proposal),
       proposal.findingIds.length,
     );
+    // Keep the preview open on failure. The draft cost a model call, and the error
+    // is about *this* patch — discarding it would make the owner pay to see the
+    // same thing again, with the message hidden behind a modal that just closed.
+    if (!ok) return;
     setProposal(null);
     setSelected(new Set());
   }, [sessionId, proposal, run]);
@@ -391,7 +429,9 @@ function useFixFlow({
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
-      else next.add(id);
+      // Deselecting is always allowed; only adding past the cap is refused, so the
+      // owner can never get stuck with a selection they can't act on.
+      else if (next.size < MAX_BATCH) next.add(id);
       return next;
     });
   }, []);
@@ -409,6 +449,7 @@ function useFixFlow({
   return {
     selected,
     toggle,
+    atBatchLimit: selected.size >= MAX_BATCH,
     clearSelection: () => setSelected(new Set()),
     proposeSelected: () => propose([...selected]),
     proposal,
@@ -568,7 +609,13 @@ function FindingCard({
             type="checkbox"
             checked={fix.selected.has(finding.id!)}
             onChange={() => fix.toggle(finding.id!)}
-            className="h-3.5 w-3.5 shrink-0 accent-primary"
+            disabled={fix.atBatchLimit && !fix.selected.has(finding.id!)}
+            className="h-3.5 w-3.5 shrink-0 accent-primary disabled:opacity-40"
+            title={
+              fix.atBatchLimit && !fix.selected.has(finding.id!)
+                ? t('review.fix.batch.limit', { max: MAX_BATCH })
+                : undefined
+            }
             aria-label={t('review.fix.batch.select', { title: finding.title })}
           />
         )}

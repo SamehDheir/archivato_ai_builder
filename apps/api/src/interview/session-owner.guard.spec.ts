@@ -35,6 +35,7 @@ function seed(
     slots: null,
     openQuestions: null,
     fixLog: null,
+    proposalDrafts: null,
     generateExtendedArtifacts: true,
     createdAt: now,
     updatedAt: now,

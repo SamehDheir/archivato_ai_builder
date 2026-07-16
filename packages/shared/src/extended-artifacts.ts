@@ -53,3 +53,26 @@ export function defaultExtendedArtifacts(
   if (!budget) return true;
   return budget.max > EXTENDED_ARTIFACTS_BUDGET_THRESHOLD;
 }
+
+/**
+ * The project's effective answer: the owner's explicit choice if they made one,
+ * otherwise the budget-derived default.
+ *
+ * **`null` is the marker for "nobody has decided yet"**, and it is what keeps the
+ * suggestion live. The default used to be computed once and written to the row at
+ * the confirmation gate — which quietly broke the feature for the user who cared
+ * most: the gate lets you *correct* `budget_range` right above the toggle, and a
+ * stored default couldn't react to that. Reach the gate with no budget (defaults
+ * on), fix it to "$3,000", and the toggle still said on.
+ *
+ * Deriving on read instead means the toggle tracks the budget until the moment the
+ * owner touches it; from then on the stored boolean wins and no slot edit can
+ * overrule them. `confirm()` pins the value, so every confirmed project carries a
+ * definite answer rather than one that depends on re-parsing a sentence.
+ */
+export function resolveExtendedArtifacts(
+  stored: boolean | null | undefined,
+  slots: SlotMap | null | undefined,
+): boolean {
+  return stored ?? defaultExtendedArtifacts(slots);
+}

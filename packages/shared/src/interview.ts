@@ -167,9 +167,14 @@ export interface ProjectSummary {
   /** Optional user-set display name; falls back to `idea` when absent. */
   title?: string;
   /**
-   * The end client this scoping is for (optional, owner-set). Purely a label for
-   * the owner's own dashboard — it is **not** part of `idea`, so it never reaches
-   * an agent prompt and never crosses onto the public share page.
+   * The end client this scoping is for (optional, owner-set). A label for the
+   * owner's own dashboard — it is **not** part of `idea`, so no design agent ever
+   * reads it and it never crosses onto the public share page.
+   *
+   * One deliberate exception, and only via the owner's hand: the R13 proposal
+   * composer prefills its "client name" field from this, because that message is
+   * addressed *to* this person. It reaches the writer only as form input the owner
+   * saw and can clear — the service never defaults to it silently.
    */
   clientName?: string;
   status: InterviewStatus;

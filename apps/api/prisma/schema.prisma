@@ -263,10 +263,20 @@ model InterviewSession {
   /// Lives here rather than on the review because a re-run REPLACES the review row
   /// and a version restore can rewind it — an audit log must survive both.
   fixLog          Json?
-  /// Whether this project generates the threat model + QA plan (R12). Defaults TRUE
-  /// so every EXISTING row keeps the behaviour it already had; new projects get a
-  /// budget-derived default at the confirmation gate, which the owner can override.
-  generateExtendedArtifacts Boolean @default(true)
+  /// The last 5 proposal cover messages generated for this project (R13,
+  /// ProposalDraft[], newest first — capped by `appendProposalDraft`). OWNER-ONLY:
+  /// it is on the session, never projected onto the public share payload. Lives
+  /// here rather than in its own table for the same reason as `fixLog`: these are
+  /// the owner's outbox, not a generated artifact, so a version restore (which
+  /// rewinds design artifacts) must never rewind them.
+  proposalDrafts  Json?
+  /// Whether this project generates the threat model + QA plan (R12).
+  /// **NULL = the owner hasn't decided**, so the budget-derived default applies
+  /// (`resolveExtendedArtifacts`) and keeps tracking the budget slot while they're
+  /// still at the gate. A non-null value is their explicit choice and wins over the
+  /// derivation; `confirm()` pins one. Existing rows were backfilled to `true` by
+  /// the previous migration, so nothing already created changed behaviour.
+  generateExtendedArtifacts Boolean?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

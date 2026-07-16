@@ -30,6 +30,8 @@ import type {
   GithubConnectionStatus,
   ProductVision,
   ProjectRoadmap,
+  ProposalControls,
+  ProposalDraft,
   CostEstimate,
   ProjectOverview,
   ProjectSummary,
@@ -953,6 +955,23 @@ export const exportApi = {
     request<Record<string, unknown>>(`/export/${sessionId}/postman`),
   /** Every format bundled into one .zip Blob. */
   all: (sessionId: string) => requestBlob(`/export/${sessionId}/all.zip`),
+};
+
+/**
+ * The proposal cover message (R13) — owner-only, so there is no public read here.
+ * `generate` mints the share link as a side effect (idempotently), which is why
+ * the caller gets a `shareUrl` back without asking for one.
+ */
+export const proposalApi = {
+  generate: (sessionId: string, controls: ProposalControls) =>
+    request<ProposalDraft>(`/proposal/${sessionId}/generate`, {
+      method: 'POST',
+      body: JSON.stringify(controls),
+    }),
+
+  /** The project's last few drafts, newest first. */
+  drafts: (sessionId: string) =>
+    request<ProposalDraft[]>(`/proposal/${sessionId}/drafts`),
 };
 
 export const shareApi = {

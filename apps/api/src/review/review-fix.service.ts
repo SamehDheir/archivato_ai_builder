@@ -332,10 +332,18 @@ export class ReviewFixService {
       });
     }
 
-    const [review] = await Promise.all([
-      this.reports.upsert(next),
-      this.sessions.save({ ...session, fixLog: log ?? [] }),
-    ]);
+    // Sequential, log first — NOT a Promise.all. There is no transaction across
+    // these two stores, so the question is which half-write is survivable. The
+    // artifact was already patched before we got here, so:
+    //
+    //   - log first, report second → worst case the fix is recorded and the
+    //     finding still reads `open`; the owner is re-offered a fix for something
+    //     already done, which is visible and harmless.
+    //   - report first, log second → worst case the finding reads `resolved` with
+    //     no record of who changed what. An audit log with a hole in it is worse
+    //     than a duplicate offer, and nothing surfaces the omission.
+    await this.sessions.save({ ...session, fixLog: log ?? [] });
+    const review = await this.reports.upsert(next);
 
     return {
       review,

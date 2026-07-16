@@ -23,11 +23,18 @@ import { diffSection, sectionLabelKey, type DiffLine } from './fix-preview';
 export function FixPreviewModal({
   proposal,
   busy,
+  error,
   onApply,
   onClose,
 }: {
   proposal: FixProposal;
   busy: boolean;
+  /**
+   * A failed apply. Shown here rather than only on the page behind, because the
+   * preview deliberately stays open when a patch is rejected — an error the modal
+   * covers is an error nobody reads.
+   */
+  error?: string | null;
   onApply: () => void;
   onClose: () => void;
 }) {
@@ -91,8 +98,14 @@ export function FixPreviewModal({
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/30 p-4">
-          <p className="text-xs text-muted-foreground">
-            {t('review.fix.preview.stale')}
+          <p
+            className={cn(
+              'text-xs',
+              error ? 'text-destructive' : 'text-muted-foreground',
+            )}
+            dir="auto"
+          >
+            {error ?? t('review.fix.preview.stale')}
           </p>
           <div className="flex shrink-0 gap-2">
             <Button variant="ghost" onClick={onClose} disabled={busy}>

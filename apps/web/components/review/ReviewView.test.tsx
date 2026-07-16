@@ -9,9 +9,13 @@ jest.mock('react-i18next', () => ({
 }));
 
 const proposeFix = jest.fn();
+const fetchFixLog = jest.fn();
 jest.mock('@/lib/api', () => ({
   reviewApi: {
     proposeFix: (...args: unknown[]) => proposeFix(...args),
+    // The view loads the existing log on mount (it lives on the session, so it
+    // outlives the report and can't just be accumulated from this page's actions).
+    fixLog: (...args: unknown[]) => fetchFixLog(...args),
     applyFix: jest.fn(),
     addClientQuestion: jest.fn(),
     addOutOfScope: jest.fn(),
@@ -37,7 +41,11 @@ const report: ReviewReport = normalizeReviewReport({
 } as unknown as ReviewReport);
 
 describe('ReviewView', () => {
-  beforeEach(() => proposeFix.mockReset());
+  beforeEach(() => {
+    proposeFix.mockReset();
+    fetchFixLog.mockReset();
+    fetchFixLog.mockResolvedValue([]);
+  });
 
   it('renders the findings read-only when there is no session', () => {
     // How the public share page and the read-only example project mount it. The
@@ -70,6 +78,30 @@ describe('ReviewView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'review.fix.propose' }));
 
     expect(proposeFix).toHaveBeenCalledWith('s1', ['security:0']);
+  });
+
+  it('loads the existing fix log on mount, not just this session\'s actions', async () => {
+    // The log lives on the session so it survives a review re-run and a version
+    // restore. If it were only accumulated from actions taken here, an owner
+    // returning to the page would see no history at all.
+    fetchFixLog.mockResolvedValue([
+      {
+        findingId: 'security:0',
+        findingTitle: 'No encryption stated',
+        action: 'patch_applied',
+        artifactsTouched: ['requirements'],
+        at: '2026-01-03T00:00:00.000Z',
+      },
+    ]);
+    render(<ReviewView report={report} sessionId="s1" onFixApplied={jest.fn()} />);
+
+    expect(fetchFixLog).toHaveBeenCalledWith('s1');
+    expect(await screen.findByText('review.fix.log.title')).toBeInTheDocument();
+  });
+
+  it('never fetches the fix log without a session', () => {
+    render(<ReviewView report={report} />);
+    expect(fetchFixLog).not.toHaveBeenCalled();
   });
 
   it('hides the actions once a finding is resolved', () => {
