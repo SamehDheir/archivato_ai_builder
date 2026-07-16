@@ -62,6 +62,15 @@ export interface InterviewSession {
    * in version snapshots, so a restore would rewind a log stored there.
    */
   fixLog: FixLogEntry[] | null;
+  /**
+   * Whether this project generates the threat model + QA plan (R12).
+   *
+   * Never null: the column defaults TRUE, so every row predating it keeps the
+   * behaviour it already had. A new project's default is derived from the stated
+   * budget **once, at the confirmation gate** (the budget slot isn't filled until
+   * the interview has run), and the owner can override it there or later.
+   */
+  generateExtendedArtifacts: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

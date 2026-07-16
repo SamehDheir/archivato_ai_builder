@@ -49,6 +49,8 @@ interface Harness {
   costs: InMemoryCostEstimateRepository;
   roadmaps: InMemoryProjectRoadmapRepository;
   reviews: InMemoryReviewReportRepository;
+  threats: InMemoryThreatModelRepository;
+  qaPlans: InMemoryQaPlanRepository;
   users: InMemoryUserRepository;
   billing: BillingService;
   share: ShareService;
@@ -107,6 +109,9 @@ function makeHarness(): Harness {
     new InMemoryBillingEventRepository(),
   );
 
+  const threatRepo = new InMemoryThreatModelRepository();
+  const qaRepo = new InMemoryQaPlanRepository();
+
   const share = new ShareService(
     new InMemoryShareLinkRepository(),
     sessionRepo,
@@ -118,8 +123,8 @@ function makeHarness(): Harness {
     visionRepo,
     costRepo,
     roadmapRepo,
-    new InMemoryThreatModelRepository(),
-    new InMemoryQaPlanRepository(),
+    threatRepo,
+    qaRepo,
     billing,
   );
   return {
@@ -135,6 +140,8 @@ function makeHarness(): Harness {
     costs: costRepo,
     roadmaps: roadmapRepo,
     reviews: reviewRepo,
+    threats: threatRepo,
+    qaPlans: qaRepo,
     users: userRepo,
     billing,
     share,
@@ -170,6 +177,29 @@ async function confirmedSession(h: Harness): Promise<string> {
   }
   await h.interview.confirm(sessionId);
   return sessionId;
+}
+
+/** Store a minimal threat model + QA plan, as their stages would have. */
+async function seedExtendedArtifacts(h: Harness, sessionId: string) {
+  const generatedAt = new Date().toISOString();
+  await h.threats.upsert({
+    sessionId,
+    generatedAt,
+    summary: 'A STRIDE pass.',
+    threats: [],
+    trustBoundaries: [],
+    assumptions: [],
+  });
+  await h.qaPlans.upsert({
+    sessionId,
+    generatedAt,
+    summary: 'A test plan.',
+    strategy: ['Test the booking flow.'],
+    suites: [],
+    coverageGoals: [],
+    tooling: [],
+    outOfScope: [],
+  });
 }
 
 /** Everything a **Free** owner can generate: no API design, no review. */
@@ -239,6 +269,29 @@ describe('ShareService', () => {
     expect(shared.qaPlan).toBeNull();
     // …and the design it does have is still there.
     expect(shared.requirements.functional.length).toBeGreaterThan(0);
+  });
+
+  // R12 — a project that switched the extended artifacts off doesn't put them in
+  // front of a client, even if they were generated before the owner turned them
+  // off. Enforced in the payload, not by not-generating alone.
+  it('hides the threat model + QA plan when the project opted out', async () => {
+    const h = makeHarness();
+    const sessionId = await freePipeline(h);
+    await seedExtendedArtifacts(h, sessionId);
+
+    // On by default: both cross.
+    const on = await h.share.view((await h.share.create(sessionId)).token);
+    expect(on.threatModel).not.toBeNull();
+    expect(on.qaPlan).not.toBeNull();
+
+    await h.interview.update(sessionId, { generateExtendedArtifacts: false });
+
+    const off = await h.share.view((await h.share.create(sessionId)).token);
+    expect(off.threatModel).toBeNull();
+    expect(off.qaPlan).toBeNull();
+    // The rest of the proposal is untouched — this hides two sections, not a design.
+    expect(off.requirements.functional.length).toBeGreaterThan(0);
+    expect(off.systemDesign.services.length).toBeGreaterThan(0);
   });
 
   // The page leads with these three — they are what the *client* reads — so they

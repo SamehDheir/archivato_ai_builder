@@ -390,6 +390,43 @@ tsconfig and never needs shared's `dist`.
   (raw JSON would make them diff punctuation instead of judging wording). i18n
   `stages.review.fix.*` (EN+AR); the three `count` keys carry the **full Arabic CLDR
   plural set**.
+- **Optional extended artifacts (R12) — `generateExtendedArtifacts`.** The threat
+  model and QA plan are **Pro, LLM-billed, and slow**, and they're the two a small
+  fixed-price job least often needs: offering them by default on a $4k build made
+  the tool feel heavier than the deal. They're now **opt-in per project**, via one
+  `Boolean @default(true)` column on the session (migration
+  `20260716140000_add_extended_artifacts`) — the default is what makes this a
+  **zero-behaviour-change** slice for everything already created. Rules:
+  1. **Unknown means yes.** `defaultExtendedArtifacts(slots)` (pure,
+     `extended-artifacts.ts`) flips to `false` only when `budget_range` **parses**
+     and its **top** is ≤ `EXTENDED_ARTIFACTS_BUDGET_THRESHOLD` ($10k, one edit
+     site). Missing / unparseable / `na` ⇒ **true** — the `parseBudget` "null, never
+     a guess" rule. Silently withholding a security analysis because we misread a
+     sentence would be the worst failure here, and invisible. It reads the range's
+     **top** so a "5k–12k" project (which can stretch to the assurance work) stays on.
+  2. **Derived once, at the confirmation gate**, inside `advance()` when it closes
+     the gate — `start()` has no budget slot yet, and `answer()` refuses a
+     non-collecting session, so `advance()` can't fire again. That's what lets the
+     owner's toggle survive: a later re-derivation would silently undo their choice.
+  3. **Off ⇒ cleanly absent, never stale.** The artifacts are simply never
+     generated, so `isStale()` reads a missing artifact as fresh — no new pipeline
+     state, no new gating mechanic. `EXTENDED_TABS` are **hidden** from the nav (not
+     disabled: a disabled tab invites a click that does nothing), and `available`
+     *and* the dashboard's duplicate `stageAvailable` map both AND-in the flag —
+     the **command palette navigates by key too**, so "unlisted" isn't "unreachable".
+  4. **The share payload enforces it server-side**, not the absence alone:
+     `ShareService.view` nulls both when the flag is off, so an owner who generated
+     them and *then* opted out doesn't put them in front of a client.
+  5. **Activation reuses `PATCH /interview/:id`** — no endpoint, no new state. The
+     quiet "Generate security & QA artifacts" link (muted, under the tabs, only once
+     an `apiDesign` exists) flips the flag; each stage then generates on demand as
+     it always did, so nothing else re-runs.
+  **Absence-tolerance audit (R12): nothing needed fixing.** `ExportService` never
+  included them; the review's consistency checks read effort/timeline/constraints/
+  buildVsBuy/serviceSubscriptions only; version snapshots deliberately exclude them;
+  `ProjectsService`'s artifact booleans don't cover them. The share page already had
+  `?? null` + `{threatModel && …}` — because both are **Pro stages a free owner
+  never has**, so R12 inherited that tolerance for free.
 - **Roadmap = effort-grounded phases (R10).** Additive/optional on `RoadmapPhase`:
   `moduleNames`, `weeksMin`/`weeksMax`, `isMvp`, `mvpStatement`, plus
   `alternativeRoadmaps` on the roadmap. The rule that holds it together:
@@ -1737,6 +1774,24 @@ tsconfig and never needs shared's `dist`.
   any value is earned); and **confirming the interview auto-generates Requirements**
   (no redundant Generate click on an empty tab). i18n `dashboard.starters.*` /
   `dashboard.example.*` / `interview.questionN` (EN+AR).
+- **The artifact nav is ordered by the DEAL, not the build (R12).** `TABS` runs
+  vision → requirements → **cost → roadmap** → system → database → api → apidocs →
+  diagrams → canvas → review → threat → qa → export. It used to mirror the
+  *pipeline* (requirements → system → database → api), which is the order the
+  **machine** works in, not the order the owner sells in — what a dev shop reaches
+  for after a client call is the scope, the price, and the timeline. Purely
+  presentational: routes and deep links are unchanged, and cost/roadmap still need
+  the full pipeline, so they sit early **disabled** until the API design exists.
+  That's the honest read ("this is coming, and it's what matters") where burying
+  them behind eight technical tabs said the opposite.
+- **The export surface is organised by AUDIENCE, not by file format (R12).**
+  `ExportView` = two primary cards — **Send to client** (`shareApi.create`,
+  idempotent, copies the link) and **Hand off to your team** (the existing
+  `all.zip`) — plus a **"More formats"** dropdown holding every individual export,
+  unchanged. **Nothing was removed**; the flat row of nine equal buttons just asked
+  the owner to know what a Postman collection was before they could send a client
+  anything. Pinned by `ExportView.test.tsx` (every format still reachable).
+  **Client-facing PDF is deliberately NOT built** — see the TODO note below.
 - Confirmed project view = `ProjectStages` (tabbed, one stage per tab, downstream
   tabs disabled until prereqs exist). `app/dashboard/page.tsx` is the slim
   orchestrator. Above it, `ProjectWizard` is the single stage stepper (Interview →

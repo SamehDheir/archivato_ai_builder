@@ -24,6 +24,7 @@ export * from './api-design.coverage';
 export * from './api-design.rest';
 export * from './mock-response';
 export * from './freshness';
+export * from './extended-artifacts';
 export * from './review';
 export * from './review.fix';
 export * from './threat-model';

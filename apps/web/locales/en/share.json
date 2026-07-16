@@ -27,7 +27,7 @@
   },
   "appendix": {
     "title": "Technical details",
-    "lead": "For the developers who will build this. You don't need any of it to make a decision — open it if you're curious, or forward it to your technical team.",
+    "lead": "For the developers who will build this. You don't need any of it to make a decision — forward it to your technical team if you'd like it reviewed.",
     "requirements": "Technical requirements",
     "architecture": "System architecture",
     "database": "Database design",

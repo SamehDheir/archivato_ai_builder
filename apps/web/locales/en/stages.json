@@ -71,13 +71,14 @@
       "microservices": "Microservices"
     },
     "explain": {
-      "button": "Explain",
-      "loadingTitle": "Explaining this decision…",
+      "button": "Why this choice — for your client",
+      "loadingTitle": "Preparing your answer…",
+      "intro": "Use this when your client asks why you chose this.",
       "close": "Close",
       "tradeoffs": "Tradeoffs",
       "alternatives": "Alternatives considered",
       "risks": "Risks to watch",
-      "disclaimer": "AI-generated rationale — a starting point for discussion, not a verdict."
+      "disclaimer": "AI-generated rationale — a starting point for your answer, not a verdict."
     }
   },
   "database": {
@@ -306,7 +307,20 @@
     "failed": "Could not estimate costs"
   },
   "export": {
-    "intro": "Download the complete system design in your preferred format.",
+    "intro": "Two ways out: the proposal your client reads, and the spec your team builds from.",
+    "more": "More formats",
+    "client": {
+      "title": "Send to client",
+      "body": "A read-only proposal page — vision, scope, cost and roadmap. No account needed to open it.",
+      "cta": "Copy client link",
+      "copied": "Link copied",
+      "preview": "Preview it"
+    },
+    "team": {
+      "title": "Hand off to your team",
+      "body": "Everything the devs need in one zip: OpenAPI, SQL schema, Postman collection and the project structure.",
+      "cta": "Download bundle (.zip)"
+    },
     "jsonBundle": "JSON bundle",
     "markdown": "Markdown",
     "openapi": "OpenAPI",

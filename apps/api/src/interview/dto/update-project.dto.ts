@@ -1,4 +1,12 @@
-import { IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 /**
  * Partial update of a project's owner-facing labels (`PATCH /interview/:id`).
@@ -33,4 +41,13 @@ export class UpdateProjectDto {
   @Min(0)
   @Max(1_000_000)
   weeklyRate?: number | null;
+
+  /**
+   * Whether this project generates the threat model + QA plan (R12). Set from the
+   * toggle at the confirmation gate, or later by the "generate security & QA
+   * artifacts" action — which is why activation needs no endpoint of its own.
+   */
+  @IsOptional()
+  @IsBoolean()
+  generateExtendedArtifacts?: boolean;
 }

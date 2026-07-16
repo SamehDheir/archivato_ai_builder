@@ -73,25 +73,50 @@ import { useUpgrade } from '@/components/billing/upgrade-dialog';
 /** The in-flight streaming generation: which stage + the accumulated console view. */
 export type StreamState = { stage: PipelineStageName; view: StreamView };
 
-/** Tab order + icons (drives the tab bar). Labels come from `project.tab.*`. */
+/**
+ * Tab order + icons (drives the tab bar). Labels come from `project.tab.*`.
+ *
+ * **Ordered by the DEAL, not by the build (R12).** The pipeline generates
+ * requirements → system → database → API, and the nav used to mirror that — which
+ * is the order the *machine* works in, not the order the owner sells in. What a
+ * dev shop reaches for after a client call is the scope, the price, and the
+ * timeline; the architecture is how they defend those. So the client-facing
+ * artifacts lead and the technical ones follow.
+ *
+ * This is presentational only. Cost and Roadmap still need the full pipeline, so
+ * they sit here disabled until the API design exists — a locked tab early in the
+ * list is the honest read (it says "this is coming, and it's what matters"),
+ * where burying them behind eight technical tabs said the opposite.
+ */
 const TABS: { value: TabKey; icon: LucideIcon }[] = [
+  // The deal: what the client reads and decides on.
   { value: 'vision', icon: Sparkles },
   { value: 'requirements', icon: FileText },
+  { value: 'cost', icon: Coins },
+  { value: 'roadmap', icon: Flag },
+  // The build: how the team delivers it.
   { value: 'system', icon: Network },
   { value: 'database', icon: DatabaseIcon },
   { value: 'api', icon: Webhook },
+  { value: 'apidocs', icon: BookOpen },
   { value: 'diagrams', icon: Workflow },
   { value: 'canvas', icon: Shapes },
+  // Assurance, then handoff.
   { value: 'review', icon: ClipboardCheck },
-  { value: 'roadmap', icon: Flag },
-  { value: 'cost', icon: Coins },
   { value: 'threat', icon: ShieldAlert },
   { value: 'qa', icon: FlaskConical },
   { value: 'export', icon: Download },
-  { value: 'apidocs', icon: BookOpen },
   { value: 'refine', icon: MessageSquare },
   { value: 'history', icon: History },
 ];
+
+/**
+ * The stages a project can switch off (R12). Hidden from the nav — not disabled —
+ * when `generateExtendedArtifacts` is false: a disabled tab reads as "you can't
+ * afford this yet" and invites a click that does nothing, whereas this project
+ * simply isn't producing them. The quiet action below the tabs brings them back.
+ */
+const EXTENDED_TABS = new Set<TabKey>(['threat', 'qa']);
 
 export type TabKey =
   | 'vision'
@@ -167,6 +192,8 @@ export function ProjectStages({
   onUpgraded,
   weeklyRate,
   onSaveWeeklyRate,
+  extendedArtifacts = true,
+  onEnableExtendedArtifacts,
 }: {
   sessionId: string;
   summary: RequirementsSummary | null;
@@ -210,6 +237,13 @@ export function ProjectStages({
   weeklyRate?: number | null;
   /** Persist a new weekly rate (owner-only). */
   onSaveWeeklyRate?: (rate: number | null) => Promise<void>;
+  /**
+   * Whether this project produces the threat model + QA plan (R12). Defaults true
+   * so an older cached payload without the field behaves exactly as before.
+   */
+  extendedArtifacts?: boolean;
+  /** Switch them on for a project that opted out at the gate. */
+  onEnableExtendedArtifacts?: () => void;
 }) {
   // `tab` is controlled by the parent (so the Project Wizard can navigate to a
   // stage); `setTab` is just an alias to the parent's setter.
@@ -253,6 +287,15 @@ export function ProjectStages({
     setTab(key);
   };
 
+  // R12 — a project that opted out of the extended artifacts doesn't show them.
+  const visibleTabs = useMemo(
+    () =>
+      TABS.filter(
+        ({ value }) => extendedArtifacts || !EXTENDED_TABS.has(value),
+      ),
+    [extendedArtifacts],
+  );
+
   const available: Record<TabKey, boolean> = {
     vision: true,
     requirements: true,
@@ -264,8 +307,11 @@ export function ProjectStages({
     review: !!apiDesign,
     roadmap: !!apiDesign,
     cost: !!apiDesign,
-    threat: !!apiDesign,
-    qa: !!apiDesign,
+    // R12 — "switched off" has to mean unreachable, not just unlisted: the command
+    // palette navigates by key too, and a tab with no trigger would render its
+    // panel with nothing selected in the bar.
+    threat: !!apiDesign && extendedArtifacts,
+    qa: !!apiDesign && extendedArtifacts,
     export: !!apiDesign,
     apidocs: !!apiDesign,
     refine: !!apiDesign,
@@ -315,7 +361,7 @@ export function ProjectStages({
 
         <Tabs value={tab} onValueChange={(v) => goTo(v as TabKey)}>
           <TabsList className="sticky top-16 z-30 flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto shadow-sm md:flex-wrap md:overflow-visible">
-            {TABS.map(({ value, icon: Icon }) => {
+            {visibleTabs.map(({ value, icon: Icon }) => {
               const locked = !isPro && PRO_TABS.has(value);
               // Locked-but-unreachable tabs stay clickable so the click can open
               // the upgrade modal (Radix disables un-clickable triggers).
@@ -339,6 +385,27 @@ export function ProjectStages({
               );
             })}
           </TabsList>
+
+          {/*
+            R12 — the way back for a project that opted out. Deliberately quiet: a
+            muted one-liner under the tabs, not a banner. The owner already decided
+            this deal doesn't need a STRIDE analysis; nagging them about it on every
+            visit would be exactly the heaviness the setting exists to remove.
+            Switching it on only reveals the tabs — each stage still generates on
+            demand, so nothing else re-runs.
+          */}
+          {!extendedArtifacts && onEnableExtendedArtifacts && apiDesign && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={onEnableExtendedArtifacts}
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                <ShieldAlert className="h-3.5 w-3.5" />
+                {t('extended.enable')}
+              </button>
+            </div>
+          )}
 
           {/* Product Vision (standalone) */}
           <TabsContent value="vision" className="mt-4">

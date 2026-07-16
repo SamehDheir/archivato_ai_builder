@@ -182,6 +182,12 @@ export interface ProjectSummary {
    */
   weeklyRate?: number | null;
   /**
+   * Whether this project generates the threat model + QA plan (R12). Optional for
+   * back-compat with any cached/older payload; **absent reads as `true`**, which
+   * is the pre-R12 behaviour (both stages always offered).
+   */
+  generateExtendedArtifacts?: boolean;
+  /**
    * ISO timestamp of creation. The free plan allows N designs **per calendar
    * month**, so the client counts the projects created in the current period
    * (`countInQuotaPeriod`) — the project list stays the meter, with no usage table.
@@ -214,4 +220,10 @@ export interface InterviewState {
   slots: SlotMap;
   /** Gaps to forward to the end client (empty when there are none). */
   openQuestions: OpenQuestion[];
+  /**
+   * Whether this project will generate the threat model + QA plan (R12). Derived
+   * from the stated budget at the gate, where it is rendered as a toggle the owner
+   * can override before confirming. Optional for back-compat; absent reads as `true`.
+   */
+  generateExtendedArtifacts?: boolean;
 }

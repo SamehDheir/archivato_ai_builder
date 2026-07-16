@@ -202,6 +202,9 @@ export class ShareService {
     // typically anonymous, and even a signed-in one is the wrong subject: whose
     // proposal this is decides whose brand is on it. Never a client-supplied flag.
     const plan = await this.billing.planFor(session.userId);
+    // Absent only on a session read through a pre-R12 client; the column defaults
+    // true, which is the behaviour every existing project already had.
+    const extended = session.generateExtendedArtifacts ?? true;
 
     // Best-effort: a failed counter must never break the page.
     this.links.recordView(token).catch((e: unknown) => {
@@ -235,10 +238,19 @@ export class ShareService {
           // findings server-side — same enforcement as the budget warning above.
           { ...redactReviewForShare(design.review), sessionId: token }
         : null,
-      threatModel: design.threatModel
-        ? { ...design.threatModel, sessionId: token }
-        : null,
-      qaPlan: design.qaPlan ? { ...design.qaPlan, sessionId: token } : null,
+      // R12 — a project with the extended artifacts switched off shows neither,
+      // even if it generated them before the owner turned them off. Enforced here
+      // rather than by not-generating alone: the payload is the boundary, and the
+      // owner's decision that these aren't part of *this* deal has to hold for an
+      // artifact that already exists.
+      threatModel:
+        extended && design.threatModel
+          ? { ...design.threatModel, sessionId: token }
+          : null,
+      qaPlan:
+        extended && design.qaPlan
+          ? { ...design.qaPlan, sessionId: token }
+          : null,
       watermark: shouldWatermarkShare(plan),
     };
   }

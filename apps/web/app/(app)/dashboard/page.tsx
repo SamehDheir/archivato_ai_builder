@@ -704,6 +704,26 @@ export default function Home() {
     ];
   }
 
+  /**
+   * Whether this project produces the threat model + QA plan (R12). Read from the
+   * interview state — the one place both the confirmation-gate toggle and the
+   * confirmed project view can see, so they can't disagree. Absent (an older
+   * payload) reads as true, the pre-R12 behaviour.
+   */
+  const extendedArtifacts = state?.generateExtendedArtifacts ?? true;
+
+  /** Persist the extended-artifacts choice and reflect it locally. */
+  async function setExtendedArtifacts(value: boolean) {
+    if (!state) return;
+    await interviewApi.update(state.sessionId, {
+      generateExtendedArtifacts: value,
+    });
+    // PATCH returns a ProjectSummary, not an InterviewState — mirror the change
+    // onto the state the toggle and the tabs both read.
+    setState({ ...state, generateExtendedArtifacts: value });
+    await refreshProjects();
+  }
+
   // ⌘K command palette: quick actions, jump to a project, or (in a confirmed
   // project) jump to any reachable stage.
   const stageAvailable: Record<TabKey, boolean> = {
@@ -717,8 +737,10 @@ export default function Home() {
     review: !!apiDesign,
     roadmap: !!apiDesign,
     cost: !!apiDesign,
-    threat: !!apiDesign,
-    qa: !!apiDesign,
+    // R12 — a project that opted out of the extended artifacts must not be able to
+    // reach them from the palette either; ProjectStages hides the tabs entirely.
+    threat: !!apiDesign && extendedArtifacts,
+    qa: !!apiDesign && extendedArtifacts,
     export: !!apiDesign,
     apidocs: !!apiDesign,
     refine: !!apiDesign,
@@ -966,6 +988,7 @@ export default function Home() {
                 onAnswer={handleAnswer}
                 onConfirm={handleConfirm}
                 onEditSlot={handleEditSlot}
+                onToggleExtendedArtifacts={(v) => void setExtendedArtifacts(v)}
               />
             </>
           )}
@@ -1019,6 +1042,8 @@ export default function Home() {
                 await interviewApi.update(state.sessionId, { weeklyRate: rate });
                 await refreshProjects();
               }}
+              extendedArtifacts={extendedArtifacts}
+              onEnableExtendedArtifacts={() => void setExtendedArtifacts(true)}
             />
           )}
         </div>

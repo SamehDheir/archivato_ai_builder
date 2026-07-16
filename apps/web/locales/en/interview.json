@@ -16,6 +16,10 @@
   "summaryHelp": "Completeness reached the threshold. Review and confirm to lock the requirements before design begins.",
   "confirm": "Confirm requirements",
   "confirming": "Confirming…",
+  "extended": {
+    "label": "Include security threat model & QA plan",
+    "hint": "Recommended for larger projects. You can turn this on later."
+  },
   "progress": {
     "completeness": "Requirement completeness",
     "status": "Status: {{status}}",

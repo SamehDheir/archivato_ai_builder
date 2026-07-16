@@ -16,10 +16,15 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * "Explain this decision" — a small ghost trigger placed next to a design
+ * "Why this choice — for your client" — a small ghost trigger next to a design
  * choice (architecture / a tech pick / a service). Clicking opens a modal that
  * asks the API's ArchitectExplainer for the rationale, tradeoffs, alternatives,
  * and risks. The answer is ephemeral (never stored).
+ *
+ * The label is deliberately about **defending the choice in a client meeting**,
+ * not about learning architecture. Same feature, same call — but the person using
+ * it is a tech lead being asked "why not just use WordPress?", and the copy should
+ * meet them there rather than treating them as a student.
  */
 export function ExplainButton({ onClick }: { onClick: () => void }) {
   const { t } = useTranslation('stages');
@@ -27,7 +32,9 @@ export function ExplainButton({ onClick }: { onClick: () => void }) {
     <Button
       variant="ghost"
       size="sm"
-      className="h-6 gap-1 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+      // The label is a phrase, not a word: keep it on one line so it can't break
+      // mid-sentence beside every tech choice.
+      className="h-6 gap-1 whitespace-nowrap px-1.5 text-xs text-muted-foreground hover:text-foreground"
       onClick={onClick}
       aria-label={t('system.explain.button')}
     >
@@ -105,6 +112,9 @@ export function DecisionExplainModal({
         </div>
 
         <div className="overflow-y-auto p-5">
+          <p className="mb-4 text-xs text-muted-foreground" dir="auto">
+            {t('system.explain.intro')}
+          </p>
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           {!data && !error && (

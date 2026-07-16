@@ -32,6 +32,9 @@
   },
   "pro": "Pro",
   "working": "Working…",
+  "extended": {
+    "enable": "Generate security & QA artifacts"
+  },
   "generate": {
     "requirementsTitle": "Generate the requirement document",
     "requirementsHint": "Turn this interview into a formal document: functional & non-functional requirements, user roles, business rules, constraints, and assumptions.",

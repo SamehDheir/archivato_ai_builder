@@ -431,9 +431,16 @@ export function LandingPage() {
               </p>
             </div>
 
+            {/*
+              Client first, team second — and the emphasis ring is on the CLIENT
+              column. It used to be on the team's: the builder half of the story
+              was the visually dominant one, which is the pre-pivot product
+              talking. The deal is what we sell; the handoff is what makes it
+              credible (POSITIONING §4.3).
+            */}
             <div className="mt-12 grid gap-5 md:grid-cols-2">
-              <ValueColumn side="client" icon={Users} />
-              <ValueColumn side="team" icon={Download} featured />
+              <ValueColumn side="client" icon={Users} featured />
+              <ValueColumn side="team" icon={Download} />
             </div>
 
             <p

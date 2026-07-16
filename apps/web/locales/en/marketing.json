@@ -56,8 +56,8 @@
         "body": "Get the full package: requirements, architecture, database, API, cost estimate, roadmap."
       },
       "send": {
-        "title": "Send it, then build it",
-        "body": "Send the client a polished share link — and hand your devs a runnable scaffold the day they sign."
+        "title": "Send it the same day",
+        "body": "Send the client a polished share link while the meeting is still fresh."
       }
     }
   },
@@ -76,11 +76,11 @@
       ]
     },
     "team": {
-      "title": "For your team",
+      "title": "And your team starts building the same day",
       "items": [
-        "OpenAPI spec for the endpoints you just quoted",
+        "OpenAPI spec — with interactive docs — for the endpoints you just quoted",
         "SQL DDL and ER diagrams for the schema",
-        "A Postman collection to test against",
+        "A Postman collection and a mock server to build against before the API exists",
         "A runnable scaffold — API and client — on day one"
       ]
     }

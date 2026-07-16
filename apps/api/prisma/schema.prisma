@@ -263,6 +263,10 @@ model InterviewSession {
   /// Lives here rather than on the review because a re-run REPLACES the review row
   /// and a version restore can rewind it — an audit log must survive both.
   fixLog          Json?
+  /// Whether this project generates the threat model + QA plan (R12). Defaults TRUE
+  /// so every EXISTING row keeps the behaviour it already had; new projects get a
+  /// budget-derived default at the confirmation gate, which the owner can override.
+  generateExtendedArtifacts Boolean @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

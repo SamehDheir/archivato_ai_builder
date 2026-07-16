@@ -40,6 +40,7 @@ function session(): InterviewSession {
     slots: null,
     openQuestions: null,
     fixLog: null,
+    generateExtendedArtifacts: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

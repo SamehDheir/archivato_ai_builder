@@ -158,7 +158,15 @@ competitors we are explicitly *not* trying to be (§4.3).
 - Visible free-tier usage counter + contextual upgrade prompt
 - Share-link open tracking ("client viewed 2h ago")
 - Manual "project price" field, shown on the share page
-- PDF export of the share page
+- **PDF export of the share page** — *deferred from R12, deliberately.* "Send to
+  client" currently gives the share **link** only. Two reasons it wasn't wired:
+  the existing `printAsPdf` renders the **technical** Markdown bundle as a
+  monospace `white-space: pre-wrap` dump — fine for a dev handoff, actively
+  damaging as a client proposal — and there is no client-facing Markdown builder
+  to point it at. A real one means either a new client-section builder plus print
+  styling, or rendering `/s/[token]` to print: new rendering work, and this is a
+  YELLOW item. Until then the owner opens the share page and uses the browser's
+  own print, which is honest and costs us nothing.
 
 ### 🟢 Phase GREEN — only after paying traction. **Do not build now.**
 

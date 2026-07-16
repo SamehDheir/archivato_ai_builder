@@ -35,6 +35,7 @@ function seed(
     slots: null,
     openQuestions: null,
     fixLog: null,
+    generateExtendedArtifacts: true,
     createdAt: now,
     updatedAt: now,
   });

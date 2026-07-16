@@ -11,6 +11,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import {
   COMPLETENESS_THRESHOLD,
+  defaultExtendedArtifacts,
   INTERVIEW_MAX_QUESTIONS,
   INTERVIEW_PHASE_ORDER,
   InterviewPhase,
@@ -140,6 +141,9 @@ export class InterviewService {
       slots: null,
       openQuestions: null,
       fixLog: null,
+      // Starts on; `advance()` derives the real default from the stated budget once
+      // the interview reaches the gate (the budget slot isn't filled before then).
+      generateExtendedArtifacts: true,
       createdAt: now,
       updatedAt: now,
     };
@@ -212,7 +216,12 @@ export class InterviewService {
    */
   async update(
     sessionId: string,
-    patch: { title?: string; clientName?: string; weeklyRate?: number | null },
+    patch: {
+      title?: string;
+      clientName?: string;
+      weeklyRate?: number | null;
+      generateExtendedArtifacts?: boolean;
+    },
   ): Promise<ProjectSummary> {
     const session = await this.require(sessionId);
     if (patch.title !== undefined) session.title = blankToNull(patch.title);
@@ -222,6 +231,13 @@ export class InterviewService {
     // undefined = untouched; null = clear; a number sets the rate.
     if (patch.weeklyRate !== undefined) {
       session.weeklyRate = patch.weeklyRate ?? null;
+    }
+    // R12 — the owner's override, from the confirmation-gate toggle or the later
+    // "generate security & QA artifacts" action. Turning it back on is the whole
+    // activation path: no new endpoint, no new pipeline state — the stages simply
+    // become visible and generate the way they always did.
+    if (patch.generateExtendedArtifacts !== undefined) {
+      session.generateExtendedArtifacts = patch.generateExtendedArtifacts;
     }
     await this.repo.save(session);
     return this.toSummary(session);
@@ -308,6 +324,7 @@ export class InterviewService {
       status: s.status,
       completeness: round2(s.coverage),
       weeklyRate: s.weeklyRate ?? null,
+      generateExtendedArtifacts: s.generateExtendedArtifacts,
       // The per-month quota's meter: the client counts what was created this
       // period rather than what is owned (see `countInQuotaPeriod`).
       createdAt: s.createdAt.toISOString(),
@@ -392,6 +409,13 @@ export class InterviewService {
       session.status = 'awaiting_confirmation';
       session.summary = this.buildSummary(session);
       session.pendingQuestion = null;
+      // R12 — pick the extended-artifacts default from the stated budget, here and
+      // only here. It has to be at the gate: the budget slot doesn't exist at
+      // `start()`, and this is the last point before the owner is shown the toggle.
+      // It runs exactly once (`answer()` refuses a non-collecting session, so
+      // `advance()` can't fire again), which is what lets the owner's override
+      // survive — a later re-derivation would silently undo their choice.
+      session.generateExtendedArtifacts = defaultExtendedArtifacts(session.slots);
     } else {
       session.pendingQuestion = next.question;
     }
@@ -618,6 +642,7 @@ export class InterviewService {
       // filled slots + the questions-for-your-client list without a null check.
       slots: session.slots ?? {},
       openQuestions: session.openQuestions ?? [],
+      generateExtendedArtifacts: session.generateExtendedArtifacts,
     };
   }
 }

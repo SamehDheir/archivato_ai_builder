@@ -226,7 +226,13 @@ export const interviewApi = {
    */
   update: (
     sessionId: string,
-    patch: { title?: string; clientName?: string; weeklyRate?: number | null },
+    patch: {
+      title?: string;
+      clientName?: string;
+      weeklyRate?: number | null;
+      /** Whether this project produces the threat model + QA plan (R12). */
+      generateExtendedArtifacts?: boolean;
+    },
   ) =>
     request<ProjectSummary>(`/interview/${sessionId}`, {
       method: 'PATCH',

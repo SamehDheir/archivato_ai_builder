@@ -42,6 +42,7 @@ export class PrismaInterviewSessionRepository
         slots: toJson(session.slots),
         openQuestions: toJson(session.openQuestions),
         fixLog: toJson(session.fixLog),
+        generateExtendedArtifacts: session.generateExtendedArtifacts,
       },
     });
     return toEntity(row);
@@ -90,6 +91,7 @@ export class PrismaInterviewSessionRepository
         slots: toJson(session.slots),
         openQuestions: toJson(session.openQuestions),
         fixLog: toJson(session.fixLog),
+        generateExtendedArtifacts: session.generateExtendedArtifacts,
       },
     });
     return toEntity(row);
@@ -127,6 +129,7 @@ function toEntity(row: {
   slots: Prisma.JsonValue;
   openQuestions: Prisma.JsonValue;
   fixLog: Prisma.JsonValue;
+  generateExtendedArtifacts: boolean;
   createdAt: Date;
   updatedAt: Date;
 }): InterviewSession {
@@ -152,6 +155,9 @@ function toEntity(row: {
     slots: (row.slots as SlotMap | null) ?? null,
     openQuestions: (row.openQuestions as unknown as OpenQuestion[] | null) ?? null,
     fixLog: (row.fixLog as unknown as FixLogEntry[] | null) ?? null,
+    // The column is NOT NULL DEFAULT true, so `?? true` only guards a row read
+    // through a client generated before the migration.
+    generateExtendedArtifacts: row.generateExtendedArtifacts ?? true,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
