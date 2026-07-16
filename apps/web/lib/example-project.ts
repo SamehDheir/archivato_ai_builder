@@ -535,7 +535,7 @@ export const EXAMPLE_REVIEW: ReviewReport = {
   sessionId: SESSION_ID,
   generatedAt: GENERATED_AT,
   overallScore: 82,
-  scores: { security: 78, scalability: 84, performance: 80, cost: 85 },
+  scores: { security: 78, scalability: 84, performance: 80, cost: 85, clientReadiness: 74 },
   scalabilityScore: 84,
   summary:
     'A well-structured modular monolith with clear domain boundaries and sensible technology choices. The design handles the core booking and payment flows safely; the main risks are around concurrent slot locking under load and observability of async payment capture.',
@@ -581,6 +581,36 @@ export const EXAMPLE_REVIEW: ReviewReport = {
     'Add an idempotency key to booking creation to survive client retries.',
     'Emit structured events for payment capture so failures are observable.',
     'Introduce a read replica when catalog traffic grows.',
+  ],
+  // R10 — deal-risk axis + cross-artifact consistency. OWNER-ONLY: stripped from
+  // the public share payload, so this only shows on the owner's review tab.
+  clientReadinessIssues: [
+    {
+      title: 'Payout timing is open-ended',
+      detail:
+        '"Providers are paid out after each job" doesn\'t say how soon, and that shapes cash-flow expectations. Pin a concrete payout schedule before the client reads it as instant.',
+      severity: 'medium',
+      suggestedResolution: 'tighten_requirement',
+      resolutionHint: 'State the payout window explicitly, e.g. "within 3 business days of completion".',
+    },
+    {
+      title: 'Disputes are implied but not scoped',
+      detail:
+        'The vision promises trust, but contested jobs have no workflow in the requirements — a classic post-sign scope surprise.',
+      severity: 'low',
+      suggestedResolution: 'add_out_of_scope',
+      resolutionHint: 'List dispute resolution as explicitly out of scope for v1, or price it in.',
+    },
+  ],
+  consistencyFindings: [
+    {
+      title: 'Availability caching is a design choice, not a requirement',
+      detail:
+        'The architecture caches availability in Redis, but no non-functional requirement mentions read latency. Confirm it belongs in scope.',
+      severity: 'low',
+      source: 'ai',
+      artifacts: ['requirements', 'design'],
+    },
   ],
 };
 
@@ -700,6 +730,12 @@ export const EXAMPLE_ROADMAP: ProjectRoadmap = {
       goal: 'A deployable modular monolith with auth, the data model, and CI in place.',
       effort: '~2 wks',
       dependsOn: [],
+      moduleNames: [],
+      weeksMin: 2,
+      weeksMax: 3,
+      isMvp: true,
+      mvpStatement:
+        'The app is deployable with accounts and the data model in place — the groundwork the first bookable release ships on.',
       milestones: [
         {
           title: 'Project skeleton and infrastructure',
@@ -731,6 +767,9 @@ export const EXAMPLE_ROADMAP: ProjectRoadmap = {
       goal: 'A customer can find an available slot and hold it without risk of double-booking.',
       effort: '~3 wks',
       dependsOn: ['Foundation'],
+      moduleNames: ['Catalog', 'Booking'],
+      weeksMin: 3,
+      weeksMax: 4.5,
       milestones: [
         {
           title: 'Catalog and availability',
@@ -766,6 +805,9 @@ export const EXAMPLE_ROADMAP: ProjectRoadmap = {
       goal: 'Money moves safely and customers can judge provider quality.',
       effort: '~3 wks',
       dependsOn: ['Booking core'],
+      moduleNames: ['Payments', 'Reviews'],
+      weeksMin: 3,
+      weeksMax: 4.5,
       milestones: [
         {
           title: 'Authorize and capture',
@@ -796,6 +838,9 @@ export const EXAMPLE_ROADMAP: ProjectRoadmap = {
       goal: 'Admins can run the marketplace and the system is safe to open to real traffic.',
       effort: '~3 wks',
       dependsOn: ['Payments and trust'],
+      moduleNames: ['Notifications'],
+      weeksMin: 2.5,
+      weeksMax: 4,
       milestones: [
         {
           title: 'Admin console',

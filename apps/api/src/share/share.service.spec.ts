@@ -48,6 +48,7 @@ interface Harness {
   visions: InMemoryProductVisionRepository;
   costs: InMemoryCostEstimateRepository;
   roadmaps: InMemoryProjectRoadmapRepository;
+  reviews: InMemoryReviewReportRepository;
   users: InMemoryUserRepository;
   billing: BillingService;
   share: ShareService;
@@ -133,6 +134,7 @@ function makeHarness(): Harness {
     visions: visionRepo,
     costs: costRepo,
     roadmaps: roadmapRepo,
+    reviews: reviewRepo,
     users: userRepo,
     billing,
     share,
@@ -302,6 +304,70 @@ describe('ShareService', () => {
     expect(shared.roadmap?.sessionId).toBe(token);
     expect(shared.costEstimate?.sessionId).toBe(token);
     expect(JSON.stringify(shared)).not.toContain(sessionId);
+  });
+
+  // R10 — the client-readiness axis is a DEAL-risk lens (ambiguous scope, an
+  // effort/timeline conflict): it is for the owner, never the client reading the
+  // proposal. The payload IS the boundary, so it's stripped server-side — exactly
+  // like R9's budget warning.
+  it('never leaks client-readiness / consistency findings onto the public page', async () => {
+    const h = makeHarness();
+    const sessionId = await fullPipeline(h);
+
+    await h.reviews.upsert({
+      sessionId,
+      generatedAt: new Date().toISOString(),
+      overallScore: 80,
+      scores: {
+        security: 80,
+        scalability: 80,
+        performance: 80,
+        cost: 80,
+        clientReadiness: 55,
+      },
+      scalabilityScore: 80,
+      summary: 'Solid.',
+      securityIssues: [{ title: 'Public security note', detail: 'd', severity: 'low' }],
+      scalabilityIssues: [],
+      performanceRisks: [],
+      costOptimizations: [],
+      missingFeatures: [],
+      recommendations: [],
+      clientReadinessIssues: [
+        {
+          title: 'SECRET_DEAL_RISK',
+          detail: 'The payout window is ambiguous.',
+          severity: 'high',
+          suggestedResolution: 'tighten_requirement',
+          resolutionHint: 'Pin the payout window.',
+        },
+      ],
+      consistencyFindings: [
+        {
+          title: 'SECRET_TIMELINE_CONFLICT',
+          detail: 'Effort exceeds the stated timeline.',
+          severity: 'high',
+          source: 'automated',
+          artifacts: ['effort', 'timeline'],
+        },
+      ],
+      clientReadinessNote: 'SECRET_NOTE',
+    });
+
+    const shared = await h.share.view((await h.share.create(sessionId)).token);
+    const payload = JSON.stringify(shared);
+
+    expect(shared.review?.clientReadinessIssues).toEqual([]);
+    expect(shared.review?.consistencyFindings).toEqual([]);
+    expect(shared.review?.clientReadinessNote).toBeUndefined();
+    expect(shared.review?.scores.clientReadiness).toBeUndefined();
+    expect(payload).not.toContain('SECRET_DEAL_RISK');
+    expect(payload).not.toContain('SECRET_TIMELINE_CONFLICT');
+    expect(payload).not.toContain('SECRET_NOTE');
+    expect(payload).not.toContain('55');
+    // …while the engineering review still crosses (it lives in the appendix).
+    expect(shared.review?.securityIssues[0].title).toBe('Public security note');
+    expect(shared.review?.overallScore).toBe(80);
   });
 
   // The watermark is the free tier's price for a link that IS free — and it's the

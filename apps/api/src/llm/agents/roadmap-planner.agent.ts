@@ -1,13 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AgentRole,
+  buildPhaseEffort,
+  formatWeekRange,
+  type AlternativeRoadmaps,
   type ApiDesign,
   type DatabaseDesign,
+  type EffortEstimate,
   type IntentAnalysis,
   type ProjectRoadmap,
   type RequirementDocument,
   type RoadmapMilestone,
   type RoadmapPhase,
+  type SlotMap,
   type SystemDesign,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
@@ -21,6 +26,19 @@ export interface RoadmapContext {
   systemDesign: SystemDesign;
   databaseDesign: DatabaseDesign;
   apiDesign: ApiDesign;
+  /** Interview slots (timeline/core_workflows); absent in plan-mode runs. */
+  slots?: SlotMap | null;
+  /**
+   * Deterministic effort estimate (R9). When present, the CODE computes each
+   * phase's week range from it (`buildPhaseEffort`) — the LLM only groups modules.
+   */
+  effort?: EffortEstimate | null;
+  /**
+   * True when the stated timeline can't fit the full scope (B3): ask the LLM for a
+   * dual roadmap (within-deadline / full-scope). The fallback ignores this and
+   * produces a single roadmap (the conflict surfaces as an automated review finding).
+   */
+  requestDualRoadmap?: boolean;
 }
 
 /**
@@ -42,13 +60,20 @@ export class RoadmapPlannerAgent extends BaseAgent {
     '→ Hardening & Launch). Front-load risk and dependencies: stand up the',
     'skeleton, auth, and data model first, then ship a thin end-to-end slice of the',
     'core workflow before breadth, and defer nice-to-haves to later phases. Each',
-    'phase has a clear goal, milestones, concrete engineering tasks, a rough effort',
-    'estimate, and dependencies on earlier phases only (no forward or circular',
-    'dependencies).',
+    'phase has a clear goal, milestones, concrete engineering tasks, and',
+    'dependencies on earlier phases only (no forward or circular dependencies).',
+    'For each phase also list moduleNames — which of the design’s services it',
+    'builds — so effort can be attributed to it.',
+    'Phase 1 is ALWAYS the MVP: the smallest coherent set of modules that delivers',
+    'the core workflow end to end. Flag it isMvp:true and give it a one-sentence',
+    'mvpStatement describing what is usable/launchable at the end of it.',
+    'CRITICAL: do NOT output week numbers, durations, or effort figures anywhere —',
+    'those are computed downstream from the effort estimate. Group modules; never',
+    'estimate time.',
     'Output standard: tasks are specific to THIS design’s services, entities, and',
-    'endpoints (not generic SDLC steps), effort estimates are consistent and',
-    'summable, and the ordering is genuinely executable — nothing depends on work',
-    'scheduled after it. Return ONLY strict JSON matching the schema.',
+    'endpoints (not generic SDLC steps), and the ordering is genuinely executable —',
+    'nothing depends on work scheduled after it. Return ONLY strict JSON matching',
+    'the schema.',
   ].join(' ');
 
   constructor(@Inject(LLM_PROVIDER) llm: LlmProvider) {
@@ -65,7 +90,7 @@ export class RoadmapPlannerAgent extends BaseAgent {
         this.buildPrompt(ctx),
       );
       if (this.isValid(raw)) {
-        return this.normalize({ ...raw, sessionId, generatedAt });
+        return this.normalize({ ...raw, sessionId, generatedAt }, ctx);
       }
       this.logger.debug('Roadmap malformed; using deterministic build.');
     } catch (err) {
@@ -75,22 +100,50 @@ export class RoadmapPlannerAgent extends BaseAgent {
   }
 
   private buildPrompt(ctx: RoadmapContext): string {
-    return [
+    const workflow = this.slotText(ctx, 'core_workflows');
+    const timeline = this.slotText(ctx, 'timeline');
+    const lines = [
       `Idea: ${ctx.idea}`,
       `Architecture: ${ctx.systemDesign.architecture}`,
-      `Services: ${ctx.systemDesign.services.map((s) => s.name).join(', ')}`,
+      `Services (modules): ${ctx.systemDesign.services
+        .map((s) => `${s.name}${s.complexity ? `[${s.complexity}]` : ''}`)
+        .join(', ')}`,
       `Entities: ${ctx.databaseDesign.entities.map((e) => e.name).join(', ')}`,
       `API modules: ${ctx.apiDesign.modules
         .map((m) => `${m.name}(${m.endpoints.length})`)
         .join(', ')}`,
       `Roles: ${ctx.requirements.roles.map((r) => r.name).join(', ') || 'none'}`,
+      `Core workflow (defines the MVP): ${workflow || 'the primary end-to-end flow'}`,
+      `Stated timeline: ${timeline || 'not stated'}`,
       '',
       'Produce the implementation roadmap as JSON with these keys:',
       '- summary: 1-2 sentences on the delivery approach.',
-      '- totalEstimate: overall effort as a human string (e.g. "~10 weeks").',
-      '- phases[]: {name, goal, effort (e.g. "~3 wks"), dependsOn[] (names of earlier phases only), milestones[]}.',
-      '  Each milestone: {title, effort, tasks[] {title, detail?}} — tasks reference concrete services/entities/endpoints from this design.',
-    ].join('\n');
+      '- phases[]: {name, goal, dependsOn[] (names of earlier phases only), moduleNames[] (which Services this phase builds), milestones[], and for phase 1 only isMvp:true + mvpStatement}.',
+      '  Each milestone: {title, tasks[] {title, detail?}} — tasks reference concrete services/entities/endpoints from this design.',
+      '  Do NOT include any effort/week/day numbers on phases, milestones, or the roadmap — omit them entirely.',
+    ];
+
+    // B3 — a timeline conflict: ask for the dual roadmap. Only requested when the
+    // deterministic pre-check found the stated deadline can't fit the full scope.
+    if (ctx.requestDualRoadmap) {
+      lines.push(
+        '',
+        `The stated timeline (${timeline}) cannot fit the full scope. ALSO return alternativeRoadmaps:`,
+        '- alternativeRoadmaps: {',
+        '    withinDeadline: phases[] — a REDUCED-scope plan that fits the deadline (fewer moduleNames per phase; defer non-core modules),',
+        '    fullScope: phases[] — the realistic full-scope plan (same phases as above),',
+        '    excludedFromDeadline: string[] — what the within-deadline plan drops, in plain client language.',
+        '  }',
+        '  Same rules: group moduleNames, phase 1 is the MVP, NO week/day numbers.',
+      );
+    }
+    return lines.join('\n');
+  }
+
+  /** A slot's text value, or '' when absent / marked not-applicable. */
+  private slotText(ctx: RoadmapContext, key: 'core_workflows' | 'timeline'): string {
+    const slot = ctx.slots?.[key];
+    return slot && !slot.na ? slot.value : '';
   }
 
   private isValid(value: Partial<ProjectRoadmap> | null): boolean {
@@ -105,25 +158,88 @@ export class RoadmapPlannerAgent extends BaseAgent {
   }
 
   /** Backfill optional fields the model may omit so the shape is always complete. */
-  private normalize(raw: Partial<ProjectRoadmap>): ProjectRoadmap {
-    const phases: RoadmapPhase[] = (raw.phases ?? []).map((p) => ({
-      name: p.name,
-      goal: p.goal ?? '',
-      effort: p.effort ?? '',
-      dependsOn: p.dependsOn ?? [],
-      milestones: (p.milestones ?? []).map((m) => ({
-        title: m.title,
-        effort: m.effort ?? '',
-        tasks: (m.tasks ?? []).map((t) => ({ title: t.title, detail: t.detail })),
-      })),
-    }));
+  private normalize(raw: Partial<ProjectRoadmap>, ctx: RoadmapContext): ProjectRoadmap {
+    let phases = this.mapPhases(raw.phases, ctx);
+    // The LLM never emits week numbers — compute them from the effort estimate.
+    if (ctx.effort) phases = buildPhaseEffort(phases, ctx.effort);
+
+    // B3 — keep the dual roadmap only when we actually asked for it and the model
+    // returned both halves; otherwise it's a single roadmap.
+    const alt = this.mapAlternatives(raw.alternativeRoadmaps, ctx);
+
     return {
       sessionId: raw.sessionId!,
       generatedAt: raw.generatedAt!,
       summary: raw.summary ?? 'Phased implementation plan for the generated design.',
-      totalEstimate: raw.totalEstimate ?? this.weeks(this.totalWeeks(phases)),
+      // Totals come from the effort estimate when present (never the LLM).
+      totalEstimate: ctx.effort
+        ? formatWeekRange(ctx.effort.weeksMin, ctx.effort.weeksMax)
+        : raw.totalEstimate ?? this.weeks(this.totalWeeks(phases)),
       phases,
+      ...(alt ? { alternativeRoadmaps: alt } : {}),
     };
+  }
+
+  /** Map raw LLM phases into complete phases; enforce the MVP flag on phase 1. */
+  private mapPhases(
+    raw: ProjectRoadmap['phases'] | undefined,
+    ctx: RoadmapContext,
+  ): RoadmapPhase[] {
+    const phases: RoadmapPhase[] = (raw ?? []).map((p) => ({
+      name: p.name,
+      goal: p.goal ?? '',
+      effort: '', // never trusted from the LLM; buildPhaseEffort fills the numbers
+      dependsOn: p.dependsOn ?? [],
+      moduleNames: Array.isArray(p.moduleNames) ? p.moduleNames : undefined,
+      isMvp: !!p.isMvp,
+      mvpStatement:
+        typeof p.mvpStatement === 'string' ? p.mvpStatement : undefined,
+      milestones: (p.milestones ?? []).map((m) => ({
+        title: m.title,
+        effort: '',
+        tasks: (m.tasks ?? []).map((t) => ({ title: t.title, detail: t.detail })),
+      })),
+    }));
+    return this.ensureMvp(phases, ctx);
+  }
+
+  /** Phase 1 is always the MVP; backfill its statement if the model skipped it. */
+  private ensureMvp(phases: RoadmapPhase[], ctx: RoadmapContext): RoadmapPhase[] {
+    if (phases.length === 0) return phases;
+    return phases.map((p, i) =>
+      i === 0
+        ? { ...p, isMvp: true, mvpStatement: p.mvpStatement || this.mvpStatement(ctx) }
+        : { ...p, isMvp: false },
+    );
+  }
+
+  /** Map + effort-fill the dual roadmap, or undefined when it wasn't produced. */
+  private mapAlternatives(
+    raw: AlternativeRoadmaps | undefined,
+    ctx: RoadmapContext,
+  ): AlternativeRoadmaps | undefined {
+    if (!ctx.requestDualRoadmap || !raw) return undefined;
+    const within = this.mapPhases(raw.withinDeadline, ctx);
+    const full = this.mapPhases(raw.fullScope, ctx);
+    if (within.length === 0 || full.length === 0) return undefined;
+    return {
+      withinDeadline: ctx.effort ? buildPhaseEffort(within, ctx.effort) : within,
+      fullScope: ctx.effort ? buildPhaseEffort(full, ctx.effort) : full,
+      excludedFromDeadline: Array.isArray(raw.excludedFromDeadline)
+        ? raw.excludedFromDeadline.filter((s) => typeof s === 'string')
+        : [],
+    };
+  }
+
+  /** What Phase 1 delivers — aligned with the R8 phased MVP or the core workflow. */
+  private mvpStatement(ctx: RoadmapContext): string {
+    const phased = ctx.systemDesign.phasedArchitecture?.mvp;
+    if (phased && phased.trim()) return phased.trim();
+    const workflow = this.slotText(ctx, 'core_workflows');
+    if (workflow) {
+      return `At the end of Phase 1 the core workflow is usable end to end: ${workflow}`;
+    }
+    return 'At the end of Phase 1 a working end-to-end slice of the core workflow is usable.';
   }
 
   // ── deterministic fallback ──────────────────────────────────────────────
@@ -133,7 +249,7 @@ export class RoadmapPlannerAgent extends BaseAgent {
     generatedAt: string,
     ctx: RoadmapContext,
   ): ProjectRoadmap {
-    const phases: RoadmapPhase[] = [
+    let phases: RoadmapPhase[] = [
       this.foundationPhase(ctx),
       this.corePhase(ctx),
       this.supportingPhase(ctx),
@@ -146,11 +262,19 @@ export class RoadmapPlannerAgent extends BaseAgent {
       p.dependsOn = i === 0 ? [] : [phases[i - 1].name];
     });
 
+    // Phase 1 is the MVP, and (when the effort estimate exists) each phase gets an
+    // effort-grounded week range. No dual roadmap here — that needs LLM judgment;
+    // the timeline conflict surfaces as an automated review finding instead.
+    phases = this.ensureMvp(phases, ctx);
+    if (ctx.effort) phases = buildPhaseEffort(phases, ctx.effort);
+
     return {
       sessionId,
       generatedAt,
       summary: this.summary(ctx, phases),
-      totalEstimate: this.weeks(this.totalWeeks(phases)),
+      totalEstimate: ctx.effort
+        ? formatWeekRange(ctx.effort.weeksMin, ctx.effort.weeksMax)
+        : this.weeks(this.totalWeeks(phases)),
       phases,
     };
   }
@@ -202,27 +326,30 @@ export class RoadmapPlannerAgent extends BaseAgent {
 
   private corePhase(ctx: RoadmapContext): RoadmapPhase {
     // A milestone per core service, wiring its matching API module endpoints.
-    const milestones: RoadmapMilestone[] = ctx.systemDesign.services
-      .slice(0, 6)
-      .map((s) => {
-        const mod = ctx.apiDesign.modules.find((m) => m.name === s.name);
-        const endpoints = mod?.endpoints.length ?? 0;
-        const tasks = [
-          this.task(`Implement the ${s.name} service and business rules`),
-          endpoints
-            ? this.task(`Build ${endpoints} ${s.name} endpoint(s) with validation`)
-            : this.task(`Build the ${s.name} API endpoints with validation`),
-          this.task(`Cover ${s.name} with unit tests`),
-        ];
-        return this.milestone(`${s.name} module`, this.sizeWeeks(endpoints, 1), tasks);
-      });
+    const services = ctx.systemDesign.services.slice(0, 6);
+    const milestones: RoadmapMilestone[] = services.map((s) => {
+      const mod = ctx.apiDesign.modules.find((m) => m.name === s.name);
+      const endpoints = mod?.endpoints.length ?? 0;
+      const tasks = [
+        this.task(`Implement the ${s.name} service and business rules`),
+        endpoints
+          ? this.task(`Build ${endpoints} ${s.name} endpoint(s) with validation`)
+          : this.task(`Build the ${s.name} API endpoints with validation`),
+        this.task(`Cover ${s.name} with unit tests`),
+      ];
+      return this.milestone(`${s.name} module`, this.sizeWeeks(endpoints, 1), tasks);
+    });
 
-    return this.phase(
+    const phase = this.phase(
       'Core workflow',
       'The primary services and their APIs — a working end-to-end slice.',
       ['Foundation'],
       milestones,
     );
+    // The design modules this phase builds — the anchor `buildPhaseEffort` uses to
+    // attribute each service's effort line to this phase.
+    phase.moduleNames = services.map((s) => s.name);
+    return phase;
   }
 
   private supportingPhase(ctx: RoadmapContext): RoadmapPhase {

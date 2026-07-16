@@ -1,18 +1,27 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AgentRole,
+  isSuggestedResolution,
   type ApiDesign,
+  type ClientReadinessFinding,
+  type ConsistencyFinding,
   type DatabaseDesign,
+  type EffortEstimate,
   type IntentAnalysis,
   type RequirementDocument,
   type ReviewFinding,
   type ReviewReport,
   type ReviewScores,
   type Severity,
+  type SlotMap,
+  type SuggestedResolution,
   type SystemDesign,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
+
+/** A neutral client-readiness baseline when only the deterministic path ran. */
+const NEUTRAL_CLIENT_READINESS = 70;
 
 /** Everything the Reviewer inspects — the full generated pipeline. */
 export interface ReviewContext {
@@ -22,6 +31,15 @@ export interface ReviewContext {
   systemDesign: SystemDesign;
   databaseDesign: DatabaseDesign;
   apiDesign: ApiDesign;
+  /** Interview slots (timeline/budget/constraints); absent in plan-mode runs. */
+  slots?: SlotMap | null;
+  /** Deterministic effort estimate, for the client-readiness prompt context. */
+  effort?: EffortEstimate | null;
+  /**
+   * Deterministic cross-artifact consistency findings (A2), computed by the
+   * service. Always merged into the report (both the LLM and fallback paths).
+   */
+  automatedConsistency?: ConsistencyFinding[];
 }
 
 /**
@@ -37,11 +55,13 @@ export class ReviewerAgent extends BaseAgent {
   private readonly logger = new Logger(ReviewerAgent.name);
 
   protected readonly systemPrompt = [
-    'You are a rigorous Principal Engineer running a design review before build.',
-    'Assess the generated design across four dimensions — security, scalability,',
-    'performance, and cost — giving each a calibrated 0-100 sub-score plus',
-    'specific findings, then an overall 0-100 score, the missing requirements, and',
-    'concrete suggestions.',
+    'You are a rigorous Principal Engineer running a design review before build,',
+    'who also protects the deal: this design is a scoping proposal a software shop',
+    'sends a client.',
+    'Assess it across four engineering dimensions — security, scalability,',
+    'performance, and cost — giving each a calibrated 0-100 sub-score plus specific',
+    'findings, then an overall 0-100 score, the missing requirements, and concrete',
+    'suggestions.',
     'Method: judge against real engineering standards (OWASP, least privilege,',
     'defense in depth; horizontal scalability and statelessness; pagination,',
     'caching, and N+1 avoidance; right-sizing and idle cost). Score honestly — a',
@@ -49,6 +69,18 @@ export class ReviewerAgent extends BaseAgent {
     'affected component, explains the concrete risk, and states severity',
     '(low|medium|high|critical); reserve critical/high for issues that would cause',
     'a breach, outage, or data loss.',
+    'ALSO assess a fifth axis, clientReadiness — hunt for DEAL risks, not',
+    'engineering risks: ambiguous requirements a client could read two ways;',
+    'unbounded/open-ended scope ("any report the client requests"); undocumented',
+    'assumptions absent from the assumptions list; promises in the executive summary',
+    'with no backing functional requirement; and out-of-scope gaps for capabilities',
+    'a buyer in this domain typically expects. Give clientReadiness its own 0-100',
+    'sub-score and findings, and for each finding a suggestedResolution — one of',
+    'add_open_question | add_out_of_scope | tighten_requirement | align_summary —',
+    'plus a short instruction the owner can act on manually.',
+    'ALSO flag cross-artifact contradictions (consistencyFindings): where the',
+    'requirements, the design, and the cost/effort disagree — each finding naming',
+    'the two artifacts that conflict.',
     'Output standard: every finding is specific to THIS design and actionable (a',
     'team could fix exactly what you name) — no generic checklist advice, no',
     'praise padding. Sub-scores must be consistent with the findings. Return ONLY',
@@ -87,6 +119,14 @@ export class ReviewerAgent extends BaseAgent {
     const roles = ctx.requirements.roles
       .map((r) => `${r.name}[${r.permissions.length} perms]`)
       .join(', ');
+    const timeline = this.slotText(ctx, 'timeline');
+    const effort = ctx.effort
+      ? `~${ctx.effort.weeksMin}-${ctx.effort.weeksMax} person-weeks`
+      : 'not estimated';
+    const buys = (ctx.systemDesign.buildVsBuy ?? [])
+      .filter((b) => b.recommendation === 'buy')
+      .map((b) => `${b.capability}${b.suggestedService ? `→${b.suggestedService}` : ''}`)
+      .join(', ');
     return [
       `Idea: ${ctx.idea}`,
       `Architecture: ${ctx.systemDesign.architecture}`,
@@ -102,14 +142,37 @@ export class ReviewerAgent extends BaseAgent {
         .map((n) => n.category)
         .join(', ') || 'none stated'}`,
       '',
+      '# Client-scoping context (for the clientReadiness axis + consistency)',
+      `Executive summary: ${ctx.requirements.executiveSummary || 'none written'}`,
+      `Functional requirements: ${ctx.requirements.functional
+        .map((f) => f.title)
+        .join('; ') || 'none'}`,
+      `Out-of-scope: ${(ctx.requirements.outOfScope ?? [])
+        .map((o) => o.item)
+        .join('; ') || 'none listed'}`,
+      `Documented assumptions: ${(ctx.requirements.assumptionsAndOpenQuestions ?? [])
+        .map((a) => a.assumption)
+        .join('; ') || 'none'}`,
+      `Stated timeline: ${timeline || 'not stated'}`,
+      `Estimated build effort: ${effort}`,
+      `Bought capabilities (build-vs-buy): ${buys || 'none'}`,
+      '',
       'Review the design and return JSON with these keys:',
-      '- overallScore: 0-100, consistent with the sub-scores below.',
-      '- scores: {security, scalability, performance, cost} — each 0-100.',
+      '- overallScore: 0-100, consistent with the four engineering sub-scores.',
+      '- scores: {security, scalability, performance, cost, clientReadiness} — each 0-100.',
       '- summary: 1-3 sentences on the overall health and the top risk.',
       '- securityIssues[], scalabilityIssues[], performanceRisks[], costOptimizations[]: each {title, detail (the concrete risk + where), severity (low|medium|high|critical)}.',
+      '- clientReadinessIssues[]: DEAL risks — each {title, detail, severity, suggestedResolution (add_open_question|add_out_of_scope|tighten_requirement|align_summary), resolutionHint (a short instruction)}.',
+      '- consistencyFindings[]: cross-artifact contradictions — each {title, detail, severity, artifacts: [artifactA, artifactB] (the two that conflict, e.g. ["requirements","design"])}.',
       '- missingFeatures[]: requirements or capabilities absent from the design (strings).',
       '- recommendations[]: prioritized, concrete next actions (strings).',
     ].join('\n');
+  }
+
+  /** A slot's text value, or '' when absent / marked not-applicable. */
+  private slotText(ctx: ReviewContext, key: 'timeline'): string {
+    const slot = ctx.slots?.[key];
+    return slot && !slot.na ? slot.value : '';
   }
 
   private isValid(value: Partial<ReviewReport> | null): boolean {
@@ -132,6 +195,9 @@ export class ReviewerAgent extends BaseAgent {
     const scalabilityIssues = raw.scalabilityIssues ?? [];
     const performanceRisks = raw.performanceRisks ?? [];
     const costOptimizations = raw.costOptimizations ?? [];
+    const clientReadinessIssues = this.sanitizeClientReadiness(
+      raw.clientReadinessIssues,
+    );
 
     // Fill each sub-score independently so a partial `scores` object from the
     // model (e.g. only { security }) still yields a complete, defined set.
@@ -144,11 +210,21 @@ export class ReviewerAgent extends BaseAgent {
           : this.scoreFrom(scalabilityIssues)),
       performance: raw.scores?.performance ?? this.scoreFrom(performanceRisks),
       cost: raw.scores?.cost ?? this.scoreFrom(costOptimizations),
+      // clientReadiness is a separate lens — it does NOT feed overallScore.
+      clientReadiness:
+        raw.scores?.clientReadiness ?? this.scoreFrom(clientReadinessIssues),
     };
     const overallScore =
       typeof raw.overallScore === 'number'
         ? raw.overallScore
         : this.overall(scores);
+
+    // Deterministic (automated) findings are always merged with any the model
+    // flagged; the model's are forced to source 'ai'.
+    const consistencyFindings: ConsistencyFinding[] = [
+      ...(ctx.automatedConsistency ?? []),
+      ...this.sanitizeConsistency(raw.consistencyFindings),
+    ];
 
     return {
       sessionId: raw.sessionId!,
@@ -166,7 +242,80 @@ export class ReviewerAgent extends BaseAgent {
       costOptimizations,
       missingFeatures: raw.missingFeatures ?? [],
       recommendations: raw.recommendations ?? [],
+      clientReadinessIssues,
+      consistencyFindings,
     };
+  }
+
+  /** Allowlist LLM client-readiness findings; drop malformed ones. */
+  private sanitizeClientReadiness(
+    raw: ClientReadinessFinding[] | undefined,
+  ): ClientReadinessFinding[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((f) => f && typeof f.title === 'string')
+      .map((f) => {
+        const resolution: SuggestedResolution =
+          typeof f.suggestedResolution === 'string' &&
+          isSuggestedResolution(f.suggestedResolution)
+            ? f.suggestedResolution
+            : 'tighten_requirement';
+        return {
+          title: f.title,
+          detail: typeof f.detail === 'string' ? f.detail : '',
+          severity: this.severity(f.severity),
+          suggestedResolution: resolution,
+          resolutionHint:
+            typeof f.resolutionHint === 'string' && f.resolutionHint
+              ? f.resolutionHint
+              : this.defaultHint(resolution),
+        };
+      });
+  }
+
+  /** Force LLM consistency findings to source 'ai' with a valid artifacts pair. */
+  private sanitizeConsistency(
+    raw: ConsistencyFinding[] | undefined,
+  ): ConsistencyFinding[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((f) => f && typeof f.title === 'string')
+      .map((f) => {
+        const pair = Array.isArray(f.artifacts) ? f.artifacts : [];
+        const artifacts: [string, string] = [
+          typeof pair[0] === 'string' ? pair[0] : 'requirements',
+          typeof pair[1] === 'string' ? pair[1] : 'design',
+        ];
+        return {
+          title: f.title,
+          detail: typeof f.detail === 'string' ? f.detail : '',
+          severity: this.severity(f.severity),
+          source: 'ai',
+          artifacts,
+        };
+      });
+  }
+
+  private severity(value: unknown): Severity {
+    return value === 'low' ||
+      value === 'medium' ||
+      value === 'high' ||
+      value === 'critical'
+      ? value
+      : 'medium';
+  }
+
+  private defaultHint(resolution: SuggestedResolution): string {
+    switch (resolution) {
+      case 'add_open_question':
+        return 'Add this as a question to forward to the client.';
+      case 'add_out_of_scope':
+        return 'List this as explicitly out of scope.';
+      case 'align_summary':
+        return 'Align the executive summary with the actual requirements.';
+      default:
+        return 'Tighten the requirement so it can only be read one way.';
+    }
   }
 
   // ── deterministic fallback ──────────────────────────────────────────────
@@ -189,6 +338,10 @@ export class ReviewerAgent extends BaseAgent {
       scalability: this.scalabilityScore(ctx, hasQueue, hasCache),
       performance: this.scoreFrom(performanceRisks),
       cost: this.scoreFrom(costOptimizations),
+      // The deal-risk axis needs LLM judgment; offline we show a neutral baseline
+      // plus a note. The automated consistency findings below are pure code and
+      // are still included, so the offline demo shows the new axis + findings.
+      clientReadiness: NEUTRAL_CLIENT_READINESS,
     };
 
     return {
@@ -204,6 +357,10 @@ export class ReviewerAgent extends BaseAgent {
       costOptimizations,
       missingFeatures: this.missingFeatures(ctx, haystack),
       recommendations: this.recommendations(ctx, hasCache),
+      clientReadinessIssues: [],
+      consistencyFindings: ctx.automatedConsistency ?? [],
+      clientReadinessNote:
+        'Client-readiness (deal risk) scoring needs an AI review pass; showing a neutral baseline. The cross-artifact checks below are still applied.',
     };
   }
 

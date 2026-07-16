@@ -168,6 +168,27 @@ describe('RoadmapService', () => {
     }
   });
 
+  // R10 — the deterministic roadmap flags phase 1 as the MVP and carries an
+  // effort-grounded week range on every phase (computed in code from the design).
+  it('flags the MVP and carries effort-grounded phase week ranges', async () => {
+    const h = makeHarness();
+    const sessionId = await pipeline(h);
+
+    const roadmap = await h.service.generate(sessionId);
+    expect(roadmap.phases[0].isMvp).toBe(true);
+    expect(roadmap.phases[0].mvpStatement).toBeTruthy();
+    expect(roadmap.phases.slice(1).every((p) => !p.isMvp)).toBe(true);
+    for (const p of roadmap.phases) {
+      expect(typeof p.weeksMin).toBe('number');
+      expect(typeof p.weeksMax).toBe('number');
+      expect(p.weeksMax!).toBeGreaterThanOrEqual(p.weeksMin!);
+    }
+    // The total is a range derived from the effort estimate.
+    expect(roadmap.totalEstimate).toMatch(/wks/);
+    // No dual roadmap without a stated timeline conflict.
+    expect(roadmap.alternativeRoadmaps).toBeUndefined();
+  });
+
   it('stamps the design revision it was built from, and goes stale with it', async () => {
     const h = makeHarness();
     const sessionId = await pipeline(h);

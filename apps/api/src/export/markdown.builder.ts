@@ -172,6 +172,23 @@ export function buildMarkdown(bundle: ExportBundle): string {
       for (const rec of rev.recommendations) li(rec);
       blank();
     }
+    // R10 — owner-only client-readiness (deal risk) + cross-artifact consistency.
+    if (rev.clientReadinessIssues?.length) {
+      h(3, 'Client readiness (deal risk)');
+      for (const f of rev.clientReadinessIssues) {
+        li(`[${f.severity}] **${f.title}** — ${f.detail} _(${f.resolutionHint})_`);
+      }
+      blank();
+    }
+    if (rev.consistencyFindings?.length) {
+      h(3, 'Cross-artifact consistency');
+      for (const f of rev.consistencyFindings) {
+        li(
+          `[${f.severity}] (${f.source}, ${f.artifacts.join(' ↔ ')}) **${f.title}** — ${f.detail}`,
+        );
+      }
+      blank();
+    }
   }
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';

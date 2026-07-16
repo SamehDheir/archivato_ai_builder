@@ -182,7 +182,9 @@
       "Bash(echo \"---exit $?---\")",
       "Bash(echo \"web-tsc-done exit=$?\")",
       "Bash(echo \"web-tsc exit=$?\")",
-      "Bash(grep -n \"Cost Estimator \\(\\\\`cost-estimate\\\\`\\)\" CLAUDE.md)"
+      "Bash(grep -n \"Cost Estimator \\(\\\\`cost-estimate\\\\`\\)\" CLAUDE.md)",
+      "Bash(NEXT_DIST_DIR=.next-r10 NEXT_SKIP_STANDALONE=1 npx next build)",
+      "Bash(grep -E \"error|warning|\\\\.ts$\")"
     ],
     "additionalDirectories": [
       "\\tmp"

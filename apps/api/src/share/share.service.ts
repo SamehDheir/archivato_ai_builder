@@ -20,7 +20,7 @@ import type {
   SystemDesign,
   ThreatModel,
 } from '@archivato/shared';
-import { shouldWatermarkShare } from '@archivato/shared';
+import { redactReviewForShare, shouldWatermarkShare } from '@archivato/shared';
 import { BillingService } from '../billing/billing.service';
 import {
   INTERVIEW_SESSION_REPOSITORY,
@@ -230,7 +230,11 @@ export class ShareService {
       apiDesign: design.apiDesign
         ? { ...design.apiDesign, sessionId: token }
         : null,
-      review: design.review ? { ...design.review, sessionId: token } : null,
+      review: design.review
+        ? // Strip the OWNER-ONLY client-readiness / consistency (deal-risk)
+          // findings server-side — same enforcement as the budget warning above.
+          { ...redactReviewForShare(design.review), sessionId: token }
+        : null,
       threatModel: design.threatModel
         ? { ...design.threatModel, sessionId: token }
         : null,

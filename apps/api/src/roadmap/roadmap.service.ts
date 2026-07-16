@@ -4,7 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { upstreamStamp, type ProjectRoadmap } from '@archivato/shared';
+import {
+  buildEffortEstimate,
+  hasTimelineConflict,
+  upstreamStamp,
+  type ProjectRoadmap,
+} from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -80,6 +85,16 @@ export class RoadmapService {
       throw new ConflictException('Upstream design artifacts are missing.');
     }
 
+    // R10 — the effort estimate is deterministic (from the design), so it's
+    // always available; the CODE computes each phase's week range from it (the
+    // agent only groups modules). A timeline conflict — the low-end effort can't
+    // fit the stated deadline — asks the agent for a dual roadmap.
+    const effort = buildEffortEstimate(systemDesign);
+    const timelineSlot = session.slots?.timeline;
+    const timeline =
+      timelineSlot && !timelineSlot.na ? timelineSlot.value : undefined;
+    const requestDualRoadmap = hasTimelineConflict(effort.weeksMin, timeline);
+
     const roadmap = await this.planner.generate(sessionId, {
       idea: session.input.idea,
       intent: session.intent,
@@ -87,6 +102,9 @@ export class RoadmapService {
       systemDesign,
       databaseDesign,
       apiDesign,
+      slots: session.slots,
+      effort,
+      requestDualRoadmap,
     });
 
     // Record which design revision this was built from, so the UI can tell the

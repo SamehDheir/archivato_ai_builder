@@ -12,6 +12,7 @@ import { DatabaseDesignService } from '../database-design/database-design.servic
 import { InMemoryDatabaseDesignRepository } from '../database-design/in-memory-database-design.repository';
 import { ApiDesignService } from '../api-design/api-design.service';
 import { InMemoryApiDesignRepository } from '../api-design/in-memory-api-design.repository';
+import { InMemoryCostEstimateRepository } from '../cost-estimate/in-memory-cost-estimate.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
@@ -32,6 +33,7 @@ interface Harness {
   systemDesign: SystemDesignService;
   databaseDesign: DatabaseDesignService;
   apiDesign: ApiDesignService;
+  sessions: InMemoryInterviewSessionRepository;
   service: ReviewService;
   mock: MockLlmProvider;
 }
@@ -84,6 +86,7 @@ function makeHarness(): Harness {
     sysRepo,
     dbRepo,
     apiRepo,
+    new InMemoryCostEstimateRepository(),
     reviewRepo,
     new ReviewerAgent(mock),
   );
@@ -93,6 +96,7 @@ function makeHarness(): Harness {
     systemDesign,
     databaseDesign,
     apiDesign,
+    sessions: sessionRepo,
     service,
     mock,
   };
@@ -183,6 +187,38 @@ describe('ReviewService', () => {
     expect(report.scalabilityScore).toBe(88);
     expect(report.recommendations).toEqual(['ship it']);
     expect(report.sessionId).toBe(sessionId);
+  });
+
+  // R10 — the offline fallback shows the new axis: a neutral client-readiness
+  // score + a "requires AI review" note, plus any automated consistency findings.
+  it('includes a neutral client-readiness axis + note in the deterministic fallback', async () => {
+    const h = makeHarness();
+    const sessionId = await pipeline(h);
+
+    const report = await h.service.generate(sessionId);
+    expect(report.scores.clientReadiness).toBe(70);
+    expect(report.clientReadinessNote).toBeTruthy();
+    expect(report.clientReadinessIssues).toEqual([]);
+    expect(Array.isArray(report.consistencyFindings)).toBe(true);
+  });
+
+  // R10 — a tight timeline slot fires the deterministic effort-vs-timeline
+  // consistency check (A2), tagged 'automated', even offline.
+  it('flags an effort-vs-timeline conflict as an automated consistency finding', async () => {
+    const h = makeHarness();
+    const sessionId = await pipeline(h);
+    const session = await h.sessions.findById(sessionId);
+    await h.sessions.save({
+      ...session!,
+      slots: { timeline: { value: '1 day', confidence: 'high', source: 'explicit' } },
+    });
+
+    const report = await h.service.generate(sessionId);
+    const conflict = report.consistencyFindings?.find(
+      (f) => f.artifacts.join() === 'effort,timeline',
+    );
+    expect(conflict).toBeDefined();
+    expect(conflict!.source).toBe('automated');
   });
 
   it('get() returns a stored report and 404s otherwise', async () => {

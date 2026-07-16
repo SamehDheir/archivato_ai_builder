@@ -52,8 +52,8 @@ chain of structured artifacts — each one grounded in the previous:
 | **System Design** | Constraint-aware architecture + tech stack + service modules (with build-effort complexity), a build-vs-buy plan, a phased MVP→growth path when scale outruns the budget/timeline, and a constraint-compliance table — with per-decision "Explain this" rationale |
 | **Database Design** | Entities, columns, keys, relationships + ER diagram (Mermaid, exportable to Draw.io/SVG/PNG/PDF) |
 | **API Design** | REST endpoints per module with schemas + interactive API docs and a working mock server |
-| **AI Architect Review** | Scored review across security / scalability / performance / cost with findings |
-| **Roadmap** | Phased implementation plan |
+| **AI Architect Review** | Scored review across security / scalability / performance / cost with findings — plus an owner-only **client-readiness** axis that hunts deal risks (ambiguous scope, promises with no backing requirement), each with a suggested resolution, and **cross-artifact consistency** checks that catch the requirements, design, effort, and cost contradicting each other |
+| **Roadmap** | Phased implementation plan — each phase lists the modules it builds and carries a **person-week range computed from the effort estimate** (never guessed by the LLM), Phase 1 is flagged as the **MVP** with a "what's launchable" statement, and a stated deadline that can't fit the scope produces a **dual roadmap** (within-deadline vs full-scope) |
 | **Project Economics** | Deterministic monthly hosting bill across 8 providers (100 / 1k / 10k users), plus a person-week **effort estimate**, third-party **service subscriptions**, an owner-only **budget reality check**, and an owner-only suggested price from your weekly rate |
 | **Threat Model** | STRIDE security analysis with severities + mitigations |
 | **QA Plan** | Test strategy + concrete test cases by type |

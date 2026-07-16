@@ -268,6 +268,71 @@ tsconfig and never needs shared's `dist`.
     budget,services,infra}.*` (EN+AR, Arabic numerals via `useFormat`). The example
     fixture derives `effort`/`serviceSubscriptions` from the same builders so it can't
     drift.
+- **Review = engineering health + deal risk (R10).** The Reviewer gained a fifth
+  axis and a consistency layer, both **additive/optional** on `ReviewReport` (old
+  rows render fine):
+  1. **`scores.clientReadiness` + `clientReadinessIssues[]`** — a *deal*-risk lens,
+     not an engineering one: ambiguous requirements a client could read two ways,
+     unbounded scope ("any report the client requests"), undocumented assumptions,
+     executive-summary promises with no backing functional requirement, missing
+     out-of-scope coverage. Each finding carries a **`suggestedResolution`** enum
+     (`add_open_question | add_out_of_scope | tighten_requirement | align_summary`)
+     + a short instruction. **Resolution is manual — rendered as guidance; auto-apply
+     is deliberately not built.**
+  2. **`consistencyFindings[]`** — cross-artifact contradictions, each naming the two
+     artifacts that conflict and tagged **`source: 'automated' | 'ai'`** so the UI can
+     distinguish a code check from the model's judgment. The **deterministic** layer is
+     `buildConsistencyFindings()` (pure, `@archivato/shared`): effort-vs-timeline,
+     constraint-vs-`constraintCompliance` coverage, and build-vs-buy "buy" vs a
+     matching cost line. The **LLM** layer adds its own (forced to `source:'ai'`).
+  Four things not to undo:
+  - **`clientReadiness` does NOT feed `overallScore`.** Overall stays the 4-dimension
+     *engineering* average, so the public number survives redaction unchanged and
+     keeps meaning what it always meant.
+  - **The whole deal-risk lens is OWNER-ONLY.** `redactReviewForShare()` (pure, in
+     `shared`) empties `clientReadinessIssues`/`consistencyFindings`/`clientReadinessNote`
+     and deletes `scores.clientReadiness`; `ShareService.view` runs it — same
+     enforcement as R9's `budgetWarning` (**the payload IS the boundary**; a security
+     test asserts none of it reaches the public page). The *engineering* findings still
+     cross — the review lives in the share appendix.
+  - **The fallback still ships the axis.** Offline it emits a **neutral 70** +
+     `clientReadinessNote` ("needs an AI pass"), because deal risk needs LLM judgment —
+     but the **automated consistency findings are pure code and are always included**,
+     on both paths. `ReviewModule` imports `CostEstimateModule` only to read the cost
+     estimate's `serviceSubscriptions` for check 3.
+  - **The buy-vs-cost-line check keys off `serviceSubscriptions` being *undefined* vs
+     `[]`.** Undefined = no cost estimate to compare against ⇒ skip; a present-but-empty
+     array is a real signal. Comparing against a freshly-computed `buildServiceCostLines`
+     would be circular (both derive from `buildVsBuy`) — the point is catching a **stale**
+     stored estimate.
+- **Roadmap = effort-grounded phases (R10).** Additive/optional on `RoadmapPhase`:
+  `moduleNames`, `weeksMin`/`weeksMax`, `isMvp`, `mvpStatement`, plus
+  `alternativeRoadmaps` on the roadmap. The rule that holds it together:
+  - **The LLM groups modules; the CODE computes every week number.** The prompt
+    explicitly forbids durations, `mapPhases` **drops any effort the model emits**, and
+    `buildPhaseEffort(phases, effort)` (pure, `shared`) fills the numbers: each phase =
+    the sum of its `moduleNames`' effort lines + a share of the fixed pool (setup, QA,
+    DevOps, buffer, flat integrations, and any module no phase claimed — so no weight is
+    lost). Allocation is proportional to build weight **with a per-phase baseline of 1**,
+    so an overhead-only phase (Hardening) still gets a fair slice of QA/DevOps instead of
+    zero. `totalEstimate` likewise comes from the effort estimate, never the model.
+  - **No effort estimate ⇒ no week numbers** (`weeksMin`/`weeksMax` stay undefined and
+    the view falls back to the legacy `effort` string) — the pre-R10 behavior, kept as a
+    regression test.
+  - **Phase 1 is always the MVP** (`ensureMvp` enforces it on both paths) with a
+    `mvpStatement` backfilled from **R8 `phasedArchitecture.mvp`** when present, else the
+    `core_workflows` slot, else a generic line.
+  - **Dual roadmap only on a real conflict.** The service pre-checks
+    `hasTimelineConflict(effort.weeksMin, timeline)` — the **low** end, so a conflict means
+    even the best case blows the deadline — and only then asks for
+    `alternativeRoadmaps {withinDeadline, fullScope, excludedFromDeadline}`; `normalize`
+    drops them if they weren't requested. **The fallback never produces one** (it needs
+    LLM judgment); the conflict surfaces as the review's automated effort-vs-timeline
+    finding instead. `TIMELINE_CONFLICT_TOLERANCE` (1.1) is shared by both features so
+    they can never disagree about when a timeline is unrealistic.
+  - **`parseTimelineWeeks` handles Arabic units** (`٦ أسابيع`, both hamza spellings), not
+    just digits — the timeline slot holds the *client's own words*, and this product's
+    market states deadlines in Arabic. Unparseable ⇒ **null, never a guess** ⇒ no conflict.
 - **Threat model (`threat-model`).** A standalone **Pro** stage: a **STRIDE**
   security analysis of the generated design (Spoofing/Tampering/Repudiation/Info
   Disclosure/DoS/Elevation of Privilege), each threat with a component, severity,
@@ -595,6 +660,22 @@ tsconfig and never needs shared's `dist`.
   valid LLM response but fills any omitted field deterministically, so the shape
   is always complete. New optional fields on a JSON-stored artifact need
   defensive defaults in consumers (view + markdown export) for old rows.
+  - **A write-side `normalize()` can never reach a row that is already in the
+    table — so the JSON store's READ is a boundary too.** Artifacts persist as
+    `data Json` and come back through `row.data as unknown as X`: **the cast is a
+    claim, not a check**, and a row written before a normalization rule existed
+    still violates the type it is cast to. This is not hypothetical — an API design
+    stored without `statusCodes` (a **required** field) 500'd the OpenAPI export
+    with `ep.statusCodes is not iterable`, and it would equally have taken out
+    Postman, the scaffold, the mock server, and the view, because all of them trust
+    the type. Fixed the only way that heals an existing row: **`normalizeApiDesign()`
+    is applied in `PrismaApiDesignRepository.findBySessionId`**, one chokepoint that
+    every consumer reads through — *not* a `?? []` sprinkled into each builder
+    (~8 sites, and the next consumer forgets). The rule is **one pure helper in
+    `@archivato/shared`, called at both boundaries** (the agent on write, the store
+    on read) so the two can't drift. **A missing array must read as empty, never as
+    undefined.** When a required field on a JSON-stored artifact starts arriving
+    absent, fix the read — not the crash site.
 - **Repository pattern everywhere.** Every store has an interface + in-memory
   impl (used by unit tests, DB-free) + Prisma impl. Feature modules provide the
   Prisma repo.

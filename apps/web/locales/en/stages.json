@@ -133,11 +133,29 @@
       "high": "high",
       "critical": "critical"
     },
+    "clientReadiness": {
+      "title": "Client readiness",
+      "score": "Deal-readiness score:"
+    },
+    "consistency": {
+      "title": "Cross-artifact consistency"
+    },
+    "resolution": {
+      "add_open_question": "Add open question",
+      "add_out_of_scope": "Add to out-of-scope",
+      "tighten_requirement": "Tighten requirement",
+      "align_summary": "Align summary"
+    },
+    "source": {
+      "automated": "automated",
+      "ai": "AI"
+    },
     "empty": {
       "security": "No security issues flagged.",
       "scalability": "No scalability problems flagged.",
       "performance": "No performance risks flagged.",
       "cost": "No cost optimizations suggested.",
+      "clientReadiness": "No deal risks flagged.",
       "missing": "Nothing obvious missing."
     }
   },
@@ -282,6 +300,15 @@
     "totalEstimate": "Total estimate:",
     "download": "Download roadmap",
     "after": "after {{deps}}",
+    "weeks": "{{min}}–{{max}} wks",
+    "mvp": "MVP",
+    "dual": {
+      "title": "The stated timeline can't fit the full scope",
+      "lead": "Two plans: reduce scope to hit the deadline, or keep the full scope and extend the timeline.",
+      "withinDeadline": "Within deadline",
+      "fullScope": "Full scope",
+      "excluded": "Not included to hit the deadline"
+    },
     "generate": "Generate Roadmap",
     "regenerate": "Regenerate",
     "working": "Working…",

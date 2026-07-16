@@ -14,6 +14,7 @@ import { ApiDesignService } from '../api-design/api-design.service';
 import { InMemoryApiDesignRepository } from '../api-design/in-memory-api-design.repository';
 import { ReviewService } from '../review/review.service';
 import { InMemoryReviewReportRepository } from '../review/in-memory-review-report.repository';
+import { InMemoryCostEstimateRepository } from '../cost-estimate/in-memory-cost-estimate.repository';
 import { VersionsService } from '../versions/versions.service';
 import { InMemoryProjectVersionRepository } from '../versions/in-memory-project-version.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
@@ -91,6 +92,7 @@ function makeHarness(): Harness {
     sysRepo,
     dbRepo,
     apiRepo,
+    new InMemoryCostEstimateRepository(),
     reviewRepo,
     new ReviewerAgent(mock),
   );

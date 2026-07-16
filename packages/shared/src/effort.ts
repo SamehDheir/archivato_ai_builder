@@ -335,3 +335,84 @@ export function computeSuggestedPrice(
     max: Math.round(effort.weeksMax * weeklyRate),
   };
 }
+
+// ── Timeline parsing + conflict (R10) ───────────────────────────────────────
+
+/** Rough calendar-weeks per unit, for tolerant timeline parsing. */
+const WEEKS_PER_UNIT = {
+  day: 1 / 7,
+  week: 1,
+  month: 4.345,
+  year: 52,
+} as const;
+
+/**
+ * Time units we recognise, longest-alternative first so "months" can never be
+ * consumed as "mo". Arabic is first-class here: the timeline slot holds the
+ * client's own words, and this product's market states deadlines in Arabic as
+ * often as English (both hamza spellings — أسابيع / اسابيع — occur in the wild).
+ */
+const TIME_UNITS: readonly { pattern: string; weeks: number }[] = [
+  { pattern: 'days?|يوم|أيام|ايام', weeks: WEEKS_PER_UNIT.day },
+  { pattern: 'weeks?|wks?|أسابيع|اسابيع|أسبوع|اسبوع', weeks: WEEKS_PER_UNIT.week },
+  { pattern: 'months?|mos?|أشهر|اشهر|شهور|شهر', weeks: WEEKS_PER_UNIT.month },
+  { pattern: 'years?|yrs?|سنوات|سنة|أعوام|اعوام|عام', weeks: WEEKS_PER_UNIT.year },
+];
+
+const TIMELINE_RE = new RegExp(
+  `(\\d+(?:\\.\\d+)?)\\s*(${TIME_UNITS.map((u) => u.pattern).join('|')})`,
+  'g',
+);
+
+/** Weeks-per-unit for a matched unit token (English or Arabic). */
+function weeksForUnit(unit: string): number {
+  for (const u of TIME_UNITS) {
+    if (new RegExp(`^(?:${u.pattern})$`).test(unit)) return u.weeks;
+  }
+  return WEEKS_PER_UNIT.week;
+}
+
+/**
+ * Tolerantly parse a stated timeline into a number of calendar weeks. Handles
+ * "3 months", "6 weeks", "45 days", "1.5 months", "2-3 months", Arabic numerals
+ * and Arabic units ("٦ أسابيع"). On a range it takes the larger figure (the
+ * available runway). Returns null when the text carries no number+unit it can
+ * read — it never guesses.
+ */
+export function parseTimelineWeeks(text: string | undefined | null): number | null {
+  if (!text) return null;
+  const normalized = normalizeDigits(text).toLowerCase();
+  TIMELINE_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let weeks: number | null = null;
+  while ((match = TIMELINE_RE.exec(normalized)) !== null) {
+    const n = parseFloat(match[1]);
+    if (!Number.isFinite(n)) continue;
+    const w = n * weeksForUnit(match[2]);
+    weeks = weeks === null ? w : Math.max(weeks, w);
+  }
+  return weeks;
+}
+
+/**
+ * Tolerance on the stated timeline before the effort counts as a conflict. 1.1 =
+ * the estimate may run 10% past the deadline before we flag it. Shared by the
+ * roadmap's dual-plan trigger (B3) and the review's automated consistency check
+ * (A2), so the two features agree on exactly when a timeline is unrealistic.
+ */
+export const TIMELINE_CONFLICT_TOLERANCE = 1.1;
+
+/**
+ * Does the effort (in weeks) exceed the stated timeline by more than the
+ * tolerance? Uses the LOW end of the estimate by convention — a conflict means
+ * even the best case blows the deadline. Returns false when the timeline is
+ * unparseable (no timeline → no conflict).
+ */
+export function hasTimelineConflict(
+  effortWeeks: number,
+  timelineText: string | undefined | null,
+): boolean {
+  const available = parseTimelineWeeks(timelineText);
+  if (available === null || available <= 0) return false;
+  return effortWeeks > available * TIMELINE_CONFLICT_TOLERANCE;
+}
