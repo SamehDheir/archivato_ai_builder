@@ -13,10 +13,66 @@ import type { ServiceCostLine } from './cost-estimate';
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
+// ── R11: findings → actionable fixes ────────────────────────────────────────
+//
+// A finding is only useful if the owner can *act* on it. R11 classifies each one
+// into how it gets resolved, and tracks where it got to. The schema lives here
+// (it is part of the artifact); the classification rules, the patch contract, and
+// the appliers live in `review.fix.ts`, which imports this file one-way — never
+// the reverse, or the barrel would have a runtime cycle.
+
+/**
+ * How a finding gets resolved (R11).
+ *
+ * - `patch` — an LLM can rewrite the named artifact section to fix it.
+ * - `needs_client` — only the client can settle it; it converts to an open
+ *   question or an out-of-scope line. No LLM call.
+ * - `advisory` — guidance to acknowledge or dismiss; nothing to mutate.
+ *
+ * Optional: findings on pre-R11 rows carry none, and `resolveFindingAction`
+ * reads that absence as `advisory` (never guess a mutation onto an old row).
+ */
+export type FindingActionType = 'patch' | 'needs_client' | 'advisory';
+
+/** The stages whose artifacts a patch may write. */
+export type PatchableStage =
+  | 'requirements'
+  | 'system-design'
+  | 'database-design'
+  | 'api-design';
+
+/** Where a `patch` finding's fix would land. */
+export interface PatchTarget {
+  stage: PatchableStage;
+  /** The artifact field to rewrite, e.g. `nonFunctional`. See `PATCH_SECTIONS`. */
+  sectionHint: string;
+}
+
+/**
+ * Where a finding got to (R11). Reset to `open` by every review re-run — a re-run
+ * is a fresh assessment, and the durable history lives in the session's append-only
+ * `fixLog`, not here. Optional for back-compat; absent reads as `open`.
+ */
+export type FindingStatus = 'open' | 'resolved' | 'converted' | 'dismissed';
+
 export interface ReviewFinding {
+  /**
+   * Stable within one report — `"<section>:<index>"`, assigned deterministically
+   * by `normalizeReviewReport` at both the write and read boundaries, so a
+   * pre-R11 row gets ids on read rather than being unactionable forever.
+   */
+  id?: string;
   title: string;
   detail: string;
   severity: Severity;
+  /** How this finding gets resolved (R11). Absent ⇒ read as `advisory`. */
+  actionType?: FindingActionType;
+  /** Only meaningful when `actionType === 'patch'`. */
+  patchTarget?: PatchTarget;
+  /** Absent ⇒ read as `open`. */
+  status?: FindingStatus;
+  /** The note captured when the owner dismissed it. */
+  statusNote?: string;
 }
 
 /** 0–100 health sub-scores, one per review dimension. */
@@ -223,12 +279,27 @@ export function buildConsistencyFindings(
 }
 
 /**
+ * Strip the workflow layer (R11) off a finding. The public page gets the finding
+ * itself — never how the owner is dealing with it. A `status: 'dismissed'` chip
+ * or a `patchTarget` on a client's proposal is the owner's private working state;
+ * leaking it would tell the client which risks their vendor waved away.
+ */
+function redactFinding<T extends ReviewFinding>(finding: T): T {
+  const { id, actionType, patchTarget, status, statusNote, ...rest } = finding;
+  return rest as T;
+}
+
+/**
  * Strip the OWNER-ONLY parts of a review before it crosses onto the public share
- * page (R10). The client-readiness axis is a *deal-risk* lens (promises without a
- * backing requirement, budget/timeline conflicts) meant for the owner's eyes only
- * — exactly like R9's budget warning. The engineering findings (security,
- * scalability, performance, cost) stay, since the review lives in the technical
- * appendix. Pure, so the enforcement is one testable rule.
+ * page (R10/R11). Two lenses come off:
+ *
+ * - the **client-readiness axis** — a *deal-risk* lens (promises without a backing
+ *   requirement, budget/timeline conflicts), exactly like R9's budget warning; and
+ * - the **fix workflow** (R11) — ids, action types, patch targets, and statuses.
+ *
+ * The engineering findings themselves stay, since the review lives in the technical
+ * appendix — but they cross as plain `ReviewFinding`s, byte-identical to what the
+ * share page carried before R11. Pure, so the enforcement is one testable rule.
  */
 export function redactReviewForShare(review: ReviewReport): ReviewReport {
   const scores: ReviewScores = { ...review.scores };
@@ -236,6 +307,10 @@ export function redactReviewForShare(review: ReviewReport): ReviewReport {
   return {
     ...review,
     scores,
+    securityIssues: (review.securityIssues ?? []).map(redactFinding),
+    scalabilityIssues: (review.scalabilityIssues ?? []).map(redactFinding),
+    performanceRisks: (review.performanceRisks ?? []).map(redactFinding),
+    costOptimizations: (review.costOptimizations ?? []).map(redactFinding),
     clientReadinessIssues: [],
     consistencyFindings: [],
     clientReadinessNote: undefined,

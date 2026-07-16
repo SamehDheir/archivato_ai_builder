@@ -1,4 +1,5 @@
 import type {
+  FixLogEntry,
   InterviewExchange,
   InterviewQuestion,
   InterviewStatus,
@@ -52,6 +53,15 @@ export interface InterviewSession {
   slots: SlotMap | null;
   /** Gaps to forward to the client, accumulated as the interview couldn't fill them. */
   openQuestions: OpenQuestion[] | null;
+  /**
+   * Append-only record of the review fixes the owner approved (R11). Null on rows
+   * predating it, and on any project where no fix was ever applied.
+   *
+   * It lives on the session, not the review, because a re-run replaces the review
+   * row (statuses reset — a re-run is a fresh assessment) and the review is carried
+   * in version snapshots, so a restore would rewind a log stored there.
+   */
+  fixLog: FixLogEntry[] | null;
   createdAt: Date;
   updatedAt: Date;
 }

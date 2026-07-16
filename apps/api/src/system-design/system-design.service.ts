@@ -4,7 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { DecisionExplanation, DecisionRef, SystemDesign } from '@archivato/shared';
+import {
+  applySystemDesignPatch,
+  type DecisionExplanation,
+  type DecisionRef,
+  type PatchSection,
+  type SystemDesign,
+} from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -99,6 +105,32 @@ export class SystemDesignService {
       );
     }
     return design;
+  }
+
+  /**
+   * Apply an **approved** review-fix patch (R11) to the named sections. Only the
+   * patchable sections are written (`techStack`, `constraintCompliance`); the
+   * services list is deliberately not patchable, so the R8 analysis and every
+   * module's complexity survive untouched without any carry-over logic.
+   *
+   * The fresh `generatedAt` is what raises the existing staleness flags downstream.
+   * The caller is responsible for having obtained explicit approval.
+   */
+  async applyPatch(
+    sessionId: string,
+    sections: PatchSection[],
+  ): Promise<SystemDesign> {
+    const existing = await this.designs.findBySessionId(sessionId);
+    if (!existing) {
+      throw new ConflictException(
+        'Generate the system design before patching it.',
+      );
+    }
+    return this.designs.upsert({
+      ...applySystemDesignPatch(existing, sections),
+      sessionId,
+      generatedAt: new Date().toISOString(),
+    });
   }
 
   /** Persist a user-edited system design (must already exist). */

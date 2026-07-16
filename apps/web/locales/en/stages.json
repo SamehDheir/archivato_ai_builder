@@ -155,6 +155,78 @@
       "automated": "automated",
       "ai": "AI"
     },
+    "fix": {
+      "propose": "Propose fix",
+      "addQuestion": "Add to client questions",
+      "addOutOfScope": "Add to out-of-scope",
+      "acknowledge": "Acknowledge",
+      "dismiss": "Dismiss",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "placeholder": {
+        "question": "Question to send your client",
+        "outOfScope": "What is not included",
+        "dismiss": "Why you're dismissing this (optional)"
+      },
+      "status": {
+        "open": "Open",
+        "resolved": "Resolved",
+        "converted": "Converted",
+        "dismissed": "Dismissed"
+      },
+      "action": {
+        "patch_applied": "Fix applied",
+        "added_open_question": "Sent to client questions",
+        "added_out_of_scope": "Added to out-of-scope",
+        "acknowledged": "Acknowledged",
+        "dismissed": "Dismissed"
+      },
+      "batch": {
+        "selected": "{{count}} findings selected",
+        "selected_one": "{{count}} finding selected",
+        "propose": "Propose fixes for selected",
+        "clear": "Clear",
+        "select": "Select \"{{title}}\" for a batch fix"
+      },
+      "preview": {
+        "title": "Review this fix before applying",
+        "subtitle": "{{count}} sections would change. Nothing is saved until you apply.",
+        "subtitle_one": "{{count}} section would change. Nothing is saved until you apply.",
+        "before": "Now",
+        "after": "Proposed",
+        "emptyBefore": "This section is currently empty.",
+        "emptyAfter": "This section would be emptied.",
+        "stale": "Stages built from these documents will be flagged for regeneration.",
+        "apply": "Apply fix",
+        "applying": "Applying…",
+        "cancel": "Cancel",
+        "close": "Close"
+      },
+      "section": {
+        "requirements.executiveSummary": "Requirements · Executive summary",
+        "requirements.functional": "Requirements · Functional requirements",
+        "requirements.nonFunctional": "Requirements · Non-functional requirements",
+        "requirements.roles": "Requirements · User roles",
+        "requirements.businessRules": "Requirements · Business rules",
+        "requirements.constraints": "Requirements · Constraints",
+        "requirements.outOfScope": "Requirements · Out of scope",
+        "requirements.assumptionsAndOpenQuestions": "Requirements · Assumptions & open questions",
+        "system-design.techStack": "Architecture · Tech stack",
+        "system-design.constraintCompliance": "Architecture · Constraint compliance"
+      },
+      "rerun": {
+        "hint": "You applied {{count}} fixes. Re-run the review to see the new score.",
+        "hint_one": "You applied {{count}} fix. Re-run the review to see the new score.",
+        "button": "Re-run review"
+      },
+      "delta": {
+        "up": "after your fixes",
+        "down": "after your fixes — new issues surfaced"
+      },
+      "log": {
+        "title": "Fix history"
+      }
+    },
     "empty": {
       "security": "No security issues flagged.",
       "scalability": "No scalability problems flagged.",

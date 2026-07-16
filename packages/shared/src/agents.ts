@@ -25,6 +25,8 @@ export enum AgentRole {
   ThreatModeler = 'threat_modeler',
   /** Structured test / QA plan derived from the generated design. */
   QaPlanner = 'qa_planner',
+  /** Drafts a targeted fix for a review finding, for the owner to approve (R11). */
+  Patcher = 'patcher',
 }
 
 /** A single turn in an LLM conversation. */

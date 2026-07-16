@@ -27,6 +27,7 @@ import {
 import type {
   ApiDesign,
   DatabaseDesign,
+  FixResult,
   PipelineStageName,
   ProjectSnapshot,
   RefineResult,
@@ -156,6 +157,7 @@ export function ProjectStages({
   onGenerateDatabase,
   onGenerateApi,
   onGenerateReview,
+  onFixApplied,
   onSavedDoc,
   onSavedDesign,
   onSavedDbDesign,
@@ -190,6 +192,12 @@ export function ProjectStages({
   onGenerateDatabase: () => void;
   onGenerateApi: () => void;
   onGenerateReview: () => void;
+  /**
+   * An approved review fix landed (R11). The parent takes the new report and
+   * refetches the artifacts named in `artifactsTouched` — which is also exactly
+   * the set whose staleness flags just moved.
+   */
+  onFixApplied: (result: FixResult) => void;
   onSavedDoc: (doc: RequirementDocument, opts?: { auto?: boolean }) => void;
   onSavedDesign: (design: SystemDesign, opts?: { auto?: boolean }) => void;
   onSavedDbDesign: (design: DatabaseDesign, opts?: { auto?: boolean }) => void;
@@ -583,7 +591,16 @@ export function ProjectStages({
                   busy={busy}
                   onRegenerate={onGenerateReview}
                 />
-                <ReviewView report={review} />
+                {/* `sessionId` is what turns on the R11 fix actions — the share
+                    page and the example project render the same component without
+                    it and stay read-only. */}
+                <ReviewView
+                  report={review}
+                  sessionId={sessionId}
+                  busy={busy}
+                  onFixApplied={onFixApplied}
+                  onRegenerate={onGenerateReview}
+                />
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateReview}

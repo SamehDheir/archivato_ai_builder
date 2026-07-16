@@ -12,6 +12,8 @@
  * but the number a customer reads is the number they are charged.
  */
 
+import { PLANS } from '@archivato/shared';
+
 /**
  * A real, public share link used as the "see a real scoping package" proof.
  * Set `NEXT_PUBLIC_DEMO_SHARE_URL` to the token URL of a finished project.
@@ -24,7 +26,7 @@ export const DEMO_SHARE_URL =
  * truth so the pricing page and the checkout can never disagree. To reprice, edit
  * `PLANS.pro` in `@archivato/shared` (and its `annualPriceUsd`), not this line.
  */
-export const TEAM_PRICE = '$79';
+export const TEAM_PRICE = `$${PLANS.pro.priceUsd}`;
 
 /** The tier a landing card renders. `price: null` = the "coming soon" tier. */
 export interface LandingPlan {

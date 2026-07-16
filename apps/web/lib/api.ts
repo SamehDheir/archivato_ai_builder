@@ -44,6 +44,9 @@ import type {
   SubscriptionView,
   UpdateProfileInput,
   ReviewReport,
+  FixLogEntry,
+  FixProposal,
+  FixResult,
   SystemDesign,
   ThreatModel,
   QaPlan,
@@ -314,6 +317,61 @@ export const reviewApi = {
     }),
 
   get: (sessionId: string) => request<ReviewReport>(`/review/${sessionId}`),
+
+  // R11 — findings → fixes. `propose` only drafts; nothing is written until the
+  // owner approves the preview and `apply` is called with it.
+  proposeFix: (sessionId: string, findingIds: string[]) =>
+    request<FixProposal>(`/review/${sessionId}/fix/propose`, {
+      method: 'POST',
+      body: JSON.stringify({ findingIds }),
+    }),
+
+  applyFix: (sessionId: string, proposal: FixProposal) =>
+    request<FixResult>(`/review/${sessionId}/fix/apply`, {
+      method: 'POST',
+      body: JSON.stringify({
+        findingIds: proposal.findingIds,
+        // `currentContent` is the preview's "before" side — the server reads the
+        // real artifact itself, so sending it back would be noise at best.
+        sections: proposal.sections.map(({ key, proposedContent, rationale, beforeSummary }) => ({
+          key,
+          proposedContent,
+          rationale,
+          beforeSummary,
+        })),
+      }),
+    }),
+
+  addClientQuestion: (sessionId: string, findingId: string, question: string) =>
+    request<FixResult>(`/review/${sessionId}/fix/client-question`, {
+      method: 'POST',
+      body: JSON.stringify({ findingId, question }),
+    }),
+
+  addOutOfScope: (
+    sessionId: string,
+    findingId: string,
+    item: string,
+    reason?: string,
+  ) =>
+    request<FixResult>(`/review/${sessionId}/fix/out-of-scope`, {
+      method: 'POST',
+      body: JSON.stringify({ findingId, item, reason }),
+    }),
+
+  resolveAdvisory: (
+    sessionId: string,
+    findingId: string,
+    action: 'acknowledged' | 'dismissed',
+    note?: string,
+  ) =>
+    request<FixResult>(`/review/${sessionId}/fix/advisory`, {
+      method: 'POST',
+      body: JSON.stringify({ findingId, action, note }),
+    }),
+
+  fixLog: (sessionId: string) =>
+    request<FixLogEntry[]>(`/review/${sessionId}/fix-log`),
 };
 
 export const productVisionApi = {

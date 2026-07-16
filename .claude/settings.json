@@ -190,7 +190,22 @@
       "Bash(PYTHONIOENCODING=utf-8 python -c ' *)",
       "Bash(NEXT_DIST_DIR=.next-plans NEXT_SKIP_STANDALONE=1 npx next build)",
       "Bash(PYTHONIOENCODING=utf-8 python -)",
-      "Bash(grep -n \"19\\\\|Free\\\\b.*1 project\\\\|5 projects\\\\|Pro\\\\b.*\\\\$\" README.md)"
+      "Bash(grep -n \"19\\\\|Free\\\\b.*1 project\\\\|5 projects\\\\|Pro\\\\b.*\\\\$\" README.md)",
+      "Bash(git --no-pager diff HEAD -- apps/api/src/api-design/api-design.service.ts)",
+      "Bash(git --no-pager diff -- apps/api/src/api-design/api-design.service.ts)",
+      "PowerShell(npm run build --workspace @archivato/shared 2>&1)",
+      "PowerShell(npx tsc -p apps/api/tsconfig.build.json --noEmit 2>&1)",
+      "PowerShell(npx prisma generate --schema apps/api/prisma/schema.prisma 2>&1)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Select-Object ProcessId, @{n='Cmd';e={$_.CommandLine.Substring\\(0, [Math]::Min\\(110, $_.CommandLine.Length\\)\\)}} | Format-Table -AutoSize -Wrap)",
+      "PowerShell(Stop-Process -Id 16320 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Id 15320 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(npm run prisma:migrate --workspace @archivato/api 2>&1)",
+      "Bash(npm run *)",
+      "Bash(NEXT_DIST_DIR=.next-verify NEXT_SKIP_STANDALONE=1 npm run build --workspace @archivato/web)",
+      "Bash(grep -rniE \"\\\\\\\\\\\\$19|\\\\\\\\\\\\$182|5 projects|1 project\\\\b|Free = 1|Pro \\\\\\(5\" README.md DEPLOY.md docs/*.md)",
+      "Bash(grep -rnE \"\\\\\\\\\\\\$19\\\\b|182|projectQuota: 5\" apps/api/src apps/web packages/shared/src --include=*.ts --include=*.tsx --include=*.json)",
+      "PowerShell($env:NEXT_DIST_DIR=\".next-perf\"; $env:NEXT_SKIP_STANDALONE=\"1\"; npm run build 2>&1 | Select-String -Pattern \"error|Error|✓ Compiled|Compiled successfully|Failed|warn\" | Select-Object -First 20)",
+      "PowerShell($env:NEXT_DIST_DIR=\".next-perf\"; $env:NEXT_SKIP_STANDALONE=\"1\"; npm run build 2>&1 | Select-String -Pattern \"error|Failed|Compiled successfully\" | Select-Object -First 8; Write-Output \"=== tsconfig untouched? ===\"; git diff --stat apps/web/tsconfig.json)"
     ],
     "additionalDirectories": [
       "\\tmp"

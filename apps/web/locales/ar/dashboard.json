@@ -229,6 +229,7 @@
     "databaseSaved": "تم حفظ قاعدة البيانات",
     "apiSaved": "تم حفظ تصميم API",
     "refined": "تم تحسين التصميم",
+    "fixApplied": "تم تطبيق الإصلاح",
     "restored": "تمت استعادة الـ scoping إلى الإصدار المحدد",
     "generated": "تم توليد {{stage}}",
     "generateFailed": "تعذّر توليد {{stage}}",

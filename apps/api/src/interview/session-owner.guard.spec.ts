@@ -34,6 +34,7 @@ function seed(
     summary: null,
     slots: null,
     openQuestions: null,
+    fixLog: null,
     createdAt: now,
     updatedAt: now,
   });

@@ -305,6 +305,91 @@ tsconfig and never needs shared's `dist`.
      array is a real signal. Comparing against a freshly-computed `buildServiceCostLines`
      would be circular (both derive from `buildVsBuy`) — the point is catching a **stale**
      stored estimate.
+- **Review findings → applied fixes (R11).** R10 gave each client-readiness finding
+  a `suggestedResolution`, but resolution stayed *prose*: the owner read "tighten
+  this requirement" and did it by hand, so the findings most worth acting on were
+  the least likely to be acted on. R11 closes the loop. Additive/optional on
+  `ReviewFinding` (JSON-blob convention, migration-free): `id`, `actionType`
+  (`patch | needs_client | advisory`), `patchTarget {stage, sectionHint}`, `status`
+  (`open | resolved | converted | dismissed`), `statusNote`. Logic lives in
+  `review.fix.ts` (pure, `@archivato/shared`), which imports `review.ts`
+  **one-way** — the reverse would give the barrel a runtime cycle. Non-negotiables:
+  1. **No silent auto-fix.** Every mutation is proposed → previewed → explicitly
+     approved → applied. `ReviewFixService.propose` calls the model and **writes
+     nothing**; only an owner-approved `apply` writes. There is deliberately no
+     "fix all", and no path from a draft to a write that skips the preview.
+  2. **`PATCH_SECTIONS` is a CLOSED set, on one test:** a section qualifies only if
+     a model can regenerate all of it in **one response** AND rewriting it can't
+     invalidate its neighbours. That's why **`api-design.modules` is not patchable**
+     — that artifact provably doesn't fit (its own generator chunks at 4 entities
+     because the ceiling is 2048 tokens), and a truncated API design parses *short*,
+     silently dropping endpoints. `system-design.services` is out because rewriting
+     it moves complexity → effort → **the price**; `database-design.*` cascades into
+     the API, SQL export, and scaffold. Findings landing there are `advisory` — the
+     owner is told what's wrong and left to drive it, which is honest. Widening the
+     set means proving the new section passes **both** halves, not adding a key.
+  3. **The PatchAgent is the ONE agent with no deterministic fallback**, and that's
+     the design. Every other agent falls back because a templated artifact beats no
+     artifact; a *patch* is the inverse — a guessed rewrite of a document a client
+     reads is worse than an honest "couldn't generate a fix", since the owner still
+     has the finding. `validateFixProposal` is strict and never coerces or salvages
+     a partial batch (a partially-applied fix is a document nobody reviewed).
+  4. **Downstream = the EXISTING staleness system, not a new cascade.** A patch
+     stamps a fresh `generatedAt`, the derived stages' `sourceStamp`s stop matching,
+     and `StaleNotice` offers the one-click regenerate it already had. A
+     requirements-only patch must **not** drag the cost estimate stale
+     (`DERIVED_STAGE_SOURCES`) — pinned by a test.
+  5. **The fixLog lives on the SESSION** (`fixLog Json?`, migration
+     `20260716120000_add_fix_log`), not the review: a re-run **replaces** the review
+     row and the review **is** in version snapshots, so a restore would rewind a log
+     stored there. An audit log a restore can rewind is not an audit log. It carries
+     **`findingTitle`** because it outlives the report — after a re-run the id points
+     at nothing, and "resolved security:0" is not a record anyone can read.
+  6. **A re-run resets every status to `open`** — it's a fresh assessment; a genuinely
+     fixed issue simply stops being reported, and the delta (`60 → 78`) shows the win.
+  7. **`needs_client` writes the REQUIREMENT DOC ONLY, never `session.openQuestions`.**
+     R6's invariant is that the session's slots/openQuestions are a *derived cache*
+     always re-derivable from `history[]`; a question the reviewer inferred from the
+     finished documents has no transcript turn behind it. (The session is also
+     `confirmed` by then — exactly when `editSlot` stops accepting writes.) Accepted
+     trade-off: a requirements **regen** re-derives from the transcript and drops
+     them; the finding is still in the review and can be re-converted.
+  8. **The workflow is OWNER-ONLY.** `redactReviewForShare` now also strips `id`/
+     `actionType`/`patchTarget`/`status`/`statusNote` from every finding that *does*
+     cross, so the share payload is byte-identical to pre-R11 — a client must never
+     learn which risks their vendor waved away. A security test asserts a dismissal
+     note never reaches the public page.
+  9. **`normalizeReviewReport` runs at BOTH boundaries** (the agent on write, the
+     store on read — Prisma *and* in-memory). The read side is what gives a pre-R11
+     row ids and action buttons instead of leaving it inert forever; `row.data as
+     ReviewReport` is a claim, not a check.
+  Classification: `RESOLUTION_ACTION` maps R10's four enums (`add_*` → needs_client,
+  `tighten_requirement`/`align_summary` → patch on requirements); `DIMENSION_ACTION`
+  is the per-dimension default (**security → `requirements.nonFunctional`**, since a
+  security finding is nearly always a missing NFR; scalability/performance →
+  `system-design.techStack`; **cost → advisory**, as there's no artifact section that
+  states "right-size compute"). The **deterministic fallback classifies each finding
+  at its source** (the code knows what it built), so offline runs get real buttons.
+  API: `POST /review/:id/fix/{propose,apply,client-question,out-of-scope,advisory}` +
+  `GET /review/:id/fix-log`, all owner-guarded + `ProGuard`; only `propose` is
+  `THROTTLE_AI` (the only one that calls a model). The proposal round-trips through
+  the browser and is **re-validated server-side** — safe because the caller is the
+  owner, who can already PUT anything via the structured editors, so the risk is a
+  malformed *shape*, not an untrusted author. Patches write through
+  `RequirementsService.applyPatch` / `SystemDesignService.applyPatch` (each service
+  owns writes to its own artifact); `applyPatch` is separate from `save()` because
+  `save()` deliberately carries the narrative sections over — exactly what a patch to
+  one of them must overwrite. Metering is automatic (`BaseAgent.thinkJson` stamps
+  `agent`; the route's first path segment gives stage `review`). **Web:** `ReviewView`
+  gains `sessionId` — **its presence is what enables the actions**, so the share page
+  and example project render the same component read-only (the `SystemDesignView
+  interactive={false}` precedent; the server's redaction is the boundary that counts).
+  `FixPreviewModal` shows a **real before/after** — `currentContent` is read off the
+  artifact **server-side**, never the model's description of it, because the owner
+  approves what they are shown. `fix-preview.ts` renders sections as readable lines
+  (raw JSON would make them diff punctuation instead of judging wording). i18n
+  `stages.review.fix.*` (EN+AR); the three `count` keys carry the **full Arabic CLDR
+  plural set**.
 - **Roadmap = effort-grounded phases (R10).** Additive/optional on `RoadmapPhase`:
   `moduleNames`, `weeksMin`/`weeksMax`, `isMvp`, `mvpStatement`, plus
   `alternativeRoadmaps` on the roadmap. The rule that holds it together:

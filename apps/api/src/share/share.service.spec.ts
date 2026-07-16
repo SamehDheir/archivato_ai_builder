@@ -297,7 +297,10 @@ describe('ShareService', () => {
     expect(shared.costEstimate?.recommended).toBe('render');
     // The owner-only budget warning is stripped server-side.
     expect(shared.costEstimate?.budgetWarning).toBeNull();
-    expect(JSON.stringify(shared)).not.toContain('188');
+    // Scoped to the estimate, and keyed on a distinctive field name rather than
+    // the bare number "188" — the random token and the ISO timestamps are full of
+    // digits, so a short numeric needle matches by chance (see the review test).
+    expect(JSON.stringify(shared.costEstimate)).not.toContain('overPct');
 
     // The internal session id must not ride out on any of them.
     expect(shared.vision?.sessionId).toBe(token);
@@ -364,7 +367,12 @@ describe('ShareService', () => {
     expect(payload).not.toContain('SECRET_DEAL_RISK');
     expect(payload).not.toContain('SECRET_TIMELINE_CONFLICT');
     expect(payload).not.toContain('SECRET_NOTE');
-    expect(payload).not.toContain('55');
+    // Scope the score check to `scores` rather than searching the whole payload
+    // for "55": the token is 43 random base64url chars and `sharedAt` is full of
+    // digits, so a bare two-digit needle matches by chance and the test fails on
+    // an unlucky token (it did). Assert the KEY is gone from the object that
+    // would carry it — distinctive, and it can't collide with random data.
+    expect(JSON.stringify(shared.review?.scores)).not.toContain('clientReadiness');
     // …while the engineering review still crosses (it lives in the appendix).
     expect(shared.review?.securityIssues[0].title).toBe('Public security note');
     expect(shared.review?.overallScore).toBe(80);

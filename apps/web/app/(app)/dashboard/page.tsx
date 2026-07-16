@@ -23,6 +23,7 @@ import type {
   ProjectOverview,
   ProjectScale,
   ProjectSnapshot,
+  FixResult,
   RefineResult,
   RequirementDocument,
   ReviewReport,
@@ -526,6 +527,26 @@ export default function Home() {
     toast({ title: t('toast.refined'), variant: 'success' });
   }
 
+  /**
+   * An approved review fix landed (R11). The server already wrote the artifacts
+   * and returned the updated report, so all that's left is to pull the ones it
+   * says it touched back into view — their `generatedAt` moved, which is what the
+   * staleness notices on the derived tabs read.
+   */
+  async function handleFixApplied(result: FixResult) {
+    setReview(result.review);
+    const id = state?.sessionId;
+    if (!id) return;
+    await Promise.all(
+      result.artifactsTouched.map(async (stage) => {
+        if (stage === 'requirements') setDoc(await requirementsApi.get(id));
+        else if (stage === 'system-design') setDesign(await systemDesignApi.get(id));
+      }),
+    );
+    setVersionsReload((k) => k + 1);
+    toast({ title: t('toast.fixApplied'), variant: 'success' });
+  }
+
   /** Apply a restored version: replace every artifact with the snapshot's. */
   function handleRestored(snapshot: ProjectSnapshot) {
     setDoc(snapshot.requirements);
@@ -982,6 +1003,7 @@ export default function Home() {
               onGenerateReview={() =>
                 generateStage<ReviewReport>('review', setReview)
               }
+              onFixApplied={handleFixApplied}
               onSavedDoc={handleSavedDoc}
               onSavedDesign={handleSavedDesign}
               onSavedDbDesign={handleSavedDbDesign}

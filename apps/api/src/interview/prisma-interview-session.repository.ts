@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
+  FixLogEntry,
   InterviewExchange,
   InterviewQuestion,
   InterviewStatus,
@@ -40,6 +41,7 @@ export class PrismaInterviewSessionRepository
         summary: toJson(session.summary),
         slots: toJson(session.slots),
         openQuestions: toJson(session.openQuestions),
+        fixLog: toJson(session.fixLog),
       },
     });
     return toEntity(row);
@@ -87,6 +89,7 @@ export class PrismaInterviewSessionRepository
         summary: toJson(session.summary),
         slots: toJson(session.slots),
         openQuestions: toJson(session.openQuestions),
+        fixLog: toJson(session.fixLog),
       },
     });
     return toEntity(row);
@@ -123,6 +126,7 @@ function toEntity(row: {
   summary: Prisma.JsonValue;
   slots: Prisma.JsonValue;
   openQuestions: Prisma.JsonValue;
+  fixLog: Prisma.JsonValue;
   createdAt: Date;
   updatedAt: Date;
 }): InterviewSession {
@@ -147,6 +151,7 @@ function toEntity(row: {
     summary: (row.summary as RequirementsSummary | null) ?? null,
     slots: (row.slots as SlotMap | null) ?? null,
     openQuestions: (row.openQuestions as unknown as OpenQuestion[] | null) ?? null,
+    fixLog: (row.fixLog as unknown as FixLogEntry[] | null) ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

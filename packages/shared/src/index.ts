@@ -25,6 +25,7 @@ export * from './api-design.rest';
 export * from './mock-response';
 export * from './freshness';
 export * from './review';
+export * from './review.fix';
 export * from './threat-model';
 export * from './qa-plan';
 export * from './product-vision';

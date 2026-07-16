@@ -2,6 +2,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AgentRole,
   isSuggestedResolution,
+  normalizeReviewReport,
+  patchTargetFor,
+  PATCH_SECTION_KEYS,
   type ApiDesign,
   type ClientReadinessFinding,
   type ConsistencyFinding,
@@ -81,6 +84,13 @@ export class ReviewerAgent extends BaseAgent {
     'ALSO flag cross-artifact contradictions (consistencyFindings): where the',
     'requirements, the design, and the cost/effort disagree — each finding naming',
     'the two artifacts that conflict.',
+    'For EVERY finding, also classify how it gets resolved (actionType): "patch" if',
+    'rewriting ONE named artifact section fixes it — then give patchTarget {stage,',
+    'sectionHint} naming that section; "needs_client" if only the client can settle',
+    'it (a decision or a fact you do not have); "advisory" if it is guidance with no',
+    'single section to rewrite. Prefer "advisory" over a patch you are not confident',
+    'a single section edit would fix — a wrong edit to a client-facing document',
+    'costs more than an unfixed note.',
     'Output standard: every finding is specific to THIS design and actionable (a',
     'team could fix exactly what you name) — no generic checklist advice, no',
     'praise padding. Sub-scores must be consistent with the findings. Return ONLY',
@@ -161,11 +171,22 @@ export class ReviewerAgent extends BaseAgent {
       '- overallScore: 0-100, consistent with the four engineering sub-scores.',
       '- scores: {security, scalability, performance, cost, clientReadiness} — each 0-100.',
       '- summary: 1-3 sentences on the overall health and the top risk.',
-      '- securityIssues[], scalabilityIssues[], performanceRisks[], costOptimizations[]: each {title, detail (the concrete risk + where), severity (low|medium|high|critical)}.',
-      '- clientReadinessIssues[]: DEAL risks — each {title, detail, severity, suggestedResolution (add_open_question|add_out_of_scope|tighten_requirement|align_summary), resolutionHint (a short instruction)}.',
-      '- consistencyFindings[]: cross-artifact contradictions — each {title, detail, severity, artifacts: [artifactA, artifactB] (the two that conflict, e.g. ["requirements","design"])}.',
+      '- securityIssues[], scalabilityIssues[], performanceRisks[], costOptimizations[]: each {title, detail (the concrete risk + where), severity (low|medium|high|critical), actionType, patchTarget?}.',
+      '- clientReadinessIssues[]: DEAL risks — each {title, detail, severity, suggestedResolution (add_open_question|add_out_of_scope|tighten_requirement|align_summary), resolutionHint (a short instruction), actionType, patchTarget?}.',
+      '- consistencyFindings[]: cross-artifact contradictions — each {title, detail, severity, artifacts: [artifactA, artifactB] (the two that conflict, e.g. ["requirements","design"]), actionType, patchTarget?}.',
       '- missingFeatures[]: requirements or capabilities absent from the design (strings).',
       '- recommendations[]: prioritized, concrete next actions (strings).',
+      '',
+      '# actionType / patchTarget',
+      'actionType is one of: patch | needs_client | advisory.',
+      'A patchTarget is ONLY valid for one of these {stage, sectionHint} pairs — any',
+      'other section cannot be patched, so classify such a finding as "advisory":',
+      ...PATCH_SECTION_KEYS.map((key) => {
+        const { stage, sectionHint } = patchTargetFor(key);
+        return `- {"stage":"${stage}","sectionHint":"${sectionHint}"}`;
+      }),
+      'Note the design\'s services, the API modules, and the database entities are',
+      'deliberately NOT patchable — a finding about those is "advisory".',
     ].join('\n');
   }
 
@@ -226,7 +247,10 @@ export class ReviewerAgent extends BaseAgent {
       ...this.sanitizeConsistency(raw.consistencyFindings),
     ];
 
-    return {
+    // R11 — stamp every finding with an id, a resolved actionType/patchTarget, and
+    // an initial status. The same helper runs again at the store's READ boundary,
+    // which is what heals reports written before R11 existed.
+    return normalizeReviewReport({
       sessionId: raw.sessionId!,
       generatedAt: raw.generatedAt!,
       overallScore,
@@ -244,7 +268,7 @@ export class ReviewerAgent extends BaseAgent {
       recommendations: raw.recommendations ?? [],
       clientReadinessIssues,
       consistencyFindings,
-    };
+    });
   }
 
   /** Allowlist LLM client-readiness findings; drop malformed ones. */
@@ -269,6 +293,11 @@ export class ReviewerAgent extends BaseAgent {
             typeof f.resolutionHint === 'string' && f.resolutionHint
               ? f.resolutionHint
               : this.defaultHint(resolution),
+          // Carried through raw — `normalizeReviewReport` is what validates them
+          // (and falls back to the suggestedResolution mapping). Dropping them
+          // here would silently discard the model's classification.
+          actionType: f.actionType,
+          patchTarget: f.patchTarget,
         };
       });
   }
@@ -292,6 +321,8 @@ export class ReviewerAgent extends BaseAgent {
           severity: this.severity(f.severity),
           source: 'ai',
           artifacts,
+          actionType: f.actionType,
+          patchTarget: f.patchTarget,
         };
       });
   }
@@ -344,7 +375,10 @@ export class ReviewerAgent extends BaseAgent {
       clientReadiness: NEUTRAL_CLIENT_READINESS,
     };
 
-    return {
+    // Each fallback finding is built by code that knows exactly what it is, so it
+    // classifies itself precisely (see the `actionType` on each below) rather than
+    // leaning on the per-dimension default. Offline runs get real action buttons.
+    return normalizeReviewReport({
       sessionId,
       generatedAt,
       overallScore: this.overall(scores),
@@ -361,7 +395,7 @@ export class ReviewerAgent extends BaseAgent {
       consistencyFindings: ctx.automatedConsistency ?? [],
       clientReadinessNote:
         'Client-readiness (deal risk) scoring needs an AI review pass; showing a neutral baseline. The cross-artifact checks below are still applied.',
-    };
+    });
   }
 
   /** Turn a set of findings into a 0-100 health score (heavier issues cost more). */
@@ -395,6 +429,8 @@ export class ReviewerAgent extends BaseAgent {
         detail:
           'A single deployable cannot scale hot paths independently. Extract high-load workflows into services or background workers so they scale in isolation.',
         severity: 'medium',
+        // Re-architecting is not a section rewrite — the service list is not patchable.
+        actionType: 'advisory',
       });
     }
 
@@ -404,6 +440,8 @@ export class ReviewerAgent extends BaseAgent {
         detail:
           'Heavy work (emails, reports, exports) runs inline with requests. Without a queue + workers these block request threads and cap throughput under load.',
         severity: 'medium',
+        actionType: 'patch',
+        patchTarget: { stage: 'system-design', sectionHint: 'techStack' },
       });
     }
 
@@ -413,6 +451,7 @@ export class ReviewerAgent extends BaseAgent {
         detail:
           'With one service, scaling is all-or-nothing. Define clear module/service seams so bottlenecks can be scaled without scaling everything.',
         severity: 'low',
+        actionType: 'advisory',
       });
     }
 
@@ -521,6 +560,10 @@ export class ReviewerAgent extends BaseAgent {
           .map((r) => r.name)
           .join(', ')} have no explicit permissions. Define per-role access control for each endpoint.`,
         severity: 'medium',
+        // The gap is in the role definitions, not the security NFRs the dimension
+        // default would aim at.
+        actionType: 'patch',
+        patchTarget: { stage: 'requirements', sectionHint: 'roles' },
       });
     }
 
@@ -549,6 +592,9 @@ export class ReviewerAgent extends BaseAgent {
         detail:
           'List endpoints do not declare pagination parameters; large tables will produce slow, memory-heavy responses.',
         severity: 'high',
+        // The fix belongs in the API modules, which are deliberately not patchable
+        // (that artifact does not fit one model response — see PATCH_SECTIONS).
+        actionType: 'advisory',
       });
     }
 
@@ -558,6 +604,8 @@ export class ReviewerAgent extends BaseAgent {
         detail:
           'The stack has no cache (e.g. Redis/CDN); read-heavy endpoints will hit the database directly under load.',
         severity: 'medium',
+        actionType: 'patch',
+        patchTarget: { stage: 'system-design', sectionHint: 'techStack' },
       });
     }
 
@@ -567,6 +615,7 @@ export class ReviewerAgent extends BaseAgent {
         detail:
           'Several relations exist; ensure list/detail queries eager-load related rows to avoid N+1 round-trips.',
         severity: 'low',
+        actionType: 'advisory',
       });
     }
 
