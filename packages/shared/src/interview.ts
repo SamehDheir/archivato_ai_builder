@@ -181,6 +181,13 @@ export interface ProjectSummary {
    * cost page; it is NEVER part of the public share payload.
    */
   weeklyRate?: number | null;
+  /**
+   * ISO timestamp of creation. The free plan allows N designs **per calendar
+   * month**, so the client counts the projects created in the current period
+   * (`countInQuotaPeriod`) — the project list stays the meter, with no usage table.
+   * Optional for back-compat with any cached/older payload.
+   */
+  createdAt?: string;
   /** ISO timestamp of the last change, for "most recently worked on" ordering. */
   updatedAt: string;
 }

@@ -29,7 +29,14 @@ import type {
   SubscriptionView,
   SystemDesign,
 } from '@archivato/shared';
-import { hasPermission, isStaffUser, sharePath } from '@archivato/shared';
+import {
+  countInQuotaPeriod,
+  hasPermission,
+  isStaffUser,
+  isUnlimitedQuota,
+  PLANS,
+  sharePath,
+} from '@archivato/shared';
 import {
   ApiError,
   apiDesignApi,
@@ -829,15 +836,23 @@ export default function Home() {
               {sub && projects.length > 0 && (
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
                   <span>
-                    <span className="font-semibold capitalize">
-                      {t('quota.plan', { plan: sub.plan })}
+                    <span className="font-semibold">
+                      {t('quota.plan', { plan: PLANS[sub.plan].name })}
                     </span>{' '}
                     <span className="text-muted-foreground">
                       ·{' '}
-                      {t('quota.used', {
-                        count: projects.length,
-                        quota: sub.projectQuota,
-                      })}
+                      {isUnlimitedQuota(sub.projectQuota)
+                        ? t('quota.unlimited')
+                        : t('quota.used', {
+                            // The quota is a rate per calendar month, so the meter
+                            // is what was CREATED this period — not what is owned.
+                            used: countInQuotaPeriod(
+                              projects
+                                .map((p) => p.createdAt)
+                                .filter((d): d is string => !!d),
+                            ),
+                            quota: sub.projectQuota,
+                          })}
                     </span>
                   </span>
                   {sub.plan === 'free' ? (

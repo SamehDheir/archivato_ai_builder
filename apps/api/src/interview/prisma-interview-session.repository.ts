@@ -62,6 +62,12 @@ export class PrismaInterviewSessionRepository
     return this.prisma.interviewSession.count({ where: { userId } });
   }
 
+  countByUserIdCreatedSince(userId: string, since: Date): Promise<number> {
+    return this.prisma.interviewSession.count({
+      where: { userId, createdAt: { gte: since } },
+    });
+  }
+
   async delete(id: string): Promise<void> {
     await this.prisma.interviewSession.delete({ where: { id } });
   }

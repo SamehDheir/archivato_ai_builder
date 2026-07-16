@@ -108,7 +108,12 @@
     "meta": "{{modules}} وحدات · {{endpoints}} نقاط نهاية · تم التوليد {{date}}",
     "download": "تنزيل تصميم API",
     "request": "الطلب",
-    "response": "الاستجابة"
+    "response": "الاستجابة",
+    "coverage": {
+      "summary": "{{covered}} كيان مغطى · {{excluded}} كيان مستثنى",
+      "needsReview": "{{n}} بحاجة إلى مراجعة",
+      "fallback": "مُولّد تلقائياً — يحتاج مراجعة"
+    }
   },
   "review": {
     "generated": "تم التوليد {{date}}",

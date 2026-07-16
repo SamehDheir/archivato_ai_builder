@@ -14,6 +14,8 @@ import {
   INTERVIEW_MAX_QUESTIONS,
   INTERVIEW_PHASE_ORDER,
   InterviewPhase,
+  isUnlimitedQuota,
+  startOfQuotaPeriod,
   type InterviewExchange,
   type InterviewQuestion,
   type InterviewState,
@@ -84,27 +86,41 @@ export class InterviewService {
     clientName: string | null = null,
     notes: string | null = null,
   ): Promise<InterviewState> {
-    // Enforce the plan's project-count quota (Free = 1, Pro = 5): a user at
-    // their limit must delete a project or upgrade before starting another.
-    // Skipped for owner-less sessions (unit tests drive the state machine).
+    // Enforce the plan's quota, which is a **creation rate per calendar month**
+    // (Starter = 1/month), not a lifetime count of projects owned: last month's
+    // design must not be held against this month.
+    //
+    // The meter is still the project list — there is no usage table (see the
+    // billing notes) — which leaves one accepted hole: a *deleted* project stops
+    // being counted, so a Starter user can delete-and-retry within a month. That
+    // is not a regression (the old owned-count quota behaved the same) and it
+    // costs them the design they delete, so it buys nothing but a re-run. Closing
+    // it needs creations recorded somewhere that survives the delete. Pinned by a
+    // test in `project-quota.spec.ts` so it stays a decision, not a surprise.
+    //
+    // Team is unlimited and skips the check entirely. Owner-less sessions are
+    // never metered (unit tests drive the state machine).
     if (userId) {
-      const [count, quota] = await Promise.all([
-        this.repo.countByUserId(userId),
-        this.billing.getProjectQuota(userId),
-      ]);
-      if (count >= quota) {
-        throw new HttpException(
-          {
-            statusCode: HttpStatus.PAYMENT_REQUIRED,
-            error: 'Payment Required',
-            code: 'quota_exceeded',
-            message:
-              quota === 1
-                ? 'Your Free plan allows 1 project. Delete it or upgrade to Pro (5 projects) to start another.'
-                : `You've reached your plan limit of ${quota} projects. Delete one or upgrade to start another.`,
-          },
-          HttpStatus.PAYMENT_REQUIRED,
+      const quota = await this.billing.getProjectQuota(userId);
+      if (!isUnlimitedQuota(quota)) {
+        const used = await this.repo.countByUserIdCreatedSince(
+          userId,
+          startOfQuotaPeriod(),
         );
+        if (used >= quota!) {
+          throw new HttpException(
+            {
+              statusCode: HttpStatus.PAYMENT_REQUIRED,
+              error: 'Payment Required',
+              code: 'quota_exceeded',
+              message:
+                quota === 1
+                  ? 'Your Starter plan includes 1 design per month. Upgrade to Team for unlimited designs, or wait until next month.'
+                  : `You've used all ${quota} designs included in your plan this month. Upgrade to Team for unlimited designs, or wait until next month.`,
+            },
+            HttpStatus.PAYMENT_REQUIRED,
+          );
+        }
       }
     }
     const now = new Date();
@@ -291,6 +307,9 @@ export class InterviewService {
       status: s.status,
       completeness: round2(s.coverage),
       weeklyRate: s.weeklyRate ?? null,
+      // The per-month quota's meter: the client counts what was created this
+      // period rather than what is owned (see `countInQuotaPeriod`).
+      createdAt: s.createdAt.toISOString(),
       updatedAt: s.updatedAt.toISOString(),
     };
   }

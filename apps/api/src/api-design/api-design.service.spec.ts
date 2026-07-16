@@ -1,7 +1,11 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { validateEntityCoverage } from '@archivato/shared';
 import { ApiDesignService } from './api-design.service';
 import { InMemoryApiDesignRepository } from './in-memory-api-design.repository';
-import { ApiDesignerAgent } from '../llm/agents/api-designer.agent';
+import {
+  ApiDesignerAgent,
+  MAX_ENTITIES_PER_CALL,
+} from '../llm/agents/api-designer.agent';
 import { InterviewService } from '../interview/interview.service';
 import { InMemoryInterviewSessionRepository } from '../interview/in-memory-interview-session.repository';
 import { RequirementsService } from '../requirements/requirements.service';
@@ -197,6 +201,253 @@ describe('ApiDesignService', () => {
     expect(Array.isArray(ep.statusCodes)).toBe(true);
     expect(Array.isArray(ep.requestSchema)).toBe(true);
     expect(Array.isArray(ep.responseSchema)).toBe(true);
+  });
+
+  it('repairs an LLM design that leaves entities uncovered', async () => {
+    const h = makeHarness();
+    const sessionId = await upstream(h);
+    const db = await h.databaseDesign.generate(sessionId);
+    const names = db.entities.map((e) => e.name);
+    expect(names.length).toBeGreaterThan(2);
+
+    const [first, ...missing] = names;
+
+    // The reported bug, scripted: the model groups around one resource and the
+    // rest of the tables get no API at all.
+    h.mock.enqueueJson({
+      modules: [
+        {
+          name: 'First',
+          basePath: `/api/${first}`,
+          coveredEntities: [first],
+          endpoints: [
+            {
+              method: 'GET',
+              path: `/api/${first}`,
+              summary: 'list',
+              requestSchema: [],
+              responseSchema: [],
+              statusCodes: [200],
+            },
+          ],
+        },
+      ],
+    });
+    // The repair call answers with groups for exactly the entities it was given.
+    h.mock.enqueueJson({
+      modules: missing.map((name) => ({
+        name: `Repaired ${name}`,
+        basePath: `/api/${name}`,
+        coveredEntities: [name],
+        endpoints: [
+          {
+            method: 'GET',
+            path: `/api/${name}`,
+            summary: 'list',
+            requestSchema: [],
+            responseSchema: [],
+            statusCodes: [200],
+          },
+        ],
+      })),
+    });
+
+    const design = await h.service.generate(sessionId);
+    expect(validateEntityCoverage(design, names).ok).toBe(true);
+    for (const name of missing) {
+      expect(design.modules.some((m) => m.name === `Repaired ${name}`)).toBe(true);
+    }
+    // Repaired by the model, so nothing needs the review flag.
+    expect(design.modules.some((m) => m.source === 'generated-fallback')).toBe(false);
+  });
+
+  it('never persists a design with uncovered entities, even if the repair fails', async () => {
+    const h = makeHarness();
+    const sessionId = await upstream(h);
+    const db = await h.databaseDesign.generate(sessionId);
+    const names = db.entities.map((e) => e.name);
+    const [first, ...missing] = names;
+
+    // One good group, then a repair call that returns junk (the mock's default
+    // echo response) — the gap has to close deterministically or not at all.
+    h.mock.enqueueJson({
+      modules: [
+        {
+          name: 'First',
+          basePath: `/api/${first}`,
+          coveredEntities: [first],
+          endpoints: [
+            {
+              method: 'GET',
+              path: `/api/${first}`,
+              summary: 'list',
+              requestSchema: [],
+              responseSchema: [],
+              statusCodes: [200],
+            },
+          ],
+        },
+      ],
+    });
+
+    const design = await h.service.generate(sessionId);
+    expect(validateEntityCoverage(design, names).ok).toBe(true);
+
+    // And what the code had to invent says so, so the user can review it.
+    for (const name of missing) {
+      const owner = design.modules.find((m) =>
+        (m.coveredEntities ?? []).includes(name),
+      );
+      expect(owner?.source).toBe('generated-fallback');
+    }
+
+    // The guarantee holds on the way back out of the store too.
+    expect(validateEntityCoverage(await h.service.get(sessionId), names).ok).toBe(
+      true,
+    );
+  });
+
+  it('will not let one chunk excuse an entity that belongs to another', async () => {
+    const h = makeHarness();
+    const sessionId = await upstream(h);
+    const db = await h.databaseDesign.generate(sessionId);
+    const names = db.entities.map((e) => e.name);
+    // The design has to be big enough to be generated in more than one call.
+    expect(names.length).toBeGreaterThan(4);
+    const last = names[names.length - 1];
+
+    // Chunk 1 answers, and excuses an entity it was never given. Chunk 2 — the
+    // one that actually owns it — then fails. Unscoped, that exclusion would
+    // stand in for the missing API and nothing would fill it.
+    h.mock.enqueueJson({
+      modules: [
+        {
+          name: 'First',
+          basePath: `/api/${names[0]}`,
+          coveredEntities: [names[0]],
+          endpoints: [
+            {
+              method: 'GET',
+              path: `/api/${names[0]}`,
+              summary: 'list',
+              requestSchema: [],
+              responseSchema: [],
+              statusCodes: [200],
+            },
+          ],
+        },
+      ],
+      excludedEntities: [{ entity: last, reason: 'Internal table, no client use.' }],
+    });
+
+    const design = await h.service.generate(sessionId);
+    expect(
+      (design.excludedEntities ?? []).some((e) => e.entity === last),
+    ).toBe(false);
+    const owner = design.modules.find((m) =>
+      (m.coveredEntities ?? []).includes(last),
+    );
+    expect(owner?.source).toBe('generated-fallback');
+    expect(validateEntityCoverage(design, names).ok).toBe(true);
+  });
+
+  it('credits a real resource the model never declared coverage for', async () => {
+    const h = makeHarness();
+    const sessionId = await upstream(h);
+    const db = await h.databaseDesign.generate(sessionId);
+    const names = db.entities.map((e) => e.name);
+
+    // No coveredEntities anywhere — paths only. Inference must see these, or the
+    // repair pass would build a second resource next to each of them.
+    h.mock.enqueueJson({
+      modules: names.map((name) => ({
+        name: `Mod ${name}`,
+        basePath: `/api/${name}`,
+        endpoints: [
+          {
+            method: 'GET',
+            path: `/api/${name}`,
+            summary: 'list',
+            requestSchema: [],
+            responseSchema: [],
+            statusCodes: [200],
+          },
+        ],
+      })),
+    });
+
+    const design = await h.service.generate(sessionId);
+    expect(validateEntityCoverage(design, names).ok).toBe(true);
+    expect(design.modules).toHaveLength(names.length);
+    expect(design.modules.every((m) => m.source === 'llm')).toBe(true);
+  });
+
+  it('keeps an entity excluded with a reason, without inventing a resource', async () => {
+    const h = makeHarness();
+    const sessionId = await upstream(h);
+    const db = await h.databaseDesign.generate(sessionId);
+    const names = db.entities.map((e) => e.name);
+    // Exclusions only count for the entities the answering call was given, so
+    // scope this to the first chunk's.
+    const [first, ...excused] = names.slice(0, MAX_ENTITIES_PER_CALL);
+
+    h.mock.enqueueJson({
+      modules: [
+        {
+          name: 'First',
+          basePath: `/api/${first}`,
+          coveredEntities: [first],
+          endpoints: [
+            {
+              method: 'GET',
+              path: `/api/${first}`,
+              summary: 'list',
+              requestSchema: [],
+              responseSchema: [],
+              statusCodes: [200],
+            },
+          ],
+        },
+      ],
+      excludedEntities: excused.map((entity) => ({
+        entity,
+        reason: `Join table managed through the First resource (/api/${first}).`,
+      })),
+    });
+
+    const design = await h.service.generate(sessionId);
+    expect(validateEntityCoverage(design, names).ok).toBe(true);
+
+    // A justified exclusion stands — no resource is invented for it.
+    for (const entity of excused) {
+      expect((design.excludedEntities ?? []).some((e) => e.entity === entity)).toBe(
+        true,
+      );
+      expect(
+        design.modules.some((m) => (m.coveredEntities ?? []).includes(entity)),
+      ).toBe(false);
+    }
+  });
+
+  it('save() keeps the exclusions the editor cannot see and recomputes coverage', async () => {
+    const h = makeHarness();
+    const sessionId = await upstream(h);
+    await h.databaseDesign.generate(sessionId);
+    const generated = await h.service.generate(sessionId);
+    const excluded = generated.excludedEntities;
+
+    // What the editor actually sends: modules only.
+    const saved = await h.service.save(sessionId, {
+      modules: generated.modules.map((m) => ({
+        name: m.name,
+        basePath: m.basePath,
+        endpoints: m.endpoints,
+      })),
+    });
+
+    expect(saved.excludedEntities).toEqual(excluded);
+    const users = saved.modules.find((m) => m.name === 'Users');
+    expect(users?.coveredEntities).toEqual(['users']);
   });
 
   it('get() returns a stored design and 404s otherwise', async () => {

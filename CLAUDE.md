@@ -655,6 +655,57 @@ tsconfig and never needs shared's `dist`.
   just throttled. Web: an `ExplainButton` beside each choice in `SystemDesignView`
   opens `DecisionExplainModal` (rationale/tradeoffs/alternatives/risks). i18n
   `stages.system.explain.*` (EN+AR).
+- **API Design = guaranteed entity coverage.** The stage's promise: **every entity
+  in the database design gets an endpoint group, or a declared reason it doesn't**.
+  Nothing enforced this before — the prompt mentioned entities in passing and no
+  code ever checked the result — so a model that grouped its modules around
+  *services* quietly shipped tables with no API, and the only signal was a user
+  noticing a missing resource later. Additive/optional on the artifact (JSON-blob
+  convention, migration-free): `coveredEntities?: string[]` + `source?:
+  ApiModuleSource` per module, `excludedEntities?: {entity, reason}[]` top-level.
+  Three pure, unit-tested pieces in `@archivato/shared` — `api-design.coverage.ts`
+  (`validateEntityCoverage`, `withResolvedCoverage`, `mergeMissingCoverage`) and
+  `api-design.rest.ts` (`buildRestApi`, `ensureEntityCoverage`). The flow:
+  LLM → resolve → validate → **one repair call** for the gap → `ensureEntityCoverage`
+  in the service. Things not to undo:
+  1. **The invariant lives in `ApiDesignService.generate`, not the agent** — it is
+     the only path that writes a generated design (the SSE stream calls it too), so
+     `ensureEntityCoverage` there is what makes "can't persist an uncovered entity"
+     true rather than best-effort. `save()` deliberately only *recomputes* coverage:
+     re-adding a group the user just deleted would make the editor feel broken.
+  2. **Coverage is declared OR inferred from paths.** Declaration-only would treat a
+     perfectly good undeclared `/api/orders` as missing and send the repair pass off
+     to build a **second** Orders resource — duplicates are worse than the paperwork
+     gap. Inference only counts segments **before the first path param**: reading
+     `/api/customers/:id/orders` as "Customers covers orders" would let one nested
+     read route stand in for the whole orders API. An explicit `coveredEntities`
+     still buys nested-only coverage.
+  3. **Only `generated-fallback` is a warning.** It marks a group the *code* built
+     because the model left an entity uncovered even after repair. A wholesale
+     deterministic design (mock mode / failed call) is **not** tagged — that's the
+     expected offline output, and flagging every group would make the chip
+     meaningless.
+  4. **Chunked generation is the truncation fix** (`MAX_ENTITIES_PER_CALL = 4`).
+     The API design is the largest artifact here and the default output ceiling is
+     **2048 tokens on Groq/Azure**, 4096 on Claude — a 10-entity design doesn't fit,
+     and a cut-off response either fails to parse or parses *short*. Chunks merge in
+     code; a failed chunk contributes nothing and its entities fall through repair →
+     fallback, so an outage costs precision, never coverage. Don't "fix" this by
+     raising `maxTokens`. Every call (incl. repair) goes through `thinkJson`, so
+     **usage metering is intact**.
+  5. **A chunk may only excuse its own entities.** Unscoped, a chunk that excluded a
+     *later* chunk's entity would satisfy the validator on its behalf — and if that
+     chunk then failed, the entity would end up with no API and a reason nobody
+     designed.
+  6. **Junction tables are excluded, with nested routes on the PARENT's module.** A
+     pure join table (≥2 FKs and nothing else of its own — `order_items` with a
+     `quantity` is a real resource, `post_tags` is not) gets no resource; the parent
+     carries `/api/orders/:id/order_products`. Nested routes must hang off the
+     parent's group because the scaffold mounts a group's endpoints under its own
+     basePath — the same path declared in `Orders` would generate `/orders/:id/orders`.
+  7. **Code enforces that a reason exists, not that it's a good one.** The prompt
+     narrows the valid reasons (junction / internal table / nested-under-a-named-parent);
+     the validator can't judge prose.
 - **Agents backfill via `normalize()`.** Where an artifact has many optional
   parts (e.g. the reviewer's per-dimension scores/findings), the agent trusts a
   valid LLM response but fills any omitted field deterministically, so the shape
@@ -679,9 +730,39 @@ tsconfig and never needs shared's `dist`.
 - **Repository pattern everywhere.** Every store has an interface + in-memory
   impl (used by unit tests, DB-free) + Prisma impl. Feature modules provide the
   Prisma repo.
-- **Billing / project quota.** Capacity is a **max-projects-owned** count (dollars
-  are plan prices): **Free = 1 project**, **Pro → 5 projects** (**$19/mo** or
-  **$182/yr — 20% off**). **Annual is a cadence, not a tier:** an orthogonal
+- **Billing / project quota.** Capacity is a **projects-created-per-calendar-month**
+  rate (dollars are plan prices): **Starter = 1 design/month**, **Team = unlimited**
+  (**$79/mo** or **$758/yr — 20% off**).
+  - **The tier names are display-only.** The ids stay `free` | `pro` — that is what
+    every subscription row, `isPro`, `ProGuard`, `effectivePlan`, the Paddle mapping,
+    and the admin console key on. `PLANS[plan].name` is the label ("Starter"/"Team");
+    **rename the label, never the id.** Tier names are product brands, so they are
+    read from `PLANS` rather than i18n and are identical in every locale.
+  - **`projectQuota: number | null`, where `null` = unlimited** — never `0` (which
+    would block everything) and never a large number standing in for "no limit"
+    (which a later edit could accidentally enforce). Callers must **skip** the check
+    via `isUnlimitedQuota`, not compare against a sentinel.
+  - **The quota period is the UTC calendar month** (`startOfQuotaPeriod` /
+    `countInQuotaPeriod`, pure, in `shared`). Both sides must agree on where the
+    month starts: the server's 402 and the client's "used X of Y". If each used its
+    own local clock they would disagree across a timezone boundary and a user would
+    be told they had a design left and then refused — hence one shared UTC rule,
+    used by the enforcement *and* the banner.
+  - **Known accepted hole:** the meter is still the project list (no usage table),
+    so a **deleted project stops counting** and a Starter user can delete-and-retry
+    within a month. Not a regression (the old owned-count quota behaved the same)
+    and it costs them the design they delete. Closing it needs creations recorded
+    somewhere that survives the delete. Pinned by `project-quota.spec.ts`.
+  - **The landing page reads its price from `PLANS`** (`lib/landing.ts` →
+    `TEAM_PRICE`). It used to be an independent literal, and the two promptly
+    drifted — the page advertised $79/mo + "unlimited designs" while billing charged
+    $19/mo for 5 projects. A pricing page that disagrees with the checkout is worse
+    than one that can't be freely edited. The tier *structure* still lives in
+    `landing.ts` (billing has no "Agency" tier to sell — it is **not built**, per
+    POSITIONING §4.5); the number a customer reads is the number they are charged.
+    **To reprice, edit `PLANS` — one file.**
+
+  **Annual is a cadence, not a tier:** an orthogonal
   `billingCycle: 'monthly' | 'annual'` on the subscription changes only the price,
   the period length (mock: +30d vs +365d; Paddle supplies real dates), and the
   Paddle price id (`PADDLE_PRICE_ID_ANNUAL`, falls back to the monthly id). Nothing
@@ -693,12 +774,14 @@ tsconfig and never needs shared's `dist`.
   `annualPrice/12`. Web: monthly/annual toggle in the **UpgradeModal** (default
   annual) + **landing pricing**, cadence badge in **settings** (i18n `billing.cycle.*`
   / `pricing.cycle.*`, EN+AR). Enforced
-  at **project creation** (`InterviewService.start`: `repo.countByUserId` vs
-  `BillingService.getProjectQuota` → **402** when at the limit). To start another
-  at the cap you **delete** a project (`DELETE /interview/:id`, owner-guarded,
-  cascades all artifacts) or upgrade. Deliberately simple: **no per-confirm
+  at **project creation** (`InterviewService.start`:
+  `repo.countByUserIdCreatedSince(startOfQuotaPeriod())` vs
+  `BillingService.getProjectQuota` → **402 `quota_exceeded`** when the month's
+  allowance is spent; skipped entirely when the quota is `null`). At the cap you
+  wait for the next month or upgrade. Deliberately simple: **no per-confirm
   consumption and no usage table** — the project list *is* the meter, so the UI
-  computes "used" from the project count (billing only returns the quota/limit).
+  computes "used" from the projects created this period (`createdAt` on
+  `ProjectSummary`; billing only returns the quota/limit).
   `BillingModule` is imported by `InterviewModule` (one-way; billing never reads
   sessions). Payments sit behind a **`BillingProvider`** (mirrors `LlmProvider`):
   `BILLING_PROVIDER=mock|paddle` forces it, else Paddle when `PADDLE_API_KEY` is

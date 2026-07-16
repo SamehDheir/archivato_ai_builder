@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslation } from 'react-i18next';
-import { Package } from 'lucide-react';
+import { Package, ShieldQuestion, TriangleAlert } from 'lucide-react';
 import type { ApiDesign, ApiEndpoint, SchemaField } from '@archivato/shared';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -39,14 +39,22 @@ export function ApiDesignView({ design }: { design: ApiDesign }) {
         />
       </div>
 
+      <CoverageSummary design={design} />
+
       {design.modules.map((module) => (
         <div className="mt-5" key={module.name}>
-          <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-            <Package className="h-4 w-4 text-muted-foreground" />
+          <h4 className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold">
+            <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
             {module.name}
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-xs text-muted-foreground" dir="ltr">
               {module.basePath}
             </span>
+            {module.source === 'generated-fallback' && (
+              <Badge variant="warning" className="gap-1 font-normal">
+                <TriangleAlert className="h-3 w-3" />
+                {t('api.coverage.fallback')}
+              </Badge>
+            )}
           </h4>
           <div className="space-y-2">
             {module.endpoints.map((ep, i) => (
@@ -55,6 +63,59 @@ export function ApiDesignView({ design }: { design: ApiDesign }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * What the design does with every table it was given: how many entities have an
+ * API, how many were deliberately left out, and why.
+ *
+ * Hidden entirely on a design generated before coverage accounting existed — it
+ * has no claims to render, and "0 entities covered" would read as a broken API
+ * rather than a missing field.
+ */
+function CoverageSummary({ design }: { design: ApiDesign }) {
+  const { t } = useTranslation('stages');
+  const covered = new Set(design.modules.flatMap((m) => m.coveredEntities ?? []));
+  const excluded = design.excludedEntities ?? [];
+  const declared = design.modules.some((m) => m.coveredEntities !== undefined);
+  if (!declared && excluded.length === 0) return null;
+
+  const needsReview = design.modules.filter(
+    (m) => m.source === 'generated-fallback',
+  ).length;
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <ShieldQuestion className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="font-medium">
+          {t('api.coverage.summary', {
+            covered: covered.size,
+            excluded: excluded.length,
+          })}
+        </span>
+        {needsReview > 0 && (
+          <Badge variant="warning" className="gap-1 font-normal">
+            <TriangleAlert className="h-3 w-3" />
+            {t('api.coverage.needsReview', { n: needsReview })}
+          </Badge>
+        )}
+      </div>
+
+      {excluded.length > 0 && (
+        <ul className="mt-2 space-y-1 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+          {excluded.map((e) => (
+            <li key={e.entity}>
+              <span className="font-mono text-foreground" dir="ltr">
+                {e.entity}
+              </span>{' '}
+              <span dir="auto">{e.reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

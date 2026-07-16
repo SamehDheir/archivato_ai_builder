@@ -184,7 +184,13 @@
       "Bash(echo \"web-tsc exit=$?\")",
       "Bash(grep -n \"Cost Estimator \\(\\\\`cost-estimate\\\\`\\)\" CLAUDE.md)",
       "Bash(NEXT_DIST_DIR=.next-r10 NEXT_SKIP_STANDALONE=1 npx next build)",
-      "Bash(grep -E \"error|warning|\\\\.ts$\")"
+      "Bash(grep -E \"error|warning|\\\\.ts$\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import json;d=json.load\\(open\\('apps/web/locales/en/stages.json',encoding='utf-8'\\)\\);print\\(json.dumps\\(d.get\\('api'\\),indent=1\\)\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 python -c ' *)",
+      "Bash(NEXT_DIST_DIR=.next-plans NEXT_SKIP_STANDALONE=1 npx next build)",
+      "Bash(PYTHONIOENCODING=utf-8 python -)",
+      "Bash(grep -n \"19\\\\|Free\\\\b.*1 project\\\\|5 projects\\\\|Pro\\\\b.*\\\\$\" README.md)"
     ],
     "additionalDirectories": [
       "\\tmp"

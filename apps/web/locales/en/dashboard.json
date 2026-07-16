@@ -50,9 +50,10 @@
   },
   "quota": {
     "plan": "{{plan}} plan",
-    "used": "{{count}} of {{quota}} scopings used",
-    "upgrade": "Upgrade to Pro",
-    "manage": "Manage plan"
+    "used": "{{used}} of {{quota}} designs used this month",
+    "upgrade": "Upgrade to Team",
+    "manage": "Manage plan",
+    "unlimited": "Unlimited designs"
   },
   "projects": {
     "heading": "Your client scopings",
@@ -162,7 +163,11 @@
     "awaiting_confirmation": "Review & confirm",
     "confirmed": "Confirmed"
   },
-  "scale": { "mvp": "MVP", "startup": "Startup", "enterprise": "Enterprise" },
+  "scale": {
+    "mvp": "MVP",
+    "startup": "Startup",
+    "enterprise": "Enterprise"
+  },
   "stage": {
     "requirements": "Requirement document",
     "system-design": "System design",
@@ -187,7 +192,10 @@
     "history": "History",
     "interview": "Interview"
   },
-  "breadcrumb": { "projects": "Scopings", "project": "Scoping" },
+  "breadcrumb": {
+    "projects": "Scopings",
+    "project": "Scoping"
+  },
   "palette": {
     "actions": "Actions",
     "projects": "Scopings",
@@ -235,5 +243,7 @@
     "exportIncomplete": "Finish generating the design before exporting.",
     "exportFeature": "Export"
   },
-  "upgradeFeature": { "anotherProject": "start another scoping" }
+  "upgradeFeature": {
+    "anotherProject": "start another scoping"
+  }
 }

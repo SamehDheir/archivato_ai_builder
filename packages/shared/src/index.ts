@@ -20,6 +20,8 @@ export * from './system-design';
 export * from './decision-explanation';
 export * from './database-design';
 export * from './api-design';
+export * from './api-design.coverage';
+export * from './api-design.rest';
 export * from './mock-response';
 export * from './freshness';
 export * from './review';

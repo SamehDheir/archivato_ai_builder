@@ -45,11 +45,13 @@ interface PaddleEvent {
 }
 
 /**
- * Subscriptions + the plan's PROJECT-COUNT quota. Capacity is metered as the
- * maximum number of projects a user may own (Free = 1, Pro = 5); the interview
- * module enforces it at project creation via `getProjectQuota`. This service
- * owns plan state (upgrade/cancel/webhooks) but never counts projects itself —
- * that belongs to the interview domain.
+ * Subscriptions + the plan's PROJECT quota. Capacity is metered as the number of
+ * projects a user may CREATE per calendar month (Starter = 1/month, Team =
+ * unlimited); the interview module enforces it at project creation via
+ * `getProjectQuota`. This service owns plan state (upgrade/cancel/webhooks) but
+ * never counts projects itself — that belongs to the interview domain, and
+ * reading sessions from here would invert the one-way BillingModule ← InterviewModule
+ * dependency.
  */
 @Injectable()
 export class BillingService {
@@ -80,8 +82,11 @@ export class BillingService {
     return existing ?? this.subs.create({ userId });
   }
 
-  /** How many projects the user's current plan allows (the enforced cap). */
-  async getProjectQuota(userId: string): Promise<number> {
+  /**
+   * How many projects the user's plan allows per calendar month (the enforced
+   * cap). **`null` = unlimited** — callers must skip the check, not compare.
+   */
+  async getProjectQuota(userId: string): Promise<number | null> {
     const sub = await this.getOrCreate(userId);
     return PLANS[this.effectivePlan(sub)].projectQuota;
   }

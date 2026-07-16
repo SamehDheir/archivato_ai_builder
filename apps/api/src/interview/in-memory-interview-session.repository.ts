@@ -39,6 +39,14 @@ export class InMemoryInterviewSessionRepository
     return n;
   }
 
+  async countByUserIdCreatedSince(userId: string, since: Date): Promise<number> {
+    let n = 0;
+    for (const s of this.sessions.values()) {
+      if (s.userId === userId && s.createdAt.getTime() >= since.getTime()) n++;
+    }
+    return n;
+  }
+
   async delete(id: string): Promise<void> {
     this.sessions.delete(id);
   }

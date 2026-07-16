@@ -456,8 +456,51 @@ export const EXAMPLE_API_DESIGN: ApiDesign = {
   generatedAt: GENERATED_AT,
   modules: [
     {
+      name: 'Accounts',
+      basePath: '/api/users',
+      coveredEntities: ['users'],
+      endpoints: [
+        {
+          method: 'POST',
+          path: '/api/users',
+          summary: 'Register a customer or provider account.',
+          requestSchema: [
+            { name: 'email', type: 'string', required: true },
+            { name: 'full_name', type: 'string', required: true },
+            { name: 'role', type: 'enum', required: true },
+          ],
+          responseSchema: [
+            { name: 'id', type: 'uuid', required: true },
+            { name: 'email', type: 'string', required: true },
+          ],
+          statusCodes: [201, 400, 409],
+        },
+        {
+          method: 'GET',
+          path: '/api/users/:id',
+          summary: 'Get a user profile.',
+          requestSchema: [],
+          responseSchema: [
+            { name: 'id', type: 'uuid', required: true },
+            { name: 'full_name', type: 'string', required: true },
+            { name: 'role', type: 'enum', required: true },
+          ],
+          statusCodes: [200, 403, 404],
+        },
+        {
+          method: 'PUT',
+          path: '/api/users/:id',
+          summary: 'Update a user profile.',
+          requestSchema: [{ name: 'full_name', type: 'string', required: false }],
+          responseSchema: [{ name: 'id', type: 'uuid', required: true }],
+          statusCodes: [200, 400, 403, 404],
+        },
+      ],
+    },
+    {
       name: 'Catalog',
       basePath: '/api/services',
+      coveredEntities: ['services'],
       endpoints: [
         {
           method: 'GET',
@@ -484,6 +527,7 @@ export const EXAMPLE_API_DESIGN: ApiDesign = {
     {
       name: 'Booking',
       basePath: '/api/bookings',
+      coveredEntities: ['bookings'],
       endpoints: [
         {
           method: 'POST',
@@ -511,8 +555,53 @@ export const EXAMPLE_API_DESIGN: ApiDesign = {
       ],
     },
     {
+      name: 'Payments',
+      basePath: '/api/payments',
+      coveredEntities: ['payments'],
+      endpoints: [
+        {
+          method: 'GET',
+          path: '/api/payments',
+          summary: 'List payments for the signed-in user.',
+          requestSchema: [
+            { name: 'page', type: 'integer', required: false },
+            { name: 'limit', type: 'integer', required: false },
+          ],
+          responseSchema: [
+            { name: 'id', type: 'uuid', required: true },
+            { name: 'booking_id', type: 'uuid', required: true },
+            { name: 'amount', type: 'decimal', required: true },
+            { name: 'status', type: 'enum', required: true },
+          ],
+          statusCodes: [200, 401],
+        },
+        {
+          method: 'GET',
+          path: '/api/payments/:id',
+          summary: 'Get a payment and its capture status.',
+          requestSchema: [],
+          responseSchema: [
+            { name: 'id', type: 'uuid', required: true },
+            { name: 'amount', type: 'decimal', required: true },
+            { name: 'status', type: 'enum', required: true },
+            { name: 'processor_ref', type: 'string', required: false },
+          ],
+          statusCodes: [200, 403, 404],
+        },
+        {
+          method: 'POST',
+          path: '/api/payments/:id/refund',
+          summary: 'Refund a captured payment (admin only).',
+          requestSchema: [{ name: 'reason', type: 'string', required: true }],
+          responseSchema: [{ name: 'status', type: 'enum', required: true }],
+          statusCodes: [200, 403, 404, 409],
+        },
+      ],
+    },
+    {
       name: 'Reviews',
       basePath: '/api/reviews',
+      coveredEntities: ['reviews'],
       endpoints: [
         {
           method: 'POST',

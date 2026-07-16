@@ -108,7 +108,12 @@
     "meta": "{{modules}} modules · {{endpoints}} endpoints · generated {{date}}",
     "download": "Download API design",
     "request": "Request",
-    "response": "Response"
+    "response": "Response",
+    "coverage": {
+      "summary": "{{covered}} entities covered · {{excluded}} excluded",
+      "needsReview": "{{n}} need review",
+      "fallback": "Auto-generated — review"
+    }
   },
   "review": {
     "generated": "Generated {{date}}",

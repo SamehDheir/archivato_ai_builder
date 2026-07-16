@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { validateEntityCoverage } from '@archivato/shared';
 import { ExampleProjectView } from './ExampleProjectView';
 import { SummaryView } from '@/components/interview/SummaryView';
 import { RequirementDocumentView } from '@/components/design/RequirementDocumentView';
@@ -121,6 +122,19 @@ describe('ExampleProjectView', () => {
     });
     expect(EXAMPLE_COST_ESTIMATE.providers.length).toBeGreaterThan(0);
     expect(EXAMPLE_COST_ESTIMATE.recommended).toBeTruthy();
+  });
+
+  // The example is what a good design looks like, so it has to satisfy the rule
+  // the real stage enforces: no entity without an API or a stated reason. It used
+  // to ship `users` and `payments` with no endpoints at all — the very bug the
+  // coverage guarantee exists to prevent, on the page selling the product.
+  it('gives every example entity an API', () => {
+    const result = validateEntityCoverage(
+      EXAMPLE_API_DESIGN,
+      EXAMPLE_DATABASE_DESIGN.entities.map((e) => e.name),
+    );
+    expect(result.missing).toEqual([]);
+    expect(result.ok).toBe(true);
   });
 
   // Every STRIDE category must be represented, mirroring the real agent's

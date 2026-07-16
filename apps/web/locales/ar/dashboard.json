@@ -50,9 +50,10 @@
   },
   "quota": {
     "plan": "خطة {{plan}}",
-    "used": "{{count}} من {{quota}} scoping مُستخدَم",
-    "upgrade": "الترقية إلى Pro",
-    "manage": "إدارة الخطة"
+    "used": "استخدمت {{used}} من {{quota}} تصميم هذا الشهر",
+    "upgrade": "الترقية إلى Team",
+    "manage": "إدارة الخطة",
+    "unlimited": "تصاميم بلا حدود"
   },
   "projects": {
     "heading": "مشاريع الـ scoping",
@@ -162,7 +163,11 @@
     "awaiting_confirmation": "المراجعة والتأكيد",
     "confirmed": "مؤكَّد"
   },
-  "scale": { "mvp": "حد أدنى", "startup": "شركة ناشئة", "enterprise": "مؤسسة" },
+  "scale": {
+    "mvp": "حد أدنى",
+    "startup": "شركة ناشئة",
+    "enterprise": "مؤسسة"
+  },
   "stage": {
     "requirements": "مستند المتطلبات",
     "system-design": "تصميم النظام",
@@ -187,7 +192,10 @@
     "history": "السجل",
     "interview": "المقابلة"
   },
-  "breadcrumb": { "projects": "مشاريع الـ scoping", "project": "scoping" },
+  "breadcrumb": {
+    "projects": "مشاريع الـ scoping",
+    "project": "scoping"
+  },
   "palette": {
     "actions": "إجراءات",
     "projects": "مشاريع الـ scoping",
@@ -235,5 +243,7 @@
     "exportIncomplete": "أكمِل توليد التصميم قبل التصدير.",
     "exportFeature": "التصدير"
   },
-  "upgradeFeature": { "anotherProject": "بدء scoping آخر" }
+  "upgradeFeature": {
+    "anotherProject": "بدء scoping آخر"
+  }
 }

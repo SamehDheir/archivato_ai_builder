@@ -4,7 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { ApiDesign } from '@archivato/shared';
+import {
+  ensureEntityCoverage,
+  withResolvedCoverage,
+  type ApiDesign,
+} from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -81,7 +85,13 @@ export class ApiDesignService {
       databaseDesign,
     });
 
-    return this.apiDesigns.upsert(design);
+    // The invariant lives here, at the only path that writes a generated design:
+    // no entity gets persisted without either an endpoint group or a stated
+    // reason it has none. The agent tries the model first and repairs what it
+    // can; anything still uncovered becomes a deterministic group tagged
+    // `generated-fallback`, which the UI flags for review. A generic resource the
+    // user can see and fix beats a table with no API and nothing to notice.
+    return this.apiDesigns.upsert(ensureEntityCoverage(design, databaseDesign));
   }
 
   async get(sessionId: string): Promise<ApiDesign> {
@@ -94,7 +104,16 @@ export class ApiDesignService {
     return design;
   }
 
-  /** Persist a user-edited API design (must already exist). */
+  /**
+   * Persist a user-edited API design (must already exist).
+   *
+   * Coverage is **recomputed, not enforced**: the editor doesn't expose it, so an
+   * edit must not wipe the exclusions (the R7 precedent), and the numbers are
+   * re-derived from the modules the user actually kept so the summary can't
+   * outlive them. Deliberately no `ensureEntityCoverage` here — silently
+   * resurrecting a group the user just deleted would make the editor feel broken.
+   * The invariant belongs to generation, which is where designs come from.
+   */
   async save(
     sessionId: string,
     edited: Omit<ApiDesign, 'sessionId' | 'generatedAt'>,
@@ -103,10 +122,23 @@ export class ApiDesignService {
     if (!existing) {
       throw new ConflictException('Generate the API design before editing it.');
     }
-    return this.apiDesigns.upsert({
+    const databaseDesign = await this.databaseDesigns.findBySessionId(sessionId);
+    const design: ApiDesign = {
       ...edited,
+      // `?? existing` rather than a spread order: the DTO leaves the key present
+      // and undefined when the editor omits it, which would spread right over the
+      // stored exclusions.
+      excludedEntities: edited.excludedEntities ?? existing.excludedEntities,
       sessionId,
       generatedAt: new Date().toISOString(),
-    });
+    };
+    return this.apiDesigns.upsert(
+      databaseDesign
+        ? withResolvedCoverage(
+            design,
+            (databaseDesign.entities ?? []).map((e) => e.name),
+          )
+        : design,
+    );
   }
 }

@@ -15,8 +15,9 @@ import { siteDescription, siteName, siteUrl } from '@/lib/site';
  * page**. Marking up copy that isn't rendered is a structured-data violation,
  * not a free ranking signal.
  *
- * Prices mirror `lib/landing.ts` — the tiers being validated on discovery calls
- * — not `PLANS` in the billing package. See the note in that file.
+ * The price comes from `lib/landing.ts`, which now reads it from `PLANS` in the
+ * billing package — so the JSON-LD offer, the pricing card, and the checkout all
+ * quote the same number. See the note in that file.
  */
 const price = TEAM_PRICE.replace(/[^0-9.]/g, '');
 
