@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  appendProposalDraft,
   PROPOSAL_CEILINGS,
   PROPOSAL_CHANNELS,
   PROPOSAL_LOCALES,
@@ -80,6 +81,7 @@ export function ProposalModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<'message' | 'link' | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // What the server will pick, computed with the same shared rule — so the form
   // shows the language it will actually write in rather than a guess.
@@ -88,9 +90,16 @@ export function ProposalModal({
     localeChoice || undefined,
     projectLocale,
   );
-  const ceiling = PROPOSAL_CEILINGS[channel];
+  // The ceiling of the draft on screen — which is not always the form's current
+  // channel. Reopening a Mostaql draft (700) from history while the channel chip
+  // reads Upwork must still measure it against 700, or the counter says a message
+  // that cannot be sent is fine. That is exactly why the draft stores its own
+  // `ceiling`. Before the first draft there is nothing on screen, so the form's
+  // channel is the honest answer.
+  const ceiling = draft?.ceiling ?? PROPOSAL_CEILINGS[channel];
   const count = proposalCharCount(message);
   const over = count > ceiling;
+  const overChannel = draft?.channel ?? channel;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -101,11 +110,20 @@ export function ProposalModal({
   }, [onClose, busy]);
 
   useEffect(() => {
+    let alive = true;
     proposalApi
       .drafts(sessionId)
-      .then(setHistory)
+      .then((d) => alive && setHistory(d))
       .catch(() => undefined); // non-fatal: the history panel just stays empty
+    return () => {
+      alive = false;
+    };
   }, [sessionId]);
+
+  // The "Copied" label resets on a timer; clearing it on unmount stops a pending
+  // reset from firing after the modal closes, and stops a first copy's timer from
+  // wiping the label a second copy just set.
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
 
   const generate = useCallback(
     async (nextVariant: number) => {
@@ -130,7 +148,8 @@ export function ProposalModal({
         setDraft(result);
         setMessage(result.message);
         setVariant(nextVariant);
-        setHistory((h) => [result, ...h].slice(0, 5));
+        // The shared helper owns the cap, so the client can't drift from the server.
+        setHistory((h) => appendProposalDraft(h, result));
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -154,7 +173,8 @@ export function ProposalModal({
   async function copy(text: string, what: 'message' | 'link') {
     await navigator.clipboard.writeText(text);
     setCopied(what);
-    window.setTimeout(() => setCopied(null), 1500);
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(null), 1500);
   }
 
   return (
@@ -358,7 +378,7 @@ export function ProposalModal({
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   {t('proposal.overLength', {
                     n: count - ceiling,
-                    channel: t(`proposal.channel.${channel}`),
+                    channel: t(`proposal.channel.${overChannel}`),
                   })}
                 </p>
               )}

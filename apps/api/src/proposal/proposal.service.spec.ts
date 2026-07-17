@@ -278,5 +278,36 @@ describe('ProposalService', () => {
 
       expect(await h.service.history(sessionId)).toEqual([]);
     });
+
+    it('does not clobber a session change made while the model was writing', async () => {
+      // `save()` persists the whole row, and the model call is the longest window
+      // in the app. If the service wrote back the snapshot it read before that
+      // call, anything the owner changed meanwhile — a rename, a weekly rate, a
+      // review fix — would silently revert.
+      const h = makeHarness();
+      const sessionId = await pipeline(h);
+
+      const writer: ProposalWriterAgent = (
+        h.service as unknown as { writer: ProposalWriterAgent }
+      ).writer;
+      jest.spyOn(writer, 'write').mockImplementation(async () => {
+        // A concurrent PATCH /interview/:id landing mid-generation.
+        const concurrent = await h.sessions.findById(sessionId);
+        await h.sessions.save({
+          ...concurrent!,
+          title: 'Renamed mid-flight',
+          weeklyRate: 2500,
+        });
+        return { message: `Hi. ${WEB_ORIGIN}/s/${TOKEN} What first?`, source: 'llm' };
+      });
+
+      await h.service.generate(sessionId, { channel: 'upwork' });
+
+      const session = await h.sessions.findById(sessionId);
+      expect(session!.title).toBe('Renamed mid-flight');
+      expect(session!.weeklyRate).toBe(2500);
+      // …and the draft still landed.
+      expect(session!.proposalDrafts).toHaveLength(1);
+    });
   });
 });

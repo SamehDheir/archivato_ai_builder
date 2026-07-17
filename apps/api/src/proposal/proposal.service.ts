@@ -160,9 +160,16 @@ export class ProposalService {
       createdAt: new Date().toISOString(),
     };
 
+    // Re-read before writing. `save()` persists the WHOLE row, and the model call
+    // above is the longest window in the app — several seconds during which the
+    // owner can rename the project, set a weekly rate, or apply a review fix from
+    // another tab. Writing back the snapshot taken before the call would silently
+    // revert any of them. Only the drafts column is ours to move (the R11 `record`
+    // precedent, which re-reads for exactly this reason).
+    const current = await this.requireSession(sessionId);
     await this.sessions.save({
-      ...session,
-      proposalDrafts: appendProposalDraft(session.proposalDrafts, draft),
+      ...current,
+      proposalDrafts: appendProposalDraft(current.proposalDrafts, draft),
     });
     return draft;
   }
@@ -202,7 +209,11 @@ export class ProposalService {
       capabilities: topCapabilities(requirements.functional),
       effortWeeksMin: effort.weeksMin,
       effortWeeksMax: effort.weeksMax,
-      mvpStatement: roadmap?.phases.find((p) => p.isMvp)?.mvpStatement,
+      // `phases?.` and not just `roadmap?.`: the roadmap comes back from a JSON
+      // column through a cast, which is a claim rather than a check — a row stored
+      // before a rule existed can violate the type it is cast to. A missing array
+      // must read as absent, never blow up a stage that merely wanted one line.
+      mvpStatement: roadmap?.phases?.find((p) => p.isMvp)?.mvpStatement,
       timeline:
         timelineSlot && !timelineSlot.na ? timelineSlot.value : undefined,
       shareUrl,

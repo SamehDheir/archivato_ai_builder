@@ -116,7 +116,15 @@ export class ProposalWriterAgent extends BaseAgent {
             PROPOSAL_CEILINGS[input.channel]
           }); retrying shorter.`,
         );
-        const second = await this.attempt(input, first);
+        // The retry gets its own catch: `first` is a real, sendable message that
+        // the owner has already been billed for, and it is only *long*. Letting a
+        // failed second call fall through to the outer handler would throw it away
+        // and hand back the template instead — a worse message, plus a "the AI was
+        // unavailable" note that isn't true. A long draft beats a templated one.
+        const second = await this.attempt(input, first).catch((err: unknown) => {
+          this.logger.warn(`Proposal shorten retry failed; keeping the long draft: ${err}`);
+          return null;
+        });
         const best =
           second && proposalCharCount(second) < proposalCharCount(first) ? second : first;
         return { message: best, source: 'llm' };
@@ -216,10 +224,19 @@ export class ProposalWriterAgent extends BaseAgent {
   }
 }
 
-/** The regenerate angle for this draft number (0 = the first draft). */
+/**
+ * The angle for this draft number (0 = the first draft).
+ *
+ * A regenerate rotates through the angles *after* the first, rather than modulo
+ * the whole list — otherwise the 4th draft would wrap back to `ANGLES[0]` and ask
+ * for "a different take" while handing over the instruction that produced the very
+ * first draft. The owner would be billed for a call likely to return something
+ * they already rejected. It still cycles once they exhaust the list, but it never
+ * contradicts itself.
+ */
 function pickAngle(variant: number): string {
-  const i = Math.abs(Math.trunc(variant)) % ANGLES.length;
-  return variant > 0
-    ? `This is a REGENERATE — the owner wants a different take from the last draft. ${ANGLES[i]}`
-    : ANGLES[0];
+  const n = Math.abs(Math.trunc(variant)) || 0;
+  if (n === 0) return ANGLES[0];
+  const i = 1 + ((n - 1) % (ANGLES.length - 1));
+  return `This is a REGENERATE — the owner wants a different take from the last draft. ${ANGLES[i]}`;
 }

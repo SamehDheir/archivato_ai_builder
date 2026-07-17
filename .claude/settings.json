@@ -210,7 +210,9 @@
       "Bash(node \"C:/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/5b0aff3d-f69b-49ff-a910-aa28a93dd8a4/scratchpad/sample.js\")",
       "Bash(grep -n \"product-vision\\\\`, \\\\`roadmap\\\\`\" CLAUDE.md)",
       "Bash(python \"C:/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/5b0aff3d-f69b-49ff-a910-aa28a93dd8a4/scratchpad/claudemd.py\")",
-      "Bash(python \"C:/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/5b0aff3d-f69b-49ff-a910-aa28a93dd8a4/scratchpad/readme.py\")"
+      "Bash(python \"C:/Users/SAMEHD~1/AppData/Local/Temp/claude/d--portoflio-Archivato-AI-Builder/5b0aff3d-f69b-49ff-a910-aa28a93dd8a4/scratchpad/readme.py\")",
+      "Bash(cd \"d:/portoflio/Archivato *)",
+      "Bash(git ls-tree *)"
     ],
     "additionalDirectories": [
       "\\tmp"

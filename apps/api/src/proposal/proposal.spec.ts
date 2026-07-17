@@ -237,6 +237,23 @@ describe('proposal — length ceiling enforcement', () => {
     expect(isOverLength(result.message, 'upwork')).toBe(true);
   });
 
+  it('keeps the long first draft when the shorten retry itself fails', async () => {
+    // The retry is the second billed call; when it dies, the first draft is still
+    // a real, sendable message that the owner paid for — it is only long. Dropping
+    // to the template here would hand back a worse message AND claim the AI was
+    // unavailable, which it wasn't.
+    const llm = new MockLlmProvider();
+    llm.enqueue(JSON.stringify({ message: tooLong }));
+    llm.setResponder(() => {
+      throw new Error('network blip');
+    });
+
+    const result = await new ProposalWriterAgent(llm).write(input({ channel: 'upwork' }));
+
+    expect(result).toEqual({ message: tooLong, source: 'llm' });
+    expect(isOverLength(result.message, 'upwork')).toBe(true);
+  });
+
   it('falls back to the template when the model returns nothing usable', async () => {
     const llm = new MockLlmProvider(() => 'not json at all');
     const result = await new ProposalWriterAgent(llm).write(input());
