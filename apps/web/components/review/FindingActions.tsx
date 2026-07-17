@@ -34,8 +34,8 @@ export interface FindingHandlers {
 
 const STATUS_CLASS: Record<FindingStatus, string> = {
   open: 'border-border text-muted-foreground',
-  resolved: 'border-success/40 bg-success/10 text-success',
-  converted: 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  resolved: 'border-success/40 bg-success-subtle text-success-subtle-foreground',
+  converted: 'border-info/40 bg-info-subtle text-info-subtle-foreground',
   dismissed: 'border-border bg-muted text-muted-foreground',
 };
 

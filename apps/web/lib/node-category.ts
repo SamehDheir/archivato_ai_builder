@@ -2,6 +2,12 @@
  * Keyword-based colour categories for canvas nodes (services / entities), so an
  * Auth box reads differently from a Billing box at a glance. Pure + dependency
  * free; used by both the Architecture and Database canvases and their minimaps.
+ *
+ * This is the ONE place in the app that legitimately spends non-semantic hue:
+ * telling two unordered categories apart IS the function here, which is exactly
+ * what the `--data-*` tokens exist for. Everything else — chips, badges,
+ * severities, section headers — uses a semantic token or a neutral. Don't read
+ * this file as licence to add a decorative palette elsewhere.
  */
 
 export type NodeCategory =
@@ -19,7 +25,20 @@ export interface CategoryStyle {
   headerBg: string;
   /** Tailwind text class for the category chip. */
   text: string;
-  /** Hex colour for the React Flow MiniMap dot. */
+  /**
+   * Colour for the React Flow MiniMap dot.
+   *
+   * The one deliberate raw-colour exception in the app, and it is forced:
+   * MiniMap sets the swatch via the SVG `fill` **attribute**, and `var()` does
+   * not resolve inside a presentation attribute — `fill="hsl(var(--data-1))"`
+   * renders as nothing. So these are literals that MIRROR the `--data-*` tokens
+   * in globals.css (light-theme values; the minimap is a 120px thumbnail, so the
+   * theme mismatch in dark mode is invisible at that size).
+   *
+   * If you retune a `--data-*` token, retune its twin here. There is no way to
+   * derive one from the other without reading computed styles at runtime, which
+   * is not worth it for a thumbnail.
+   */
   hex: string;
   /** Human label for the legend / chip. */
   label: string;
@@ -42,45 +61,48 @@ export function categorize(name: string): NodeCategory {
 
 export const CATEGORY_STYLE: Record<NodeCategory, CategoryStyle> = {
   auth: {
-    border: 'border-amber-500/70',
-    headerBg: 'bg-amber-500/15',
-    text: 'text-amber-600 dark:text-amber-400',
-    hex: '#f59e0b',
+    border: 'border-data-1/70',
+    headerBg: 'bg-data-1/15',
+    text: 'text-data-1',
+    hex: '#6d3ba8',
     label: 'Auth',
   },
   billing: {
-    border: 'border-emerald-500/70',
-    headerBg: 'bg-emerald-500/15',
-    text: 'text-emerald-600 dark:text-emerald-400',
-    hex: '#10b981',
+    border: 'border-data-2/70',
+    headerBg: 'bg-data-2/15',
+    text: 'text-data-2',
+    hex: '#1e7a4d',
     label: 'Billing',
   },
   notify: {
-    border: 'border-sky-500/70',
-    headerBg: 'bg-sky-500/15',
-    text: 'text-sky-600 dark:text-sky-400',
-    hex: '#0ea5e9',
+    border: 'border-data-3/70',
+    headerBg: 'bg-data-3/15',
+    text: 'text-data-3',
+    hex: '#1470b8',
     label: 'Notify',
   },
   users: {
-    border: 'border-violet-500/70',
-    headerBg: 'bg-violet-500/15',
-    text: 'text-violet-600 dark:text-violet-400',
-    hex: '#8b5cf6',
+    border: 'border-data-4/70',
+    headerBg: 'bg-data-4/15',
+    text: 'text-data-4',
+    hex: '#c26212',
     label: 'Users',
   },
   reporting: {
-    border: 'border-cyan-500/70',
-    headerBg: 'bg-cyan-500/15',
-    text: 'text-cyan-600 dark:text-cyan-400',
-    hex: '#06b6d4',
+    border: 'border-data-5/70',
+    headerBg: 'bg-data-5/15',
+    text: 'text-data-5',
+    hex: '#b83a6f',
     label: 'Reporting',
   },
+  // The catch-all. Uses the accent on purpose — an unclassified box is the
+  // baseline, and the accent is what "nothing special about this one" looks like
+  // in a teal-accented app.
   default: {
     border: 'border-primary/60',
     headerBg: 'bg-primary/10',
     text: 'text-primary',
-    hex: '#6d8bff',
+    hex: '#10707f',
     label: 'Other',
   },
 };

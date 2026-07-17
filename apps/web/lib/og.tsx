@@ -6,6 +6,31 @@ export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_CONTENT_TYPE = 'image/png';
 
 /**
+ * The card's on-dark palette.
+ *
+ * Hex, not tokens: Satori has no CSS engine and no stylesheet, so a `var()` here
+ * resolves to nothing and the render dies. These are the ONE place that is
+ * allowed to restate the theme — so they are named and grouped here rather than
+ * sprinkled inline, which is how the card ended up with an indigo-noded logo on
+ * a teal background after R14 moved the accent: they were literals in the middle
+ * of the markup, invisible to a `brand.` grep.
+ *
+ * They mirror the dark theme's neutral ramp (hue ~205) and `brand` in
+ * lib/site.ts. Retune them together.
+ */
+const OG_TEXT = '#E6EDF0';
+const OG_TEXT_DIM = '#A9B6BE';
+const OG_MUTED = '#7E8E97';
+const OG_FAINT = '#55646D';
+const OG_CHIP_TEXT = '#CBD8DE';
+const OG_CHIP_BORDER = '#ffffff1f';
+const OG_CHIP_BG = '#ffffff0a';
+const OG_WHITE = '#FFFFFF';
+/** The mark knocked out on ink: near-white strokes, light-teal base nodes. */
+const OG_MARK_STROKE = '#E6F7FA';
+const OG_MARK_NODE = '#7FDCE8';
+
+/**
  * The social share card, rasterized to PNG at request time by Satori.
  *
  * Scrapers (X, LinkedIn, Slack, iMessage) do not render SVG, so this cannot be
@@ -23,10 +48,16 @@ export const OG_CONTENT_TYPE = 'image/png';
 function ogHeader(host: string) {
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
+      {/* The mark, knocked out on the dark card. The strokes are near-white and
+          the base nodes a light tint of the accent — they are NOT `brand.accent`,
+          because the mid-weight accent that reads on a white page disappears
+          against `brand.ink`. Keep them in the teal family: these were left as
+          indigo (#EEF2FF / #A5B4FC) when the accent moved, and the card shipped
+          with a purple-noded logo on a teal background. */}
       <svg width="56" height="56" viewBox="0 0 64 64">
         <g
           fill="none"
-          stroke="#EEF2FF"
+          stroke={OG_MARK_STROKE}
           strokeWidth={5}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -34,9 +65,9 @@ function ogHeader(host: string) {
           <path d="M17 50 32 15 47 50" />
           <path d="M23.3 36h17.4" />
         </g>
-        <circle cx={17} cy={50} r={4.4} fill="#A5B4FC" />
-        <circle cx={47} cy={50} r={4.4} fill="#A5B4FC" />
-        <circle cx={32} cy={15} r={6} fill={brand.cyan} />
+        <circle cx={17} cy={50} r={4.4} fill={OG_MARK_NODE} />
+        <circle cx={47} cy={50} r={4.4} fill={OG_MARK_NODE} />
+        <circle cx={32} cy={15} r={6} fill={brand.accentBright} />
       </svg>
       <div style={{ marginLeft: 16, fontSize: 34, letterSpacing: -0.5 }}>
         {siteName}
@@ -46,7 +77,7 @@ function ogHeader(host: string) {
           display: 'flex',
           marginLeft: 'auto',
           fontSize: 22,
-          color: '#8A90A6',
+          color: OG_MUTED,
         }}
       >
         {host}
@@ -64,8 +95,8 @@ const OG_SHELL = {
   justifyContent: 'space-between' as const,
   padding: '64px 72px',
   backgroundColor: brand.ink,
-  backgroundImage: `radial-gradient(circle at 12% 0%, ${brand.indigoDeep} 0%, ${brand.ink} 62%)`,
-  color: '#E8EAF3',
+  backgroundImage: `radial-gradient(circle at 12% 0%, ${brand.accentDeep} 0%, ${brand.ink} 62%)`,
+  color: OG_TEXT,
 };
 
 /** Facts about one shared design, rendered as the card's proof strip. */
@@ -114,7 +145,7 @@ export function shareOgImage(facts: ShareOgFacts) {
               fontSize: 22,
               letterSpacing: 4,
               textTransform: 'uppercase',
-              color: brand.cyan,
+              color: brand.accentBright,
             }}
           >
             A complete system design
@@ -127,7 +158,7 @@ export function shareOgImage(facts: ShareOgFacts) {
               fontSize: 60,
               lineHeight: 1.15,
               letterSpacing: -1.5,
-              color: '#FFFFFF',
+              color: OG_WHITE,
             }}
           >
             {truncate(facts.title, 90)}
@@ -144,11 +175,11 @@ export function shareOgImage(facts: ShareOgFacts) {
                 marginRight: 24,
                 padding: '14px 22px',
                 borderRadius: 10,
-                border: '1px solid #ffffff1f',
-                backgroundColor: '#ffffff0a',
+                border: `1px solid ${OG_CHIP_BORDER}`,
+                backgroundColor: OG_CHIP_BG,
               }}
             >
-              <div style={{ display: 'flex', fontSize: 18, color: '#8A90A6' }}>
+              <div style={{ display: 'flex', fontSize: 18, color: OG_MUTED }}>
                 {label}
               </div>
               <div
@@ -156,7 +187,7 @@ export function shareOgImage(facts: ShareOgFacts) {
                   display: 'flex',
                   marginTop: 4,
                   fontSize: 30,
-                  color: '#FFFFFF',
+                  color: OG_WHITE,
                   textTransform: 'capitalize',
                 }}
               >
@@ -194,8 +225,8 @@ export function ogImage() {
           // accepts the `circle|ellipse at <pos>` form. The explicit-size variant
           // (`radial-gradient(1000px 620px at 12% 0%, …)`) does not just degrade —
           // it kills the render, and the route returns an empty reply.
-          backgroundImage: `radial-gradient(circle at 12% 0%, ${brand.indigoDeep} 0%, ${brand.ink} 62%)`,
-          color: '#E8EAF3',
+          backgroundImage: `radial-gradient(circle at 12% 0%, ${brand.accentDeep} 0%, ${brand.ink} 62%)`,
+          color: OG_TEXT,
         }}
       >
         {/* Brand lockup. The mark is drawn in near-white rather than the brand
@@ -205,7 +236,7 @@ export function ogImage() {
           <svg width="56" height="56" viewBox="0 0 64 64">
             <g
               fill="none"
-              stroke="#EEF2FF"
+              stroke={OG_MARK_STROKE}
               strokeWidth={5}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -213,9 +244,9 @@ export function ogImage() {
               <path d="M17 50 32 15 47 50" />
               <path d="M23.3 36h17.4" />
             </g>
-            <circle cx={17} cy={50} r={4.4} fill="#A5B4FC" />
-            <circle cx={47} cy={50} r={4.4} fill="#A5B4FC" />
-            <circle cx={32} cy={15} r={6} fill={brand.cyan} />
+            <circle cx={17} cy={50} r={4.4} fill={OG_MARK_NODE} />
+            <circle cx={47} cy={50} r={4.4} fill={OG_MARK_NODE} />
+            <circle cx={32} cy={15} r={6} fill={brand.accentBright} />
           </svg>
           <div style={{ marginLeft: 16, fontSize: 34, letterSpacing: -0.5 }}>
             {siteName}
@@ -225,7 +256,7 @@ export function ogImage() {
               display: 'flex',
               marginLeft: 'auto',
               fontSize: 22,
-              color: '#8A90A6',
+              color: OG_MUTED,
             }}
           >
             {host}
@@ -240,7 +271,7 @@ export function ogImage() {
               fontSize: 22,
               letterSpacing: 4,
               textTransform: 'uppercase',
-              color: brand.cyan,
+              color: brand.accentBright,
             }}
           >
             Client scoping for software shops
@@ -253,7 +284,7 @@ export function ogImage() {
               fontSize: 64,
               lineHeight: 1.15,
               letterSpacing: -1.5,
-              color: '#FFFFFF',
+              color: OG_WHITE,
             }}
           >
             {siteTagline}
@@ -265,7 +296,7 @@ export function ogImage() {
               maxWidth: 880,
               fontSize: 26,
               lineHeight: 1.45,
-              color: '#A9AFC4',
+              color: OG_TEXT_DIM,
             }}
           >
             Turn a client call into a complete scoping package — requirements,
@@ -282,10 +313,10 @@ export function ogImage() {
                   display: 'flex',
                   padding: '10px 18px',
                   borderRadius: 10,
-                  border: '1px solid #ffffff1f',
-                  backgroundColor: '#ffffff0a',
+                  border: `1px solid ${OG_CHIP_BORDER}`,
+                  backgroundColor: OG_CHIP_BG,
                   fontSize: 21,
-                  color: '#D3D7E4',
+                  color: OG_CHIP_TEXT,
                 }}
               >
                 {step}
@@ -296,7 +327,7 @@ export function ogImage() {
                     display: 'flex',
                     margin: '0 10px',
                     fontSize: 20,
-                    color: '#5A6076',
+                    color: OG_FAINT,
                   }}
                 >
                   ›

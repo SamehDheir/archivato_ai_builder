@@ -248,5 +248,10 @@
   },
   "upgradeFeature": {
     "anotherProject": "بدء scoping آخر"
+  },
+  "workflow": {
+    "call": "مكالمة العميل",
+    "scope": "scoping بالذكاء الاصطناعي",
+    "send": "انبعت للعميل"
   }
 }

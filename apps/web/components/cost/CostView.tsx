@@ -336,8 +336,8 @@ function SuggestedPrice({
       : null;
 
   return (
-    <div className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] p-4">
-      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+    <div className="mb-5 rounded-lg border border-warning/30 bg-warning-subtle p-4">
+      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-warning-subtle-foreground">
         <Lock className="h-3.5 w-3.5" /> {t('cost.price.internal')}
       </div>
       {price && (
@@ -381,14 +381,16 @@ function BudgetWarningCard({
       className={cn(
         'mb-5 rounded-lg border p-4',
         critical
-          ? 'border-destructive/40 bg-destructive/[0.06]'
-          : 'border-amber-500/40 bg-amber-500/[0.06]',
+          ? 'border-destructive/40 bg-destructive-subtle'
+          : 'border-warning/40 bg-warning-subtle',
       )}
     >
       <div
         className={cn(
           'mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide',
-          critical ? 'text-destructive' : 'text-amber-700 dark:text-amber-300',
+          critical
+            ? 'text-destructive-subtle-foreground'
+            : 'text-warning-subtle-foreground',
         )}
       >
         <AlertTriangle className="h-3.5 w-3.5" />

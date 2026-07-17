@@ -244,6 +244,11 @@ readiness, 503 when degraded).
   as runtime-free, unit-tested functions.
 - **i18n by default:** all UI chrome is English + Arabic with RTL-safe logical
   styling; AI artifacts stay server-side English by convention.
+- **Design tokens only:** every colour, type step, radius, shadow and duration is
+  a CSS variable in `apps/web/app/globals.css`. Raw hex and Tailwind's stock
+  palette are **blocked by ESLint** in components — colour has to mean a semantic
+  state or a data category, never decoration. `/design` (dev-only) renders every
+  token and component variant so new work has something to converge on.
 - **Docs as memory:** [CLAUDE.md](CLAUDE.md) records conventions, decisions,
   and hard-won gotchas; [docs/PROGRESS.md](docs/PROGRESS.md) is the slice log.
 

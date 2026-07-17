@@ -1,6 +1,45 @@
 {
   "extends": "next/core-web-vitals",
   "rules": {
-    "react-hooks/exhaustive-deps": "warn"
-  }
+    "react-hooks/exhaustive-deps": "warn",
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "Literal[value=/(?:^|[\\s'\"`:])(?:bg|text|border|ring|from|via|to|fill|stroke|shadow|decoration|outline|divide|accent|caret|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)\\b/]",
+        "message": "Tokens only: don't use Tailwind's stock palette (e.g. `text-amber-600`, `bg-blue-500`). Use a semantic token — bg-warning-subtle / text-warning-subtle-foreground, text-destructive, bg-primary — or a --data-* token for an unordered data category. Colour must mean a state or a category, never decoration. See app/globals.css."
+      },
+      {
+        "selector": "Literal[value=/#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b/]",
+        "message": "Tokens only: no raw hex colours in components. A literal is invisible to the theme switch and to the print stylesheet. Add a token to app/globals.css and reference it via Tailwind. (Genuinely unavoidable cases — SVG `fill` attributes, <meta theme-color>, canvas — need an eslint-disable-next-line with a comment saying why.)"
+      },
+      {
+        "selector": "TemplateElement[value.raw=/#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b/]",
+        "message": "Tokens only: no raw hex colours in components. See app/globals.css."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "lib/node-category.ts",
+        "lib/og.tsx",
+        "lib/site.ts",
+        "lib/device-fingerprint.ts",
+        "app/layout.tsx",
+        "app/apple-icon.tsx",
+        "app/opengraph-image.tsx",
+        "app/twitter-image.tsx",
+        "app/**/opengraph-image.tsx",
+        "components/shared/LanguageMenu.tsx",
+        "components/auth/AuthForm.tsx",
+        "components/marketing/LandingPage.tsx",
+        "components/project/ExportView.tsx",
+        "components/design-system/**",
+        "**/*.test.tsx"
+      ],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    }
+  ]
 }

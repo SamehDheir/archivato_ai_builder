@@ -248,5 +248,10 @@
   },
   "upgradeFeature": {
     "anotherProject": "start another scoping"
+  },
+  "workflow": {
+    "call": "Client call",
+    "scope": "AI scoping",
+    "send": "Sent to client"
   }
 }

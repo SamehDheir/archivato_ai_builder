@@ -27,6 +27,10 @@ function printAsPdf(markdown: string) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+  // The hex is unavoidable: this is a FRESH document in a new window, with none
+  // of our stylesheets loaded, so there is no --foreground to resolve. It is also
+  // print-bound, where near-black on white is the only correct answer regardless
+  // of the app's theme.
   w.document.write(
     `<html><head><title>Archivato Export</title>
      <style>body{font-family:ui-monospace,Consolas,monospace;white-space:pre-wrap;

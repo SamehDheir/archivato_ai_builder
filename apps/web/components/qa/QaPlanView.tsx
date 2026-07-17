@@ -28,7 +28,7 @@ export function QaPlanView({ plan }: { plan: QaPlan }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {t('qa.generated_at', {
             date: new Date(plan.generatedAt).toLocaleString(),
@@ -88,7 +88,7 @@ export function QaPlanView({ plan }: { plan: QaPlan }) {
         );
       })}
 
-      <Section title={t('qa.coverageGoals')} icon={Target} tone="emerald">
+      <Section title={t('qa.coverageGoals')} icon={Target}>
         <ul className="list-disc space-y-1 ps-5 text-sm" dir="auto">
           {(plan.coverageGoals ?? []).map((g, i) => (
             <li key={i}>{g}</li>
@@ -96,7 +96,7 @@ export function QaPlanView({ plan }: { plan: QaPlan }) {
         </ul>
       </Section>
 
-      <Section title={t('qa.tooling')} icon={Wrench} tone="violet">
+      <Section title={t('qa.tooling')} icon={Wrench}>
         <ul className="list-disc space-y-1 ps-5 text-sm" dir="auto">
           {(plan.tooling ?? []).map((tool, i) => (
             <li key={i}>{tool}</li>
@@ -104,7 +104,7 @@ export function QaPlanView({ plan }: { plan: QaPlan }) {
         </ul>
       </Section>
 
-      <Section title={t('qa.outOfScope')} icon={Ban} tone="blue">
+      <Section title={t('qa.outOfScope')} icon={Ban}>
         <ul className="list-disc space-y-1 ps-5 text-sm text-muted-foreground" dir="auto">
           {(plan.outOfScope ?? []).map((o, i) => (
             <li key={i}>{o}</li>

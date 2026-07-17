@@ -3,11 +3,32 @@
 @tailwind utilities;
 
 /*
- * Archivato design system — Tailwind + shadcn/ui.
- * Light theme on :root, dark theme on .dark (toggled via the ThemeProvider).
- * The dark tokens mirror the original palette
- * (bg #0f1117, panel #171a23, accent #6d8bff, green #4ade80, danger #f87171).
+ * ══════════════════════════════════════════════════════════════════════════
+ * Archivato design tokens — the single source of truth for colour, type,
+ * elevation and motion. Light on :root, dark on .dark (ThemeProvider toggles).
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Our users show this product's output to THEIR clients. The chrome must read
+ * as an instrument — professional, precise, receding — so the documents it
+ * frames are the hero. Two rules follow from that, and they govern every value
+ * below:
+ *
+ *   1. ONE accent (deep teal), spent only on primary actions and progress.
+ *      Neutrals do the heavy lifting. If everything is accented, nothing is.
+ *   2. Colour must MEAN something. A hue is either semantic (success/warning/
+ *      danger/info) or categorical data (--data-*). Decorative hue is not a
+ *      category we have.
+ *
+ * Why teal: every competitor in this space is indigo-violet, which is now the
+ * "AI toy" tell. Teal is decisive, reads as instrumentation, and holds WCAG AA
+ * on both themes.
+ *
+ * ── Adding a colour? ──────────────────────────────────────────────────────
+ * Raw hex / Tailwind palette classes (`text-amber-600`, `bg-blue-500`) are
+ * BANNED in components — enforced by the `no-restricted-syntax` rule in
+ * .eslintrc.json. Add a token here instead, and see the semantic pairs below.
  */
+
 @layer base {
   :root {
     /* Height of the sticky app header. AuthGate measures the real header and
@@ -15,77 +36,199 @@
        admin sidebar's sticky offset never depends on a magic pixel value. */
     --app-header-h: 57px;
 
-    --background: 220 24% 98%;
-    --foreground: 224 24% 12%;
+    /* ── Surfaces ─────────────────────────────────────────────────────────
+       A cool neutral ramp (hue 205) so neutrals sit in the same temperature
+       family as the teal accent and never read as a muddy warm grey next to it. */
+    --background: 200 20% 98%;
+    --foreground: 205 30% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 224 24% 12%;
+    --card-foreground: 205 30% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 224 24% 12%;
+    --popover-foreground: 205 30% 12%;
 
-    --primary: 226 70% 55%;
+    --secondary: 200 16% 93%;
+    --secondary-foreground: 205 28% 20%;
+
+    --muted: 200 16% 93%;
+    --muted-foreground: 205 12% 38%;
+
+    --accent: 200 16% 90%;
+    --accent-foreground: 205 28% 20%;
+
+    --border: 205 16% 86%;
+    --input: 205 16% 86%;
+
+    /* ── Accent ───────────────────────────────────────────────────────────
+       Deep teal. `--primary` carries white text at 5.3:1; `text-primary` sits
+       on --background at 5.1:1. Both clear AA. */
+    --primary: 188 78% 30%;
     --primary-foreground: 0 0% 100%;
+    --primary-subtle: 187 55% 94%;
+    --primary-subtle-foreground: 190 82% 22%;
 
-    --secondary: 220 16% 93%;
-    --secondary-foreground: 224 24% 20%;
+    --ring: 188 78% 30%;
 
-    --muted: 220 16% 93%;
-    --muted-foreground: 220 9% 42%;
+    /* ── Semantic ─────────────────────────────────────────────────────────
+       Each semantic ships FOUR tokens, and the pairing is the whole point:
 
-    --accent: 220 16% 90%;
-    --accent-foreground: 224 24% 20%;
+         --x                    solid fill  (a filled button / a rail segment)
+         --x-foreground         text ON that solid fill
+         --x-subtle             tinted surface (a chip, a callout, an alert)
+         --x-subtle-foreground  text ON that tinted surface
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142 60% 38%;
+       The `-subtle` pair exists because the old `bg-warning/15` +
+       `text-amber-700` idiom computed its contrast against whatever surface it
+       happened to land on — unknowable, and it failed AA in dark mode. These
+       are explicit colours, so every chip's contrast is a fixed, checkable
+       number. Use the pair; never mix `--x` with `--x-subtle-foreground`. */
+    --success: 152 62% 30%;
     --success-foreground: 0 0% 100%;
+    --success-subtle: 150 55% 93%;
+    --success-subtle-foreground: 154 70% 20%;
 
-    --warning: 38 92% 45%;
+    --warning: 32 90% 38%;
     --warning-foreground: 0 0% 100%;
+    --warning-subtle: 44 95% 91%;
+    --warning-subtle-foreground: 28 85% 26%;
 
-    --border: 220 14% 87%;
-    --input: 220 14% 87%;
-    --ring: 226 70% 55%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-subtle: 0 85% 96%;
+    --destructive-subtle-foreground: 0 70% 36%;
 
-    --radius: 0.75rem;
+    --info: 205 80% 38%;
+    --info-foreground: 0 0% 100%;
+    --info-subtle: 202 85% 94%;
+    --info-subtle-foreground: 205 85% 26%;
+
+    /* The fourth rung of the severity ramp (low → medium → HIGH → critical),
+       used by the review findings and the STRIDE threat model. It exists because
+       the ramp genuinely has four steps and the semantic set only offers three
+       that fit: collapsing `high` into `destructive` would make a high finding
+       indistinguishable from a critical one, which is the single distinction
+       that decides what an owner fixes before sending the proposal. Sits between
+       warning (amber) and destructive (red), where "a stronger warning" belongs. */
+    --severity-high: 22 88% 42%;
+
+    /* ── Categorical data ─────────────────────────────────────────────────
+       For the canvas node categories (Auth / Billing / Notify / Users /
+       Reporting), where telling two boxes apart IS the function — the one
+       place a non-semantic hue earns its place. Ordered, not ranked.
+       Deliberately excludes the teal accent: a node that matches the primary
+       action colour reads as clickable. */
+    --data-1: 262 52% 48%;
+    --data-2: 152 60% 30%;
+    --data-3: 205 80% 40%;
+    --data-4: 28 80% 42%;
+    --data-5: 330 60% 45%;
+
+    /* ── Radii ────────────────────────────────────────────────────────────
+       One scale, derived. Bumped 0.75rem → 0.625rem: a document tool wants
+       crisper corners than a consumer app. */
+    --radius: 0.625rem;
+
+    /* ── Elevation ────────────────────────────────────────────────────────
+       Tinted with the neutral hue rather than pure black — a black shadow on a
+       cool surface reads as grey dirt. Deliberately shallow; this is a
+       document tool, not a stack of floating cards. */
+    --shadow-color: 205 40% 20%;
+    --shadow-xs: 0 1px 2px 0 hsl(var(--shadow-color) / 0.05);
+    --shadow-sm: 0 1px 3px 0 hsl(var(--shadow-color) / 0.08),
+      0 1px 2px -1px hsl(var(--shadow-color) / 0.06);
+    --shadow-md: 0 4px 12px -2px hsl(var(--shadow-color) / 0.1),
+      0 2px 4px -2px hsl(var(--shadow-color) / 0.06);
+    --shadow-lg: 0 12px 28px -6px hsl(var(--shadow-color) / 0.14),
+      0 4px 8px -4px hsl(var(--shadow-color) / 0.08);
+
+    /* ── Motion ───────────────────────────────────────────────────────────
+       One language: fast, ease-out, short. Anything above --duration-slow on a
+       UI affordance reads as lag, not polish. Entrances/parallax are banned by
+       the design philosophy, so there is no --duration-xl on purpose. */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-fast: 150ms;
+    --duration-base: 200ms;
+    --duration-slow: 300ms;
+
+    /* ── Typography ───────────────────────────────────────────────────────
+       --font-sans / --font-arabic / --font-mono are injected by next/font in
+       layout.tsx. `--leading-script` is the script-aware body line-height:
+       Arabic needs more room than Latin for its ascenders/descenders, and the
+       [lang] rules below swap it. */
+    --leading-script: 1.6;
   }
 
   .dark {
-    --background: 224 24% 7%;
-    --foreground: 222 30% 93%;
+    --background: 205 30% 7%;
+    --foreground: 200 20% 93%;
 
-    --card: 225 22% 11%;
-    --card-foreground: 222 30% 93%;
+    --card: 205 26% 10%;
+    --card-foreground: 200 20% 93%;
 
-    --popover: 225 22% 11%;
-    --popover-foreground: 222 30% 93%;
+    --popover: 205 26% 10%;
+    --popover-foreground: 200 20% 93%;
 
-    --primary: 226 100% 72%;
-    --primary-foreground: 225 47% 8%;
+    --secondary: 205 20% 16%;
+    --secondary-foreground: 200 20% 93%;
 
-    --secondary: 224 21% 16%;
-    --secondary-foreground: 222 30% 93%;
+    --muted: 205 20% 16%;
+    --muted-foreground: 205 12% 64%;
 
-    --muted: 224 21% 16%;
-    --muted-foreground: 221 14% 65%;
+    --accent: 205 20% 19%;
+    --accent-foreground: 200 20% 93%;
 
-    --accent: 224 21% 18%;
-    --accent-foreground: 222 30% 93%;
+    --border: 205 18% 20%;
+    --input: 205 18% 20%;
 
-    --destructive: 0 91% 71%;
-    --destructive-foreground: 225 47% 8%;
+    /* Teal lightens in dark mode so it stays legible on a near-black surface,
+       and its foreground flips to near-black. */
+    --primary: 186 72% 52%;
+    --primary-foreground: 195 60% 8%;
+    --primary-subtle: 190 55% 14%;
+    --primary-subtle-foreground: 186 70% 70%;
 
-    --success: 142 69% 58%;
-    --success-foreground: 225 47% 8%;
+    --ring: 186 72% 52%;
 
-    --warning: 43 96% 56%;
-    --warning-foreground: 225 47% 8%;
+    --success: 150 62% 52%;
+    --success-foreground: 152 70% 8%;
+    --success-subtle: 152 45% 14%;
+    --success-subtle-foreground: 148 65% 68%;
 
-    --border: 223 21% 21%;
-    --input: 223 21% 21%;
-    --ring: 226 100% 72%;
+    --warning: 40 92% 58%;
+    --warning-foreground: 32 80% 8%;
+    --warning-subtle: 36 50% 15%;
+    --warning-subtle-foreground: 43 92% 70%;
+
+    --destructive: 0 85% 66%;
+    --destructive-foreground: 0 60% 10%;
+    --destructive-subtle: 0 45% 16%;
+    --destructive-subtle-foreground: 0 90% 78%;
+
+    --info: 202 88% 62%;
+    --info-foreground: 205 70% 8%;
+    --info-subtle: 204 50% 16%;
+    --info-subtle-foreground: 200 90% 74%;
+
+    --severity-high: 24 92% 62%;
+
+    --data-1: 262 80% 72%;
+    --data-2: 150 60% 55%;
+    --data-3: 204 85% 62%;
+    --data-4: 30 90% 60%;
+    --data-5: 330 80% 68%;
+
+    /* A black shadow is invisible on a dark surface — elevation there comes
+       from the border + a lifted card colour, so the shadows go near-opaque
+       black only to seat the element, not to draw a halo. */
+    --shadow-color: 205 60% 2%;
+    --shadow-xs: 0 1px 2px 0 hsl(var(--shadow-color) / 0.3);
+    --shadow-sm: 0 1px 3px 0 hsl(var(--shadow-color) / 0.4),
+      0 1px 2px -1px hsl(var(--shadow-color) / 0.3);
+    --shadow-md: 0 4px 12px -2px hsl(var(--shadow-color) / 0.5),
+      0 2px 4px -2px hsl(var(--shadow-color) / 0.35);
+    --shadow-lg: 0 12px 28px -6px hsl(var(--shadow-color) / 0.6),
+      0 4px 8px -4px hsl(var(--shadow-color) / 0.4);
   }
 }
 
@@ -110,17 +253,102 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family:
-      ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
-      Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    line-height: var(--leading-script);
+    /* Inter's stylistic sets: disambiguated l/1, open-tailed a/g. Worth it on a
+       page full of identifiers and figures. */
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+
+    /*
+     * Never let the browser FAKE a weight or a slant by smearing the glyph —
+     * synthesised bold is blurry by construction. If a weight is missing, fall
+     * back to the nearest real one, which looks intentional instead of broken.
+     * (The real weights are enumerated in layout.tsx; this is the guard for when
+     * someone reaches for `font-extrabold` and no 800 file exists.)
+     */
+    font-synthesis-weight: none;
+    font-synthesis-style: none;
+
+    /*
+     * Font smoothing is deliberately NOT set here. Do not add
+     * `-webkit-font-smoothing: antialiased` back.
+     *
+     * It reads like a polish tweak and is the opposite. On Windows — which is
+     * most of this audience — it turns OFF DirectWrite/ClearType subpixel
+     * antialiasing and forces grayscale AA, so text renders thin and visibly
+     * blurry. It only ever existed to tame macOS's heavy subpixel rendering,
+     * and macOS removed subpixel AA entirely in Mojave (10.14), so on every
+     * current OS this rule has no upside and one real downside.
+     *
+     * `text-rendering: optimizeLegibility` is out for the same reason: it's a
+     * known source of blurry/shifted glyphs and buys nothing here.
+     *
+     * Leaving both unset means each platform uses its native rasterizer, which
+     * is what "crisp" actually looks like.
+     */
   }
-  /* Slightly tighter tracking on headings for a denser, more deliberate feel. */
-  h1, h2, h3, h4 {
+
+  /* ── Script-aware typography ───────────────────────────────────────────
+     Arabic sets in IBM Plex Sans Arabic and needs a taller line — its
+     ascenders/descenders collide at Latin leading. The rule keys off [lang]
+     (LocaleProvider sets it on <html>) rather than [dir], because the two are
+     not the same question: dir is layout, lang is script.
+
+     `font-feature-settings: normal` resets Inter's cv* sets, which mean
+     nothing to an Arabic face and only risk odd substitutions. */
+  :root[lang='ar'] body,
+  [lang='ar'] {
+    font-family: var(--font-arabic), var(--font-sans), ui-sans-serif, sans-serif;
+    --leading-script: 1.85;
+    font-feature-settings: normal;
+  }
+
+  /* Latin text inside an Arabic page (a tech-stack name, an email, a URL) keeps
+     Inter — Plex Arabic's Latin is serviceable but mismatched in colour/width
+     next to it. `dir="ltr"` already marks these islands throughout the app. */
+  :root[lang='ar'] [dir='ltr']:not([lang='ar']) {
+    font-family: var(--font-sans), ui-sans-serif, sans-serif;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono), ui-monospace, monospace;
+  }
+
+  /* Headings are set tight and are never Arabic-leaded — a heading is short
+     enough that generous leading just makes it look unset. */
+  h1,
+  h2,
+  h3,
+  h4 {
     @apply tracking-tight;
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+  :root[lang='ar'] h1,
+  :root[lang='ar'] h2,
+  :root[lang='ar'] h3,
+  :root[lang='ar'] h4 {
+    line-height: 1.45;
+    /* Arabic has no uppercase and its letterforms are already tightly joined;
+       negative tracking smears them. */
+    letter-spacing: 0;
+  }
+
+  /* ── Focus ─────────────────────────────────────────────────────────────
+     One visible, consistent ring everywhere — keyboard navigation has to look
+     intentional, not like a browser default that nobody styled. Applied at the
+     base layer so a new control is accessible before anyone remembers to add
+     the class. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    /* NO `border-radius` here. It sets the ELEMENT's radius, not the outline's,
+       so any focused element without its own radius class visibly pops its
+       corners round the moment you tab to it. It's also pointless: browsers
+       already follow the element's border-radius when drawing an outline. */
   }
 }
 
@@ -147,7 +375,229 @@
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background-color: hsl(var(--muted-foreground) / 0.5);
   }
+
+  /* The reading measure for long-form artifact prose. ~70ch is the span the eye
+     tracks without losing the line; `ch` (not rem) because it follows the font,
+     and Arabic's average glyph is wider than Latin's. */
+  .measure {
+    max-width: 70ch;
+  }
 }
 
-/* Print: only the export print-window opens a fresh document, so no app-wide
-   print rules are needed here. */
+/* ══════════════════════════════════════════════════════════════════════════
+ * Stacked tables (below `sm`).
+ * ══════════════════════════════════════════════════════════════════════════
+ * An artifact table on a 360px phone has three bad options: compress (what it
+ * used to do — three columns at ~40px each, one word per line), scroll (legible
+ * but you swipe to read a priority and swipe back to see whose it was), or
+ * stack. Below `sm` it stacks: each row becomes a labelled block, each cell a
+ * "Label   value" line.
+ *
+ * The label comes from `data-label`, which components/ui/table.tsx harvests off
+ * the header row — so a renamed column renames its labels automatically.
+ *
+ * Two things here are load-bearing:
+ *   - `display: block` DESTROYS a table's implicit ARIA semantics. table.tsx
+ *     sets explicit role="table|rowgroup|row|columnheader|cell" for exactly this
+ *     reason. Don't remove them.
+ *   - `thead` is clipped, NOT `display: none`. It stays in the accessibility
+ *     tree so a screen reader still associates each cell with its column;
+ *     `::before` content is generated and is not reliably announced, so it is a
+ *     sighted-user affordance only.
+ */
+@media (max-width: 639.98px) {
+  table[data-stack='true'] {
+    display: block;
+  }
+
+  /* Visually hidden, still announced (the sr-only pattern). */
+  table[data-stack='true'] > thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  table[data-stack='true'] > tbody {
+    display: block;
+  }
+
+  table[data-stack='true'] > tbody > tr {
+    display: block;
+    padding: 0.625rem 0;
+  }
+
+  /*
+   * GRID, not flex. A cell is "label | value", but the value is often several
+   * elements (a requirement's title AND its description). `display: flex` makes
+   * every child a flex item in the same row, so those two rendered side by side,
+   * overlapping — the label column has to be one track and the value column
+   * another, with the value's children stacking DOWN the second track.
+   */
+  table[data-stack='true'] > tbody > tr > td {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    align-items: start;
+    /* `justify-items: start` so a pill-shaped child (a priority Badge, a status
+       chip) keeps its natural width instead of being stretched across the whole
+       value track, which reads as a progress bar. Block text is unaffected: a
+       start-justified block is fit-content, which for a paragraph still fills
+       and wraps at the track width. */
+    justify-items: start;
+    gap: 0.125rem 0.75rem;
+    padding: 0.1875rem 0;
+  }
+
+  table[data-stack='true'] > tbody > tr > td::before {
+    content: attr(data-label);
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.6;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Force every element child into the value track. Without this the second
+     child auto-places back under the LABEL (auto-flow fills col 1, then col 2). */
+  table[data-stack='true'] > tbody > tr > td > * {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  /* A column with no header text (an actions column, an icon) would otherwise
+     reserve 6.5rem of empty gutter beside its value — so it collapses to one
+     track and its children move back to column 1. */
+  table[data-stack='true'] > tbody > tr > td[data-label=''] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  table[data-stack='true'] > tbody > tr > td[data-label='']::before {
+    content: none;
+  }
+  table[data-stack='true'] > tbody > tr > td[data-label=''] > * {
+    grid-column: 1;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Print — the share page.
+ * ══════════════════════════════════════════════════════════════════════════
+ * The owner's client prints or PDFs this while deciding whether to sign, and a
+ * browser's default print of a dark-themed app page is a black rectangle that
+ * eats a toner cartridge. So print is treated as a real target: force the light
+ * tokens regardless of the viewer's theme, and drop the controls.
+ *
+ * This is NOT the deferred PDF export (POSITIONING §5 YELLOW) — that needs a
+ * client-facing Markdown builder. This just means the browser's own Print
+ * command, which is what owners use today, produces something sendable.
+ */
+@media print {
+  /*
+   * EVERY token a printed surface can reach must be restated here, not just the
+   * obvious ones. `:root.dark` (0,2,0) outbids `.dark` (0,1,0), so anything
+   * listed flips to paper — and anything OMITTED silently keeps its dark-theme
+   * value. The first cut set only background/foreground/card/border/primary, and
+   * a dark-mode reader printing the proposal got near-black `bg-muted` category
+   * pills and dark `-subtle` badges on white paper: illegible, on the one
+   * document that goes to a paying client.
+   *
+   * If you add a token above, add it here.
+   */
+  :root,
+  :root.dark {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --border: 0 0% 80%;
+    --input: 0 0% 80%;
+
+    /* Neutral surfaces — `bg-muted` carries the NFR/category pills, `bg-secondary`
+       the Badge's secondary variant. Both are all over the printed appendix. */
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 30%;
+    --secondary: 0 0% 95%;
+    --secondary-foreground: 0 0% 12%;
+    --accent: 0 0% 92%;
+    --accent-foreground: 0 0% 12%;
+
+    --primary: 188 78% 26%;
+    --primary-foreground: 0 0% 100%;
+    --primary-subtle: 187 40% 94%;
+    --primary-subtle-foreground: 190 82% 20%;
+
+    /* The four semantic pairs reach paper through every Badge and callout —
+       priority chips (must/should), review severities, the stale notice. */
+    --success: 152 62% 26%;
+    --success-foreground: 0 0% 100%;
+    --success-subtle: 150 45% 93%;
+    --success-subtle-foreground: 154 70% 18%;
+
+    --warning: 32 90% 34%;
+    --warning-foreground: 0 0% 100%;
+    --warning-subtle: 44 85% 92%;
+    --warning-subtle-foreground: 28 85% 24%;
+
+    --destructive: 0 72% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-subtle: 0 80% 96%;
+    --destructive-subtle-foreground: 0 70% 34%;
+
+    --info: 205 80% 34%;
+    --info-foreground: 0 0% 100%;
+    --info-subtle: 202 75% 94%;
+    --info-subtle-foreground: 205 85% 24%;
+
+    --severity-high: 22 88% 38%;
+
+    /* Categorical (canvas legends in the appendix) — darkened for paper. */
+    --data-1: 262 52% 42%;
+    --data-2: 152 60% 26%;
+    --data-3: 205 80% 34%;
+    --data-4: 28 80% 36%;
+    --data-5: 330 60% 40%;
+
+    /* Ink-on-paper needs no elevation, and a printer renders a shadow as grey mud. */
+    --shadow-xs: none;
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* Anything that only exists to be clicked. */
+  [data-print='hide'] {
+    display: none !important;
+  }
+
+  /* Keep a section's heading with its content, and never break a card across
+     two sheets mid-table. */
+  h1,
+  h2,
+  h3 {
+    break-after: avoid-page;
+  }
+  section,
+  table,
+  figure {
+    break-inside: avoid;
+  }
+
+  a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 0.75em;
+    color: hsl(var(--muted-foreground));
+  }
+}

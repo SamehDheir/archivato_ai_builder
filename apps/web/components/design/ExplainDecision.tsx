@@ -132,7 +132,7 @@ export function DecisionExplainModal({
 
               <ExplainList
                 icon={Scale}
-                tone="text-amber-500"
+                tone="text-warning"
                 title={t('system.explain.tradeoffs')}
                 items={data.tradeoffs}
               />
@@ -141,7 +141,7 @@ export function DecisionExplainModal({
                 <div>
                   <SectionHead
                     icon={GitCompareArrows}
-                    tone="text-sky-500"
+                    tone="text-info"
                     title={t('system.explain.alternatives')}
                   />
                   <ul className="mt-2 space-y-2">
@@ -157,7 +157,7 @@ export function DecisionExplainModal({
 
               <ExplainList
                 icon={AlertTriangle}
-                tone="text-rose-500"
+                tone="text-destructive"
                 title={t('system.explain.risks')}
                 items={data.risks}
               />

@@ -6,7 +6,7 @@ import { Coins } from 'lucide-react';
 import type { CostEstimate, UpstreamRevisions } from '@archivato/shared';
 import { costEstimateApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ArtifactSkeleton } from '@/components/shared/ArtifactSkeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { CostView } from '@/components/cost/CostView';
 import { StaleNotice } from '@/components/project/StaleNotice';
@@ -71,12 +71,7 @@ export function CostEstimatePanel({
   }
 
   if (!loaded) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
+    return <ArtifactSkeleton />;
   }
 
   if (!estimate) {

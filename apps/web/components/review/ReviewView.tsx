@@ -31,10 +31,11 @@ import { Empty, Section } from '@/components/design/RequirementDocumentView';
 import { FindingActions, StatusChip, type FindingHandlers } from './FindingActions';
 import { FixPreviewModal } from './FixPreviewModal';
 
+/** The severity ramp: an ordered scale, so it reads muted → amber → orange → red. */
 const SEVERITY_CLASS: Record<Severity, string> = {
   low: 'text-muted-foreground',
   medium: 'text-warning',
-  high: 'text-[#fb923c]',
+  high: 'text-severity-high',
   critical: 'text-destructive',
 };
 
@@ -115,7 +116,7 @@ export function ReviewView({
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {t('review.generated', {
             date: new Date(report.generatedAt).toLocaleString(),

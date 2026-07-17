@@ -17,7 +17,7 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
   const { t } = useTranslation('stages');
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {t('database.meta', {
             type: design.databaseType,

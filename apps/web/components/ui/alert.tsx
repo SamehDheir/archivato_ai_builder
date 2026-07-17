@@ -2,16 +2,28 @@ import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
+/**
+ * A callout. Every variant is a `-subtle` surface + its matching
+ * `-subtle-foreground`, so the text contrast is a fixed, checkable number rather
+ * than whatever `bg-x/10` happened to composite to on the surface underneath.
+ *
+ * The icon is positioned with LOGICAL properties (`start-4`, `ps-7`). It used to
+ * use `left-4`/`pl-7`, which pinned it to the physical left and let the text run
+ * underneath it in Arabic — one of the RTL bugs R14 swept up.
+ */
 const alertVariants = cva(
-  'relative w-full rounded-lg border px-4 py-3 text-sm [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:size-4 [&>svg~*]:pl-7',
+  'relative w-full rounded-lg border px-4 py-3 text-small [&>svg]:absolute [&>svg]:start-4 [&>svg]:top-4 [&>svg]:size-4 [&>svg~*]:ps-7',
   {
     variants: {
       variant: {
         default: 'border-border bg-card text-card-foreground',
-        info: 'border-primary/40 bg-primary/10 text-foreground',
-        success: 'border-success/40 bg-success/10 text-foreground',
+        info: 'border-info/40 bg-info-subtle text-info-subtle-foreground [&>svg]:text-info',
+        success:
+          'border-success/40 bg-success-subtle text-success-subtle-foreground [&>svg]:text-success',
+        warning:
+          'border-warning/40 bg-warning-subtle text-warning-subtle-foreground [&>svg]:text-warning',
         destructive:
-          'border-destructive/50 bg-destructive/10 text-destructive [&>svg]:text-destructive',
+          'border-destructive/50 bg-destructive-subtle text-destructive-subtle-foreground [&>svg]:text-destructive',
       },
     },
     defaultVariants: {

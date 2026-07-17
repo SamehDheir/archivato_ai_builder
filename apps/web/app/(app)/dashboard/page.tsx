@@ -67,6 +67,7 @@ import { ProjectStages, type StreamState, type TabKey } from '@/components/proje
 import { streamStage, reduceStreamEvent, emptyStreamView } from '@/lib/stream';
 import { saveFile } from '@/lib/download';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ProjectCardSkeleton } from '@/components/shared/ArtifactSkeleton';
 import { CommandPalette, type CommandGroup } from '@/components/shared/command-palette';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { AdminOverview } from '@/components/admin/AdminOverview';
@@ -656,18 +657,22 @@ export default function Home() {
   }, [dirty]);
 
   if (restoring) {
+    // Shaped like the dashboard that lands, so the arrival is a fill rather than
+    // a reflow: title, example banner, action bar, then real card skeletons (the
+    // `h-[132px]` grey rectangles that used to stand in here were the right
+    // height by luck and told the user nothing about what was coming).
     return (
       <div className="mx-auto max-w-4xl px-5 py-8">
         <Skeleton className="h-7 w-48" />
         <Skeleton className="mt-2 h-4 w-full max-w-md" />
         <Skeleton className="mt-5 h-12 w-full rounded-lg" />
-        <div className="mt-6 mb-4 flex items-center justify-between">
-          <Skeleton className="h-6 w-24" />
-          <Skeleton className="h-9 w-32 rounded-md" />
+        <div className="mb-4 mt-6 flex items-center justify-between">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-9 w-36 rounded-md" />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-[132px] w-full rounded-lg" />
+            <ProjectCardSkeleton key={i} />
           ))}
         </div>
       </div>
@@ -900,16 +905,23 @@ export default function Home() {
 
           {(
             <>
-              {/* Don't sell before any value is earned: the quota/upsell banner
-                  appears only once the user owns at least one project. */}
-              {sub && projects.length > 0 && (
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-                  <span>
-                    <span className="font-semibold">
-                      {t('quota.plan', { plan: PLANS[sub.plan].name })}
-                    </span>{' '}
-                    <span className="text-muted-foreground">
-                      ·{' '}
+              <ProjectsDashboard
+                /*
+                 * The plan meter, inlined beside the "New client scoping" button
+                 * instead of the full-width banner it used to be. It is context
+                 * for that button — "you have one left" only matters at the
+                 * moment you reach for it — and a banner across the top of the
+                 * work said the opposite about its importance.
+                 *
+                 * Still hidden on a zero-project account: don't sell before any
+                 * value has been earned.
+                 */
+                usage={
+                  sub && projects.length > 0 ? (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="hidden sm:inline">
+                        {t('quota.plan', { plan: PLANS[sub.plan].name })} ·
+                      </span>
                       {isUnlimitedQuota(sub.projectQuota)
                         ? t('quota.unlimited')
                         : t('quota.used', {
@@ -922,31 +934,28 @@ export default function Home() {
                             ),
                             quota: sub.projectQuota,
                           })}
+                      {sub.plan === 'free' ? (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const upgraded = await openUpgrade();
+                            if (upgraded) await refreshProjects();
+                          }}
+                          className="rounded font-medium text-primary hover:underline"
+                        >
+                          {t('quota.upgrade')}
+                        </button>
+                      ) : (
+                        <Link
+                          href="/settings"
+                          className="rounded font-medium text-primary hover:underline"
+                        >
+                          {t('quota.manage')}
+                        </Link>
+                      )}
                     </span>
-                  </span>
-                  {sub.plan === 'free' ? (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const upgraded = await openUpgrade();
-                        if (upgraded) await refreshProjects();
-                      }}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {t('quota.upgrade')}
-                    </button>
-                  ) : (
-                    <Link
-                      href="/settings"
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {t('quota.manage')}
-                    </Link>
-                  )}
-                </div>
-              )}
-
-              <ProjectsDashboard
+                  ) : null
+                }
                 projects={projects}
                 creating={creating}
                 setCreating={setCreating}

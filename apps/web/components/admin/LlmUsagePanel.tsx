@@ -87,7 +87,7 @@ export function LlmUsagePanel() {
 
       {/* Unpriced calls make `spend` a FLOOR, not a total — say so, loudly. */}
       {last30d.unpricedCalls > 0 && (
-        <p className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-300">
+        <p className="mt-3 flex items-start gap-2 rounded-md border border-warning/40 bg-warning-subtle p-2.5 text-xs text-warning-subtle-foreground">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{t('llm.unpriced', { n: fmt.number(last30d.unpricedCalls) })}</span>
         </p>

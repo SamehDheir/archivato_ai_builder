@@ -21,7 +21,7 @@ export default function AppleIcon() {
           alignItems: 'center',
           justifyContent: 'center',
           // iOS masks the corners itself, so the tile is drawn edge-to-edge.
-          backgroundImage: `linear-gradient(${brand.indigo}, ${brand.indigoDeep})`,
+          backgroundImage: `linear-gradient(${brand.accent}, ${brand.accentDeep})`,
         }}
       >
         <svg width="128" height="128" viewBox="0 0 64 64">
@@ -37,7 +37,7 @@ export default function AppleIcon() {
           </g>
           <circle cx={17} cy={50} r={4.6} fill="#A5B4FC" />
           <circle cx={47} cy={50} r={4.6} fill="#A5B4FC" />
-          <circle cx={32} cy={15} r={6.2} fill={brand.cyan} />
+          <circle cx={32} cy={15} r={6.2} fill={brand.accentBright} />
         </svg>
       </div>
     ),

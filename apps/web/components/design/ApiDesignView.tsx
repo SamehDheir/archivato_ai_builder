@@ -8,11 +8,21 @@ import { Badge } from '@/components/ui/badge';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { Empty } from '@/components/design/RequirementDocumentView';
 
+/**
+ * HTTP verb → chip colour. An UNORDERED category (a DELETE is not "worse" than a
+ * GET), and the mapping follows the Swagger/Postman convention every developer
+ * reading this page already has memorised — green reads, red destroys — so it
+ * borrows the semantic tokens whose hues happen to match that convention rather
+ * than inventing a scale nobody expects.
+ *
+ * PATCH has no semantic counterpart (there is no "purple" state), so it takes a
+ * categorical `--data-*` token, which is what those are for.
+ */
 const METHOD_CLASS: Record<string, string> = {
   GET: 'text-success border-success/50',
   POST: 'text-primary border-primary/50',
   PUT: 'text-warning border-warning/50',
-  PATCH: 'text-[#c084fc] border-[#c084fc]/50',
+  PATCH: 'text-data-1 border-data-1/50',
   DELETE: 'text-destructive border-destructive/50',
 };
 
@@ -24,7 +34,7 @@ export function ApiDesignView({ design }: { design: ApiDesign }) {
   );
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {t('api.meta', {
             modules: design.modules.length,

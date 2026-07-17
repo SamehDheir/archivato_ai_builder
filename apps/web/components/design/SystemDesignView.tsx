@@ -35,12 +35,17 @@ import {
   ExplainButton,
 } from '@/components/design/ExplainDecision';
 
-/** t-shirt size → accent classes for the complexity chip. */
+/**
+ * T-shirt size → chip tone. This is an ORDERED ramp, not a categorical palette:
+ * complexity drives effort, which drives the price, so rising size is rising
+ * cost/risk. That maps onto the semantic ladder exactly — which is why it earns
+ * no hues of its own (the `--data-*` tokens are for unordered categories).
+ */
 const COMPLEXITY_TONE: Record<ModuleComplexity, string> = {
-  S: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  M: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  L: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  XL: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
+  S: 'bg-success-subtle text-success-subtle-foreground',
+  M: 'bg-info-subtle text-info-subtle-foreground',
+  L: 'bg-warning-subtle text-warning-subtle-foreground',
+  XL: 'bg-destructive-subtle text-destructive-subtle-foreground',
 };
 
 function ComplexityBadge({
@@ -94,7 +99,6 @@ export function SystemDesignView({
       title={t('system.buildVsBuy.title')}
       count={buildVsBuy.length}
       icon={Scale}
-      tone="amber"
     >
       <Table>
         <TableHeader>
@@ -115,7 +119,7 @@ export function SystemDesignView({
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {t('system.generated', {
             date: new Date(design.generatedAt).toLocaleString(),
@@ -142,7 +146,7 @@ export function SystemDesignView({
 
       {buildVsBuyFirst && buildVsBuySection}
 
-      <Section title={t('system.architecture')} icon={Network} tone="blue">
+      <Section title={t('system.architecture')} icon={Network}>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="primary">
             {t(`system.arch.${design.architecture}`, {
@@ -161,7 +165,7 @@ export function SystemDesignView({
       </Section>
 
       {design.phasedArchitecture && (
-        <Section title={t('system.phased.title')} icon={GitBranch} tone="cyan">
+        <Section title={t('system.phased.title')} icon={GitBranch}>
           <p className="mb-3 text-sm text-muted-foreground">
             {t('system.phased.lead')}
           </p>
@@ -182,7 +186,7 @@ export function SystemDesignView({
         </Section>
       )}
 
-      <Section title={t('system.techStack')} icon={Layers} tone="violet">
+      <Section title={t('system.techStack')} icon={Layers}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -196,7 +200,9 @@ export function SystemDesignView({
             {design.techStack.map((tech) => (
               <TableRow key={tech.layer + tech.technology}>
                 <TableCell className="font-mono text-xs">{tech.layer}</TableCell>
-                <TableCell className="font-medium">{tech.technology}</TableCell>
+                <TableCell className="font-medium" dir="auto">
+                  {tech.technology}
+                </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {tech.rationale}
                 </TableCell>
@@ -215,10 +221,10 @@ export function SystemDesignView({
         </Table>
       </Section>
 
-      <Section title={t('system.services')} icon={Boxes} tone="emerald">
+      <Section title={t('system.services')} icon={Boxes}>
         <div className="grid gap-3 sm:grid-cols-2">
           {design.services.map((s) => (
-            <Card key={s.name} className="border-l-2 border-l-emerald-500/60">
+            <Card key={s.name} className="border-s-2 border-s-primary/50">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -264,7 +270,6 @@ export function SystemDesignView({
           title={t('system.compliance.title')}
           count={compliance.length}
           icon={ShieldCheck}
-          tone="blue"
         >
           <Table>
             <TableHeader>
@@ -334,7 +339,7 @@ function BuildVsBuyRow({ item }: { item: BuildVsBuyItem }) {
 function PhaseCard({ label, body }: { label: string; body: string }) {
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-3">
-      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-cyan-700 dark:text-cyan-300">
+      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-primary">
         {label}
       </div>
       <p className="text-sm text-muted-foreground" dir="auto">

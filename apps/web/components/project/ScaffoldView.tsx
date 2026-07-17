@@ -303,7 +303,7 @@ export function ScaffoldView({ sessionId }: { sessionId: string }) {
                 : t('scaffold.connect')}
             </Button>
             {conn && !conn.available && (
-              <p className="mt-2 text-xs text-amber-600 dark:text-amber-500" dir="auto">
+              <p className="mt-2 text-xs text-warning" dir="auto">
                 {t('scaffold.notConfigured')}
               </p>
             )}

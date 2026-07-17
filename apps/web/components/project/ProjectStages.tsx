@@ -39,6 +39,7 @@ import type {
   SystemDesign,
   UpstreamRevisions,
 } from '@archivato/shared';
+import { cn } from '@/lib/utils';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -76,6 +77,32 @@ import { useFormat } from '@/lib/i18n/format';
 
 /** The in-flight streaming generation: which stage + the accumulated console view. */
 export type StreamState = { stage: PipelineStageName; view: StreamView };
+
+/**
+ * Whether the stage rail is currently drawn vertically (the `md` breakpoint).
+ *
+ * Radix Tabs takes `orientation` as a prop and uses it to decide which arrow
+ * keys move the selection — so the value has to track the CSS breakpoint, which
+ * only CSS knows about.
+ *
+ * Starts `false` (mobile-first) so SSR and the first client render agree; the
+ * effect then corrects it. `useEffect`, not `useLayoutEffect`, is deliberate:
+ * this value drives NO layout — the rail's axis is pure CSS (`md:flex-col`) —
+ * so the one-frame window before it syncs can only mean arrow keys briefly move
+ * on the wrong axis. There is never a visual jump to block paint for, and
+ * `useLayoutEffect` would warn during SSR for nothing.
+ */
+function useIsDesktop(): boolean {
+  const [desktop, setDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const sync = () => setDesktop(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  return desktop;
+}
 
 /**
  * Tab order + icons (drives the tab bar). Labels come from `project.tab.*`.
@@ -121,6 +148,33 @@ const TABS: { value: TabKey; icon: LucideIcon }[] = [
  * simply isn't producing them. The quiet action below the tabs brings them back.
  */
 const EXTENDED_TABS = new Set<TabKey>(['threat', 'qa']);
+
+/**
+ * Which artifact each stage waits on, for the locked tooltip ("Requires the
+ * database design"). This is the SAME gate `available` computes — it just names
+ * the blocker instead of only refusing.
+ *
+ * A dimmed nav item with no explanation makes the user guess whether the stage
+ * is broken, unpaid for, or merely not reached yet; those need three different
+ * reactions. The Pro lock is a separate axis (`PRO_TABS`) and reads its own
+ * badge, because "not yet" and "not on your plan" are different problems.
+ */
+const REQUIRES: Partial<Record<TabKey, TabKey>> = {
+  system: 'requirements',
+  database: 'system',
+  diagrams: 'system',
+  canvas: 'system',
+  api: 'database',
+  review: 'api',
+  roadmap: 'api',
+  cost: 'api',
+  threat: 'api',
+  qa: 'api',
+  export: 'api',
+  apidocs: 'api',
+  refine: 'api',
+  history: 'requirements',
+};
 
 export type TabKey =
   | 'vision'
@@ -296,6 +350,31 @@ export function ProjectStages({
     [doc, design, dbDesign, apiDesign],
   );
 
+  // The rail is vertical from `md` up (a CSS decision), and Radix needs the same
+  // axis in JS to point its arrow keys the right way.
+  const desktop = useIsDesktop();
+
+  /**
+   * Which stages this component can honestly report as done.
+   *
+   * Only the five design artifacts are here because they're the only ones
+   * ProjectStages holds. The standalone stages (vision, roadmap, cost, threat,
+   * QA) are fetched by their own panels — Radix unmounts inactive `TabsContent`,
+   * so lifting those fetches up just to draw a checkmark would make every
+   * project open fire five extra requests. An absent check reads as "not sure
+   * yet", which is true; a wrong one would read as "not generated", which isn't.
+   */
+  const stageDone: Partial<Record<TabKey, boolean>> = useMemo(
+    () => ({
+      requirements: !!doc,
+      system: !!design,
+      database: !!dbDesign,
+      api: !!apiDesign,
+      review: !!review,
+    }),
+    [doc, design, dbDesign, apiDesign, review],
+  );
+
   /**
    * Navigate to a tab, applying the freemium gate: a free user reaching for a
    * still-locked Pro stage gets the upgrade modal; a stage whose upstream isn't
@@ -411,32 +490,29 @@ export function ProjectStages({
           <StreamingConsole stage={stream.stage} view={stream.view} />
         )}
 
-        <Tabs value={tab} onValueChange={(v) => goTo(v as TabKey)}>
-          <TabsList className="sticky top-16 z-30 flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto shadow-sm md:flex-wrap md:overflow-visible">
-            {visibleTabs.map(({ value, icon: Icon }) => {
-              const locked = !isPro && PRO_TABS.has(value);
-              // Locked-but-unreachable tabs stay clickable so the click can open
-              // the upgrade modal (Radix disables un-clickable triggers).
-              const opensModal = locked && !available[value];
-              return (
-                <TabsTrigger
-                  key={value}
-                  value={value}
-                  disabled={!available[value] && !opensModal}
-                  className={`shrink-0 gap-1.5${locked ? ' opacity-80' : ''}`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {t(`tab.${value}`)}
-                  {locked && (
-                    <Lock
-                      className="h-3 w-3 text-muted-foreground"
-                      aria-label={t('pro')}
-                    />
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
+        {/* `orientation` drives Radix's roving arrow-key navigation, so it has to
+            match the axis the rail is actually drawn on. The rail is vertical
+            from `md` up, which CSS knows and JS doesn't — hence the media query
+            listener in `useIsDesktop`. */}
+        <Tabs
+          value={tab}
+          onValueChange={(v) => goTo(v as TabKey)}
+          orientation={desktop ? 'vertical' : 'horizontal'}
+          className="md:flex md:items-start md:gap-5"
+        >
+          <StageNav
+            tabs={visibleTabs}
+            active={tab}
+            available={available}
+            done={stageDone}
+            isPro={isPro}
+          />
+
+          {/* `min-w-0` is load-bearing: without it this flex child refuses to
+              shrink below its content's intrinsic width, and a wide artifact
+              table pushes the whole page into a horizontal scroll instead of
+              scrolling inside its own container. */}
+          <div className="min-w-0 flex-1">
 
           {/*
             R12 — the way back for a project that opted out. Deliberately quiet: a
@@ -795,6 +871,7 @@ export function ProjectStages({
               onRestored={onRestored}
             />
           </TabsContent>
+          </div>
         </Tabs>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -809,6 +886,105 @@ export function ProjectStages({
         />
       )}
     </Card>
+  );
+}
+
+/**
+ * The persistent stage nav: a side rail on desktop, a scrolling segmented strip
+ * on mobile.
+ *
+ * Still a Radix `TabsList` underneath, and that is deliberate rather than
+ * incidental. Radix **unmounts inactive `TabsContent`**, which the whole file
+ * depends on (every stage panel fetches on mount, and the staleness notices
+ * assume a fresh read). Rebuilding this as a bespoke nav + a conditional render
+ * would have quietly changed that, so the rail is a restyle of the existing
+ * primitive: `orientation="vertical"` also hands us roving up/down arrow-key
+ * navigation for free, which a hand-rolled list would have had to reimplement.
+ *
+ * Each item carries its state explicitly, because "why can't I click this?" has
+ * three different answers and they need three different affordances:
+ *   done    — a check; the artifact exists
+ *   current — the accent bar
+ *   locked  — dimmed + a tooltip naming the missing prerequisite
+ *   pro     — a lock badge; a plan problem, not a progress one
+ */
+function StageNav({
+  tabs,
+  active,
+  available,
+  done,
+  isPro,
+}: {
+  tabs: { value: TabKey; icon: LucideIcon }[];
+  active: TabKey;
+  available: Record<TabKey, boolean>;
+  /**
+   * Stages whose artifact this component can actually see. Deliberately partial:
+   * the standalone stages (vision, roadmap, cost, threat, QA) are fetched by
+   * their own panels, so ProjectStages genuinely does not know whether they
+   * exist. Showing an unknown state as "not done" would be a confident lie, so
+   * those items simply carry no check.
+   */
+  done: Partial<Record<TabKey, boolean>>;
+  isPro: boolean;
+}) {
+  const { t } = useTranslation('project');
+
+  return (
+    <TabsList
+      className={cn(
+        'h-auto w-full justify-start gap-1 p-1',
+        // Mobile: a horizontal strip that scrolls under the sticky header.
+        'sticky top-16 z-30 flex flex-nowrap overflow-x-auto shadow-sm scrollbar-thin',
+        // Desktop: a real side rail that stays put while the artifact scrolls.
+        'md:top-20 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:shadow-none',
+      )}
+    >
+      {tabs.map(({ value, icon: Icon }) => {
+        const locked = !isPro && PRO_TABS.has(value);
+        // Locked-but-unreachable tabs stay clickable so the click can open the
+        // upgrade modal (Radix disables un-clickable triggers).
+        const opensModal = locked && !available[value];
+        const blocked = !available[value] && !opensModal;
+        const requires = REQUIRES[value];
+
+        return (
+          <TabsTrigger
+            key={value}
+            value={value}
+            disabled={blocked}
+            title={
+              blocked && requires
+                ? t('nav.requires', { stage: t(`tab.${requires}`) })
+                : undefined
+            }
+            className={cn(
+              'shrink-0 justify-start gap-2 md:w-full',
+              locked && 'opacity-80',
+            )}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{t(`tab.${value}`)}</span>
+            <span className="ms-auto flex items-center gap-1">
+              {done[value] && (
+                <CheckCircle2
+                  className={cn(
+                    'h-3 w-3',
+                    // On the active (accent-filled) trigger the check has to sit
+                    // on the accent, not on the page.
+                    value === active ? 'text-primary-foreground' : 'text-success',
+                  )}
+                  aria-label={t('nav.done')}
+                />
+              )}
+              {locked && (
+                <Lock className="h-3 w-3 opacity-70" aria-label={t('pro')} />
+              )}
+            </span>
+          </TabsTrigger>
+        );
+      })}
+    </TabsList>
   );
 }
 

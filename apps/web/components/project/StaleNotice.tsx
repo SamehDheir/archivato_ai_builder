@@ -39,16 +39,12 @@ export function StaleNotice({
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-500/40 dark:bg-amber-500/10"
+      className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning-subtle p-3 text-small text-warning-subtle-foreground"
     >
-      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+      <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
       <div className="min-w-0 flex-1" dir="auto">
-        <p className="font-medium text-amber-900 dark:text-amber-200">
-          {t('stale.title')}
-        </p>
-        <p className="text-amber-800/80 dark:text-amber-200/70">
-          {t('stale.description')}
-        </p>
+        <p className="font-medium">{t('stale.title')}</p>
+        <p className="opacity-80">{t('stale.description')}</p>
       </div>
       <Button
         size="sm"

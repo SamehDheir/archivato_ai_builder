@@ -67,7 +67,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-full max-w-sm flex-col gap-2">
+      {/* `end-4`, not `right-4`: toasts belong on the reading-trailing edge, so
+          in Arabic they surface bottom-LEFT. A physical `right` put them over
+          the RTL page's leading edge. */}
+      <div className="pointer-events-none fixed bottom-4 end-4 z-[100] flex w-full max-w-sm flex-col gap-2">
         {toasts.map((t) => {
           const Icon = ICON[t.variant];
           return (

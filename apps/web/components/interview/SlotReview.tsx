@@ -137,7 +137,7 @@ function FilledSlots({
                     {slot.value}
                   </p>
                   {inferred && (
-                    <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-500">
+                    <p className="mt-1 flex items-center gap-1 text-xs text-warning">
                       <Sparkles className="h-3 w-3" />
                       {t('slots.inferred')}
                     </p>

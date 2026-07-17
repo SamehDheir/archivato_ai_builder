@@ -12,10 +12,11 @@ import { cn } from '@/lib/utils';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { Section } from '@/components/design/RequirementDocumentView';
 
+/** Same ordered ramp as the review's findings — they must not disagree. */
 const SEVERITY_CLASS: Record<Severity, string> = {
   low: 'text-muted-foreground border-border',
   medium: 'text-warning border-warning/40',
-  high: 'text-[#fb923c] border-[#fb923c]/40',
+  high: 'text-severity-high border-severity-high/40',
   critical: 'text-destructive border-destructive/40',
 };
 
@@ -32,7 +33,7 @@ export function ThreatModelView({ model }: { model: ThreatModel }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {t('threat.generated_at', {
             date: new Date(model.generatedAt).toLocaleString(),
@@ -85,7 +86,7 @@ export function ThreatModelView({ model }: { model: ThreatModel }) {
         );
       })}
 
-      <Section title={t('threat.trustBoundaries')} icon={ShieldCheck} tone="blue">
+      <Section title={t('threat.trustBoundaries')} icon={ShieldCheck}>
         <ul className="list-disc space-y-1 ps-5 text-sm" dir="auto">
           {(model.trustBoundaries ?? []).map((b, i) => (
             <li key={i}>{b}</li>
@@ -93,7 +94,7 @@ export function ThreatModelView({ model }: { model: ThreatModel }) {
         </ul>
       </Section>
 
-      <Section title={t('threat.assumptions')} icon={ListChecks} tone="violet">
+      <Section title={t('threat.assumptions')} icon={ListChecks}>
         <ul className="list-disc space-y-1 ps-5 text-sm text-muted-foreground" dir="auto">
           {(model.assumptions ?? []).map((a, i) => (
             <li key={i}>{a}</li>

@@ -94,8 +94,10 @@ export function ProjectWizard({
                       'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
                       // Done: green ring + green check on a transparent fill.
                       step.done && 'border-success bg-transparent text-success',
-                      // Current: solid blue circle with a white step number.
-                      isCurrent && !step.done && 'border-blue-500 bg-blue-500 text-white',
+                      // Current: solid accent circle with a contrasting step number.
+                      isCurrent &&
+                        !step.done &&
+                        'border-primary bg-primary text-primary-foreground',
                       // Locked / future: filled gray chip with a lock or number.
                       !step.done && !isCurrent &&
                         'border-transparent bg-muted text-muted-foreground',

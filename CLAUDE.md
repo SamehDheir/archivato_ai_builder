@@ -1554,8 +1554,22 @@ tsconfig and never needs shared's `dist`.
   customer reply → assignee); assignment → assignee; AI smart-alert → assignee
   (skipped if unassigned). Emails HTML-escape the (user-controlled) ticket subject
   and carry an absolute `WEB_ORIGIN` deep-link; in-app links are relative
-  (`/support/tickets/:id` for the customer, `/support/admin/tickets/:id` for
-  staff). The **`notifications` module** is a normal repo-pattern store
+  (**`/support/:id`** for the customer, **`/support/admin/:id`** for staff).
+  - **These links must match the web app's real routes, and a string test cannot
+    check that.** They used to carry an extra segment (`/support/tickets/:id`),
+    which matched **no route at all** — Next resolves `support/[id]` against a
+    *single* segment — so every in-app notification and every notification
+    **email** landed on a 404. That is the worst place for this bug: the deep link
+    is the entire reason the email exists, and a customer who clicks "you have a
+    reply" and gets a 404 concludes the product is broken. It survived because the
+    unit test asserted the link *contained* `/support/tickets/`, and a substring
+    check on a path can't tell a live route from a dead one.
+    **`support-notification-links.spec.ts`** now resolves each emitted path
+    against the web app's actual route files on disk (the App Router's filesystem
+    **is** the route table, so it can't drift from itself) and asserts the old
+    paths still resolve to nothing — so the test can genuinely fail. Move the
+    ticket page ⇒ move these links.
+  The **`notifications` module** is a normal repo-pattern store
   (`notifications` table, in-memory + Prisma) exposing owner-scoped
   `GET /notifications` (items + unread count), `POST /notifications/read-all`,
   `PATCH /notifications/:id/read`; `NotificationsService.notify()` swallows its own
@@ -1685,9 +1699,174 @@ tsconfig and never needs shared's `dist`.
   (and a granted one appears) on tab-return without a hard reload. Console *pages*
   already re-check on mount via `usePageAccess`, and every API is server-gated, so
   this is UX freshness, not the security boundary.
-- Design system: Tailwind + shadcn/ui under `components/ui/`. Colors are HSL CSS
-  vars in `globals.css` (light on `:root`, dark on `.dark`); theme toggled by
-  `ThemeProvider`. Providers: Theme → Toast → Confirm → **Upgrade** → AuthGate.
+- **Design system (R14) — tokens only, one accent, colour must MEAN something.**
+  Tailwind + shadcn/ui under `components/ui/`. Every token is an HSL CSS var in
+  **`globals.css`** (light on `:root`, dark on `.dark`); `tailwind.config.ts` only
+  *exposes* them and may never hold a literal. Theme via `ThemeProvider`;
+  providers: Theme → Toast → Confirm → **Upgrade** → AuthGate. Reference page:
+  **`/design`** (dev-only, 404s in prod) renders every token + variant.
+  1. **Raw hex and Tailwind's stock palette are BANNED in components**, enforced
+     by `no-restricted-syntax` in `.eslintrc.json` (it catches `bg-blue-500` *and*
+     arbitrary values like `text-[#fb923c]` — that second form is how three
+     violations hid from a palette-name grep). The `overrides` list is the set of
+     files that legitimately hold literals, each for a reason CSS can't solve:
+     **`lib/node-category.ts`** (React Flow's MiniMap sets its swatch via an SVG
+     `fill` **attribute**, where `var()` does not resolve), **`lib/og.tsx`** +
+     the icon/image routes (Satori has no CSS engine), **`lib/site.ts`** (brand
+     constants read by crawlers), **`app/layout.tsx`** (`<meta theme-color>` is
+     read by OS chrome before any CSS loads), `LanguageMenu`/`AuthForm` (flag +
+     third-party brand SVGs), `ExportView` (a print window with no stylesheet).
+     Anything else needs an `eslint-disable-next-line` **with the reason**.
+  2. **Colour means exactly one of two things.** A **semantic state**
+     (success/warning/destructive/info) or an **unordered data category**
+     (`--data-1..5`, the canvas node kinds — the one place non-semantic hue earns
+     its keep). Decorative hue is not a category: R14 deleted a six-tone rainbow
+     from the artifact `Section` headers and a twelve-entry NFR colour map,
+     because the requirement document is what the owner's **client** reads and a
+     rainbow reads as a template. Don't reintroduce one.
+  3. **Every semantic ships FOUR tokens** and the pairing is the contract:
+     `--x` (solid fill) + `--x-foreground` (text on it), `--x-subtle` (tinted
+     surface) + `--x-subtle-foreground` (text on THAT). Use the pair; never mix a
+     solid with a subtle-foreground. The old `bg-success/15 text-success` idiom
+     composited a tint onto an unknown surface and then put the *solid* colour on
+     it — which failed AA in dark mode, where the solid token is lightened for
+     dark backgrounds. Explicit colours make each chip's contrast a fixed number.
+  4. **Ordered ramps reuse the semantic ladder; they don't get new hues.** Module
+     complexity S/M/L/XL → success/info/warning/destructive (rising size = rising
+     cost). Severity is the one exception: it genuinely has **four** rungs, so
+     `--severity-high` exists between warning and destructive — collapsing `high`
+     into `destructive` would make a high finding indistinguishable from a
+     critical one, which is the distinction that decides what an owner fixes.
+  5. **Brand constants are named by ROLE, not hue** (`brand.accent`,
+     `accentDeep`, `accentBright`, `ink` in `lib/site.ts`). They were `indigo` /
+     `cyan`, and when the accent moved to teal every name became a lie that still
+     compiled. They mirror `--primary`/`--background` and are literals only
+     because Satori/favicons/`theme_color` render where no stylesheet exists —
+     **retune them together**, including the on-dark mark colours in `lib/og.tsx`
+     (an inline `#A5B4FC` there survived the repaint and shipped a purple-noded
+     logo on a teal card; verify by fetching `/opengraph-image` and *looking*).
+- **Typography — static weights, and never `-webkit-font-smoothing` (R14).**
+  Inter (Latin) + IBM Plex Sans Arabic (Arabic) + JetBrains Mono, self-hosted via
+  `next/font` in the **root** layout (the landing and share pages live outside
+  `(app)`, so loading them there would strand exactly the two surfaces a stranger
+  sees first on the fallback stack). Two rules, both learned the hard way, both
+  about **Windows** — which is most of this audience:
+  1. **Do not add `-webkit-font-smoothing: antialiased`.** It reads like polish
+     and is the opposite: on Windows it disables DirectWrite/ClearType subpixel
+     AA and forces grayscale, so text renders thin and blurry. It only ever
+     existed to tame macOS's heavy subpixel rendering, and **macOS removed
+     subpixel AA in Mojave** — so on every current OS it has no upside.
+     `text-rendering: optimizeLegibility` is out for the same reason.
+  2. **The weights are enumerated on purpose — do not drop `weight` to get the
+     variable font.** Chromium on Windows rasterises **variable** fonts with
+     grayscale AA instead of ClearType, so bold weights render smeared. Static
+     instances take the normal ClearType path. Cost: ~4 woff2 instead of 1.
+     `font-synthesis-weight: none` guards the corollary — Tailwind's
+     `font-extrabold`(800)/`font-black`(900) have no file and would faux-bold
+     (blurry by construction), so they fall back to a real weight instead.
+  Arabic gets `--leading-script: 1.85` (vs 1.6) and zero tracking, keyed off
+  **`[lang]`, not `[dir]`** — script and layout direction are different questions.
+- **Responsive + RTL — wide content adapts itself; direction is logical (R14).**
+  **Exit criteria, and it is measured, not eyeballed:** the page body must never
+  scroll sideways, at any width, in either direction, in either theme. Verified
+  by driving a real browser over 48 combinations (4 public pages × 360/768/1280 ×
+  {dark,light} × {LTR,RTL}) and asserting `documentElement.scrollWidth <=
+  clientWidth`. That check found two live overflows a screenshot pass had missed.
+  1. **`components/ui/table.tsx` does two different things at two widths, and
+     both halves are load-bearing.**
+     - **From `sm` up: it scrolls.** `overflow-x-auto` on the wrapper + a
+       **`sm:min-w-[34rem]`** floor on the `<table>`. The min-width is the half
+       people forget: the wrapper always had `overflow-auto`, but a `w-full`
+       table with no floor doesn't scroll — it **compresses**, squeezing three
+       columns to ~40px each and wrapping one word per line. Opt out with
+       `min-w-0`.
+     - **Below `sm`: it STACKS** into labelled rows (`[data-stack]` in
+       globals.css). Horizontal-scrolling a 3-column requirements table on a
+       360px phone is technically legible and practically horrible — you swipe to
+       read a priority and swipe back to see whose it was. Opt out with
+       `stack={false}`.
+     Three traps inside the stacking, each of which bit:
+     - **The cell is a GRID, not a flex row.** A cell's value is often several
+       elements (a requirement's title *and* its description); `display:flex`
+       makes them siblings in one row and they render on top of each other. It's
+       `grid-template-columns: <label> minmax(0,1fr)` with `td > * {grid-column:2}`
+       — without that forcing rule the second child auto-places back under the
+       *label*. `justify-items:start` keeps a Badge at its natural width instead
+       of stretching it into something that reads as a progress bar.
+     - **`display:block` DESTROYS a table's implicit ARIA semantics**, which is
+       why table.tsx sets explicit `role="table|rowgroup|row|columnheader|cell"`.
+       They look redundant at desktop width and are the only reason a screen
+       reader still hears rows and columns at phone width. `thead` is *clipped*
+       (sr-only), never `display:none`, so column headers stay in the a11y tree —
+       `::before` content is generated and is not reliably announced.
+     - **`data-label` is HARVESTED, not hand-written.** `TableRow` reads the
+       header row's text into a ref and stamps each body cell by index. The
+       alternative was `data-label={t('…')}` on ~100 cells — the same string
+       typed twice, guaranteed to drift. It also means the label is *translated*
+       for free (the Arabic run harvests `المعرّف`). Ordering is what makes it
+       safe: React renders `TableHeader` before `TableBody`.
+  2. **Its ancestor must be able to shrink.** A flex child needs **`min-w-0`** or
+     it adopts the table's min-width and pushes the whole page into a horizontal
+     scroll — which is why the stage-content wrapper in `ProjectStages` has it.
+     This is the trap that makes (1) look broken.
+  3. **A row holding a `whitespace-nowrap` button must be able to wrap.** Every
+     artifact header (`flex items-center justify-between` + a meta line + a
+     Download button) overflowed the page at 360px, because the button can't
+     shrink and the row couldn't wrap. They all carry `flex-wrap` now, and the
+     text block beside them carries `min-w-0`.
+  4. **AI-generated artifact text needs `dir="auto"`, and RTL is where you find
+     out you forgot.** The artifacts are server-side English; on an Arabic page
+     an English string with no `dir` inherits RTL and bidi reorders it — the
+     sentence's full stop jumps to the wrong end. The requirements/NFR/business-
+     rule cells were missing it and looked fine in every LTR screenshot.
+  5. **Logical properties, always** (`ms/me/ps/pe`, `start/end`, `text-start`).
+     R14 swept up live bugs where physical ones had shipped: toasts pinned
+     `right-4` (so they surfaced on the RTL page's *leading* edge), `TableHead`
+     used `text-left` (headers hugging the wrong edge while their cells aligned
+     right), the Select check indicator sat at `left-2` over the Arabic label,
+     `Alert`'s icon at `left-4`/`pl-7` let RTL text run underneath it, a
+     `list-disc pl-5` hung its bullets off the wrong edge, and the service/role
+     cards' `border-l` accent bar stayed on the physical left.
+     `left-1/2 -translate-x-1/2` centring is symmetric and fine.
+  6. A chevron that **rotates** to show state needs no `rtl:-scale-x-100` — it's
+     symmetric about the vertical axis. An **arrow** does.
+- **Loading = skeletons shaped like the content, never a spinner (R14).** A
+  spinner says "wait"; a skeleton says "here is what is coming, and how much".
+  `ArtifactSkeleton` (`components/shared/`) is the one loading state for every
+  standalone artifact panel — vision/roadmap/cost/threat/QA each rendered their
+  own copy-pasted `<Skeleton h-16/><Skeleton h-40/>`, which was five copies of
+  one decision **and** looked nothing like what arrived, so the page visibly
+  re-laid-out on load. It mirrors the real shape (meta row → prose section →
+  table rows); `ProjectCardSkeleton` does the same for the dashboard grid, and
+  the share page has its own document-shaped one (it is the first thing a cold
+  visitor sees). `Skeleton` shimmers rather than pulses — a pulsing block reads
+  as *disabled* — and carries `motion-reduce:animate-none`, since the shape
+  carries the meaning and the animation is only the liveness cue.
+- **`/demo-scoping-package` — the public proof (R14).** A complete client
+  scoping package, indexable, rendered by the **same `SharedProjectView`** a real
+  share link uses, from the **same fixture** the in-app example tour uses
+  (`lib/demo-scoping-package.ts`). The landing page can only *describe* the
+  output; a prospect's real question is "is what this sends my client good enough
+  to put my name on?", and only the artifact answers it — previously you had to
+  sign up, interview and generate to see one. Four things not to undo:
+  1. **It reuses the real share page.** No separate "marketing version" of the
+     artifact exists to drift out of sync, and a share-page regression shows up
+     here loudly.
+  2. **It applies the SAME owner-only redaction the server does** —
+     `redactReviewForShare()` + `budgetWarning: null`, mirroring
+     `ShareService.view`. Not for security (it's a fixture, nothing is secret)
+     but for **honesty**: showing the client-readiness findings and the budget
+     warning would show a prospect something no real client ever receives.
+  3. **It is INDEXABLE, and `/s/<token>` never will be.** The difference is
+     consent, not content: this is a fictional package we wrote to be published;
+     a share link is someone's real business idea sent to specific people. It's
+     in `publicRoutes` (→ sitemap) and earns the "client scoping" keyword
+     (POSITIONING §4.7) with something better than copy.
+  4. **`watermark: false`** — the watermark is what a *free owner's* link
+     carries; printing it on our own marketing page would advertise to ourselves
+     and show a prospect the downgraded output. `sharedAt` is a fixed date, not
+     `new Date()`: the page is statically prerendered, so a live clock would bake
+     in the build date and then quietly age.
 - **Upgrade modal.** `UpgradeProvider` exposes `useUpgrade()` → `openUpgrade({feature?})`
   (mirrors `useConfirm`): a Promise that resolves `true` once the user is on Pro.
   It runs the checkout itself (mock activates instantly; Paddle opens the
