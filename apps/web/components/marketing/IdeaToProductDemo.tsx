@@ -102,7 +102,7 @@ export function IdeaToProductDemo() {
         <span className="h-2.5 w-2.5 rounded-full bg-destructive/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-warning/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-success/70" />
-        <span className="ml-2 truncate font-mono text-xs text-muted-foreground">
+        <span className="ms-2 truncate font-mono text-xs text-muted-foreground">
           archivato / {current.file}
         </span>
         <span className="ml-auto flex items-center gap-2">

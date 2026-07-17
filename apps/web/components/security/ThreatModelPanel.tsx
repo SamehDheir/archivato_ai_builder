@@ -6,7 +6,7 @@ import { ShieldAlert } from 'lucide-react';
 import type { ThreatModel, UpstreamRevisions } from '@archivato/shared';
 import { threatModelApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ArtifactSkeleton } from '@/components/shared/ArtifactSkeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ThreatModelView } from '@/components/security/ThreatModelView';
 import { StaleNotice } from '@/components/project/StaleNotice';
@@ -65,12 +65,7 @@ export function ThreatModelPanel({
   }
 
   if (!loaded) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
+    return <ArtifactSkeleton />;
   }
 
   if (!model) {

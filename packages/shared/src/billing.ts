@@ -29,6 +29,12 @@ export type BillingProviderId = 'mock' | 'paddle';
 /** Static description of a plan. */
 export interface PlanInfo {
   plan: SubscriptionPlan;
+  /**
+   * Display name. Deliberately decoupled from `plan` (the internal id): the tiers
+   * are marketed as **Starter / Team** while the ids stay `free` / `pro`, because
+   * the id is what every subscription row, `isPro`, `ProGuard`, and the Paddle
+   * mapping key on. Rename the label, never the id.
+   */
   name: string;
   /** Price in USD (0 for free). For paid plans this is the MONTHLY price. */
   priceUsd: number;
@@ -37,12 +43,44 @@ export interface PlanInfo {
    * `priceUsd × 12`; `undefined` for free. The client shows the savings.
    */
   annualPriceUsd?: number;
-  /** How many projects the plan allows. */
-  projectQuota: number;
-  /** `once` = lifetime quota (free); `month` = quota resets each billing cycle. */
+  /**
+   * How many projects the plan allows **per calendar month** (see
+   * `startOfQuotaPeriod`). **`null` = unlimited** — never 0, and never a huge
+   * number standing in for "no limit": the check must skip entirely, not compare
+   * against a sentinel that a future edit could accidentally enforce.
+   */
+  projectQuota: number | null;
+  /** How the plan is CHARGED: `once` = no recurring charge (free), `month` = billed monthly. */
   interval: 'once' | 'month';
   /** Short marketing bullets for the pricing UI. */
   features: string[];
+}
+
+/**
+ * Start of the current quota period — the **UTC** calendar month.
+ *
+ * The allowance is "1 design per month", which means two places must agree on
+ * where the month starts: the server's 402 at project creation, and the client's
+ * "used X of Y" banner. If each used its own local clock they would disagree for
+ * anyone whose timezone straddles the boundary — the user would be told they have
+ * a design left and then be refused. Hence one shared, UTC-based rule.
+ */
+export function startOfQuotaPeriod(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+/** How many of these creation timestamps fall inside the current quota period. */
+export function countInQuotaPeriod(
+  createdAt: readonly (string | Date)[],
+  now: Date = new Date(),
+): number {
+  const start = startOfQuotaPeriod(now).getTime();
+  return createdAt.filter((d) => new Date(d).getTime() >= start).length;
+}
+
+/** Whether a plan's quota is unlimited (the check is skipped entirely). */
+export function isUnlimitedQuota(quota: number | null): boolean {
+  return quota === null;
 }
 
 /** The price a plan charges for a given cadence (annual falls back to 12× monthly). */
@@ -79,14 +117,16 @@ export function annualSavings(plan: PlanInfo): {
 }
 
 /**
- * The signed-in user's live plan. `projectQuota` is the max number of projects
- * they may own; the client compares it against the actual project count (owned
- * projects are the meter — see the interview/projects list).
+ * The signed-in user's live plan. `projectQuota` is how many projects they may
+ * CREATE per calendar month (`null` = unlimited); the client compares it against
+ * the projects created in the current period (the project list is still the meter
+ * — see `countInQuotaPeriod` and the interview/projects list).
  */
 export interface SubscriptionView {
   plan: SubscriptionPlan;
   status: SubscriptionStatus;
-  projectQuota: number;
+  /** Projects creatable per calendar month; `null` = unlimited. */
+  projectQuota: number | null;
   /** End of the current pro billing period (ISO), or null for free. */
   periodEnd: string | null;
   cancelAtPeriodEnd: boolean;
@@ -229,35 +269,32 @@ export interface CheckoutResponse {
 export const PLANS: Record<SubscriptionPlan, PlanInfo> = {
   free: {
     plan: 'free',
-    name: 'Free',
+    // Marketed as "Starter"; the id stays `free` (see PlanInfo.name).
+    name: 'Starter',
     priceUsd: 0,
-    projectQuota: 1,
+    projectQuota: 1, // per calendar month
     interval: 'once',
     features: [
-      '1 client scoping',
-      'Adaptive AI interview → scoping document',
-      'System & database design (with diagrams & canvas)',
-      'Product Vision',
-      'Client-ready share link (carries a "Built with Archivato" watermark)',
+      '1 design per month',
+      'Full interview, requirements and architecture',
+      'Shareable client link',
+      '"Built with Archivato" watermark on shared links',
     ],
   },
   pro: {
     plan: 'pro',
-    name: 'Pro',
-    priceUsd: 19,
-    annualPriceUsd: 182, // 20% off $228 (2+ months free); $15.17/mo effective
-    projectQuota: 5,
+    // Marketed as "Team"; the id stays `pro`.
+    name: 'Team',
+    priceUsd: 79,
+    annualPriceUsd: 758, // 20% off $948 (2+ months free); $63.17/mo effective
+    projectQuota: null, // unlimited
     interval: 'month',
     features: [
-      'Up to 5 client scopings (Free includes 1)',
-      'Client share link with NO Archivato watermark — your brand only',
-      'REST API design — endpoints, request/response schemas & status codes',
-      'AI Architect Review — scored on security, scalability, performance & cost, with critical-issue callouts',
-      'Cost estimate & implementation roadmap — what it costs to run, and how long it takes',
-      'Interactive OpenAPI / Swagger API explorer',
-      'Refine the whole design by chat — every change versioned',
-      'Export to JSON, Markdown & OpenAPI (import straight into Postman)',
-      'Scaffold a ready-to-build project repo + Print / Save as PDF',
+      'Unlimited designs',
+      'All exports — OpenAPI, SQL, Postman',
+      'No watermark on client links',
+      'Runnable code scaffold',
+      'Cost estimates and implementation roadmap',
     ],
   },
 };

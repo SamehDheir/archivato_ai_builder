@@ -16,7 +16,8 @@ describe('NotificationsService', () => {
       type: 'ticket_created',
       title,
       body: 'body',
-      link: '/support/tickets/1',
+      // Mirrors a real link (`/support/:id` — the web app's actual ticket route).
+      link: '/support/1',
     });
 
   it('creates notifications and reports the unread count', async () => {

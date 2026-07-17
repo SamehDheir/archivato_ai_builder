@@ -4,7 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { DecisionExplanation, DecisionRef, SystemDesign } from '@archivato/shared';
+import {
+  applySystemDesignPatch,
+  type DecisionExplanation,
+  type DecisionRef,
+  type PatchSection,
+  type SystemDesign,
+} from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -61,6 +67,9 @@ export class SystemDesignService {
       idea: session.input.idea,
       intent: session.intent,
       requirements,
+      // Slots ground the design in the deal's constraints (budget/timeline/scale)
+      // — a derived cache, possibly absent on legacy/plan-mode runs, so tolerated.
+      slots: session.slots ?? undefined,
     });
 
     return this.designs.upsert(design);
@@ -98,6 +107,32 @@ export class SystemDesignService {
     return design;
   }
 
+  /**
+   * Apply an **approved** review-fix patch (R11) to the named sections. Only the
+   * patchable sections are written (`techStack`, `constraintCompliance`); the
+   * services list is deliberately not patchable, so the R8 analysis and every
+   * module's complexity survive untouched without any carry-over logic.
+   *
+   * The fresh `generatedAt` is what raises the existing staleness flags downstream.
+   * The caller is responsible for having obtained explicit approval.
+   */
+  async applyPatch(
+    sessionId: string,
+    sections: PatchSection[],
+  ): Promise<SystemDesign> {
+    const existing = await this.designs.findBySessionId(sessionId);
+    if (!existing) {
+      throw new ConflictException(
+        'Generate the system design before patching it.',
+      );
+    }
+    return this.designs.upsert({
+      ...applySystemDesignPatch(existing, sections),
+      sessionId,
+      generatedAt: new Date().toISOString(),
+    });
+  }
+
   /** Persist a user-edited system design (must already exist). */
   async save(
     sessionId: string,
@@ -109,8 +144,26 @@ export class SystemDesignService {
         'Generate the system design before editing it.',
       );
     }
+    // The structured editor doesn't touch the R8 analysis (build-vs-buy, phased
+    // architecture, constraint compliance) or a module's complexity, so an edit
+    // must not wipe them — carry the design-level fields over when omitted, and
+    // restore each service's complexity from the stored design by name.
+    const priorByName = new Map(existing.services.map((s) => [s.name, s]));
+    const services = edited.services.map((s) => {
+      const prior = priorByName.get(s.name);
+      return {
+        ...s,
+        complexity: s.complexity ?? prior?.complexity,
+        complexityRationale: s.complexityRationale ?? prior?.complexityRationale,
+      };
+    });
     return this.designs.upsert({
       ...edited,
+      services,
+      buildVsBuy: edited.buildVsBuy ?? existing.buildVsBuy,
+      phasedArchitecture: edited.phasedArchitecture ?? existing.phasedArchitecture,
+      constraintCompliance:
+        edited.constraintCompliance ?? existing.constraintCompliance,
       sessionId,
       generatedAt: new Date().toISOString(),
     });

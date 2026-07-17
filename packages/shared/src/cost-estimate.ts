@@ -10,6 +10,8 @@
  */
 
 import type { DerivedArtifact } from './freshness';
+import type { BudgetWarning, EffortEstimate } from './effort';
+import type { BuildVsBuyCapability, SystemDesign } from './system-design';
 
 /** The user scales we project a monthly bill at. */
 export const COST_USER_SCALES = [100, 1000, 10000] as const;
@@ -88,6 +90,142 @@ export interface CostEstimate extends DerivedArtifact {
   /** Best overall value (lowest summed cost across all scales). */
   recommended: CostProviderId;
   disclaimer: string;
+  /**
+   * Person-effort estimate (R9). Additive/optional — absent on pre-R9 stored
+   * estimates, so every consumer must tolerate its absence.
+   */
+  effort?: EffortEstimate;
+  /** Third-party SaaS subscription lines implied by build-vs-buy (R9). */
+  serviceSubscriptions?: ServiceCostLine[];
+  /**
+   * OWNER-ONLY budget reality check (R9). **Must be stripped from the public
+   * share payload server-side** — a deal risk is not for the client's eyes.
+   */
+  budgetWarning?: BudgetWarning | null;
+}
+
+// --- Service subscriptions + regional payment fees (R9) ---------------------
+
+/** How a service line's monthly figure is expressed. */
+export type ServiceCostBasis = 'flat' | 'usage-based' | 'unknown';
+
+/** A third-party SaaS line implied by a build-vs-buy "buy" recommendation. */
+export interface ServiceCostLine {
+  capability: BuildVsBuyCapability;
+  label: string;
+  /** Typical entry-tier monthly USD, or null when usage-based / unknown. */
+  monthlyUsd: number | null;
+  basis: ServiceCostBasis;
+  /** The concrete service suggested by build-vs-buy (e.g. "Stripe"). */
+  suggestedService?: string;
+  /** Regional payment-processing fee note (payments, when the market is known). */
+  feeNote?: string;
+}
+
+/**
+ * Static per-capability cost hints for bought services. `monthlyUsd: null` +
+ * `usage-based` renders as "usage-based", never a misleading $0 — the same
+ * "unknown price → unknown cost" convention as the LLM metering.
+ */
+export const SERVICE_COST_HINTS: Record<
+  BuildVsBuyCapability,
+  { label: string; monthlyUsd: number | null; basis: ServiceCostBasis }
+> = {
+  auth: { label: 'Managed authentication', monthlyUsd: null, basis: 'usage-based' },
+  payments: { label: 'Payment processing', monthlyUsd: null, basis: 'usage-based' },
+  notifications: {
+    label: 'Email / SMS / push delivery',
+    monthlyUsd: null,
+    basis: 'usage-based',
+  },
+  file_storage: { label: 'Object storage & CDN', monthlyUsd: null, basis: 'usage-based' },
+  maps_geo: { label: 'Maps & geocoding API', monthlyUsd: null, basis: 'usage-based' },
+  search: { label: 'Hosted search', monthlyUsd: 29, basis: 'flat' },
+};
+
+/**
+ * Regional payment-processing fee bands (market-generic notes, not exact math).
+ * Keyed by a coarse market bucket. Extend as target markets are added.
+ */
+export const REGIONAL_SERVICES: Record<
+  string,
+  { paymentsFeeNote: string; approxFeePct: number }
+> = {
+  mena: {
+    paymentsFeeNote:
+      'Regional PSPs (e.g. PayTabs, Tap) typically charge ~2.5–3% per transaction.',
+    approxFeePct: 2.75,
+  },
+  us: {
+    paymentsFeeNote: 'US card processing is ~2.9% + $0.30 per transaction.',
+    approxFeePct: 2.9,
+  },
+  eu: {
+    paymentsFeeNote: 'EU/SEPA card processing is ~1.5–2.5% per transaction.',
+    approxFeePct: 2.0,
+  },
+  global: {
+    paymentsFeeNote: 'International card processing is ~2.9–3.9% per transaction.',
+    approxFeePct: 3.4,
+  },
+};
+
+/** Normalize a free-text target market to a REGIONAL_SERVICES bucket, or null. */
+export function resolveRegion(
+  targetMarket: string | undefined | null,
+): { paymentsFeeNote: string; approxFeePct: number } | null {
+  if (!targetMarket) return null;
+  const t = targetMarket.toLowerCase();
+  if (/mena|middle east|gulf|gcc|saudi|emirat|uae|egypt|jordan|arab/.test(t)) {
+    return REGIONAL_SERVICES.mena;
+  }
+  if (/\bus\b|usa|united states|america|canada|north america/.test(t)) {
+    return REGIONAL_SERVICES.us;
+  }
+  if (/\beu\b|europe|european|uk|britain|germany|france|sepa/.test(t)) {
+    return REGIONAL_SERVICES.eu;
+  }
+  if (/global|worldwide|international|multiple/.test(t)) {
+    return REGIONAL_SERVICES.global;
+  }
+  return null;
+}
+
+/**
+ * The monthly SaaS subscription lines a design implies — one per build-vs-buy
+ * "buy" recommendation. Deterministic. When the target market is known, the
+ * payments line carries a regional fee note.
+ */
+export function buildServiceCostLines(
+  design: Pick<SystemDesign, 'buildVsBuy'>,
+  options?: { targetMarket?: string },
+): ServiceCostLine[] {
+  const region = resolveRegion(options?.targetMarket);
+  const lines: ServiceCostLine[] = [];
+  for (const item of design.buildVsBuy ?? []) {
+    if (item.recommendation !== 'buy') continue;
+    const hint = SERVICE_COST_HINTS[item.capability];
+    const line: ServiceCostLine = hint
+      ? {
+          capability: item.capability,
+          label: hint.label,
+          monthlyUsd: hint.monthlyUsd,
+          basis: hint.basis,
+          suggestedService: item.suggestedService,
+        }
+      : {
+          capability: item.capability,
+          label: item.capability,
+          monthlyUsd: null,
+          basis: 'unknown',
+          suggestedService: item.suggestedService,
+        };
+    if (item.capability === 'payments' && region) {
+      line.feeNote = region.paymentsFeeNote;
+    }
+    lines.push(line);
+  }
+  return lines;
 }
 
 /** The design-derived inputs the estimator needs. */

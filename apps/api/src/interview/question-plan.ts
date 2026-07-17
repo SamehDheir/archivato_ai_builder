@@ -75,6 +75,36 @@ export const QUESTION_PLAN: readonly InterviewQuestion[] = [
     prompt: 'Any architecture preference?',
     options: ['Monolith', 'Microservices', 'No preference'],
   },
+  // Phase F — Commercial (R6). Budget + timeline are new to the interview's
+  // scope: a dev shop can't scope a bid without them. In pure PLAN mode these sit
+  // past the 9-question hard cap (`MAX_ADAPTIVE_QUESTIONS`), so a fully offline
+  // run won't reach them — that's an accepted degradation (plan mode fills no
+  // slots either). The adaptive path is what guarantees they're covered: the
+  // model must fill or open-question both before it may finish.
+  {
+    id: 'f1',
+    phase: InterviewPhase.Commercial,
+    prompt: 'What budget range does the client have in mind for the build?',
+    options: [
+      'Under $5k',
+      '$5k – $20k',
+      '$20k – $50k',
+      'Over $50k',
+      'Not discussed yet',
+    ],
+  },
+  {
+    id: 'f2',
+    phase: InterviewPhase.Commercial,
+    prompt: 'What timeline does the client need it delivered in?',
+    options: [
+      'ASAP / weeks',
+      '1 – 3 months',
+      '3 – 6 months',
+      'Flexible',
+      'Not discussed yet',
+    ],
+  },
 ];
 
 export const TOTAL_QUESTIONS = QUESTION_PLAN.length;

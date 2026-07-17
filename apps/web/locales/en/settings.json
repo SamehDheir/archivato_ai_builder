@@ -38,13 +38,9 @@
     "title": "Plan & billing",
     "description": "Projects are metered by plan — a project counts once you confirm its interview.",
     "planLabel": "{{plan}} plan",
-    "planFree": "Free",
-    "planPro": "Pro",
     "proBadge": "Pro",
     "annualBadge": "Annual",
     "cancelsBadge": "cancels at period end",
-    "usage_one": "{{used}} of {{quota}} project used",
-    "usage_other": "{{used}} of {{quota}} projects used",
     "renews": "renews {{date}}",
     "ends": "ends {{date}}",
     "cancel": "Cancel Pro",
@@ -60,7 +56,9 @@
     "cancelConfirm": "Cancel subscription",
     "cancelKeep": "Keep Pro",
     "canceled": "Subscription canceled",
-    "cancelFailed": "Could not cancel"
+    "cancelFailed": "Could not cancel",
+    "usageMonth": "{{used}} of {{quota}} designs used this month",
+    "usageUnlimited": "Unlimited designs"
   },
   "security": {
     "changeTitle": "Change password",

@@ -35,13 +35,45 @@ export const sitePipeline = [
   'Proposal',
 ] as const;
 
-/** Brand colors shared by the OG card and the web manifest. */
+/**
+ * Brand colours, shared by the logo, the favicon tile, the OG card and the web
+ * manifest.
+ *
+ * These MIRROR the `--primary` / `--background` tokens in app/globals.css and
+ * must be kept in step with them — they are literals only because every consumer
+ * renders where no stylesheet exists: Satori (the OG card) has no CSS engine, a
+ * favicon is a standalone file, and `theme_color` is read by OS browser chrome
+ * before any CSS loads. There is nothing to resolve a `var()` against.
+ *
+ * The keys are deliberately hue-free. They used to be `indigo` / `indigoDeep` /
+ * `cyan`, and when R14 moved the accent to teal every one of those names became
+ * a lie while still compiling — the fastest way to a codebase where the constant
+ * says indigo and the pixel is teal. Name the ROLE, not the colour.
+ */
 export const brand = {
-  indigo: '#6366F1',
-  indigoDeep: '#4338CA',
-  cyan: '#22D3EE',
-  ink: '#0D0F16',
+  /** The mark's strokes. Mid-weight on purpose: legible on white AND on ink. */
+  accent: '#1598AC',
+  /** Nodes + the favicon tile's gradient end. */
+  accentDeep: '#0A4E5C',
+  /** The apex + on-dark accents. Mirrors `--primary` in the dark theme. */
+  accentBright: '#2CCBDD',
+  /** The dark canvas. Mirrors `--background` in the dark theme. */
+  ink: '#0D1317',
 } as const;
 
-/** Public routes worth putting in the sitemap (everything else is auth-gated). */
-export const publicRoutes = ['/', '/login', '/register', '/privacy', '/terms'] as const;
+/**
+ * Public routes worth putting in the sitemap (everything else is auth-gated).
+ *
+ * `/demo-scoping-package` is here on purpose and `/s/<token>` never will be:
+ * the demo is a fictional package we wrote to be published, while a real share
+ * link is someone's business idea, sent to specific people (robots.ts disallows
+ * `/s/` and the page carries `noindex`). The difference is consent, not content.
+ */
+export const publicRoutes = [
+  '/',
+  '/demo-scoping-package',
+  '/login',
+  '/register',
+  '/privacy',
+  '/terms',
+] as const;

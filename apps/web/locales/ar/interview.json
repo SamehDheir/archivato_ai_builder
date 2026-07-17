@@ -16,6 +16,10 @@
   "summaryHelp": "بلغت نسبة الاكتمال الحد المطلوب. راجِع وأكّد لتثبيت المتطلبات قبل بدء التصميم.",
   "confirm": "تأكيد المتطلبات",
   "confirming": "جارٍ التأكيد…",
+  "extended": {
+    "label": "تضمين تحليل الأمان وخطة الاختبار",
+    "hint": "مُوصى به للمشاريع الأكبر. تقدر تفعّله لاحقًا."
+  },
   "progress": {
     "completeness": "اكتمال المتطلبات",
     "status": "الحالة: {{status}}",
@@ -31,7 +35,8 @@
     "business_logic": "منطق العمل",
     "features": "المزايا",
     "scale": "الحجم",
-    "technical": "التقنية"
+    "technical": "التقنية",
+    "commercial": "التجاري"
   },
   "summary": {
     "goal": "الهدف",
@@ -41,5 +46,31 @@
     "constraints": "القيود",
     "assumptions": "الافتراضات",
     "empty": "—"
+  },
+  "slots": {
+    "title": "ما فهمناه",
+    "inferred": "مفهوم من إجاباتك — صحّحه إذا لزم.",
+    "edit": "تعديل",
+    "save": "حفظ",
+    "cancel": "إلغاء"
+  },
+  "slot": {
+    "business_domain": "مجال العمل",
+    "target_users_roles": "المستخدمون والأدوار",
+    "core_workflows": "سير العمل الأساسي",
+    "data_entities": "البيانات الرئيسية",
+    "integrations": "التكاملات",
+    "scale_expectations": "الحجم",
+    "constraints": "القيود",
+    "budget_range": "نطاق الميزانية",
+    "timeline": "الجدول الزمني",
+    "existing_assets": "الأصول الحالية"
+  },
+  "openQuestions": {
+    "title": "أسئلة لعميلك",
+    "help": "لم تُجب عليها المقابلة — أرسلها لعميلك واملأ الإجابات.",
+    "copy": "نسخ السؤال",
+    "copyAll": "نسخ الكل",
+    "copyFailed": "تعذّر النسخ إلى الحافظة"
   }
 }

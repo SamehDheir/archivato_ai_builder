@@ -48,6 +48,9 @@ interface Harness {
   visions: InMemoryProductVisionRepository;
   costs: InMemoryCostEstimateRepository;
   roadmaps: InMemoryProjectRoadmapRepository;
+  reviews: InMemoryReviewReportRepository;
+  threats: InMemoryThreatModelRepository;
+  qaPlans: InMemoryQaPlanRepository;
   users: InMemoryUserRepository;
   billing: BillingService;
   share: ShareService;
@@ -106,6 +109,9 @@ function makeHarness(): Harness {
     new InMemoryBillingEventRepository(),
   );
 
+  const threatRepo = new InMemoryThreatModelRepository();
+  const qaRepo = new InMemoryQaPlanRepository();
+
   const share = new ShareService(
     new InMemoryShareLinkRepository(),
     sessionRepo,
@@ -117,8 +123,8 @@ function makeHarness(): Harness {
     visionRepo,
     costRepo,
     roadmapRepo,
-    new InMemoryThreatModelRepository(),
-    new InMemoryQaPlanRepository(),
+    threatRepo,
+    qaRepo,
     billing,
   );
   return {
@@ -133,6 +139,9 @@ function makeHarness(): Harness {
     visions: visionRepo,
     costs: costRepo,
     roadmaps: roadmapRepo,
+    reviews: reviewRepo,
+    threats: threatRepo,
+    qaPlans: qaRepo,
     users: userRepo,
     billing,
     share,
@@ -168,6 +177,29 @@ async function confirmedSession(h: Harness): Promise<string> {
   }
   await h.interview.confirm(sessionId);
   return sessionId;
+}
+
+/** Store a minimal threat model + QA plan, as their stages would have. */
+async function seedExtendedArtifacts(h: Harness, sessionId: string) {
+  const generatedAt = new Date().toISOString();
+  await h.threats.upsert({
+    sessionId,
+    generatedAt,
+    summary: 'A STRIDE pass.',
+    threats: [],
+    trustBoundaries: [],
+    assumptions: [],
+  });
+  await h.qaPlans.upsert({
+    sessionId,
+    generatedAt,
+    summary: 'A test plan.',
+    strategy: ['Test the booking flow.'],
+    suites: [],
+    coverageGoals: [],
+    tooling: [],
+    outOfScope: [],
+  });
 }
 
 /** Everything a **Free** owner can generate: no API design, no review. */
@@ -239,6 +271,29 @@ describe('ShareService', () => {
     expect(shared.requirements.functional.length).toBeGreaterThan(0);
   });
 
+  // R12 — a project that switched the extended artifacts off doesn't put them in
+  // front of a client, even if they were generated before the owner turned them
+  // off. Enforced in the payload, not by not-generating alone.
+  it('hides the threat model + QA plan when the project opted out', async () => {
+    const h = makeHarness();
+    const sessionId = await freePipeline(h);
+    await seedExtendedArtifacts(h, sessionId);
+
+    // On by default: both cross.
+    const on = await h.share.view((await h.share.create(sessionId)).token);
+    expect(on.threatModel).not.toBeNull();
+    expect(on.qaPlan).not.toBeNull();
+
+    await h.interview.update(sessionId, { generateExtendedArtifacts: false });
+
+    const off = await h.share.view((await h.share.create(sessionId)).token);
+    expect(off.threatModel).toBeNull();
+    expect(off.qaPlan).toBeNull();
+    // The rest of the proposal is untouched — this hides two sections, not a design.
+    expect(off.requirements.functional.length).toBeGreaterThan(0);
+    expect(off.systemDesign.services.length).toBeGreaterThan(0);
+  });
+
   // The page leads with these three — they are what the *client* reads — so they
   // have to actually cross the public boundary, with the session id stripped like
   // every other artifact.
@@ -278,6 +333,13 @@ describe('ShareService', () => {
       cheapestByScale: {},
       recommended: 'render',
       disclaimer: 'Ballpark.',
+      // OWNER-ONLY: a budget warning must never reach the public payload.
+      budgetWarning: {
+        severity: 'critical',
+        messageKey: 'cost.budget.over',
+        values: { estimatedLowUsd: 14400, budgetMaxUsd: 5000, overPct: 188 },
+        links: { mvpPhase: false, outOfScope: false },
+      },
     });
 
     const shared = await h.share.view((await h.share.create(sessionId)).token);
@@ -286,12 +348,87 @@ describe('ShareService', () => {
     expect(shared.vision?.vision).toBe('A booking system for clinics.');
     expect(shared.roadmap?.totalEstimate).toBe('~10 wks');
     expect(shared.costEstimate?.recommended).toBe('render');
+    // The owner-only budget warning is stripped server-side.
+    expect(shared.costEstimate?.budgetWarning).toBeNull();
+    // Scoped to the estimate, and keyed on a distinctive field name rather than
+    // the bare number "188" — the random token and the ISO timestamps are full of
+    // digits, so a short numeric needle matches by chance (see the review test).
+    expect(JSON.stringify(shared.costEstimate)).not.toContain('overPct');
 
     // The internal session id must not ride out on any of them.
     expect(shared.vision?.sessionId).toBe(token);
     expect(shared.roadmap?.sessionId).toBe(token);
     expect(shared.costEstimate?.sessionId).toBe(token);
     expect(JSON.stringify(shared)).not.toContain(sessionId);
+  });
+
+  // R10 — the client-readiness axis is a DEAL-risk lens (ambiguous scope, an
+  // effort/timeline conflict): it is for the owner, never the client reading the
+  // proposal. The payload IS the boundary, so it's stripped server-side — exactly
+  // like R9's budget warning.
+  it('never leaks client-readiness / consistency findings onto the public page', async () => {
+    const h = makeHarness();
+    const sessionId = await fullPipeline(h);
+
+    await h.reviews.upsert({
+      sessionId,
+      generatedAt: new Date().toISOString(),
+      overallScore: 80,
+      scores: {
+        security: 80,
+        scalability: 80,
+        performance: 80,
+        cost: 80,
+        clientReadiness: 55,
+      },
+      scalabilityScore: 80,
+      summary: 'Solid.',
+      securityIssues: [{ title: 'Public security note', detail: 'd', severity: 'low' }],
+      scalabilityIssues: [],
+      performanceRisks: [],
+      costOptimizations: [],
+      missingFeatures: [],
+      recommendations: [],
+      clientReadinessIssues: [
+        {
+          title: 'SECRET_DEAL_RISK',
+          detail: 'The payout window is ambiguous.',
+          severity: 'high',
+          suggestedResolution: 'tighten_requirement',
+          resolutionHint: 'Pin the payout window.',
+        },
+      ],
+      consistencyFindings: [
+        {
+          title: 'SECRET_TIMELINE_CONFLICT',
+          detail: 'Effort exceeds the stated timeline.',
+          severity: 'high',
+          source: 'automated',
+          artifacts: ['effort', 'timeline'],
+        },
+      ],
+      clientReadinessNote: 'SECRET_NOTE',
+    });
+
+    const shared = await h.share.view((await h.share.create(sessionId)).token);
+    const payload = JSON.stringify(shared);
+
+    expect(shared.review?.clientReadinessIssues).toEqual([]);
+    expect(shared.review?.consistencyFindings).toEqual([]);
+    expect(shared.review?.clientReadinessNote).toBeUndefined();
+    expect(shared.review?.scores.clientReadiness).toBeUndefined();
+    expect(payload).not.toContain('SECRET_DEAL_RISK');
+    expect(payload).not.toContain('SECRET_TIMELINE_CONFLICT');
+    expect(payload).not.toContain('SECRET_NOTE');
+    // Scope the score check to `scores` rather than searching the whole payload
+    // for "55": the token is 43 random base64url chars and `sharedAt` is full of
+    // digits, so a bare two-digit needle matches by chance and the test fails on
+    // an unlucky token (it did). Assert the KEY is gone from the object that
+    // would carry it — distinctive, and it can't collide with random data.
+    expect(JSON.stringify(shared.review?.scores)).not.toContain('clientReadiness');
+    // …while the engineering review still crosses (it lives in the appendix).
+    expect(shared.review?.securityIssues[0].title).toBe('Public security note');
+    expect(shared.review?.overallScore).toBe(80);
   });
 
   // The watermark is the free tier's price for a link that IS free — and it's the

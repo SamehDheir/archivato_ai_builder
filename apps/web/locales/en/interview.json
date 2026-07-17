@@ -16,6 +16,10 @@
   "summaryHelp": "Completeness reached the threshold. Review and confirm to lock the requirements before design begins.",
   "confirm": "Confirm requirements",
   "confirming": "Confirming…",
+  "extended": {
+    "label": "Include security threat model & QA plan",
+    "hint": "Recommended for larger projects. You can turn this on later."
+  },
   "progress": {
     "completeness": "Requirement completeness",
     "status": "Status: {{status}}",
@@ -31,7 +35,8 @@
     "business_logic": "business logic",
     "features": "features",
     "scale": "scale",
-    "technical": "technical"
+    "technical": "technical",
+    "commercial": "commercial"
   },
   "summary": {
     "goal": "Goal",
@@ -41,5 +46,31 @@
     "constraints": "Constraints",
     "assumptions": "Assumptions",
     "empty": "—"
+  },
+  "slots": {
+    "title": "What we understood",
+    "inferred": "Understood from your answers — correct if needed.",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "slot": {
+    "business_domain": "Business domain",
+    "target_users_roles": "Users & roles",
+    "core_workflows": "Core workflows",
+    "data_entities": "Key data",
+    "integrations": "Integrations",
+    "scale_expectations": "Scale",
+    "constraints": "Constraints",
+    "budget_range": "Budget range",
+    "timeline": "Timeline",
+    "existing_assets": "Existing assets"
+  },
+  "openQuestions": {
+    "title": "Questions for your client",
+    "help": "The interview couldn't answer these — send them to your client and fill in the answers.",
+    "copy": "Copy question",
+    "copyAll": "Copy all",
+    "copyFailed": "Couldn't copy to the clipboard"
   }
 }

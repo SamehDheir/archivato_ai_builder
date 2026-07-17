@@ -33,15 +33,15 @@ describe('BillingService', () => {
     expect(await service.getProjectQuota(userId)).toBe(1);
   });
 
-  it('upgrades to Pro (mock) → quota becomes 5, monthly cadence by default', async () => {
+  it('upgrades to Pro (mock) → quota becomes unlimited, monthly cadence by default', async () => {
     const res = await service.startCheckout(userId);
     expect(res.status).toBe('activated');
 
     const view = await service.getView(userId);
     expect(view.plan).toBe('pro');
-    expect(view.projectQuota).toBe(5);
+    expect(view.projectQuota).toBeNull();
     expect(view.billingCycle).toBe('monthly');
-    expect(await service.getProjectQuota(userId)).toBe(5);
+    expect(await service.getProjectQuota(userId)).toBeNull();
 
     // Monthly period is ~30 days out.
     const sub = await subs.findByUserId(userId);
@@ -58,7 +58,7 @@ describe('BillingService', () => {
 
     const view = await service.getView(userId);
     expect(view.plan).toBe('pro');
-    expect(view.projectQuota).toBe(5); // same entitlement as monthly
+    expect(view.projectQuota).toBeNull(); // same (unlimited) entitlement as monthly
     expect(view.billingCycle).toBe('annual');
 
     const sub = await subs.findByUserId(userId);
@@ -77,7 +77,7 @@ describe('BillingService', () => {
     const afterCancel = await service.cancel(userId);
     expect(afterCancel.plan).toBe('pro');
     expect(afterCancel.cancelAtPeriodEnd).toBe(true);
-    expect(await service.getProjectQuota(userId)).toBe(5);
+    expect(await service.getProjectQuota(userId)).toBeNull();
 
     // Fast-forward past the period end → effective plan drops to Free.
     const sub = await subs.findByUserId(userId);
@@ -92,7 +92,7 @@ describe('BillingService', () => {
     await service.adminGrantPro(userId, 'admin-1');
     const view = await service.getView(userId);
     expect(view.plan).toBe('pro');
-    expect(view.projectQuota).toBe(5);
+    expect(view.projectQuota).toBeNull();
     // Comp grant has no expiry → still Pro far in the future.
     expect(view.periodEnd).toBeNull();
 

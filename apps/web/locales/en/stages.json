@@ -2,12 +2,17 @@
   "requirements": {
     "title": "Requirement Document",
     "meta": "{{functional}} functional · {{nonFunctional}} non-functional · {{roles}} roles · generated {{date}}",
+    "executiveSummary": "Executive summary",
     "functional": "Functional requirements",
     "nonFunctional": "Non-functional requirements",
     "roles": "User roles",
+    "outOfScope": "Out of scope",
+    "assumptionsAndOpenQuestions": "Assumptions & open questions",
+    "impactIfWrong": "If this is wrong:",
     "businessRules": "Business rules",
     "constraints": "Constraints",
     "assumptions": "Assumptions",
+    "openQuestions": "Open questions for the client",
     "col": {
       "id": "ID",
       "requirement": "Requirement",
@@ -26,6 +31,34 @@
     "architecture": "Architecture",
     "techStack": "Tech stack",
     "services": "Services",
+    "buildVsBuy": {
+      "title": "Build vs. buy",
+      "capability": "Capability",
+      "decision": "Decision",
+      "rationale": "Recommendation",
+      "build": "Build",
+      "buy": "Buy",
+      "cap": {
+        "auth": "Authentication",
+        "payments": "Payments",
+        "notifications": "Notifications",
+        "file_storage": "File storage",
+        "maps_geo": "Maps & location",
+        "search": "Search"
+      }
+    },
+    "phased": {
+      "title": "Phased plan",
+      "lead": "The scale ambition runs ahead of the initial budget and timeline, so the build is phased rather than over-built on day one.",
+      "mvp": "MVP",
+      "growth": "Growth path",
+      "migration": "Migration notes"
+    },
+    "compliance": {
+      "title": "Constraint compliance",
+      "constraint": "Constraint",
+      "howAddressed": "How it's addressed"
+    },
     "col": {
       "layer": "Layer",
       "technology": "Technology",
@@ -38,13 +71,14 @@
       "microservices": "Microservices"
     },
     "explain": {
-      "button": "Explain",
-      "loadingTitle": "Explaining this decision…",
+      "button": "Why this choice — for your client",
+      "loadingTitle": "Preparing your answer…",
+      "intro": "Use this when your client asks why you chose this.",
       "close": "Close",
       "tradeoffs": "Tradeoffs",
       "alternatives": "Alternatives considered",
       "risks": "Risks to watch",
-      "disclaimer": "AI-generated rationale — a starting point for discussion, not a verdict."
+      "disclaimer": "AI-generated rationale — a starting point for your answer, not a verdict."
     }
   },
   "database": {
@@ -75,7 +109,12 @@
     "meta": "{{modules}} modules · {{endpoints}} endpoints · generated {{date}}",
     "download": "Download API design",
     "request": "Request",
-    "response": "Response"
+    "response": "Response",
+    "coverage": {
+      "summary": "{{covered}} entities covered · {{excluded}} excluded",
+      "needsReview": "{{n}} need review",
+      "fallback": "Auto-generated — review"
+    }
   },
   "review": {
     "generated": "Generated {{date}}",
@@ -100,11 +139,102 @@
       "high": "high",
       "critical": "critical"
     },
+    "clientReadiness": {
+      "title": "Client readiness",
+      "score": "Deal-readiness score:"
+    },
+    "consistency": {
+      "title": "Cross-artifact consistency"
+    },
+    "resolution": {
+      "add_open_question": "Add open question",
+      "add_out_of_scope": "Add to out-of-scope",
+      "tighten_requirement": "Tighten requirement",
+      "align_summary": "Align summary"
+    },
+    "source": {
+      "automated": "automated",
+      "ai": "AI"
+    },
+    "fix": {
+      "propose": "Propose fix",
+      "addQuestion": "Add to client questions",
+      "addOutOfScope": "Add to out-of-scope",
+      "acknowledge": "Acknowledge",
+      "dismiss": "Dismiss",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "placeholder": {
+        "question": "Question to send your client",
+        "outOfScope": "What is not included",
+        "dismiss": "Why you're dismissing this (optional)"
+      },
+      "status": {
+        "open": "Open",
+        "resolved": "Resolved",
+        "converted": "Converted",
+        "dismissed": "Dismissed"
+      },
+      "action": {
+        "patch_applied": "Fix applied",
+        "added_open_question": "Sent to client questions",
+        "added_out_of_scope": "Added to out-of-scope",
+        "acknowledged": "Acknowledged",
+        "dismissed": "Dismissed"
+      },
+      "batch": {
+        "selected": "{{count}} findings selected",
+        "selected_one": "{{count}} finding selected",
+        "propose": "Propose fixes for selected",
+        "clear": "Clear",
+        "limit": "You can fix up to {{max}} findings at once.",
+        "select": "Select \"{{title}}\" for a batch fix"
+      },
+      "preview": {
+        "title": "Review this fix before applying",
+        "subtitle": "{{count}} sections would change. Nothing is saved until you apply.",
+        "subtitle_one": "{{count}} section would change. Nothing is saved until you apply.",
+        "before": "Now",
+        "after": "Proposed",
+        "emptyBefore": "This section is currently empty.",
+        "emptyAfter": "This section would be emptied.",
+        "stale": "Stages built from these documents will be flagged for regeneration.",
+        "apply": "Apply fix",
+        "applying": "Applying…",
+        "cancel": "Cancel",
+        "close": "Close"
+      },
+      "section": {
+        "requirements.executiveSummary": "Requirements · Executive summary",
+        "requirements.functional": "Requirements · Functional requirements",
+        "requirements.nonFunctional": "Requirements · Non-functional requirements",
+        "requirements.roles": "Requirements · User roles",
+        "requirements.businessRules": "Requirements · Business rules",
+        "requirements.constraints": "Requirements · Constraints",
+        "requirements.outOfScope": "Requirements · Out of scope",
+        "requirements.assumptionsAndOpenQuestions": "Requirements · Assumptions & open questions",
+        "system-design.techStack": "Architecture · Tech stack",
+        "system-design.constraintCompliance": "Architecture · Constraint compliance"
+      },
+      "rerun": {
+        "hint": "You applied {{count}} fixes. Re-run the review to see the new score.",
+        "hint_one": "You applied {{count}} fix. Re-run the review to see the new score.",
+        "button": "Re-run review"
+      },
+      "delta": {
+        "up": "after your fixes",
+        "down": "after your fixes — new issues surfaced"
+      },
+      "log": {
+        "title": "Fix history"
+      }
+    },
     "empty": {
       "security": "No security issues flagged.",
       "scalability": "No scalability problems flagged.",
       "performance": "No performance risks flagged.",
       "cost": "No cost optimizations suggested.",
+      "clientReadiness": "No deal risks flagged.",
       "missing": "Nothing obvious missing."
     }
   },
@@ -123,6 +253,37 @@
     "cheapest": "cheapest",
     "perMonth": "/mo",
     "usersLabel": "{{n}} users",
+    "infra": {
+      "title": "Infrastructure estimate"
+    },
+    "effort": {
+      "title": "Build effort",
+      "range": "{{min}}–{{max}} person-weeks",
+      "weeks": "{{min}}–{{max}} wks",
+      "note": "A planning estimate derived from module complexity and build-vs-buy — not a quote."
+    },
+    "price": {
+      "internal": "Internal — not shown to your client",
+      "rateLabel": "Your weekly rate (USD)",
+      "ratePlaceholder": "e.g. 2000",
+      "save": "Save rate",
+      "saving": "Saving…"
+    },
+    "budget": {
+      "over": "The estimated build cost (~{{estimatedLowUsd}}) is about {{overPct}}% over the stated budget ({{budgetMaxUsd}}).",
+      "severity": {
+        "warning": "Budget risk",
+        "critical": "Budget conflict"
+      },
+      "mvpHint": "Consider proposing the phased MVP to fit the first release into budget.",
+      "outOfScopeHint": "Review the out-of-scope list — trimming scope can close the gap."
+    },
+    "services": {
+      "title": "Service subscriptions",
+      "subtitle": "Third-party services this design buys instead of building — billed separately from hosting.",
+      "usageBased": "usage-based",
+      "unknown": "unknown"
+    },
     "col": {
       "provider": "Provider"
     },
@@ -147,7 +308,21 @@
     "failed": "Could not estimate costs"
   },
   "export": {
-    "intro": "Download the complete system design in your preferred format.",
+    "intro": "Two ways out: the proposal your client reads, and the spec your team builds from.",
+    "more": "More formats",
+    "client": {
+      "title": "Send to client",
+      "body": "A read-only proposal page — vision, scope, cost and roadmap. No account needed to open it.",
+      "cta": "Copy client link",
+      "copied": "Link copied",
+      "preview": "Preview it",
+      "write": "Write the message"
+    },
+    "team": {
+      "title": "Hand off to your team",
+      "body": "Everything the devs need in one zip: OpenAPI, SQL schema, Postman collection and the project structure.",
+      "cta": "Download bundle (.zip)"
+    },
     "jsonBundle": "JSON bundle",
     "markdown": "Markdown",
     "openapi": "OpenAPI",
@@ -218,6 +393,15 @@
     "totalEstimate": "Total estimate:",
     "download": "Download roadmap",
     "after": "after {{deps}}",
+    "weeks": "{{min}}–{{max}} wks",
+    "mvp": "MVP",
+    "dual": {
+      "title": "The stated timeline can't fit the full scope",
+      "lead": "Two plans: reduce scope to hit the deadline, or keep the full scope and extend the timeline.",
+      "withinDeadline": "Within deadline",
+      "fullScope": "Full scope",
+      "excluded": "Not included to hit the deadline"
+    },
     "generate": "Generate Roadmap",
     "regenerate": "Regenerate",
     "working": "Working…",
@@ -491,5 +675,55 @@
     "revokeConfirm": "Revoke link",
     "views": "{{n}} views",
     "failed": "Something went wrong. Try again."
+  },
+  "proposal": {
+    "title": "Write the proposal message",
+    "subtitle": "Built from this scoping. Edit it before you send — it goes out under your name.",
+    "close": "Close",
+    "channel": {
+      "label": "Where are you sending it?",
+      "upwork": "Upwork",
+      "mostaql": "Mostaql",
+      "email": "Email",
+      "generic": "Anywhere else"
+    },
+    "language": {
+      "label": "Language",
+      "auto": "Auto ({{lang}})",
+      "en": "English",
+      "ar": "Arabic"
+    },
+    "clientName": "Client name",
+    "clientNamePlaceholder": "Who you are writing to",
+    "senderName": "From",
+    "senderNamePlaceholder": "Your name",
+    "companyNamePlaceholder": "Your company",
+    "hook": "Anything to weave in?",
+    "hookPlaceholder": "e.g. a line from their posting you want to answer",
+    "price": {
+      "include": "State a price in the message",
+      "placeholder": "e.g. $6,000 – $9,000",
+      "prefilled": "Prefilled from your weekly rate × the effort estimate. Edit it freely — this exact text is what goes in.",
+      "hint": "Written in exactly as you type it. Set a weekly rate on the Cost tab to prefill a suggestion."
+    },
+    "write": "Write the message",
+    "writing": "Writing…",
+    "draft": "Your message",
+    "regenerate": "Try a different angle",
+    "copy": "Copy message",
+    "copied": "Copied",
+    "overLength": "{{n}} characters over the {{channel}} limit. Trim it before sending — we won’t cut it for you, because a message cut mid-sentence is worse than a long one.",
+    "fallbackNote": "Written from a template — the AI was unavailable. It’s sendable, but worth a read.",
+    "link": {
+      "label": "Your client link",
+      "copy": "Copy link",
+      "preview": "Preview it"
+    },
+    "history": {
+      "toggle": "Earlier drafts",
+      "title": "Last {{n}} drafts",
+      "priced": "with price",
+      "over": "over limit"
+    }
   }
 }

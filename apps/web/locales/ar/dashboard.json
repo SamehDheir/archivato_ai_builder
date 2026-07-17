@@ -50,9 +50,10 @@
   },
   "quota": {
     "plan": "خطة {{plan}}",
-    "used": "{{count}} من {{quota}} scoping مُستخدَم",
-    "upgrade": "الترقية إلى Pro",
-    "manage": "إدارة الخطة"
+    "used": "استخدمت {{used}} من {{quota}} تصميم هذا الشهر",
+    "upgrade": "الترقية إلى Team",
+    "manage": "إدارة الخطة",
+    "unlimited": "تصاميم بلا حدود"
   },
   "projects": {
     "heading": "مشاريع الـ scoping",
@@ -66,6 +67,11 @@
     "ideaPlaceholder": "مثال: نظام لإدارة العيادات مع المواعيد والفوترة والأطباء وسجلات المرضى.",
     "clientLabel": "العميل (اختياري)",
     "clientPlaceholder": "مثال: عيادات Acme",
+    "modeSteps": "الإجابة خطوة بخطوة",
+    "modeNotes": "لصق ملاحظات المكالمة",
+    "notesLabel": "ملاحظات المكالمة / محضر الاجتماع",
+    "notesPlaceholder": "الصق ملاحظاتك من مكالمة العميل — يقرأها الذكاء الاصطناعي، ويستخرج ما يقدر عليه، ويسأل فقط عن الثغرات.",
+    "notesHint": "تصبح الملاحظات بداية المقابلة؛ ستجيب على أسئلة أقل بكثير.",
     "industryLabel": "المجال (اختياري)",
     "industryPlaceholder": "الرعاية الصحية",
     "scaleLabel": "الحجم (اختياري)",
@@ -157,7 +163,11 @@
     "awaiting_confirmation": "المراجعة والتأكيد",
     "confirmed": "مؤكَّد"
   },
-  "scale": { "mvp": "حد أدنى", "startup": "شركة ناشئة", "enterprise": "مؤسسة" },
+  "scale": {
+    "mvp": "حد أدنى",
+    "startup": "شركة ناشئة",
+    "enterprise": "مؤسسة"
+  },
   "stage": {
     "requirements": "مستند المتطلبات",
     "system-design": "تصميم النظام",
@@ -182,7 +192,10 @@
     "history": "السجل",
     "interview": "المقابلة"
   },
-  "breadcrumb": { "projects": "مشاريع الـ scoping", "project": "scoping" },
+  "breadcrumb": {
+    "projects": "مشاريع الـ scoping",
+    "project": "scoping"
+  },
   "palette": {
     "actions": "إجراءات",
     "projects": "مشاريع الـ scoping",
@@ -216,6 +229,9 @@
     "databaseSaved": "تم حفظ قاعدة البيانات",
     "apiSaved": "تم حفظ تصميم API",
     "refined": "تم تحسين التصميم",
+    "fixApplied": "تم تطبيق الإصلاح",
+    "findingResolved": "تم تحديث الملاحظة",
+    "settingSaveFailed": "تعذّر حفظ الإعداد",
     "restored": "تمت استعادة الـ scoping إلى الإصدار المحدد",
     "generated": "تم توليد {{stage}}",
     "generateFailed": "تعذّر توليد {{stage}}",
@@ -230,5 +246,12 @@
     "exportIncomplete": "أكمِل توليد التصميم قبل التصدير.",
     "exportFeature": "التصدير"
   },
-  "upgradeFeature": { "anotherProject": "بدء scoping آخر" }
+  "upgradeFeature": {
+    "anotherProject": "بدء scoping آخر"
+  },
+  "workflow": {
+    "call": "مكالمة العميل",
+    "scope": "scoping بالذكاء الاصطناعي",
+    "send": "انبعت للعميل"
+  }
 }

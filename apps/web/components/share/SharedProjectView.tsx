@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   ChevronDown,
   ClipboardCheck,
+  ClipboardList,
   Coins,
   Compass,
   Database as DatabaseIcon,
@@ -24,7 +25,7 @@ import { useFormat } from '@/lib/i18n/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
 import { ToastProvider } from '@/components/shared/toast';
 import { Logo } from '@/components/shared/Logo';
 import { ProductVisionView } from '@/components/product/ProductVisionView';
@@ -83,7 +84,15 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
     project;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-4 py-8">
+    /*
+     * A document, not an app screen: a single centred column with generous
+     * vertical rhythm and almost no chrome. `max-w-3xl` rather than the old
+     * `max-w-5xl` — this page is read, not operated, and a 1024px-wide run of
+     * prose is a wall. Wide artifacts (tables, ERDs) don't fight it: each scrolls
+     * inside its own container, so the measure holds and the page body never
+     * scrolls sideways.
+     */
+    <div className="mx-auto max-w-3xl space-y-10 px-4 py-8 sm:px-6 sm:py-12">
       <ProposalHeader project={project} />
 
       {/* ── The client's four questions, in the order they ask them ─────────── */}
@@ -103,7 +112,10 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
         title={t('section.scope.title')}
         lead={t('section.scope.lead')}
       >
-        <RequirementDocumentView doc={project.requirements} />
+        {/* Client audience: executive summary, functional requirements, roles,
+            out-of-scope and assumptions. The technical requirements (NFRs,
+            business rules, constraints) live in the appendix below. */}
+        <RequirementDocumentView doc={project.requirements} audience="client" />
       </Section>
 
       {costEstimate && (
@@ -138,10 +150,24 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
           </p>
         </div>
 
+        <Collapsible icon={ClipboardList} title={t('appendix.requirements')}>
+          {/* The developer-facing requirements: non-functional, business rules,
+              constraints. The client block above already showed the rest. */}
+          <RequirementDocumentView
+            doc={project.requirements}
+            audience="technical"
+          />
+        </Collapsible>
+
         <Collapsible icon={Network} title={t('appendix.architecture')}>
           {/* `interactive` off: "Explain this decision" calls an owner-scoped API,
-              which a link holder has no session for. */}
-          <SystemDesignView design={project.systemDesign} interactive={false} />
+              which a link holder has no session for. `buildVsBuyFirst`: the
+              build-vs-buy plan is the most client-readable part, so it leads. */}
+          <SystemDesignView
+            design={project.systemDesign}
+            interactive={false}
+            buildVsBuyFirst
+          />
         </Collapsible>
 
         <Collapsible icon={DatabaseIcon} title={t('appendix.database')}>
@@ -190,6 +216,17 @@ function ProposalHeader({ project }: { project: SharedProject }) {
   const fmt = useFormat();
   const { costEstimate, roadmap, requirements } = project;
 
+  /*
+   * TODO(R14): the header shows the date but not the CLIENT's name ("Prepared
+   * for Acme Retail"), which the design spec asked for. `session.clientName`
+   * exists (R5) but is deliberately not on the `SharedProject` payload, and this
+   * task is presentation-only — no API changes. Adding it is one field on the
+   * projection in ShareService.view plus a line here, but it is also a
+   * positioning call (does a client want to see the label their vendor filed
+   * them under?), so it wants its own slice rather than a silent widening of a
+   * public payload.
+   */
+
   const idea = project.idea.idea.trim();
   const lead = idea && idea !== project.title.trim() ? idea : null;
 
@@ -216,16 +253,30 @@ function ProposalHeader({ project }: { project: SharedProject }) {
   ];
 
   return (
-    <header className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <header className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-5">
         <Link href="/" aria-label="Archivato">
           <Logo />
         </Link>
-        <Badge variant="secondary">{t('badge')}</Badge>
+        <div className="flex items-center gap-3">
+          {/* The date this proposal was issued. A document a client is deciding
+              on needs to say when it was written — an undated quote is one
+              nobody can tell is current. */}
+          <time
+            className="text-xs text-muted-foreground"
+            dateTime={project.sharedAt}
+          >
+            {fmt.date(new Date(project.sharedAt))}
+          </time>
+          <Badge variant="secondary">{t('badge')}</Badge>
+        </div>
       </div>
 
       <div className="space-y-3">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl" dir="auto">
+        <h1
+          className="text-balance text-h1 font-semibold sm:text-display"
+          dir="auto"
+        >
           {project.title}
         </h1>
         {/* The client's own one-line framing. NOT the vision statement: that is
@@ -320,22 +371,35 @@ function Collapsible({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-3 px-5 py-4 text-start"
+        className="flex w-full items-center gap-3 rounded-xl px-5 py-4 text-start transition-colors duration-fast ease-out hover:bg-muted/40"
       >
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="font-medium" dir="auto">
           {title}
         </span>
+        {/*
+          The affordance. `rtl:-scale-x-100` is NOT used here on purpose: a
+          chevron pointing down is symmetric about the vertical axis, so mirroring
+          it does nothing — it's the rotation that carries the state, and that
+          reads identically in both directions.
+        */}
         <ChevronDown
           className={cn(
-            'ms-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+            'ms-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-base ease-out',
             open && 'rotate-180',
           )}
+          aria-hidden
         />
       </button>
-      {open && (
-        <div className="border-t border-border/60 p-5">{children}</div>
-      )}
+      {/*
+        Closed appendices are NOT in the DOM, so they don't print — deliberate.
+        The alternative (always render, hide with CSS, reveal for print) would
+        mount every appendix on every page load, including the Mermaid ER diagram,
+        to serve a reader who prints. The client-facing sections above — the ones
+        a proposal is actually judged on — are always rendered and always print;
+        an appendix the reader opened prints too, because it's real by then.
+      */}
+      {open && <div className="border-t border-border/60 p-5">{children}</div>}
     </div>
   );
 }
@@ -344,7 +408,9 @@ function Collapsible({
 function ShareCta() {
   const { t } = useTranslation('share');
   return (
-    <Card className="border-primary/30 bg-primary/5">
+    // `data-print="hide"`: our ad has no business on the printed copy of someone
+    // else's proposal. The watermark below stays — that one is the deal.
+    <Card data-print="hide" className="border-primary/30 bg-primary-subtle">
       <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
@@ -399,12 +465,53 @@ function Watermark() {
   );
 }
 
+/**
+ * The share page's first paint, while the lazy `stages` i18n chunk lands.
+ *
+ * This is the very first thing a cold visitor — the owner's CLIENT — sees of
+ * this product, so it is shaped like the proposal that follows (header rule,
+ * title, lead, three stat tiles, first section) rather than the three anonymous
+ * grey bars it used to be. Same container geometry as `SharedProjectContent`, so
+ * nothing moves when the real thing swaps in.
+ */
 function SharedProjectSkeleton() {
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
-      <Skeleton className="h-8 w-56" />
-      <Skeleton className="h-24 w-full" />
-      <Skeleton className="h-96 w-full" />
+    <div
+      className="mx-auto max-w-3xl space-y-10 px-4 py-8 sm:px-6 sm:py-12"
+      role="status"
+      aria-busy
+    >
+      <span className="sr-only">Loading…</span>
+      <header className="space-y-6">
+        <div className="flex items-center justify-between border-b border-border pb-5">
+          <Skeleton className="h-7 w-32" />
+          <Skeleton className="h-5 w-24 rounded-full" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-9 w-3/4" />
+          <Skeleton className="h-4 w-full max-w-xl" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-lg border border-border p-4">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="mt-2 h-6 w-16" />
+            </div>
+          ))}
+        </div>
+      </header>
+      <div className="space-y-3">
+        <div className="flex items-start gap-3">
+          <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-3.5 w-72 max-w-full" />
+          </div>
+        </div>
+        <div className="rounded-lg border border-border p-5">
+          <SkeletonText lines={5} />
+        </div>
+      </div>
     </div>
   );
 }

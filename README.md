@@ -16,7 +16,8 @@ architecture, database schema, REST API, review, and a runnable code scaffold.
 
 ```
 Idea → AI Interview → Requirements → System Design → Database Design →
-API Design → AI Review → Roadmap · Cost · Threat Model · QA Plan → Export / Scaffold
+API Design → AI Review → Roadmap · Cost · Threat Model · QA Plan →
+Proposal message · Export / Scaffold
 ```
 
 ---
@@ -24,7 +25,7 @@ API Design → AI Review → Roadmap · Cost · Threat Model · QA Plan → Expo
 ## Table of Contents
 
 - [What it does](#what-it-does)
-- [Feature matrix (Free vs Pro)](#feature-matrix-free-vs-pro)
+- [Feature matrix (Starter vs Team)](#feature-matrix-starter-vs-team)
 - [Architecture](#architecture)
 - [Tech stack](#tech-stack)
 - [Repository layout](#repository-layout)
@@ -47,16 +48,18 @@ chain of structured artifacts — each one grounded in the previous:
 
 | Artifact | Description |
 | --- | --- |
-| **Requirement Document** | Functional/non-functional requirements, roles, business rules, constraints |
+| **Requirement Document** | A client-facing scoping artifact: plain-language executive summary, user-outcome functional requirements, roles, out-of-scope (scope-creep guard), assumptions & open questions — plus the technical non-functional requirements, business rules, and constraints |
 | **Product Vision** | PM-style vision derived from the interview |
-| **System Design** | Architecture pattern, tech stack, service modules — with per-decision "Explain this" rationale |
+| **System Design** | Constraint-aware architecture + tech stack + service modules (with build-effort complexity), a build-vs-buy plan, a phased MVP→growth path when scale outruns the budget/timeline, and a constraint-compliance table — with per-decision "Explain this" rationale |
 | **Database Design** | Entities, columns, keys, relationships + ER diagram (Mermaid, exportable to Draw.io/SVG/PNG/PDF) |
-| **API Design** | REST endpoints per module with schemas + interactive API docs and a working mock server |
-| **AI Architect Review** | Scored review across security / scalability / performance / cost with findings |
-| **Roadmap** | Phased implementation plan |
-| **Cloud Cost Estimator** | Deterministic monthly bill across 8 providers at 100 / 1k / 10k users |
-| **Threat Model** | STRIDE security analysis with severities + mitigations |
-| **QA Plan** | Test strategy + concrete test cases by type |
+| **API Design** | REST endpoints per module with schemas, guaranteed to cover every database entity (or say why not) + interactive API docs and a working mock server |
+| **AI Architect Review** | Scored review across security / scalability / performance / cost with findings — plus an owner-only **client-readiness** axis that hunts deal risks (ambiguous scope, promises with no backing requirement), each with a suggested resolution, and **cross-artifact consistency** checks that catch the requirements, design, effort, and cost contradicting each other |
+| **Fix the findings** | Each finding is actionable, not just prose: **Propose fix** drafts a targeted rewrite of the exact document section it names, shown as a readable **before/after** you must explicitly approve — nothing is ever changed silently, and there is no "fix all". Findings only the client can settle convert to a **question to forward** or an **out-of-scope line**; the rest you acknowledge or dismiss with a note. Every applied fix is recorded in an append-only **fix history**, and re-running the review shows the score delta (`60 → 78`) |
+| **Roadmap** | Phased implementation plan — each phase lists the modules it builds and carries a **person-week range computed from the effort estimate** (never guessed by the LLM), Phase 1 is flagged as the **MVP** with a "what's launchable" statement, and a stated deadline that can't fit the scope produces a **dual roadmap** (within-deadline vs full-scope) |
+| **Project Economics** | Deterministic monthly hosting bill across 8 providers (100 / 1k / 10k users), plus a person-week **effort estimate**, third-party **service subscriptions**, an owner-only **budget reality check**, and an owner-only suggested price from your weekly rate |
+| **Threat Model** | STRIDE security analysis with severities + mitigations — **opt-in per project**: small stated budgets default it off, and you can switch it on at any time |
+| **QA Plan** | Test strategy + concrete test cases by type — **opt-in per project**, alongside the threat model |
+| **Proposal message** | The covering message you actually submit with the bid — written from the scoping itself (what you understood, what's in scope, the effort range, the link), sized to the channel (**Upwork / Mostaql / email**), in **English or Arabic**. It never claims experience, a team size, or a portfolio, and it states a price only if you give it one — verbatim. Editable before you send, with your last 5 drafts kept |
 | **Diagrams & Canvas** | Architecture, ER, per-endpoint sequence flows; editable canvas |
 | **Export & Scaffold** | JSON / Markdown / OpenAPI (JSON+YAML) / SQL DDL / Postman / zip — plus a **runnable app scaffold**: a NestJS + Prisma API, a Next.js client (typed API client + CRUD pages), or both as one workspace (ZIP or one-click push to GitHub) |
 | **Deployment** | Every scaffold ships a Dockerfile, `docker-compose.yml`, a GitHub Actions workflow, and the config for the provider your cost estimate says is the best value it can actually run on (Render / Fly.io / Railway / Heroku / DigitalOcean / Vercel) |
@@ -71,16 +74,16 @@ ordered for the buyer — vision → requirements → cost → roadmap, with the
 detail collapsed below — that anyone can open with no account; free on every plan
 as the organic loop, carrying a "Built with Archivato" watermark below Pro), full
 **auth** (email + Google/GitHub
-OAuth), **billing** (Free/Pro via Paddle or an offline mock), a **customer
+OAuth), **billing** (Starter/Team via Paddle or an offline mock), a **customer
 support center** with a three-layer AI assistant + knowledge base, **RBAC** for
 staff consoles, **admin analytics**, and a bilingual UI (**English + Arabic,
 RTL-safe**).
 
-## Feature matrix (Free vs Pro)
+## Feature matrix (Starter vs Team)
 
-| | Free | Pro ($19/mo or $182/yr) |
+| | Starter (free) | Team ($79/mo or $758/yr) |
 | --- | --- | --- |
-| Client scopings | 1 | 5 |
+| Client scopings | 1 per month | Unlimited |
 | Interview → Requirements → System → Database design | ✅ | ✅ |
 | Product Vision | ✅ | ✅ |
 | Client-facing share link (read-only proposal page) | ✅ with watermark | ✅ no watermark |
@@ -241,6 +244,11 @@ readiness, 503 when degraded).
   as runtime-free, unit-tested functions.
 - **i18n by default:** all UI chrome is English + Arabic with RTL-safe logical
   styling; AI artifacts stay server-side English by convention.
+- **Design tokens only:** every colour, type step, radius, shadow and duration is
+  a CSS variable in `apps/web/app/globals.css`. Raw hex and Tailwind's stock
+  palette are **blocked by ESLint** in components — colour has to mean a semantic
+  state or a data category, never decoration. `/design` (dev-only) renders every
+  token and component variant so new work has something to converge on.
 - **Docs as memory:** [CLAUDE.md](CLAUDE.md) records conventions, decisions,
   and hard-won gotchas; [docs/PROGRESS.md](docs/PROGRESS.md) is the slice log.
 

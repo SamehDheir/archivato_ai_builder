@@ -30,6 +30,8 @@ import type {
   GithubConnectionStatus,
   ProductVision,
   ProjectRoadmap,
+  ProposalControls,
+  ProposalDraft,
   CostEstimate,
   ProjectOverview,
   ProjectSummary,
@@ -44,6 +46,9 @@ import type {
   SubscriptionView,
   UpdateProfileInput,
   ReviewReport,
+  FixLogEntry,
+  FixProposal,
+  FixResult,
   SystemDesign,
   ThreatModel,
   QaPlan,
@@ -185,8 +190,12 @@ export const interviewApi = {
   /** The signed-in user's projects, most recently updated first. */
   list: () => request<ProjectSummary[]>('/interview'),
 
-  /** Start a scoping. `clientName` is the owner's label — never part of the idea. */
-  start: (input: ProjectIdeaInput & { clientName?: string }) =>
+  /**
+   * Start a scoping. `clientName` is the owner's label (never part of the idea);
+   * `notes` is optional call-notes text for notes-first mode (becomes the first
+   * transcript entry, then the normal interview runs).
+   */
+  start: (input: ProjectIdeaInput & { clientName?: string; notes?: string }) =>
     request<InterviewState>('/interview', {
       method: 'POST',
       body: JSON.stringify(input),
@@ -203,6 +212,13 @@ export const interviewApi = {
       method: 'POST',
     }),
 
+  /** Correct a slot at the confirmation gate (appends a correction to the transcript). */
+  editSlot: (sessionId: string, slotKey: string, value: string) =>
+    request<InterviewState>(`/interview/${sessionId}/slots`, {
+      method: 'PATCH',
+      body: JSON.stringify({ slotKey, value }),
+    }),
+
   get: (sessionId: string) =>
     request<InterviewState>(`/interview/${sessionId}`),
 
@@ -212,7 +228,13 @@ export const interviewApi = {
    */
   update: (
     sessionId: string,
-    patch: { title?: string; clientName?: string },
+    patch: {
+      title?: string;
+      clientName?: string;
+      weeklyRate?: number | null;
+      /** Whether this project produces the threat model + QA plan (R12). */
+      generateExtendedArtifacts?: boolean;
+    },
   ) =>
     request<ProjectSummary>(`/interview/${sessionId}`, {
       method: 'PATCH',
@@ -303,6 +325,61 @@ export const reviewApi = {
     }),
 
   get: (sessionId: string) => request<ReviewReport>(`/review/${sessionId}`),
+
+  // R11 — findings → fixes. `propose` only drafts; nothing is written until the
+  // owner approves the preview and `apply` is called with it.
+  proposeFix: (sessionId: string, findingIds: string[]) =>
+    request<FixProposal>(`/review/${sessionId}/fix/propose`, {
+      method: 'POST',
+      body: JSON.stringify({ findingIds }),
+    }),
+
+  applyFix: (sessionId: string, proposal: FixProposal) =>
+    request<FixResult>(`/review/${sessionId}/fix/apply`, {
+      method: 'POST',
+      body: JSON.stringify({
+        findingIds: proposal.findingIds,
+        // `currentContent` is the preview's "before" side — the server reads the
+        // real artifact itself, so sending it back would be noise at best.
+        sections: proposal.sections.map(({ key, proposedContent, rationale, beforeSummary }) => ({
+          key,
+          proposedContent,
+          rationale,
+          beforeSummary,
+        })),
+      }),
+    }),
+
+  addClientQuestion: (sessionId: string, findingId: string, question: string) =>
+    request<FixResult>(`/review/${sessionId}/fix/client-question`, {
+      method: 'POST',
+      body: JSON.stringify({ findingId, question }),
+    }),
+
+  addOutOfScope: (
+    sessionId: string,
+    findingId: string,
+    item: string,
+    reason?: string,
+  ) =>
+    request<FixResult>(`/review/${sessionId}/fix/out-of-scope`, {
+      method: 'POST',
+      body: JSON.stringify({ findingId, item, reason }),
+    }),
+
+  resolveAdvisory: (
+    sessionId: string,
+    findingId: string,
+    action: 'acknowledged' | 'dismissed',
+    note?: string,
+  ) =>
+    request<FixResult>(`/review/${sessionId}/fix/advisory`, {
+      method: 'POST',
+      body: JSON.stringify({ findingId, action, note }),
+    }),
+
+  fixLog: (sessionId: string) =>
+    request<FixLogEntry[]>(`/review/${sessionId}/fix-log`),
 };
 
 export const productVisionApi = {
@@ -878,6 +955,23 @@ export const exportApi = {
     request<Record<string, unknown>>(`/export/${sessionId}/postman`),
   /** Every format bundled into one .zip Blob. */
   all: (sessionId: string) => requestBlob(`/export/${sessionId}/all.zip`),
+};
+
+/**
+ * The proposal cover message (R13) — owner-only, so there is no public read here.
+ * `generate` mints the share link as a side effect (idempotently), which is why
+ * the caller gets a `shareUrl` back without asking for one.
+ */
+export const proposalApi = {
+  generate: (sessionId: string, controls: ProposalControls) =>
+    request<ProposalDraft>(`/proposal/${sessionId}/generate`, {
+      method: 'POST',
+      body: JSON.stringify(controls),
+    }),
+
+  /** The project's last few drafts, newest first. */
+  drafts: (sessionId: string) =>
+    request<ProposalDraft[]>(`/proposal/${sessionId}/drafts`),
 };
 
 export const shareApi = {

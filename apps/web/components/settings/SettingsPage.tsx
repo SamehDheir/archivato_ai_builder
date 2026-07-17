@@ -12,7 +12,13 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react';
-import { PLANS, type AuthUser, type SubscriptionView } from '@archivato/shared';
+import {
+  countInQuotaPeriod,
+  isUnlimitedQuota,
+  PLANS,
+  type AuthUser,
+  type SubscriptionView,
+} from '@archivato/shared';
 import { authApi, billingApi, interviewApi } from '@/lib/api';
 import { fileToAvatarDataUri } from '@/lib/avatar';
 import { UserAvatar } from '@/components/shared/UserAvatar';
@@ -317,7 +323,13 @@ function BillingSection() {
         interviewApi.list().catch(() => []),
       ]);
       setSub(subscription);
-      setUsed(projects.length);
+      // The quota is a rate per calendar month, so the meter is what was CREATED
+      // this period — not how many projects are owned.
+      setUsed(
+        countInQuotaPeriod(
+          projects.map((p) => p.createdAt).filter((d): d is string => !!d),
+        ),
+      );
     } catch {
       /* not signed in / unavailable */
     } finally {
@@ -390,8 +402,9 @@ function BillingSection() {
   const pro = PLANS.pro;
   const isPro = sub?.plan === 'pro';
 
-  const planName = isPro ? t('billing.planPro') : t('billing.planFree');
-  const usageKey = sub?.projectQuota === 1 ? 'billing.usage_one' : 'billing.usage_other';
+  // Tier names are product brands, not prose: they come from PLANS (the single
+  // source of truth) and read the same in every locale.
+  const planName = PLANS[sub?.plan ?? 'free'].name;
 
   return (
     <Card>
@@ -422,7 +435,12 @@ function BillingSection() {
                   )}
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
-                  {t(usageKey, { used: used ?? '—', quota: sub.projectQuota })}
+                  {isUnlimitedQuota(sub.projectQuota)
+                    ? t('billing.usageUnlimited')
+                    : t('billing.usageMonth', {
+                        used: used ?? '—',
+                        quota: sub.projectQuota,
+                      })}
                   {isPro && sub.periodEnd
                     ? ` · ${
                         sub.cancelAtPeriodEnd

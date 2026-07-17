@@ -151,12 +151,28 @@ export class SupportNotificationsService {
     }
   }
 
+  /*
+   * These MUST match the web app's real routes:
+   *   apps/web/app/(app)/support/[id]        -> /support/:id
+   *   apps/web/app/(app)/support/admin/[id]  -> /support/admin/:id
+   *
+   * They used to carry an extra `/tickets` segment (`/support/tickets/:id`),
+   * which matched no route at all — Next resolves `/support/[id]` against ONE
+   * segment, so a two-segment path fell through to a 404. Every in-app
+   * notification and every notification EMAIL pointed at that dead URL, which is
+   * the worst version of this bug: the deep link is the entire reason the email
+   * exists, and a customer who clicks "you have a reply" and lands on a 404
+   * concludes the product is broken.
+   *
+   * If either route ever moves, these move with it — a link that 404s is worse
+   * than no link, because the user has already spent the click.
+   */
   private customerLink(ticket: SupportTicketRecord): string {
-    return `/support/tickets/${ticket.id}`;
+    return `/support/${ticket.id}`;
   }
 
   private adminLink(ticket: SupportTicketRecord): string {
-    return `/support/admin/tickets/${ticket.id}`;
+    return `/support/admin/${ticket.id}`;
   }
 
   private absolute(path: string): string {

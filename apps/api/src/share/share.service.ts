@@ -20,7 +20,11 @@ import type {
   SystemDesign,
   ThreatModel,
 } from '@archivato/shared';
-import { shouldWatermarkShare } from '@archivato/shared';
+import {
+  redactReviewForShare,
+  resolveExtendedArtifacts,
+  shouldWatermarkShare,
+} from '@archivato/shared';
 import { BillingService } from '../billing/billing.service';
 import {
   INTERVIEW_SESSION_REPOSITORY,
@@ -202,6 +206,13 @@ export class ShareService {
     // typically anonymous, and even a signed-in one is the wrong subject: whose
     // proposal this is decides whose brand is on it. Never a client-supplied flag.
     const plan = await this.billing.planFor(session.userId);
+    // `confirm()` pins this, and a shareable design implies a confirmed interview,
+    // so in practice the stored value is always explicit here — resolve anyway
+    // rather than assume, since the fallback is a pure function of the slots.
+    const extended = resolveExtendedArtifacts(
+      session.generateExtendedArtifacts,
+      session.slots,
+    );
 
     // Best-effort: a failed counter must never break the page.
     this.links.recordView(token).catch((e: unknown) => {
@@ -220,7 +231,9 @@ export class ShareService {
       vision: design.vision ? { ...design.vision, sessionId: token } : null,
       requirements: { ...design.requirements, sessionId: token },
       costEstimate: design.costEstimate
-        ? { ...design.costEstimate, sessionId: token }
+        ? // `budgetWarning` is OWNER-ONLY (a deal risk, not for the client's
+          // eyes): strip it server-side so it can never reach the public page.
+          { ...design.costEstimate, sessionId: token, budgetWarning: null }
         : null,
       roadmap: design.roadmap ? { ...design.roadmap, sessionId: token } : null,
       systemDesign: { ...design.systemDesign, sessionId: token },
@@ -228,11 +241,24 @@ export class ShareService {
       apiDesign: design.apiDesign
         ? { ...design.apiDesign, sessionId: token }
         : null,
-      review: design.review ? { ...design.review, sessionId: token } : null,
-      threatModel: design.threatModel
-        ? { ...design.threatModel, sessionId: token }
+      review: design.review
+        ? // Strip the OWNER-ONLY client-readiness / consistency (deal-risk)
+          // findings server-side — same enforcement as the budget warning above.
+          { ...redactReviewForShare(design.review), sessionId: token }
         : null,
-      qaPlan: design.qaPlan ? { ...design.qaPlan, sessionId: token } : null,
+      // R12 — a project with the extended artifacts switched off shows neither,
+      // even if it generated them before the owner turned them off. Enforced here
+      // rather than by not-generating alone: the payload is the boundary, and the
+      // owner's decision that these aren't part of *this* deal has to hold for an
+      // artifact that already exists.
+      threatModel:
+        extended && design.threatModel
+          ? { ...design.threatModel, sessionId: token }
+          : null,
+      qaPlan:
+        extended && design.qaPlan
+          ? { ...design.qaPlan, sessionId: token }
+          : null,
       watermark: shouldWatermarkShare(plan),
     };
   }
@@ -250,6 +276,12 @@ export class ShareService {
     if (!session) {
       throw new NotFoundException(`Interview session ${sessionId} not found.`);
     }
+    // R12 — resolved here as well as in `view()`; both are cheap pure calls, and
+    // this one is what keeps the two extra reads off the hot path.
+    const extended = resolveExtendedArtifacts(
+      session.generateExtendedArtifacts,
+      session.slots,
+    );
 
     const [
       requirements,
@@ -271,8 +303,11 @@ export class ShareService {
       this.visions.findBySessionId(sessionId),
       this.estimates.findBySessionId(sessionId),
       this.roadmaps.findBySessionId(sessionId),
-      this.threatModels.findBySessionId(sessionId),
-      this.qaPlans.findBySessionId(sessionId),
+      // R12 — a project that switched these off will have them nulled from the
+      // payload anyway, so don't pay for the reads. This is the one route built to
+      // absorb a link going viral.
+      extended ? this.threatModels.findBySessionId(sessionId) : null,
+      extended ? this.qaPlans.findBySessionId(sessionId) : null,
     ]);
 
     // The gate is unchanged: the design chain through the database design. The

@@ -8,12 +8,15 @@ import {
   Check,
   Compass,
   Download,
+  FileText,
   LayoutGrid,
   Link2,
   List,
+  ListChecks,
   MoreVertical,
   Pencil,
   PlayCircle,
+  Plus,
   Send,
   Sparkles,
   Trash2,
@@ -105,6 +108,8 @@ export function ProjectsDashboard({
   setScale,
   clientName,
   setClientName,
+  notes,
+  setNotes,
   onStart,
   onOpen,
   onDelete,
@@ -113,6 +118,7 @@ export function ProjectsDashboard({
   onCopyLink,
   onExport,
   onOpenExample,
+  usage,
 }: {
   projects: ProjectOverview[];
   creating: boolean;
@@ -127,6 +133,8 @@ export function ProjectsDashboard({
   setScale: (value: ProjectScale | '') => void;
   clientName: string;
   setClientName: (value: string) => void;
+  notes: string;
+  setNotes: (value: string) => void;
   onStart: (e: React.FormEvent) => void;
   onOpen: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
@@ -136,10 +144,27 @@ export function ProjectsDashboard({
   onExport: (sessionId: string, format: ExportFormat) => void;
   /** Open the read-only Example project (a finished sample, no quota impact). */
   onOpenExample: () => void;
+  /**
+   * The plan/quota indicator, rendered beside the "New client scoping" button.
+   *
+   * It arrives as a node rather than as `{plan, used, quota}` because the quota
+   * rules (unlimited = null, the UTC calendar-month window) live in the page
+   * that owns the subscription — duplicating them here would give the banner and
+   * the server's 402 two different opinions about when the month starts.
+   */
+  usage?: React.ReactNode;
 }) {
   const { t } = useTranslation('dashboard');
   const showForm = creating || projects.length === 0;
   const [view, setView] = useState<ProjectsView>(readStoredView);
+  // How the owner seeds the interview: answer step by step, or paste call notes.
+  const [mode, setMode] = useState<'steps' | 'notes'>('steps');
+
+  const chooseMode = (next: 'steps' | 'notes') => {
+    setMode(next);
+    // Leaving notes mode must not smuggle stale notes into a step-by-step start.
+    if (next === 'steps') setNotes('');
+  };
 
   const changeView = (next: ProjectsView) => {
     setView(next);
@@ -165,9 +190,18 @@ export function ProjectsDashboard({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">{t('projects.heading')}</h2>
-        <div className="flex items-center gap-2">
+      {/*
+        The action bar. "New client scoping" is the ONLY accent-filled button on
+        this page — that is what makes it read as the primary action from across
+        the room. The usage indicator sits beside it (quiet, muted) rather than in
+        the full-width banner it used to occupy: a plan meter is context for the
+        button next to it, not an announcement that deserves its own row above the
+        work.
+      */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h2 className="text-h3 font-semibold">{t('projects.heading')}</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          {usage}
           {!showForm && projects.length > 0 && (
             <ViewToggle view={view} onChange={changeView} />
           )}
@@ -177,7 +211,10 @@ export function ProjectsDashboard({
                 {t('projects.back')}
               </Button>
             ) : (
-              <Button onClick={() => setCreating(true)}>{t('projects.new')}</Button>
+              <Button onClick={() => setCreating(true)}>
+                <Plus />
+                {t('projects.new')}
+              </Button>
             ))}
         </div>
       </div>
@@ -187,7 +224,12 @@ export function ProjectsDashboard({
       {showForm ? (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            {/* First run: the workflow graphic leads, because on an empty account
+                this card is the entire product and a form with no context is just
+                homework. Returning users creating a second scoping already know
+                the workflow, so they skip straight to the form. */}
+            {projects.length === 0 && <WorkflowGraphic />}
+            <CardTitle className="flex items-center gap-2 text-h3">
               <Sparkles className="h-5 w-5 text-primary" />
               {projects.length === 0
                 ? t('projects.startFirst')
@@ -196,7 +238,7 @@ export function ProjectsDashboard({
             {/* On an empty account this is the only thing on screen, so it has to
                 teach the workflow — bring the call's answers, run the interview,
                 send the proposal — not describe the pipeline's internals. */}
-            <p className="text-sm text-muted-foreground">
+            <p className="measure text-small text-muted-foreground">
               {projects.length === 0
                 ? t('projects.emptyHelp')
                 : t('projects.formHelp')}
@@ -204,13 +246,17 @@ export function ProjectsDashboard({
           </CardHeader>
           <CardContent>
             <form className="space-y-3" onSubmit={onStart}>
-              <StarterIdeas
-                onPick={(next) => {
-                  setIdea(next.idea);
-                  setIndustry(next.industry);
-                  setScale(next.scale);
-                }}
-              />
+              <ModeToggle mode={mode} onChange={chooseMode} />
+
+              {mode === 'steps' && (
+                <StarterIdeas
+                  onPick={(next) => {
+                    setIdea(next.idea);
+                    setIndustry(next.industry);
+                    setScale(next.scale);
+                  }}
+                />
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="idea">{t('projects.ideaLabel')}</Label>
                 <Textarea
@@ -222,6 +268,24 @@ export function ProjectsDashboard({
                   required
                 />
               </div>
+
+              {mode === 'notes' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="notes">{t('projects.notesLabel')}</Label>
+                  <Textarea
+                    id="notes"
+                    dir="auto"
+                    rows={8}
+                    maxLength={20000}
+                    placeholder={t('projects.notesPlaceholder')}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t('projects.notesHint')}
+                  </p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="clientName">{t('projects.clientLabel')}</Label>
                 <Input
@@ -300,6 +364,52 @@ export function ProjectsDashboard({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * The first-run graphic: call → scoping → sent, drawn in the design language.
+ *
+ * Built from CSS + inline SVG rather than an illustration pack, for two reasons.
+ * One is identity: a stock illustration is the fastest way to look like every
+ * other template, and this audience shows our output to their clients. The other
+ * is that it is theme- and direction-aware for free — it inherits the tokens, so
+ * it recolours with the theme, and the connectors are drawn with a flex row that
+ * mirrors itself in RTL. A PNG would need four exports and would still be wrong
+ * in Arabic.
+ *
+ * `aria-hidden`: the three labels immediately below it say the same thing in
+ * words, so announcing the graphic would just make a screen reader read the
+ * workflow twice.
+ */
+function WorkflowGraphic() {
+  const { t } = useTranslation('dashboard');
+  const steps = [
+    { icon: FileText, key: 'call' },
+    { icon: ListChecks, key: 'scope' },
+    { icon: Send, key: 'send' },
+  ] as const;
+
+  return (
+    <div className="mb-4 flex items-center gap-2" aria-hidden>
+      {steps.map(({ icon: Icon, key }, i) => (
+        <div key={key} className="flex flex-1 items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-2 rounded-lg border border-border bg-muted/40 px-2 py-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-foreground">
+              <Icon className="h-4 w-4" />
+            </span>
+            <span className="truncate text-micro font-medium text-muted-foreground">
+              {t(`workflow.${key}`)}
+            </span>
+          </div>
+          {/* The connector between steps, not after the last one. A dashed rule
+              rather than an arrow glyph: it needs no RTL mirroring. */}
+          {i < steps.length - 1 && (
+            <span className="h-px w-4 shrink-0 border-t border-dashed border-border" />
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -407,6 +517,51 @@ function ContinueBanner({
         <ArrowRight className="h-4 w-4 rtl:-scale-x-100" />
       </span>
     </button>
+  );
+}
+
+/**
+ * How the owner seeds the interview: answer step by step, or paste the notes
+ * from their client call. Notes-first isn't a separate flow — the notes become
+ * the first transcript turn and the same interview runs, extracting slots from
+ * them up front.
+ */
+function ModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: 'steps' | 'notes';
+  onChange: (mode: 'steps' | 'notes') => void;
+}) {
+  const { t } = useTranslation('dashboard');
+  const options: {
+    value: 'steps' | 'notes';
+    icon: typeof ListChecks;
+    label: string;
+  }[] = [
+    { value: 'steps', icon: ListChecks, label: t('projects.modeSteps') },
+    { value: 'notes', icon: FileText, label: t('projects.modeNotes') },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {options.map(({ value, icon: Icon, label }) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onChange(value)}
+          aria-pressed={mode === value}
+          className={cn(
+            'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            mode === value
+              ? 'border-primary bg-primary/10 font-medium text-foreground'
+              : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+          )}
+        >
+          <Icon className="h-4 w-4" />
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -663,18 +818,33 @@ function MenuItem({
 function PipelineRail({ project }: { project: ProjectOverview }) {
   const { t } = useTranslation('dashboard');
   const progress = projectProgress(project.status, project.artifacts);
+  const complete = progress.completed === progress.total;
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-micro text-muted-foreground">
         <span>{t('pipeline.label')}</span>
-        <span className="tabular-nums">
+        <span
+          className={cn(
+            'tabular-nums',
+            // The one number that answers "is this deal ready to send?" from
+            // across the room — so a finished pipeline states it in the accent
+            // rather than making the owner count segments.
+            complete && 'font-semibold text-primary',
+          )}
+          dir="ltr"
+        >
           {t('pipeline.count', {
             done: progress.completed,
             total: progress.total,
           })}
         </span>
       </div>
+      {/*
+        `role="img"` + one label: a screen reader should hear "4 of 6", not six
+        anonymous spans. The per-segment `title` is a sighted-hover affordance on
+        top of that, not the accessible name.
+      */}
       <div
         className="flex gap-1"
         role="img"
@@ -688,7 +858,7 @@ function PipelineRail({ project }: { project: ProjectOverview }) {
             key={step}
             title={t(`pipeline.step.${step}`)}
             className={cn(
-              'h-1.5 flex-1 rounded-full transition-colors',
+              'h-1.5 flex-1 rounded-full transition-colors duration-base ease-out',
               done ? 'bg-primary' : 'bg-muted',
             )}
           />
@@ -710,12 +880,32 @@ function SentBadge() {
   );
 }
 
-/** The client this scoping is for. Absent until the owner names one. */
-function ClientLine({ clientName }: { clientName: string }) {
+/**
+ * The client this scoping is for — the card's leading line.
+ *
+ * It sits ABOVE the project title on purpose. This is a deal board: the owner
+ * scans it thinking "where is the Acme bid?", not "where is the clinic booking
+ * system?". The title answers a question they only ask once they've found the
+ * client. Absent until the owner names one, which is why the title still has to
+ * stand on its own.
+ */
+function ClientLine({
+  clientName,
+  prominent = false,
+}: {
+  clientName: string;
+  /** Card layout: the leading line. Row layout: a quiet line under the title. */
+  prominent?: boolean;
+}) {
   return (
     <p
       dir="auto"
-      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      className={cn(
+        'flex items-center gap-1.5 truncate',
+        prominent
+          ? 'text-xs font-semibold uppercase tracking-wide text-primary'
+          : 'text-xs text-muted-foreground',
+      )}
       title={clientName}
     >
       <Building2 className="h-3.5 w-3.5 shrink-0" />
@@ -760,10 +950,26 @@ function CopyLinkButton({
 
   return (
     <Button
-      variant={state === 'sent' ? 'secondary' : 'default'}
+      /*
+       * Outline, not accent-filled — even though this is the card's primary
+       * action. A grid of twelve accent-filled buttons is twelve primary
+       * actions, which is none: the page's single accent-filled button is "New
+       * client scoping" in the header, and that is what makes it findable.
+       * Position (alone in the footer) plus the accent TEXT on an unsent link is
+       * enough to mark this as the thing to do next.
+       */
+      variant={state === 'sent' ? 'ghost' : 'outline'}
       size="sm"
-      className="h-7 gap-1.5 px-2 text-xs"
+      className={cn(
+        'h-7 gap-1.5 px-2 text-xs transition-colors duration-fast ease-out',
+        state === 'ready' &&
+          'border-primary/40 text-primary hover:bg-primary-subtle hover:text-primary-subtle-foreground',
+        state === 'sent' && 'text-muted-foreground',
+        copied && 'text-success',
+      )}
       disabled={locked || busy || working}
+      // Locked says WHY (the link only mints once a database design exists), so
+      // the disabled state teaches instead of stonewalling.
       title={locked ? t('card.copyLocked') : t('card.copyLink')}
       onClick={copy}
     >
@@ -790,7 +996,7 @@ function ProjectCard({
 }: { project: ProjectOverview } & CardActions) {
   const { t } = useTranslation('dashboard');
   return (
-    <div className="group relative rounded-lg border border-border bg-card shadow-sm transition-all duration-150 hover:border-primary/60 hover:shadow-md focus-within:border-primary/60">
+    <div className="group relative flex flex-col rounded-lg border border-border bg-card shadow-xs transition-[border-color,box-shadow] duration-fast ease-out hover:border-primary/60 hover:shadow-md focus-within:border-primary/60">
       {/* The open-button holds only the identity + progress. The actions below sit
           OUTSIDE it — nesting a button inside a button is invalid HTML, and a
           "copy link" click that also opened the project would be a trap. */}
@@ -798,7 +1004,7 @@ function ProjectCard({
         type="button"
         onClick={onOpen}
         disabled={busy}
-        className="flex w-full flex-col rounded-t-lg p-4 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50"
+        className="flex w-full flex-1 flex-col rounded-t-lg p-4 text-start disabled:pointer-events-none disabled:opacity-50"
       >
         <div className="mb-2 flex flex-wrap items-center gap-2 pe-8">
           <Badge variant={STATUS_VARIANT[project.status]}>
@@ -806,21 +1012,23 @@ function ProjectCard({
           </Badge>
           {project.shared && <SentBadge />}
         </div>
+        {/* Client first, then the project name. See ClientLine: this is a deal
+            board, and the owner scans it by client. */}
+        {project.clientName && (
+          <div className="mb-1">
+            <ClientLine clientName={project.clientName} prominent />
+          </div>
+        )}
         <p
           dir="auto"
-          className="line-clamp-2 text-sm font-semibold"
+          className="line-clamp-2 text-h4 font-semibold"
           title={displayName(project)}
         >
           {displayName(project)}
         </p>
-        {project.clientName && (
-          <div className="mt-1">
-            <ClientLine clientName={project.clientName} />
-          </div>
-        )}
-        <div className="mt-auto w-full pt-3">
+        <div className="mt-auto w-full pt-4">
           <PipelineRail project={project} />
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-micro text-muted-foreground">
             {t('projects.updated', {
               date: new Date(project.updatedAt).toLocaleDateString(),
             })}

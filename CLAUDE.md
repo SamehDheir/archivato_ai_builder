@@ -12,8 +12,9 @@ cost, findings per category, critical-issues callout). Three standalone
 artifacts hang off the confirmed session: **Product Vision** (PM view of the
 interview), **Roadmap** (phased implementation plan from the full design), and
 **Cost Estimator** (deterministic per-provider monthly hosting bill at 100/1k/10k
-users). Plus post-generation **chat refine**, **version history**,
-**diagrams/canvas**, **auth**.
+users). A **Proposal cover letter** then turns the finished scoping into the
+message the owner actually submits with the link. Plus post-generation
+**chat refine**, **version history**, **diagrams/canvas**, **auth**.
 
 ## Product positioning (2026 pivot)
 
@@ -168,7 +169,7 @@ tsconfig and never needs shared's `dist`.
 - **Modular monolith.** Each pipeline stage is its own Nest module
   (`interview`, `requirements`, `system-design`, `database-design`,
   `api-design`, `review`, `product-vision`, `roadmap`, `cost-estimate`,
-  `threat-model`, `qa-plan`, `export`, `share`, `projects`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
+  `threat-model`, `qa-plan`, `proposal`, `export`, `share`, `projects`, `chat`, `jobs`, `stream`, `versions`, `diagrams`, `auth`,
   `billing`, `analytics`, `admin`, `support`, `notifications`, `roles`,
   `waitlist`).
   Modules export their repository token + service for downstream use.
@@ -199,10 +200,13 @@ tsconfig and never needs shared's `dist`.
   3. **An unstamped artifact is never stale.** Pre-existing rows carry no stamp
      and we cannot know their source; nagging every old project to re-run a
      **billed, Pro, LLM** stage on a guess would be worse than the bug.
-  4. **`DERIVED_STAGE_SOURCES` mirrors each service's real `generate()` inputs** —
-     the **cost estimate never reads the requirements** (it derives a workload from
-     the designs), so editing a requirement must not flag it. Change a service's
-     inputs ⇒ change its entry.
+  4. **`DERIVED_STAGE_SOURCES` mirrors the design inputs each service derives its
+     *output* from** — the **cost estimate's figures come only from the designs**,
+     so editing a requirement must not flag it. Change a service's design inputs ⇒
+     change its entry. (Subtlety: R9's cost service *does* read the requirement doc,
+     but only for the budget warning's out-of-scope **hint** — a boolean not worth
+     flagging a whole deterministic estimate stale over — so `requirements` stays
+     out of the cost stamp on purpose.)
 
   The banner lives on the tab that renders the artifact (Radix **unmounts inactive
   `TabsContent`**, so a stale *dot on the tab bar* would need the four panels'
@@ -220,6 +224,334 @@ tsconfig and never needs shared's `dist`.
   best-value recommendation. Stable across runs (unit-testable, offline). The
   service only reads system/database/API designs; the estimate is a labeled
   planning figure, not a quote.
+- **Project economics — effort + budget + service subscriptions (R9).** The cost
+  stage grew from "monthly hosting bill" into full project economics, still
+  **100% deterministic (zero LLM calls)** — all new math is pure functions in
+  `@archivato/shared` (`effort.ts`), reproducible and unit-tested. Additive: the
+  existing `estimateCosts()` infra output is untouched for downstream/export
+  compatibility. Three additive, optional fields on `CostEstimate`:
+  1. **`effort: EffortEstimate`** (client-facing) — `buildEffortEstimate(design)`
+     turns R8 module **complexity** (S/M/L/XL → person-week ranges via the tunable
+     `EFFORT_MODEL` constant) + **build-vs-buy** into a person-week range. A "buy"
+     capability collapses its matching module to integration-only work
+     (`buyIntegrationFactor` 0.25×; a flat 0.5–1 wk line when it maps to no module);
+     "build" keeps full weight. Fixed items layer on the build subtotal (project
+     setup 1 wk flat, QA 20%, DevOps 1 wk flat, buffer 15%). **Everything rounds to
+     0.5 wk.** A module with no complexity defaults to M.
+  2. **`serviceSubscriptions: ServiceCostLine[]`** (client-facing) — one monthly SaaS
+     line per build-vs-buy "buy" from the static `SERVICE_COST_HINTS` table; unknown
+     price ⇒ `null` + `usage-based`/`unknown`, **never a misleading $0** (the LLM-
+     metering convention). When a target market is known, the payments line carries a
+     regional PSP fee note from `REGIONAL_SERVICES` (`resolveRegion`) — **dormant for
+     now**, since no `target_market` slot exists yet (it degrades to no note, tested
+     via the pure builder).
+  3. **`budgetWarning: BudgetWarning | null`** — **OWNER-ONLY.** `buildBudgetCheck`
+     warns only when `budget_range` parses (`parseBudget` is tolerant: "$5k",
+     "5000-8000", Arabic numerals; **null, never a guess, on junk**) AND `effortMax ×
+     REFERENCE_RATES.lowUsd` exceeds the budget top by **>25%**; `links` point at the
+     R8 phased MVP + R7 out-of-scope when they exist. **The share `view()` strips it
+     to `null` server-side** (same enforcement as any owner-only field — the payload
+     IS the security boundary; a security test asserts it never reaches the public
+     page).
+  - **Owner pricing input.** An optional nullable **`weeklyRate`** on the session
+    (Prisma `Float?` + migration `20260715160000_add_weekly_rate`; entity + both
+    repos + `UpdateProjectDto` + `ProjectSummary`, owner-scoped). Set via `PATCH
+    /interview/:id`; the authenticated cost page computes a **suggested price** range
+    (`computeSuggestedPrice` = effort × rate) labeled *"internal — not shown to your
+    client"*. **The share page never receives `weeklyRate` or the price** (it's on the
+    session, never projected; the price is computed only where the rate exists). The
+    owner's JSON download namespaces them under `internal: {...}`.
+  - **Rendering.** `CostView` gains owner-only props (`weeklyRate` + `onSaveWeeklyRate`,
+    threaded dashboard→ProjectStages→CostEstimatePanel); owner order = effort →
+    suggested price → budget warning → infra → service subscriptions. The **share
+    page passes neither prop** and its payload carries no `budgetWarning`, so it shows
+    only effort + infra + service subscriptions. i18n `stages.cost.{effort,price,
+    budget,services,infra}.*` (EN+AR, Arabic numerals via `useFormat`). The example
+    fixture derives `effort`/`serviceSubscriptions` from the same builders so it can't
+    drift.
+- **Review = engineering health + deal risk (R10).** The Reviewer gained a fifth
+  axis and a consistency layer, both **additive/optional** on `ReviewReport` (old
+  rows render fine):
+  1. **`scores.clientReadiness` + `clientReadinessIssues[]`** — a *deal*-risk lens,
+     not an engineering one: ambiguous requirements a client could read two ways,
+     unbounded scope ("any report the client requests"), undocumented assumptions,
+     executive-summary promises with no backing functional requirement, missing
+     out-of-scope coverage. Each finding carries a **`suggestedResolution`** enum
+     (`add_open_question | add_out_of_scope | tighten_requirement | align_summary`)
+     + a short instruction. **Resolution is manual — rendered as guidance; auto-apply
+     is deliberately not built.**
+  2. **`consistencyFindings[]`** — cross-artifact contradictions, each naming the two
+     artifacts that conflict and tagged **`source: 'automated' | 'ai'`** so the UI can
+     distinguish a code check from the model's judgment. The **deterministic** layer is
+     `buildConsistencyFindings()` (pure, `@archivato/shared`): effort-vs-timeline,
+     constraint-vs-`constraintCompliance` coverage, and build-vs-buy "buy" vs a
+     matching cost line. The **LLM** layer adds its own (forced to `source:'ai'`).
+  Four things not to undo:
+  - **`clientReadiness` does NOT feed `overallScore`.** Overall stays the 4-dimension
+     *engineering* average, so the public number survives redaction unchanged and
+     keeps meaning what it always meant.
+  - **The whole deal-risk lens is OWNER-ONLY.** `redactReviewForShare()` (pure, in
+     `shared`) empties `clientReadinessIssues`/`consistencyFindings`/`clientReadinessNote`
+     and deletes `scores.clientReadiness`; `ShareService.view` runs it — same
+     enforcement as R9's `budgetWarning` (**the payload IS the boundary**; a security
+     test asserts none of it reaches the public page). The *engineering* findings still
+     cross — the review lives in the share appendix.
+  - **The fallback still ships the axis.** Offline it emits a **neutral 70** +
+     `clientReadinessNote` ("needs an AI pass"), because deal risk needs LLM judgment —
+     but the **automated consistency findings are pure code and are always included**,
+     on both paths. `ReviewModule` imports `CostEstimateModule` only to read the cost
+     estimate's `serviceSubscriptions` for check 3.
+  - **The buy-vs-cost-line check keys off `serviceSubscriptions` being *undefined* vs
+     `[]`.** Undefined = no cost estimate to compare against ⇒ skip; a present-but-empty
+     array is a real signal. Comparing against a freshly-computed `buildServiceCostLines`
+     would be circular (both derive from `buildVsBuy`) — the point is catching a **stale**
+     stored estimate.
+- **Review findings → applied fixes (R11).** R10 gave each client-readiness finding
+  a `suggestedResolution`, but resolution stayed *prose*: the owner read "tighten
+  this requirement" and did it by hand, so the findings most worth acting on were
+  the least likely to be acted on. R11 closes the loop. Additive/optional on
+  `ReviewFinding` (JSON-blob convention, migration-free): `id`, `actionType`
+  (`patch | needs_client | advisory`), `patchTarget {stage, sectionHint}`, `status`
+  (`open | resolved | converted | dismissed`), `statusNote`. Logic lives in
+  `review.fix.ts` (pure, `@archivato/shared`), which imports `review.ts`
+  **one-way** — the reverse would give the barrel a runtime cycle. Non-negotiables:
+  1. **No silent auto-fix.** Every mutation is proposed → previewed → explicitly
+     approved → applied. `ReviewFixService.propose` calls the model and **writes
+     nothing**; only an owner-approved `apply` writes. There is deliberately no
+     "fix all", and no path from a draft to a write that skips the preview.
+  2. **`PATCH_SECTIONS` is a CLOSED set, on one test:** a section qualifies only if
+     a model can regenerate all of it in **one response** AND rewriting it can't
+     invalidate its neighbours. That's why **`api-design.modules` is not patchable**
+     — that artifact provably doesn't fit (its own generator chunks at 4 entities
+     because the ceiling is 2048 tokens), and a truncated API design parses *short*,
+     silently dropping endpoints. `system-design.services` is out because rewriting
+     it moves complexity → effort → **the price**; `database-design.*` cascades into
+     the API, SQL export, and scaffold. Findings landing there are `advisory` — the
+     owner is told what's wrong and left to drive it, which is honest. Widening the
+     set means proving the new section passes **both** halves, not adding a key.
+  3. **The PatchAgent is the ONE agent with no deterministic fallback**, and that's
+     the design. Every other agent falls back because a templated artifact beats no
+     artifact; a *patch* is the inverse — a guessed rewrite of a document a client
+     reads is worse than an honest "couldn't generate a fix", since the owner still
+     has the finding. `validateFixProposal` is strict and never coerces or salvages
+     a partial batch (a partially-applied fix is a document nobody reviewed).
+  4. **Downstream = the EXISTING staleness system, not a new cascade.** A patch
+     stamps a fresh `generatedAt`, the derived stages' `sourceStamp`s stop matching,
+     and `StaleNotice` offers the one-click regenerate it already had. A
+     requirements-only patch must **not** drag the cost estimate stale
+     (`DERIVED_STAGE_SOURCES`) — pinned by a test.
+  5. **The fixLog lives on the SESSION** (`fixLog Json?`, migration
+     `20260716120000_add_fix_log`), not the review: a re-run **replaces** the review
+     row and the review **is** in version snapshots, so a restore would rewind a log
+     stored there. An audit log a restore can rewind is not an audit log. It carries
+     **`findingTitle`** because it outlives the report — after a re-run the id points
+     at nothing, and "resolved security:0" is not a record anyone can read.
+  6. **A re-run resets every status to `open`** — it's a fresh assessment; a genuinely
+     fixed issue simply stops being reported, and the delta (`60 → 78`) shows the win.
+  7. **`needs_client` writes the REQUIREMENT DOC ONLY, never `session.openQuestions`.**
+     R6's invariant is that the session's slots/openQuestions are a *derived cache*
+     always re-derivable from `history[]`; a question the reviewer inferred from the
+     finished documents has no transcript turn behind it. (The session is also
+     `confirmed` by then — exactly when `editSlot` stops accepting writes.) Accepted
+     trade-off: a requirements **regen** re-derives from the transcript and drops
+     them; the finding is still in the review and can be re-converted.
+  8. **The workflow is OWNER-ONLY.** `redactReviewForShare` now also strips `id`/
+     `actionType`/`patchTarget`/`status`/`statusNote` from every finding that *does*
+     cross, so the share payload is byte-identical to pre-R11 — a client must never
+     learn which risks their vendor waved away. A security test asserts a dismissal
+     note never reaches the public page.
+  9. **`normalizeReviewReport` runs at BOTH boundaries** (the agent on write, the
+     store on read — Prisma *and* in-memory). The read side is what gives a pre-R11
+     row ids and action buttons instead of leaving it inert forever; `row.data as
+     ReviewReport` is a claim, not a check.
+  Classification: `RESOLUTION_ACTION` maps R10's four enums (`add_*` → needs_client,
+  `tighten_requirement`/`align_summary` → patch on requirements); `DIMENSION_ACTION`
+  is the per-dimension default (**security → `requirements.nonFunctional`**, since a
+  security finding is nearly always a missing NFR; scalability/performance →
+  `system-design.techStack`; **cost → advisory**, as there's no artifact section that
+  states "right-size compute"). The **deterministic fallback classifies each finding
+  at its source** (the code knows what it built), so offline runs get real buttons.
+  API: `POST /review/:id/fix/{propose,apply,client-question,out-of-scope,advisory}` +
+  `GET /review/:id/fix-log`, all owner-guarded + `ProGuard`; only `propose` is
+  `THROTTLE_AI` (the only one that calls a model). The proposal round-trips through
+  the browser and is **re-validated server-side** — safe because the caller is the
+  owner, who can already PUT anything via the structured editors, so the risk is a
+  malformed *shape*, not an untrusted author. Patches write through
+  `RequirementsService.applyPatch` / `SystemDesignService.applyPatch` (each service
+  owns writes to its own artifact); `applyPatch` is separate from `save()` because
+  `save()` deliberately carries the narrative sections over — exactly what a patch to
+  one of them must overwrite. Metering is automatic (`BaseAgent.thinkJson` stamps
+  `agent`; the route's first path segment gives stage `review`). **Web:** `ReviewView`
+  gains `sessionId` — **its presence is what enables the actions**, so the share page
+  and example project render the same component read-only (the `SystemDesignView
+  interactive={false}` precedent; the server's redaction is the boundary that counts).
+  `FixPreviewModal` shows a **real before/after** — `currentContent` is read off the
+  artifact **server-side**, never the model's description of it, because the owner
+  approves what they are shown. `fix-preview.ts` renders sections as readable lines
+  (raw JSON would make them diff punctuation instead of judging wording). i18n
+  `stages.review.fix.*` (EN+AR); the three `count` keys carry the **full Arabic CLDR
+  plural set**.
+- **Optional extended artifacts (R12) — `generateExtendedArtifacts`.** The threat
+  model and QA plan are **Pro, LLM-billed, and slow**, and they're the two a small
+  fixed-price job least often needs: offering them by default on a $4k build made
+  the tool feel heavier than the deal. They're now **opt-in per project**, via one
+  `Boolean @default(true)` column on the session (migration
+  `20260716140000_add_extended_artifacts`) — the default is what makes this a
+  **zero-behaviour-change** slice for everything already created. Rules:
+  1. **Unknown means yes.** `defaultExtendedArtifacts(slots)` (pure,
+     `extended-artifacts.ts`) flips to `false` only when `budget_range` **parses**
+     and its **top** is ≤ `EXTENDED_ARTIFACTS_BUDGET_THRESHOLD` ($10k, one edit
+     site). Missing / unparseable / `na` ⇒ **true** — the `parseBudget` "null, never
+     a guess" rule. Silently withholding a security analysis because we misread a
+     sentence would be the worst failure here, and invisible. It reads the range's
+     **top** so a "5k–12k" project (which can stretch to the assurance work) stays on.
+  2. **`null` on the column = "the owner hasn't decided"**, and that marker is the
+     whole design: `resolveExtendedArtifacts(stored, slots)` derives **on read**
+     while it's null, so the toggle tracks a `budget_range` the owner **corrects at
+     the gate** — `editSlot` sits directly above it. (The first cut wrote the derived
+     default to the row once, inside `advance()`; the toggle then couldn't react to
+     the correction, which broke the feature for exactly the user who bothered to
+     state a budget. Deriving on read deleted that code path rather than adding to
+     it.) A non-null value is the owner's explicit choice and no slot edit overrules
+     it; **`confirm()` pins one**, so every confirmed project carries a definite
+     answer instead of one that depends on re-parsing a sentence. Two migrations,
+     both needed: the first added the column `NOT NULL DEFAULT true` — which is what
+     **backfilled every pre-R12 row to an explicit `true`** — and the second dropped
+     the default + NOT NULL so only *new* rows start undecided.
+  3. **Off ⇒ cleanly absent, never stale.** The artifacts are simply never
+     generated, so `isStale()` reads a missing artifact as fresh — no new pipeline
+     state, no new gating mechanic. `EXTENDED_TABS` are **hidden** from the nav (not
+     disabled: a disabled tab invites a click that does nothing), and `available`
+     *and* the dashboard's duplicate `stageAvailable` map both AND-in the flag —
+     the **command palette navigates by key too**, so "unlisted" isn't "unreachable".
+  4. **The share payload enforces it server-side**, not the absence alone:
+     `ShareService.view` nulls both when the flag is off, so an owner who generated
+     them and *then* opted out doesn't put them in front of a client.
+  5. **Activation reuses `PATCH /interview/:id`** — no endpoint, no new state. The
+     quiet "Generate security & QA artifacts" link (muted, under the tabs, only once
+     an `apiDesign` exists) flips the flag; each stage then generates on demand as
+     it always did, so nothing else re-runs.
+  **Absence-tolerance audit (R12): nothing needed fixing.** `ExportService` never
+  included them; the review's consistency checks read effort/timeline/constraints/
+  buildVsBuy/serviceSubscriptions only; version snapshots deliberately exclude them;
+  `ProjectsService`'s artifact booleans don't cover them. The share page already had
+  `?? null` + `{threatModel && …}` — because both are **Pro stages a free owner
+  never has**, so R12 inherited that tolerance for free.
+- **Proposal cover letter (R13) — `proposal`.** The scoping package was complete
+  and the deal still wasn't submitted: the owner had a link and a blank message
+  box, and the covering message is what decides whether the link is ever opened.
+  This closes the loop. A standalone **Pro** stage (full-pipeline gate: 409 until
+  the API design exists) that writes the message a dev shop pastes into
+  Mostaql/Upwork/email *alongside* the link, generated from the scoping itself:
+  R7's `executiveSummary` + top capabilities, R9's deterministic effort range,
+  R10's phase-1 MVP statement, the `timeline` slot, and the share URL.
+  `ProposalWriterAgent` + a deterministic fallback (`buildFallbackProposal`, pure,
+  in `@archivato/shared/proposal.ts`). Nine things not to undo:
+  1. **The message is signed by the USER, not by us** — that is what makes it
+     different from every other agent's output. Hence `HONESTY_RULES` (shared,
+     embedded verbatim in the system prompt, **pinned by a test**): never past
+     experience, years in business, team size, portfolio, past clients,
+     credentials, or superlatives about the sender. An LLM writing a "cover
+     letter" reaches for that register by default — "with over a decade of
+     experience delivering…" — and every word of it would be invented, in a
+     document the owner signs and a buyer may check. The message speaks ONLY about
+     this proposal's content.
+  2. **The model never invents a price.** `includePrice` defaults **false**, and
+     the enforcement is *structural*: `ProposalControls` (the form) guards the
+     price behind the flag; the service resolves it into `ProposalInput`, where a
+     price is either **present or does not exist**. The prompt cannot leak a figure
+     it was never handed — so the test asserts the figure is absent from the
+     **prompt**, not that the model behaved. A stale value left in the form after
+     unticking the box is unreachable.
+  3. **The price is FREE TEXT, inserted verbatim** — not `{min, max, currency}`.
+     Prefilled from R9's `computeSuggestedPrice` × `weeklyRate` (formatted exactly
+     as the Cost tab shows it) and always editable. This market quotes in several
+     currencies and attaches terms ("fixed, 3 milestones") a structured shape can't
+     carry, and the owner's exact words are the one thing we must not re-derive.
+  4. **Ceilings are enforced in CODE, and truncation is never allowed.**
+     `PROPOSAL_CEILINGS` (one file): upwork 900 · mostaql 700 · email 1200 ·
+     generic 900 — platform realities, not style. Over the ceiling ⇒ **one** retry
+     quoting the real overshoot; still over ⇒ keep the **shorter** of the two and
+     show it with a warning chip. A message cut at 900 chars ends mid-thought, and
+     the owner — who asked for something ready to send — may not re-read it. Their
+     judgement about what to lose beats our substring. (The *fallback* composing a
+     shorter message via its `BUDGETS` ladder is not truncation: every rung is a
+     complete message that says less, and the link, the opted-in price, and the
+     closing question never fall off any rung.)
+  5. **Arabic output here is DELIBERATE, and is not the deferred GREEN item.**
+     Generated *artifacts* stay server-side English. This isn't an artifact — it's
+     the owner's outbound message to their client, and a Mostaql bid written in
+     English is a bid that loses. `CHANNEL_DEFAULT_LOCALE`: mostaql→ar, upwork→en,
+     email/generic→the project locale; always user-overridable.
+     **Known limit:** because the artifacts are English, the *offline fallback* in
+     Arabic mixes Arabic chrome with English scope text. The LLM path translates
+     naturally, so this only shows in mock/demo mode; fixing it properly is the
+     GREEN "Arabic generated artifacts" item — a deterministic fallback cannot
+     machine-translate.
+  6. **Drafts live on the SESSION** (`proposalDrafts Json?`, migration
+     `20260717120000_add_proposal_drafts`), capped at 5 by `appendProposalDraft` —
+     the R11 `fixLog` precedent, for the same reason: version snapshots rewind
+     design artifacts, and a restore must never rewind a message the owner already
+     sent. They are an **outbox, not an artifact**, so newest-first (unlike the
+     audit-log `appendFixLog`) and no table/repo of their own. The cap lives *in*
+     the helper because an uncapped JSON column grows one LLM-length message at a
+     time.
+  7. **Generating mints the share link** via the idempotent `ShareService.create`.
+     An owner asking for the message that says "the full scoping is here: <link>"
+     is unambiguously about to send it; `create` never rotates a link already in a
+     client's inbox, so the only alternative was a step existing purely to make the
+     code feel side-effect-free.
+  8. **Owner-only, end to end.** Nothing touches the public share payload — a
+     client must never learn how their vendor pitched them, what price was floated,
+     or which drafts were binned. There is no public counterpart to any of it.
+  9. **`session.clientName` is NOT defaulted server-side.** The web prefills the
+     form field from it and sends what the owner *confirmed*; a silent fallback
+     would add nothing but a path by which a dashboard label reaches a prompt
+     unseen. This keeps R5's invariant intact — no **design** agent reads it — with
+     the proposal writer as the one owner-confirmed exception, since the message is
+     addressed to that person.
+  Effort is recomputed with `buildEffortEstimate` (never read from a stored cost
+  estimate) so the owner can't quote a client a stale figure — the roadmap's rule.
+  API: `POST /proposal/:id/generate` (`ProGuard` + `THROTTLE_AI`) + `GET
+  /proposal/:id/drafts`, both owner-guarded. Metering is automatic (`thinkJson`
+  stamps `agent: proposal_writer`; the route's first path segment gives the stage).
+  **Web:** `ProposalModal` — the draft lands in an **editable textarea** (the
+  model's job is to kill the blank page, not to have the last word; copy takes what
+  is *on screen*), with a char counter vs the ceiling, "Try a different angle" (an
+  incrementing `variant`, which rotates the fallback's hook/closing too, so
+  regenerate changes something offline as well), and **the link shown separately**
+  because Upwork/Mostaql put links in their own field. Entry points: the project
+  header (once `apiDesign` exists) and the Export "Send to client" card (R12).
+  i18n `stages.proposal.*` + `project.proposal.*` (EN+AR); history keys use `{{n}}`,
+  not `count`, to dodge the Arabic CLDR-plural trap.
+- **Roadmap = effort-grounded phases (R10).** Additive/optional on `RoadmapPhase`:
+  `moduleNames`, `weeksMin`/`weeksMax`, `isMvp`, `mvpStatement`, plus
+  `alternativeRoadmaps` on the roadmap. The rule that holds it together:
+  - **The LLM groups modules; the CODE computes every week number.** The prompt
+    explicitly forbids durations, `mapPhases` **drops any effort the model emits**, and
+    `buildPhaseEffort(phases, effort)` (pure, `shared`) fills the numbers: each phase =
+    the sum of its `moduleNames`' effort lines + a share of the fixed pool (setup, QA,
+    DevOps, buffer, flat integrations, and any module no phase claimed — so no weight is
+    lost). Allocation is proportional to build weight **with a per-phase baseline of 1**,
+    so an overhead-only phase (Hardening) still gets a fair slice of QA/DevOps instead of
+    zero. `totalEstimate` likewise comes from the effort estimate, never the model.
+  - **No effort estimate ⇒ no week numbers** (`weeksMin`/`weeksMax` stay undefined and
+    the view falls back to the legacy `effort` string) — the pre-R10 behavior, kept as a
+    regression test.
+  - **Phase 1 is always the MVP** (`ensureMvp` enforces it on both paths) with a
+    `mvpStatement` backfilled from **R8 `phasedArchitecture.mvp`** when present, else the
+    `core_workflows` slot, else a generic line.
+  - **Dual roadmap only on a real conflict.** The service pre-checks
+    `hasTimelineConflict(effort.weeksMin, timeline)` — the **low** end, so a conflict means
+    even the best case blows the deadline — and only then asks for
+    `alternativeRoadmaps {withinDeadline, fullScope, excludedFromDeadline}`; `normalize`
+    drops them if they weren't requested. **The fallback never produces one** (it needs
+    LLM judgment); the conflict surfaces as the review's automated effort-vs-timeline
+    finding instead. `TIMELINE_CONFLICT_TOLERANCE` (1.1) is shared by both features so
+    they can never disagree about when a timeline is unrealistic.
+  - **`parseTimelineWeeks` handles Arabic units** (`٦ أسابيع`, both hamza spellings), not
+    just digits — the timeline slot holds the *client's own words*, and this product's
+    market states deadlines in Arabic. Unparseable ⇒ **null, never a guess** ⇒ no conflict.
 - **Threat model (`threat-model`).** A standalone **Pro** stage: a **STRIDE**
   security analysis of the generated design (Spoofing/Tampering/Repudiation/Info
   Disclosure/DoS/Elevation of Privilege), each threat with a component, severity,
@@ -542,17 +874,114 @@ tsconfig and never needs shared's `dist`.
   just throttled. Web: an `ExplainButton` beside each choice in `SystemDesignView`
   opens `DecisionExplainModal` (rationale/tradeoffs/alternatives/risks). i18n
   `stages.system.explain.*` (EN+AR).
+- **API Design = guaranteed entity coverage.** The stage's promise: **every entity
+  in the database design gets an endpoint group, or a declared reason it doesn't**.
+  Nothing enforced this before — the prompt mentioned entities in passing and no
+  code ever checked the result — so a model that grouped its modules around
+  *services* quietly shipped tables with no API, and the only signal was a user
+  noticing a missing resource later. Additive/optional on the artifact (JSON-blob
+  convention, migration-free): `coveredEntities?: string[]` + `source?:
+  ApiModuleSource` per module, `excludedEntities?: {entity, reason}[]` top-level.
+  Three pure, unit-tested pieces in `@archivato/shared` — `api-design.coverage.ts`
+  (`validateEntityCoverage`, `withResolvedCoverage`, `mergeMissingCoverage`) and
+  `api-design.rest.ts` (`buildRestApi`, `ensureEntityCoverage`). The flow:
+  LLM → resolve → validate → **one repair call** for the gap → `ensureEntityCoverage`
+  in the service. Things not to undo:
+  1. **The invariant lives in `ApiDesignService.generate`, not the agent** — it is
+     the only path that writes a generated design (the SSE stream calls it too), so
+     `ensureEntityCoverage` there is what makes "can't persist an uncovered entity"
+     true rather than best-effort. `save()` deliberately only *recomputes* coverage:
+     re-adding a group the user just deleted would make the editor feel broken.
+  2. **Coverage is declared OR inferred from paths.** Declaration-only would treat a
+     perfectly good undeclared `/api/orders` as missing and send the repair pass off
+     to build a **second** Orders resource — duplicates are worse than the paperwork
+     gap. Inference only counts segments **before the first path param**: reading
+     `/api/customers/:id/orders` as "Customers covers orders" would let one nested
+     read route stand in for the whole orders API. An explicit `coveredEntities`
+     still buys nested-only coverage.
+  3. **Only `generated-fallback` is a warning.** It marks a group the *code* built
+     because the model left an entity uncovered even after repair. A wholesale
+     deterministic design (mock mode / failed call) is **not** tagged — that's the
+     expected offline output, and flagging every group would make the chip
+     meaningless.
+  4. **Chunked generation is the truncation fix** (`MAX_ENTITIES_PER_CALL = 4`).
+     The API design is the largest artifact here and the default output ceiling is
+     **2048 tokens on Groq/Azure**, 4096 on Claude — a 10-entity design doesn't fit,
+     and a cut-off response either fails to parse or parses *short*. Chunks merge in
+     code; a failed chunk contributes nothing and its entities fall through repair →
+     fallback, so an outage costs precision, never coverage. Don't "fix" this by
+     raising `maxTokens`. Every call (incl. repair) goes through `thinkJson`, so
+     **usage metering is intact**.
+  5. **A chunk may only excuse its own entities.** Unscoped, a chunk that excluded a
+     *later* chunk's entity would satisfy the validator on its behalf — and if that
+     chunk then failed, the entity would end up with no API and a reason nobody
+     designed.
+  6. **Junction tables are excluded, with nested routes on the PARENT's module.** A
+     pure join table (≥2 FKs and nothing else of its own — `order_items` with a
+     `quantity` is a real resource, `post_tags` is not) gets no resource; the parent
+     carries `/api/orders/:id/order_products`. Nested routes must hang off the
+     parent's group because the scaffold mounts a group's endpoints under its own
+     basePath — the same path declared in `Orders` would generate `/orders/:id/orders`.
+  7. **Code enforces that a reason exists, not that it's a good one.** The prompt
+     narrows the valid reasons (junction / internal table / nested-under-a-named-parent);
+     the validator can't judge prose.
 - **Agents backfill via `normalize()`.** Where an artifact has many optional
   parts (e.g. the reviewer's per-dimension scores/findings), the agent trusts a
   valid LLM response but fills any omitted field deterministically, so the shape
   is always complete. New optional fields on a JSON-stored artifact need
   defensive defaults in consumers (view + markdown export) for old rows.
+  - **A write-side `normalize()` can never reach a row that is already in the
+    table — so the JSON store's READ is a boundary too.** Artifacts persist as
+    `data Json` and come back through `row.data as unknown as X`: **the cast is a
+    claim, not a check**, and a row written before a normalization rule existed
+    still violates the type it is cast to. This is not hypothetical — an API design
+    stored without `statusCodes` (a **required** field) 500'd the OpenAPI export
+    with `ep.statusCodes is not iterable`, and it would equally have taken out
+    Postman, the scaffold, the mock server, and the view, because all of them trust
+    the type. Fixed the only way that heals an existing row: **`normalizeApiDesign()`
+    is applied in `PrismaApiDesignRepository.findBySessionId`**, one chokepoint that
+    every consumer reads through — *not* a `?? []` sprinkled into each builder
+    (~8 sites, and the next consumer forgets). The rule is **one pure helper in
+    `@archivato/shared`, called at both boundaries** (the agent on write, the store
+    on read) so the two can't drift. **A missing array must read as empty, never as
+    undefined.** When a required field on a JSON-stored artifact starts arriving
+    absent, fix the read — not the crash site.
 - **Repository pattern everywhere.** Every store has an interface + in-memory
   impl (used by unit tests, DB-free) + Prisma impl. Feature modules provide the
   Prisma repo.
-- **Billing / project quota.** Capacity is a **max-projects-owned** count (dollars
-  are plan prices): **Free = 1 project**, **Pro → 5 projects** (**$19/mo** or
-  **$182/yr — 20% off**). **Annual is a cadence, not a tier:** an orthogonal
+- **Billing / project quota.** Capacity is a **projects-created-per-calendar-month**
+  rate (dollars are plan prices): **Starter = 1 design/month**, **Team = unlimited**
+  (**$79/mo** or **$758/yr — 20% off**).
+  - **The tier names are display-only.** The ids stay `free` | `pro` — that is what
+    every subscription row, `isPro`, `ProGuard`, `effectivePlan`, the Paddle mapping,
+    and the admin console key on. `PLANS[plan].name` is the label ("Starter"/"Team");
+    **rename the label, never the id.** Tier names are product brands, so they are
+    read from `PLANS` rather than i18n and are identical in every locale.
+  - **`projectQuota: number | null`, where `null` = unlimited** — never `0` (which
+    would block everything) and never a large number standing in for "no limit"
+    (which a later edit could accidentally enforce). Callers must **skip** the check
+    via `isUnlimitedQuota`, not compare against a sentinel.
+  - **The quota period is the UTC calendar month** (`startOfQuotaPeriod` /
+    `countInQuotaPeriod`, pure, in `shared`). Both sides must agree on where the
+    month starts: the server's 402 and the client's "used X of Y". If each used its
+    own local clock they would disagree across a timezone boundary and a user would
+    be told they had a design left and then refused — hence one shared UTC rule,
+    used by the enforcement *and* the banner.
+  - **Known accepted hole:** the meter is still the project list (no usage table),
+    so a **deleted project stops counting** and a Starter user can delete-and-retry
+    within a month. Not a regression (the old owned-count quota behaved the same)
+    and it costs them the design they delete. Closing it needs creations recorded
+    somewhere that survives the delete. Pinned by `project-quota.spec.ts`.
+  - **The landing page reads its price from `PLANS`** (`lib/landing.ts` →
+    `TEAM_PRICE`). It used to be an independent literal, and the two promptly
+    drifted — the page advertised $79/mo + "unlimited designs" while billing charged
+    $19/mo for 5 projects. A pricing page that disagrees with the checkout is worse
+    than one that can't be freely edited. The tier *structure* still lives in
+    `landing.ts` (billing has no "Agency" tier to sell — it is **not built**, per
+    POSITIONING §4.5); the number a customer reads is the number they are charged.
+    **To reprice, edit `PLANS` — one file.**
+
+  **Annual is a cadence, not a tier:** an orthogonal
   `billingCycle: 'monthly' | 'annual'` on the subscription changes only the price,
   the period length (mock: +30d vs +365d; Paddle supplies real dates), and the
   Paddle price id (`PADDLE_PRICE_ID_ANNUAL`, falls back to the monthly id). Nothing
@@ -564,12 +993,14 @@ tsconfig and never needs shared's `dist`.
   `annualPrice/12`. Web: monthly/annual toggle in the **UpgradeModal** (default
   annual) + **landing pricing**, cadence badge in **settings** (i18n `billing.cycle.*`
   / `pricing.cycle.*`, EN+AR). Enforced
-  at **project creation** (`InterviewService.start`: `repo.countByUserId` vs
-  `BillingService.getProjectQuota` → **402** when at the limit). To start another
-  at the cap you **delete** a project (`DELETE /interview/:id`, owner-guarded,
-  cascades all artifacts) or upgrade. Deliberately simple: **no per-confirm
+  at **project creation** (`InterviewService.start`:
+  `repo.countByUserIdCreatedSince(startOfQuotaPeriod())` vs
+  `BillingService.getProjectQuota` → **402 `quota_exceeded`** when the month's
+  allowance is spent; skipped entirely when the quota is `null`). At the cap you
+  wait for the next month or upgrade. Deliberately simple: **no per-confirm
   consumption and no usage table** — the project list *is* the meter, so the UI
-  computes "used" from the project count (billing only returns the quota/limit).
+  computes "used" from the projects created this period (`createdAt` on
+  `ProjectSummary`; billing only returns the quota/limit).
   `BillingModule` is imported by `InterviewModule` (one-way; billing never reads
   sessions). Payments sit behind a **`BillingProvider`** (mirrors `LlmProvider`):
   `BILLING_PROVIDER=mock|paddle` forces it, else Paddle when `PADDLE_API_KEY` is
@@ -717,13 +1148,149 @@ tsconfig and never needs shared's `dist`.
   version with JSON mode). Native `fetch`, no SDK. Targets chat deployments
   (gpt-4o/4.1/35-turbo) — the o-series reasoning models reject `temperature` and
   want `max_completion_tokens`.
-- **Interview shape.** Kept **short: ≤ 9 questions** (`MAX_ADAPTIVE_QUESTIONS`,
-  and `QUESTION_PLAN` is 9 long so the 90% gate closes by Q9). Questions may carry
-  `options` + `multiple` on `InterviewQuestion` — the web renders tap-to-pick
-  chips/checkboxes; the answer stays a **string** the client composes (picks +
-  free-text detail), so the `answer` DTO/state machine are unchanged. The
-  adaptive interviewer may also return `options`/`multiple` (mapped in
-  `tryAdaptive`); plan questions ship curated options for scale/tech/features.
+- **Interview shape.** Kept **short: ≤ 9 questions** (`MAX_ADAPTIVE_QUESTIONS`).
+  Questions may carry `options` + `multiple` on `InterviewQuestion` — the web
+  renders tap-to-pick chips/checkboxes; the answer stays a **string** the client
+  composes (picks + free-text detail), so the `answer` DTO/state machine are
+  unchanged. The adaptive interviewer may also return `options`/`multiple` (mapped
+  in `tryAdaptive`); plan questions ship curated options for scale/tech/features.
+- **Slot-filling scoping interview (R6).** The interview is a **slot-filling
+  session**, not a blind question generator: a fixed catalog of the facts a dev
+  shop needs to scope a client bid (`SLOT_KEYS` in `@archivato/shared`;
+  `SLOT_CATALOG` — descriptions + `askClientTemplate` — server-side in
+  `interview/slots.ts`). Each adaptive turn (1) **extracts** slot values from the
+  latest answer (`source: explicit|inferred`, `confidence`), (2) records a gap the
+  owner couldn't answer as an **`openQuestion`** to forward to the client (instead
+  of re-asking), (3) asks the single most important **missing** slot, in the
+  project's own vocabulary. `budget_range` + `timeline` are new to scope and must
+  be filled-or-open-questioned before `done`. Non-negotiables:
+  - **The transcript (`history[]`) stays the source of truth.** `slots` /
+    `openQuestions` on the session are a **derived cache**, always re-derivable
+    from history — never authoritative over it. Both are nullable Json
+    (**migration-free** convention; `20260715140000_add_interview_slots`).
+  - **Merge is guardrailed** (`mergeSlots`, pure/tested): a later **explicit**
+    value beats an earlier **inferred** one, *never* the reverse; a turn that fills
+    one slot never drops the others. `reconcileOpenQuestions` drops a question only
+    once its slot is answered **explicitly** (an inference is a guess that still
+    needs client confirmation). LLM slot JSON is untrusted → `sanitizeSlots` /
+    `sanitizeOpenQuestions` allowlist via `isSlotKey` (also closes the
+    computed-key prototype-pollution path).
+  - **All existing guardrails are untouched** — `MAX 9` cap, `MIN 3` floor,
+    coverage clamp, positional plan fallback, phase validation. **Plan (offline/
+    mock) mode fills no slots**, and downstream tolerates empty `slots`/
+    `openQuestions` everywhere. Two known offline gaps, both accepted: the cap
+    short-circuit skips extraction on the *final* answer, and the appended
+    `budget`/`timeline` plan questions (`InterviewPhase.Commercial`) sit past the
+    9-cap so a pure-plan run never reaches them.
+  - **Notes-first mode** (`start` `notes?`, `NOTES_ENTRY_ID`): pasted call notes
+    become `history[0]` (labelled to the prompt as call notes), then the **same**
+    `advance()` loop runs — no parallel path. The first adaptive turn extracts many
+    slots at once; in plan mode the notes are just answer #0 and the plan continues
+    from position 1.
+  - **Confirmation gate** exposes `slots` + `openQuestions` on `InterviewState`.
+    The web `SlotReview` renders filled slots (inferred ones flagged
+    "understood from your answers — correct?") + a **"Questions for your client"**
+    copy-to-clipboard list. Editing a slot (`PATCH /interview/:id/slots`, owner-
+    guarded, `editSlot`) **appends a correction to the transcript** and marks the
+    slot `explicit`/`high` — the snapshot follows the transcript, never the reverse;
+    refused once `confirmed`.
+  - **Downstream:** `openQuestions` rides onto `RequirementDocument.openQuestions`
+    (`requirements.service` → agent, attached on both LLM + deterministic paths).
+    R6 plumbed it; **R7 (below) consumes it** — folding each gap into the
+    requirement document's "Assumptions & open questions".
+- **Requirement Document = a two-audience scoping artifact (R7).** The Requirement
+  Engineer now emits a **client-facing** document, not a bare requirements dump —
+  additive fields on `RequirementDocument` (`@archivato/shared`), all optional so
+  old rows/plan-mode runs render fine and every consumer tolerates absence: a
+  jargon-free **`executiveSummary`** (who it serves / what they can do / the
+  business outcome), **`outOfScope[]`** (`{item, reason?}` — a first-class
+  scope-creep guard, 3–6 capabilities NOT included), and
+  **`assumptionsAndOpenQuestions[]`** (`{assumption, impactIfWrong}` — the agent's
+  gap-filling assumptions **merged with** the interview's `openQuestions`, each
+  phrased as an assumed default). Section order (owner page + exporters + share
+  client block): exec summary → functional → roles → out-of-scope → assumptions →
+  then the technical sections (NFR/business rules/constraints). Non-negotiables:
+  - **Two audiences, one document.** The prompt bans jargon ("CRUD"/"endpoint"/
+    "schema"/"API") from the client sections and phrases functional reqs in the
+    **user-outcome voice** ("Customers can track their orders"), not "the system
+    shall". NFR/rules/constraints may be technical.
+  - **`budget_range` + `timeline` are context only — never printed.** The agent
+    gets the full slot snapshot but strips those two before the prompt; a test
+    asserts their values never appear in the document (they belong to roadmap/cost).
+  - **Out-of-scope has a deterministic source.** `DOMAIN_COMMON_SCOPE` /
+    `GENERIC_COMMON_SCOPE` (`interview/slots.ts`, code not model — the
+    `DOMAIN_FOLLOW_UPS` precedent) name the capabilities a buyer typically expects
+    but forgets to ask for; `domainCommonScope()` is the fallback's source and a
+    prompt hint on the LLM path, so the section is never empty (e.g. a delivery app
+    → "Live GPS tracking" listed as excluded).
+  - **Traceability is preserved.** FR/NFR/BR **ids stay stable and untouched** —
+    R7 changed structure and phrasing, not the ID scheme; the system-design stage
+    still reads requirement IDs. `normalize()` backfills any R7 section the model
+    skipped and always folds the open questions in; `save()` (the structured
+    editor) **carries the narrative sections over** (they aren't in the editor DTO,
+    so an edit must not wipe them), and `RefinementAgent` spreads `ctx.current`
+    first so a chat refine can't drop them either.
+  - **Share page (R3) split:** the client "What's included" block renders
+    `<RequirementDocumentView audience="client">` (exec summary + functional +
+    roles + out-of-scope + assumptions); NFR/business rules/constraints move to a
+    `audience="technical"` **Collapsible in the technical appendix**. i18n
+    `requirements.{executiveSummary,outOfScope,assumptionsAndOpenQuestions,
+    impactIfWrong}` + `share.appendix.requirements` (EN+AR). Owner page shows all
+    sections (`audience="full"`) with IDs demoted to muted mono reference text.
+- **System Design = constraint-aware, priceable architecture (R8).** The System
+  Architect now reads the interview's **constraint slots** (`SystemDesignContext.slots`
+  — `budget_range`/`timeline`/`scale_expectations`/`constraints`/`existing_assets`,
+  threaded through `SystemDesignService.generate` from `session.slots`, possibly
+  absent) and emits four additive, optional fields on `SystemDesign`
+  (`@archivato/shared`, all back-compat so old rows/plan-mode render fine):
+  1. **`buildVsBuy[]`** (`{capability, recommendation:'build'|'buy', suggestedService?,
+     rationale, impact}`) — a build-vs-buy call over a **closed** capability set
+     (`BUILD_VS_BUY_CAPABILITIES` = auth/payments/notifications/file_storage/maps_geo/
+     search; `isBuildVsBuyCapability` guards it). The fallback source is a static
+     `BUILD_VS_BUY_TABLE` (code, not LLM) keyed by an `applies` regex over the
+     requirement haystack — **auth is always included** (role names like "Customer"
+     don't surface as auth keywords). "Buy" picks are generic well-knowns (Stripe,
+     Twilio/Resend, S3/R2, Google Maps/Mapbox); payments is always "buy", search/auth
+     "build".
+  2. **Module `complexity` (`S|M|L|XL`) + `complexityRationale`** on each
+     `ServiceModule` — deterministic heuristic = related-requirement count + fan-out
+     (dependencies) + a `domainWeight` bump for intrinsically heavy domains
+     (payments/search/geo). **Every module always carries one** (the LLM path is
+     backfilled by `ensureComplexity`, the fallback derives it).
+  3. **`phasedArchitecture` (`{mvp, growthPath, migrationNotes}`) — CONDITIONAL.**
+     Present **iff `hasScaleConflict`**: stated **large scale** (`LARGE_SCALE` regex
+     over the `scale_expectations` slot or haystack) **AND** a **tight budget or
+     timeline** (`TIGHT_BUDGET`/`TIGHT_TIMELINE` over those slots). Its presence is a
+     pure function of the (deterministic) conflict test on BOTH paths — `normalize()`
+     **gates a model-supplied phased block off** when there's no conflict, and
+     backfills one when there is. Empty slots (plan mode) ⇒ no conflict ⇒ omitted.
+  4. **`constraintCompliance[]` (`{constraint, howAddressed}`)** — passthrough of the
+     `constraints` slot + `requirements.constraints` (deduped), each mapped to a
+     `howAddressed` line. Empty array when no constraints.
+  - **Constraint-grounded rationale + simplicity bias.** The prompt makes every major
+    decision cite the relevant constraint and NAME the rejected alternative and why it
+    loses; under a tight budget/timeline the architect prefers the **simplest**
+    architecture (`inferArchitecture` pins to `modular_monolith` when tight, even past
+    scale words — the phased plan captures the growth path). Budget/timeline are
+    **context only — referenced qualitatively ("the tight timeline"), never the exact
+    figure/date** (the R7 precedent; scale MAY be named).
+  - **Haystack excludes budget/timeline/scale slots** (a budget like "we can pay $5k"
+    would trip the payments/maps keyword detectors) but folds in
+    business_domain/core_workflows/data_entities/integrations/existing_assets.
+  - **Traceability + downstream compat preserved.** Requirement IDs, the module
+    structure, the Mermaid builders, and the **"Explain this decision"** mechanism all
+    read unchanged fields; API-design + cost-estimate read only `services`/`techStack`/
+    `architecture`, untouched. Persistence is the JSON-blob convention (migration-free).
+    `SystemDesignService.save` carries the R8 analysis over from the stored design (the
+    structured editor's `Draft` doesn't include it) and **restores each module's
+    complexity by name** so an edit can't wipe it.
+  - **Web.** `SystemDesignView` renders complexity badges on the service cards, a
+    build-vs-buy table, the phased block (when present), and a constraint-compliance
+    table at the end; a **`buildVsBuyFirst`** prop leads the share appendix with
+    build-vs-buy (the most client-readable part) while the owner page keeps it after
+    the services. i18n `stages.system.{buildVsBuy,phased,compliance}.*` (EN+AR). The
+    markdown exporters (web `systemDesignToMarkdown` + api `markdown.builder`) and the
+    example fixture (`EXAMPLE_SYSTEM_DESIGN`) carry all four sections.
 - **Gating:** each stage refuses to generate until its upstream artifacts exist
   (interview must be `confirmed`); returns 409/404 accordingly.
 - **Ownership:** pipeline routes are `@UseGuards(JwtAuthGuard, SessionOwnerGuard)`.
@@ -987,8 +1554,22 @@ tsconfig and never needs shared's `dist`.
   customer reply → assignee); assignment → assignee; AI smart-alert → assignee
   (skipped if unassigned). Emails HTML-escape the (user-controlled) ticket subject
   and carry an absolute `WEB_ORIGIN` deep-link; in-app links are relative
-  (`/support/tickets/:id` for the customer, `/support/admin/tickets/:id` for
-  staff). The **`notifications` module** is a normal repo-pattern store
+  (**`/support/:id`** for the customer, **`/support/admin/:id`** for staff).
+  - **These links must match the web app's real routes, and a string test cannot
+    check that.** They used to carry an extra segment (`/support/tickets/:id`),
+    which matched **no route at all** — Next resolves `support/[id]` against a
+    *single* segment — so every in-app notification and every notification
+    **email** landed on a 404. That is the worst place for this bug: the deep link
+    is the entire reason the email exists, and a customer who clicks "you have a
+    reply" and gets a 404 concludes the product is broken. It survived because the
+    unit test asserted the link *contained* `/support/tickets/`, and a substring
+    check on a path can't tell a live route from a dead one.
+    **`support-notification-links.spec.ts`** now resolves each emitted path
+    against the web app's actual route files on disk (the App Router's filesystem
+    **is** the route table, so it can't drift from itself) and asserts the old
+    paths still resolve to nothing — so the test can genuinely fail. Move the
+    ticket page ⇒ move these links.
+  The **`notifications` module** is a normal repo-pattern store
   (`notifications` table, in-memory + Prisma) exposing owner-scoped
   `GET /notifications` (items + unread count), `POST /notifications/read-all`,
   `PATCH /notifications/:id/read`; `NotificationsService.notify()` swallows its own
@@ -1118,9 +1699,174 @@ tsconfig and never needs shared's `dist`.
   (and a granted one appears) on tab-return without a hard reload. Console *pages*
   already re-check on mount via `usePageAccess`, and every API is server-gated, so
   this is UX freshness, not the security boundary.
-- Design system: Tailwind + shadcn/ui under `components/ui/`. Colors are HSL CSS
-  vars in `globals.css` (light on `:root`, dark on `.dark`); theme toggled by
-  `ThemeProvider`. Providers: Theme → Toast → Confirm → **Upgrade** → AuthGate.
+- **Design system (R14) — tokens only, one accent, colour must MEAN something.**
+  Tailwind + shadcn/ui under `components/ui/`. Every token is an HSL CSS var in
+  **`globals.css`** (light on `:root`, dark on `.dark`); `tailwind.config.ts` only
+  *exposes* them and may never hold a literal. Theme via `ThemeProvider`;
+  providers: Theme → Toast → Confirm → **Upgrade** → AuthGate. Reference page:
+  **`/design`** (dev-only, 404s in prod) renders every token + variant.
+  1. **Raw hex and Tailwind's stock palette are BANNED in components**, enforced
+     by `no-restricted-syntax` in `.eslintrc.json` (it catches `bg-blue-500` *and*
+     arbitrary values like `text-[#fb923c]` — that second form is how three
+     violations hid from a palette-name grep). The `overrides` list is the set of
+     files that legitimately hold literals, each for a reason CSS can't solve:
+     **`lib/node-category.ts`** (React Flow's MiniMap sets its swatch via an SVG
+     `fill` **attribute**, where `var()` does not resolve), **`lib/og.tsx`** +
+     the icon/image routes (Satori has no CSS engine), **`lib/site.ts`** (brand
+     constants read by crawlers), **`app/layout.tsx`** (`<meta theme-color>` is
+     read by OS chrome before any CSS loads), `LanguageMenu`/`AuthForm` (flag +
+     third-party brand SVGs), `ExportView` (a print window with no stylesheet).
+     Anything else needs an `eslint-disable-next-line` **with the reason**.
+  2. **Colour means exactly one of two things.** A **semantic state**
+     (success/warning/destructive/info) or an **unordered data category**
+     (`--data-1..5`, the canvas node kinds — the one place non-semantic hue earns
+     its keep). Decorative hue is not a category: R14 deleted a six-tone rainbow
+     from the artifact `Section` headers and a twelve-entry NFR colour map,
+     because the requirement document is what the owner's **client** reads and a
+     rainbow reads as a template. Don't reintroduce one.
+  3. **Every semantic ships FOUR tokens** and the pairing is the contract:
+     `--x` (solid fill) + `--x-foreground` (text on it), `--x-subtle` (tinted
+     surface) + `--x-subtle-foreground` (text on THAT). Use the pair; never mix a
+     solid with a subtle-foreground. The old `bg-success/15 text-success` idiom
+     composited a tint onto an unknown surface and then put the *solid* colour on
+     it — which failed AA in dark mode, where the solid token is lightened for
+     dark backgrounds. Explicit colours make each chip's contrast a fixed number.
+  4. **Ordered ramps reuse the semantic ladder; they don't get new hues.** Module
+     complexity S/M/L/XL → success/info/warning/destructive (rising size = rising
+     cost). Severity is the one exception: it genuinely has **four** rungs, so
+     `--severity-high` exists between warning and destructive — collapsing `high`
+     into `destructive` would make a high finding indistinguishable from a
+     critical one, which is the distinction that decides what an owner fixes.
+  5. **Brand constants are named by ROLE, not hue** (`brand.accent`,
+     `accentDeep`, `accentBright`, `ink` in `lib/site.ts`). They were `indigo` /
+     `cyan`, and when the accent moved to teal every name became a lie that still
+     compiled. They mirror `--primary`/`--background` and are literals only
+     because Satori/favicons/`theme_color` render where no stylesheet exists —
+     **retune them together**, including the on-dark mark colours in `lib/og.tsx`
+     (an inline `#A5B4FC` there survived the repaint and shipped a purple-noded
+     logo on a teal card; verify by fetching `/opengraph-image` and *looking*).
+- **Typography — static weights, and never `-webkit-font-smoothing` (R14).**
+  Inter (Latin) + IBM Plex Sans Arabic (Arabic) + JetBrains Mono, self-hosted via
+  `next/font` in the **root** layout (the landing and share pages live outside
+  `(app)`, so loading them there would strand exactly the two surfaces a stranger
+  sees first on the fallback stack). Two rules, both learned the hard way, both
+  about **Windows** — which is most of this audience:
+  1. **Do not add `-webkit-font-smoothing: antialiased`.** It reads like polish
+     and is the opposite: on Windows it disables DirectWrite/ClearType subpixel
+     AA and forces grayscale, so text renders thin and blurry. It only ever
+     existed to tame macOS's heavy subpixel rendering, and **macOS removed
+     subpixel AA in Mojave** — so on every current OS it has no upside.
+     `text-rendering: optimizeLegibility` is out for the same reason.
+  2. **The weights are enumerated on purpose — do not drop `weight` to get the
+     variable font.** Chromium on Windows rasterises **variable** fonts with
+     grayscale AA instead of ClearType, so bold weights render smeared. Static
+     instances take the normal ClearType path. Cost: ~4 woff2 instead of 1.
+     `font-synthesis-weight: none` guards the corollary — Tailwind's
+     `font-extrabold`(800)/`font-black`(900) have no file and would faux-bold
+     (blurry by construction), so they fall back to a real weight instead.
+  Arabic gets `--leading-script: 1.85` (vs 1.6) and zero tracking, keyed off
+  **`[lang]`, not `[dir]`** — script and layout direction are different questions.
+- **Responsive + RTL — wide content adapts itself; direction is logical (R14).**
+  **Exit criteria, and it is measured, not eyeballed:** the page body must never
+  scroll sideways, at any width, in either direction, in either theme. Verified
+  by driving a real browser over 48 combinations (4 public pages × 360/768/1280 ×
+  {dark,light} × {LTR,RTL}) and asserting `documentElement.scrollWidth <=
+  clientWidth`. That check found two live overflows a screenshot pass had missed.
+  1. **`components/ui/table.tsx` does two different things at two widths, and
+     both halves are load-bearing.**
+     - **From `sm` up: it scrolls.** `overflow-x-auto` on the wrapper + a
+       **`sm:min-w-[34rem]`** floor on the `<table>`. The min-width is the half
+       people forget: the wrapper always had `overflow-auto`, but a `w-full`
+       table with no floor doesn't scroll — it **compresses**, squeezing three
+       columns to ~40px each and wrapping one word per line. Opt out with
+       `min-w-0`.
+     - **Below `sm`: it STACKS** into labelled rows (`[data-stack]` in
+       globals.css). Horizontal-scrolling a 3-column requirements table on a
+       360px phone is technically legible and practically horrible — you swipe to
+       read a priority and swipe back to see whose it was. Opt out with
+       `stack={false}`.
+     Three traps inside the stacking, each of which bit:
+     - **The cell is a GRID, not a flex row.** A cell's value is often several
+       elements (a requirement's title *and* its description); `display:flex`
+       makes them siblings in one row and they render on top of each other. It's
+       `grid-template-columns: <label> minmax(0,1fr)` with `td > * {grid-column:2}`
+       — without that forcing rule the second child auto-places back under the
+       *label*. `justify-items:start` keeps a Badge at its natural width instead
+       of stretching it into something that reads as a progress bar.
+     - **`display:block` DESTROYS a table's implicit ARIA semantics**, which is
+       why table.tsx sets explicit `role="table|rowgroup|row|columnheader|cell"`.
+       They look redundant at desktop width and are the only reason a screen
+       reader still hears rows and columns at phone width. `thead` is *clipped*
+       (sr-only), never `display:none`, so column headers stay in the a11y tree —
+       `::before` content is generated and is not reliably announced.
+     - **`data-label` is HARVESTED, not hand-written.** `TableRow` reads the
+       header row's text into a ref and stamps each body cell by index. The
+       alternative was `data-label={t('…')}` on ~100 cells — the same string
+       typed twice, guaranteed to drift. It also means the label is *translated*
+       for free (the Arabic run harvests `المعرّف`). Ordering is what makes it
+       safe: React renders `TableHeader` before `TableBody`.
+  2. **Its ancestor must be able to shrink.** A flex child needs **`min-w-0`** or
+     it adopts the table's min-width and pushes the whole page into a horizontal
+     scroll — which is why the stage-content wrapper in `ProjectStages` has it.
+     This is the trap that makes (1) look broken.
+  3. **A row holding a `whitespace-nowrap` button must be able to wrap.** Every
+     artifact header (`flex items-center justify-between` + a meta line + a
+     Download button) overflowed the page at 360px, because the button can't
+     shrink and the row couldn't wrap. They all carry `flex-wrap` now, and the
+     text block beside them carries `min-w-0`.
+  4. **AI-generated artifact text needs `dir="auto"`, and RTL is where you find
+     out you forgot.** The artifacts are server-side English; on an Arabic page
+     an English string with no `dir` inherits RTL and bidi reorders it — the
+     sentence's full stop jumps to the wrong end. The requirements/NFR/business-
+     rule cells were missing it and looked fine in every LTR screenshot.
+  5. **Logical properties, always** (`ms/me/ps/pe`, `start/end`, `text-start`).
+     R14 swept up live bugs where physical ones had shipped: toasts pinned
+     `right-4` (so they surfaced on the RTL page's *leading* edge), `TableHead`
+     used `text-left` (headers hugging the wrong edge while their cells aligned
+     right), the Select check indicator sat at `left-2` over the Arabic label,
+     `Alert`'s icon at `left-4`/`pl-7` let RTL text run underneath it, a
+     `list-disc pl-5` hung its bullets off the wrong edge, and the service/role
+     cards' `border-l` accent bar stayed on the physical left.
+     `left-1/2 -translate-x-1/2` centring is symmetric and fine.
+  6. A chevron that **rotates** to show state needs no `rtl:-scale-x-100` — it's
+     symmetric about the vertical axis. An **arrow** does.
+- **Loading = skeletons shaped like the content, never a spinner (R14).** A
+  spinner says "wait"; a skeleton says "here is what is coming, and how much".
+  `ArtifactSkeleton` (`components/shared/`) is the one loading state for every
+  standalone artifact panel — vision/roadmap/cost/threat/QA each rendered their
+  own copy-pasted `<Skeleton h-16/><Skeleton h-40/>`, which was five copies of
+  one decision **and** looked nothing like what arrived, so the page visibly
+  re-laid-out on load. It mirrors the real shape (meta row → prose section →
+  table rows); `ProjectCardSkeleton` does the same for the dashboard grid, and
+  the share page has its own document-shaped one (it is the first thing a cold
+  visitor sees). `Skeleton` shimmers rather than pulses — a pulsing block reads
+  as *disabled* — and carries `motion-reduce:animate-none`, since the shape
+  carries the meaning and the animation is only the liveness cue.
+- **`/demo-scoping-package` — the public proof (R14).** A complete client
+  scoping package, indexable, rendered by the **same `SharedProjectView`** a real
+  share link uses, from the **same fixture** the in-app example tour uses
+  (`lib/demo-scoping-package.ts`). The landing page can only *describe* the
+  output; a prospect's real question is "is what this sends my client good enough
+  to put my name on?", and only the artifact answers it — previously you had to
+  sign up, interview and generate to see one. Four things not to undo:
+  1. **It reuses the real share page.** No separate "marketing version" of the
+     artifact exists to drift out of sync, and a share-page regression shows up
+     here loudly.
+  2. **It applies the SAME owner-only redaction the server does** —
+     `redactReviewForShare()` + `budgetWarning: null`, mirroring
+     `ShareService.view`. Not for security (it's a fixture, nothing is secret)
+     but for **honesty**: showing the client-readiness findings and the budget
+     warning would show a prospect something no real client ever receives.
+  3. **It is INDEXABLE, and `/s/<token>` never will be.** The difference is
+     consent, not content: this is a fictional package we wrote to be published;
+     a share link is someone's real business idea sent to specific people. It's
+     in `publicRoutes` (→ sitemap) and earns the "client scoping" keyword
+     (POSITIONING §4.7) with something better than copy.
+  4. **`watermark: false`** — the watermark is what a *free owner's* link
+     carries; printing it on our own marketing page would advertise to ourselves
+     and show a prospect the downgraded output. `sharedAt` is a fixed date, not
+     `new Date()`: the page is statically prerendered, so a live clock would bake
+     in the build date and then quietly age.
 - **Upgrade modal.** `UpgradeProvider` exposes `useUpgrade()` → `openUpgrade({feature?})`
   (mirrors `useConfirm`): a Promise that resolves `true` once the user is on Pro.
   It runs the checkout itself (mock activates instantly; Paddle opens the
@@ -1304,6 +2050,24 @@ tsconfig and never needs shared's `dist`.
   any value is earned); and **confirming the interview auto-generates Requirements**
   (no redundant Generate click on an empty tab). i18n `dashboard.starters.*` /
   `dashboard.example.*` / `interview.questionN` (EN+AR).
+- **The artifact nav is ordered by the DEAL, not the build (R12).** `TABS` runs
+  vision → requirements → **cost → roadmap** → system → database → api → apidocs →
+  diagrams → canvas → review → threat → qa → export. It used to mirror the
+  *pipeline* (requirements → system → database → api), which is the order the
+  **machine** works in, not the order the owner sells in — what a dev shop reaches
+  for after a client call is the scope, the price, and the timeline. Purely
+  presentational: routes and deep links are unchanged, and cost/roadmap still need
+  the full pipeline, so they sit early **disabled** until the API design exists.
+  That's the honest read ("this is coming, and it's what matters") where burying
+  them behind eight technical tabs said the opposite.
+- **The export surface is organised by AUDIENCE, not by file format (R12).**
+  `ExportView` = two primary cards — **Send to client** (`shareApi.create`,
+  idempotent, copies the link) and **Hand off to your team** (the existing
+  `all.zip`) — plus a **"More formats"** dropdown holding every individual export,
+  unchanged. **Nothing was removed**; the flat row of nine equal buttons just asked
+  the owner to know what a Postman collection was before they could send a client
+  anything. Pinned by `ExportView.test.tsx` (every format still reachable).
+  **Client-facing PDF is deliberately NOT built** — see the TODO note below.
 - Confirmed project view = `ProjectStages` (tabbed, one stage per tab, downstream
   tabs disabled until prereqs exist). `app/dashboard/page.tsx` is the slim
   orchestrator. Above it, `ProjectWizard` is the single stage stepper (Interview →
@@ -1464,3 +2228,4 @@ browser suite is ever reintroduced: never call an unbounded `textContent()` /
 - **Ask before making architectural decisions.**
 - After each slice, run `/security-review` + `/code-review` and fix findings.
 - Keep `README.md` + this file updated per slice.
+- Do not add any extra comments, only edit the important comments.

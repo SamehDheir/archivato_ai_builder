@@ -17,6 +17,7 @@ import {
   Lock,
   MessageSquare,
   Network,
+  PenLine,
   Shapes,
   ShieldAlert,
   Sparkles,
@@ -24,9 +25,11 @@ import {
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
+import { buildEffortEstimate, computeSuggestedPrice } from '@archivato/shared';
 import type {
   ApiDesign,
   DatabaseDesign,
+  FixResult,
   PipelineStageName,
   ProjectSnapshot,
   RefineResult,
@@ -36,6 +39,7 @@ import type {
   SystemDesign,
   UpstreamRevisions,
 } from '@archivato/shared';
+import { cn } from '@/lib/utils';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -58,6 +62,7 @@ import { QaPlanPanel } from '@/components/qa/QaPlanPanel';
 import { StaleNotice } from '@/components/project/StaleNotice';
 import { ShareLinkCard } from '@/components/project/ShareLinkCard';
 import { ExportView } from '@/components/project/ExportView';
+import { ProposalModal } from '@/components/project/ProposalModal';
 import { OpenApiView } from '@/components/design/OpenApiView';
 import { ChatPanel } from '@/components/project/ChatPanel';
 import { VersionHistory } from '@/components/project/VersionHistory';
@@ -68,29 +73,108 @@ import { SummaryView } from '@/components/interview/SummaryView';
 import { ProductVisionPanel } from '@/components/product/ProductVisionPanel';
 import { useConfirm } from '@/components/shared/confirm-dialog';
 import { useUpgrade } from '@/components/billing/upgrade-dialog';
+import { useFormat } from '@/lib/i18n/format';
 
 /** The in-flight streaming generation: which stage + the accumulated console view. */
 export type StreamState = { stage: PipelineStageName; view: StreamView };
 
-/** Tab order + icons (drives the tab bar). Labels come from `project.tab.*`. */
+/**
+ * Whether the stage rail is currently drawn vertically (the `md` breakpoint).
+ *
+ * Radix Tabs takes `orientation` as a prop and uses it to decide which arrow
+ * keys move the selection — so the value has to track the CSS breakpoint, which
+ * only CSS knows about.
+ *
+ * Starts `false` (mobile-first) so SSR and the first client render agree; the
+ * effect then corrects it. `useEffect`, not `useLayoutEffect`, is deliberate:
+ * this value drives NO layout — the rail's axis is pure CSS (`md:flex-col`) —
+ * so the one-frame window before it syncs can only mean arrow keys briefly move
+ * on the wrong axis. There is never a visual jump to block paint for, and
+ * `useLayoutEffect` would warn during SSR for nothing.
+ */
+function useIsDesktop(): boolean {
+  const [desktop, setDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const sync = () => setDesktop(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  return desktop;
+}
+
+/**
+ * Tab order + icons (drives the tab bar). Labels come from `project.tab.*`.
+ *
+ * **Ordered by the DEAL, not by the build (R12).** The pipeline generates
+ * requirements → system → database → API, and the nav used to mirror that — which
+ * is the order the *machine* works in, not the order the owner sells in. What a
+ * dev shop reaches for after a client call is the scope, the price, and the
+ * timeline; the architecture is how they defend those. So the client-facing
+ * artifacts lead and the technical ones follow.
+ *
+ * This is presentational only. Cost and Roadmap still need the full pipeline, so
+ * they sit here disabled until the API design exists — a locked tab early in the
+ * list is the honest read (it says "this is coming, and it's what matters"),
+ * where burying them behind eight technical tabs said the opposite.
+ */
 const TABS: { value: TabKey; icon: LucideIcon }[] = [
+  // The deal: what the client reads and decides on.
   { value: 'vision', icon: Sparkles },
   { value: 'requirements', icon: FileText },
+  { value: 'cost', icon: Coins },
+  { value: 'roadmap', icon: Flag },
+  // The build: how the team delivers it.
   { value: 'system', icon: Network },
   { value: 'database', icon: DatabaseIcon },
   { value: 'api', icon: Webhook },
+  { value: 'apidocs', icon: BookOpen },
   { value: 'diagrams', icon: Workflow },
   { value: 'canvas', icon: Shapes },
+  // Assurance, then handoff.
   { value: 'review', icon: ClipboardCheck },
-  { value: 'roadmap', icon: Flag },
-  { value: 'cost', icon: Coins },
   { value: 'threat', icon: ShieldAlert },
   { value: 'qa', icon: FlaskConical },
   { value: 'export', icon: Download },
-  { value: 'apidocs', icon: BookOpen },
   { value: 'refine', icon: MessageSquare },
   { value: 'history', icon: History },
 ];
+
+/**
+ * The stages a project can switch off (R12). Hidden from the nav — not disabled —
+ * when `generateExtendedArtifacts` is false: a disabled tab reads as "you can't
+ * afford this yet" and invites a click that does nothing, whereas this project
+ * simply isn't producing them. The quiet action below the tabs brings them back.
+ */
+const EXTENDED_TABS = new Set<TabKey>(['threat', 'qa']);
+
+/**
+ * Which artifact each stage waits on, for the locked tooltip ("Requires the
+ * database design"). This is the SAME gate `available` computes — it just names
+ * the blocker instead of only refusing.
+ *
+ * A dimmed nav item with no explanation makes the user guess whether the stage
+ * is broken, unpaid for, or merely not reached yet; those need three different
+ * reactions. The Pro lock is a separate axis (`PRO_TABS`) and reads its own
+ * badge, because "not yet" and "not on your plan" are different problems.
+ */
+const REQUIRES: Partial<Record<TabKey, TabKey>> = {
+  system: 'requirements',
+  database: 'system',
+  diagrams: 'system',
+  canvas: 'system',
+  api: 'database',
+  review: 'api',
+  roadmap: 'api',
+  cost: 'api',
+  threat: 'api',
+  qa: 'api',
+  export: 'api',
+  apidocs: 'api',
+  refine: 'api',
+  history: 'requirements',
+};
 
 export type TabKey =
   | 'vision'
@@ -156,6 +240,7 @@ export function ProjectStages({
   onGenerateDatabase,
   onGenerateApi,
   onGenerateReview,
+  onFixApplied,
   onSavedDoc,
   onSavedDesign,
   onSavedDbDesign,
@@ -163,6 +248,11 @@ export function ProjectStages({
   onRefined,
   onRestored,
   onUpgraded,
+  clientName,
+  weeklyRate,
+  onSaveWeeklyRate,
+  extendedArtifacts = true,
+  onEnableExtendedArtifacts,
 }: {
   sessionId: string;
   summary: RequirementsSummary | null;
@@ -188,6 +278,12 @@ export function ProjectStages({
   onGenerateDatabase: () => void;
   onGenerateApi: () => void;
   onGenerateReview: () => void;
+  /**
+   * An approved review fix landed (R11). The parent takes the new report and
+   * refetches the artifacts named in `artifactsTouched` — which is also exactly
+   * the set whose staleness flags just moved.
+   */
+  onFixApplied: (result: FixResult) => void;
   onSavedDoc: (doc: RequirementDocument, opts?: { auto?: boolean }) => void;
   onSavedDesign: (design: SystemDesign, opts?: { auto?: boolean }) => void;
   onSavedDbDesign: (design: DatabaseDesign, opts?: { auto?: boolean }) => void;
@@ -196,14 +292,45 @@ export function ProjectStages({
   onRestored: (snapshot: ProjectSnapshot) => void;
   /** Called after a successful in-place upgrade so the parent can refresh the plan. */
   onUpgraded?: () => void;
+  /** The end client this scoping is for (R5) — prefills the proposal message. */
+  clientName?: string | null;
+  /** The owner's internal weekly rate for the cost page's suggested price. */
+  weeklyRate?: number | null;
+  /** Persist a new weekly rate (owner-only). */
+  onSaveWeeklyRate?: (rate: number | null) => Promise<void>;
+  /**
+   * Whether this project produces the threat model + QA plan (R12). Defaults true
+   * so an older cached payload without the field behaves exactly as before.
+   */
+  extendedArtifacts?: boolean;
+  /** Switch them on for a project that opted out at the gate. */
+  onEnableExtendedArtifacts?: () => void;
 }) {
   // `tab` is controlled by the parent (so the Project Wizard can navigate to a
   // stage); `setTab` is just an alias to the parent's setter.
   const setTab = onTabChange;
   const { t } = useTranslation('project');
   const openUpgrade = useUpgrade();
+  const { usd } = useFormat();
   // Which stage tab is currently in edit mode (null = viewing).
   const [editing, setEditing] = useState<TabKey | null>(null);
+  // R13 — the proposal message composer (owner-only; opens over the project).
+  const [writingProposal, setWritingProposal] = useState(false);
+
+  /**
+   * The owner's internal suggested price, formatted exactly as the Cost tab shows
+   * it, to prefill the proposal message. Null without a weekly rate — we never
+   * invent a figure, and the message simply carries no price.
+   *
+   * Derived here rather than read from the stored cost estimate for the same
+   * reason the roadmap does it: `buildEffortEstimate` is deterministic from the
+   * design, so it can't hand the owner a stale number to quote a client.
+   */
+  const suggestedPrice = useMemo(() => {
+    if (!design || !weeklyRate) return null;
+    const price = computeSuggestedPrice(buildEffortEstimate(design), weeklyRate);
+    return `${usd(price.min)} – ${usd(price.max)}`;
+  }, [design, weeklyRate, usd]);
   // Set right before an autosave updates a parent artifact, so the artifact-change
   // effect below doesn't mistake the autosave for a restore and close the editor.
   const skipEditingResetRef = useRef(false);
@@ -223,6 +350,31 @@ export function ProjectStages({
     [doc, design, dbDesign, apiDesign],
   );
 
+  // The rail is vertical from `md` up (a CSS decision), and Radix needs the same
+  // axis in JS to point its arrow keys the right way.
+  const desktop = useIsDesktop();
+
+  /**
+   * Which stages this component can honestly report as done.
+   *
+   * Only the five design artifacts are here because they're the only ones
+   * ProjectStages holds. The standalone stages (vision, roadmap, cost, threat,
+   * QA) are fetched by their own panels — Radix unmounts inactive `TabsContent`,
+   * so lifting those fetches up just to draw a checkmark would make every
+   * project open fire five extra requests. An absent check reads as "not sure
+   * yet", which is true; a wrong one would read as "not generated", which isn't.
+   */
+  const stageDone: Partial<Record<TabKey, boolean>> = useMemo(
+    () => ({
+      requirements: !!doc,
+      system: !!design,
+      database: !!dbDesign,
+      api: !!apiDesign,
+      review: !!review,
+    }),
+    [doc, design, dbDesign, apiDesign, review],
+  );
+
   /**
    * Navigate to a tab, applying the freemium gate: a free user reaching for a
    * still-locked Pro stage gets the upgrade modal; a stage whose upstream isn't
@@ -239,6 +391,15 @@ export function ProjectStages({
     setTab(key);
   };
 
+  // R12 — a project that opted out of the extended artifacts doesn't show them.
+  const visibleTabs = useMemo(
+    () =>
+      TABS.filter(
+        ({ value }) => extendedArtifacts || !EXTENDED_TABS.has(value),
+      ),
+    [extendedArtifacts],
+  );
+
   const available: Record<TabKey, boolean> = {
     vision: true,
     requirements: true,
@@ -250,8 +411,11 @@ export function ProjectStages({
     review: !!apiDesign,
     roadmap: !!apiDesign,
     cost: !!apiDesign,
-    threat: !!apiDesign,
-    qa: !!apiDesign,
+    // R12 — "switched off" has to mean unreachable, not just unlisted: the command
+    // palette navigates by key too, and a tab with no trigger would render its
+    // panel with nothing selected in the bar.
+    threat: !!apiDesign && extendedArtifacts,
+    qa: !!apiDesign && extendedArtifacts,
     export: !!apiDesign,
     apidocs: !!apiDesign,
     refine: !!apiDesign,
@@ -271,8 +435,13 @@ export function ProjectStages({
     if (!available[tab]) setTab('requirements');
     setEditing(null);
     onDirty(false);
+    // `extendedArtifacts` is in here because it feeds `available` (R12): if the
+    // threat/QA tabs are ever switched off while one of them is active, its trigger
+    // vanishes from the bar and the panel would be left rendered with nothing
+    // selected. No path does that today — the quiet action only switches them ON —
+    // but leaving the dep out makes that a silent trap for whoever adds one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, design, dbDesign, apiDesign]);
+  }, [doc, design, dbDesign, apiDesign, extendedArtifacts]);
 
   // Leaving a stage tab exits any open editor (the leave guard already ran in
   // the parent, so a confirmed switch discards the draft).
@@ -295,36 +464,76 @@ export function ProjectStages({
             same floor the API mints against. */}
         {dbDesign && <ShareLinkCard sessionId={sessionId} />}
 
+        {/*
+          R13 — the step that was still manual. Everything above turns a client
+          call into a scoping; this turns the scoping into a submitted bid. It
+          sits beside the link because that is the pair the owner sends: a message
+          is what carries the link, and a link with no message is half a bid.
+
+          Gated on `apiDesign` — the same full-pipeline floor the API enforces. A
+          message whose credibility rests on "I scoped this properly" should not
+          be offered while the scoping is half-built.
+        */}
+        {apiDesign && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => setWritingProposal(true)}>
+              <PenLine className="h-4 w-4" />
+              {t('proposal.write')}
+            </Button>
+            <p className="text-xs text-muted-foreground" dir="auto">
+              {t('proposal.writeHint')}
+            </p>
+          </div>
+        )}
+
         {stream && (
           <StreamingConsole stage={stream.stage} view={stream.view} />
         )}
 
-        <Tabs value={tab} onValueChange={(v) => goTo(v as TabKey)}>
-          <TabsList className="sticky top-16 z-30 flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto shadow-sm md:flex-wrap md:overflow-visible">
-            {TABS.map(({ value, icon: Icon }) => {
-              const locked = !isPro && PRO_TABS.has(value);
-              // Locked-but-unreachable tabs stay clickable so the click can open
-              // the upgrade modal (Radix disables un-clickable triggers).
-              const opensModal = locked && !available[value];
-              return (
-                <TabsTrigger
-                  key={value}
-                  value={value}
-                  disabled={!available[value] && !opensModal}
-                  className={`shrink-0 gap-1.5${locked ? ' opacity-80' : ''}`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {t(`tab.${value}`)}
-                  {locked && (
-                    <Lock
-                      className="h-3 w-3 text-muted-foreground"
-                      aria-label={t('pro')}
-                    />
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
+        {/* `orientation` drives Radix's roving arrow-key navigation, so it has to
+            match the axis the rail is actually drawn on. The rail is vertical
+            from `md` up, which CSS knows and JS doesn't — hence the media query
+            listener in `useIsDesktop`. */}
+        <Tabs
+          value={tab}
+          onValueChange={(v) => goTo(v as TabKey)}
+          orientation={desktop ? 'vertical' : 'horizontal'}
+          className="md:flex md:items-start md:gap-5"
+        >
+          <StageNav
+            tabs={visibleTabs}
+            active={tab}
+            available={available}
+            done={stageDone}
+            isPro={isPro}
+          />
+
+          {/* `min-w-0` is load-bearing: without it this flex child refuses to
+              shrink below its content's intrinsic width, and a wide artifact
+              table pushes the whole page into a horizontal scroll instead of
+              scrolling inside its own container. */}
+          <div className="min-w-0 flex-1">
+
+          {/*
+            R12 — the way back for a project that opted out. Deliberately quiet: a
+            muted one-liner under the tabs, not a banner. The owner already decided
+            this deal doesn't need a STRIDE analysis; nagging them about it on every
+            visit would be exactly the heaviness the setting exists to remove.
+            Switching it on only reveals the tabs — each stage still generates on
+            demand, so nothing else re-runs.
+          */}
+          {!extendedArtifacts && onEnableExtendedArtifacts && apiDesign && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={onEnableExtendedArtifacts}
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                <ShieldAlert className="h-3.5 w-3.5" />
+                {t('extended.enable')}
+              </button>
+            </div>
+          )}
 
           {/* Product Vision (standalone) */}
           <TabsContent value="vision" className="mt-4">
@@ -577,7 +786,16 @@ export function ProjectStages({
                   busy={busy}
                   onRegenerate={onGenerateReview}
                 />
-                <ReviewView report={review} />
+                {/* `sessionId` is what turns on the R11 fix actions — the share
+                    page and the example project render the same component without
+                    it and stay read-only. */}
+                <ReviewView
+                  report={review}
+                  sessionId={sessionId}
+                  busy={busy}
+                  onFixApplied={onFixApplied}
+                  onRegenerate={onGenerateReview}
+                />
                 <StageActions
                   busy={busy}
                   onRegenerate={onGenerateReview}
@@ -603,6 +821,8 @@ export function ProjectStages({
               sessionId={sessionId}
               reloadKey={versionsReload}
               revisions={revisions}
+              weeklyRate={weeklyRate}
+              onSaveWeeklyRate={onSaveWeeklyRate}
             />
           </TabsContent>
 
@@ -626,7 +846,11 @@ export function ProjectStages({
 
           {/* Export */}
           <TabsContent value="export" className="mt-4">
-            <ExportView sessionId={sessionId} />
+            <ExportView
+              sessionId={sessionId}
+              clientName={clientName}
+              suggestedPrice={suggestedPrice}
+            />
           </TabsContent>
 
           {/* API Docs (Swagger UI) */}
@@ -647,11 +871,120 @@ export function ProjectStages({
               onRestored={onRestored}
             />
           </TabsContent>
+          </div>
         </Tabs>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
       </CardContent>
+
+      {writingProposal && (
+        <ProposalModal
+          sessionId={sessionId}
+          clientName={clientName}
+          suggestedPrice={suggestedPrice}
+          onClose={() => setWritingProposal(false)}
+        />
+      )}
     </Card>
+  );
+}
+
+/**
+ * The persistent stage nav: a side rail on desktop, a scrolling segmented strip
+ * on mobile.
+ *
+ * Still a Radix `TabsList` underneath, and that is deliberate rather than
+ * incidental. Radix **unmounts inactive `TabsContent`**, which the whole file
+ * depends on (every stage panel fetches on mount, and the staleness notices
+ * assume a fresh read). Rebuilding this as a bespoke nav + a conditional render
+ * would have quietly changed that, so the rail is a restyle of the existing
+ * primitive: `orientation="vertical"` also hands us roving up/down arrow-key
+ * navigation for free, which a hand-rolled list would have had to reimplement.
+ *
+ * Each item carries its state explicitly, because "why can't I click this?" has
+ * three different answers and they need three different affordances:
+ *   done    — a check; the artifact exists
+ *   current — the accent bar
+ *   locked  — dimmed + a tooltip naming the missing prerequisite
+ *   pro     — a lock badge; a plan problem, not a progress one
+ */
+function StageNav({
+  tabs,
+  active,
+  available,
+  done,
+  isPro,
+}: {
+  tabs: { value: TabKey; icon: LucideIcon }[];
+  active: TabKey;
+  available: Record<TabKey, boolean>;
+  /**
+   * Stages whose artifact this component can actually see. Deliberately partial:
+   * the standalone stages (vision, roadmap, cost, threat, QA) are fetched by
+   * their own panels, so ProjectStages genuinely does not know whether they
+   * exist. Showing an unknown state as "not done" would be a confident lie, so
+   * those items simply carry no check.
+   */
+  done: Partial<Record<TabKey, boolean>>;
+  isPro: boolean;
+}) {
+  const { t } = useTranslation('project');
+
+  return (
+    <TabsList
+      className={cn(
+        'h-auto w-full justify-start gap-1 p-1',
+        // Mobile: a horizontal strip that scrolls under the sticky header.
+        'sticky top-16 z-30 flex flex-nowrap overflow-x-auto shadow-sm scrollbar-thin',
+        // Desktop: a real side rail that stays put while the artifact scrolls.
+        'md:top-20 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:shadow-none',
+      )}
+    >
+      {tabs.map(({ value, icon: Icon }) => {
+        const locked = !isPro && PRO_TABS.has(value);
+        // Locked-but-unreachable tabs stay clickable so the click can open the
+        // upgrade modal (Radix disables un-clickable triggers).
+        const opensModal = locked && !available[value];
+        const blocked = !available[value] && !opensModal;
+        const requires = REQUIRES[value];
+
+        return (
+          <TabsTrigger
+            key={value}
+            value={value}
+            disabled={blocked}
+            title={
+              blocked && requires
+                ? t('nav.requires', { stage: t(`tab.${requires}`) })
+                : undefined
+            }
+            className={cn(
+              'shrink-0 justify-start gap-2 md:w-full',
+              locked && 'opacity-80',
+            )}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{t(`tab.${value}`)}</span>
+            <span className="ms-auto flex items-center gap-1">
+              {done[value] && (
+                <CheckCircle2
+                  className={cn(
+                    'h-3 w-3',
+                    // On the active (accent-filled) trigger the check has to sit
+                    // on the accent, not on the page.
+                    value === active ? 'text-primary-foreground' : 'text-success',
+                  )}
+                  aria-label={t('nav.done')}
+                />
+              )}
+              {locked && (
+                <Lock className="h-3 w-3 opacity-70" aria-label={t('pro')} />
+              )}
+            </span>
+          </TabsTrigger>
+        );
+      })}
+    </TabsList>
   );
 }
 

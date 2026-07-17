@@ -243,6 +243,9 @@ model InterviewSession {
   /// owner's dashboard only: it is NOT part of the idea, so it never reaches an
   /// agent prompt and never crosses onto the public share page.
   clientName      String?
+  /// Owner-only internal weekly rate (USD/person-week) for pricing (R9). Never
+  /// shown to clients / never crosses onto the public share page.
+  weeklyRate      Float?
   industry        String?
   scale           String?
   preferredStack  String?
@@ -252,6 +255,28 @@ model InterviewSession {
   pendingQuestion Json? // the question awaiting an answer (adaptive interview)
   coverage        Float    @default(0)
   summary         Json?
+  /// Derived slot snapshot (R6) — a cache over `history`, never authoritative.
+  slots           Json? // SlotMap
+  /// Gaps to forward to the end client (OpenQuestion[]).
+  openQuestions   Json?
+  /// Append-only record of the review fixes the owner approved (R11, FixLogEntry[]).
+  /// Lives here rather than on the review because a re-run REPLACES the review row
+  /// and a version restore can rewind it — an audit log must survive both.
+  fixLog          Json?
+  /// The last 5 proposal cover messages generated for this project (R13,
+  /// ProposalDraft[], newest first — capped by `appendProposalDraft`). OWNER-ONLY:
+  /// it is on the session, never projected onto the public share payload. Lives
+  /// here rather than in its own table for the same reason as `fixLog`: these are
+  /// the owner's outbox, not a generated artifact, so a version restore (which
+  /// rewinds design artifacts) must never rewind them.
+  proposalDrafts  Json?
+  /// Whether this project generates the threat model + QA plan (R12).
+  /// **NULL = the owner hasn't decided**, so the budget-derived default applies
+  /// (`resolveExtendedArtifacts`) and keeps tracking the budget slot while they're
+  /// still at the gate. A non-null value is their explicit choice and wins over the
+  /// derivation; `confirm()` pins one. Existing rows were backfilled to `true` by
+  /// the previous migration, so nothing already created changed behaviour.
+  generateExtendedArtifacts Boolean?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

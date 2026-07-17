@@ -23,13 +23,21 @@ import type {
   ProjectOverview,
   ProjectScale,
   ProjectSnapshot,
+  FixResult,
   RefineResult,
   RequirementDocument,
   ReviewReport,
   SubscriptionView,
   SystemDesign,
 } from '@archivato/shared';
-import { hasPermission, isStaffUser, sharePath } from '@archivato/shared';
+import {
+  countInQuotaPeriod,
+  hasPermission,
+  isStaffUser,
+  isUnlimitedQuota,
+  PLANS,
+  sharePath,
+} from '@archivato/shared';
 import {
   ApiError,
   apiDesignApi,
@@ -59,6 +67,7 @@ import { ProjectStages, type StreamState, type TabKey } from '@/components/proje
 import { streamStage, reduceStreamEvent, emptyStreamView } from '@/lib/stream';
 import { saveFile } from '@/lib/download';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ProjectCardSkeleton } from '@/components/shared/ArtifactSkeleton';
 import { CommandPalette, type CommandGroup } from '@/components/shared/command-palette';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { AdminOverview } from '@/components/admin/AdminOverview';
@@ -111,6 +120,8 @@ export default function Home() {
   const [industry, setIndustry] = useState('');
   const [scale, setScale] = useState<ProjectScale | ''>('');
   const [clientName, setClientName] = useState('');
+  // Notes-first mode: pasted call notes seed the interview as its first turn.
+  const [notes, setNotes] = useState('');
 
   // Generated artifacts.
   const [doc, setDoc] = useState<RequirementDocument | null>(null);
@@ -428,6 +439,7 @@ export default function Home() {
         industry: industry || undefined,
         scale: scale || undefined,
         clientName: clientName.trim() || undefined,
+        notes: notes.trim() || undefined,
       });
       setState(next);
       setCreating(false);
@@ -450,6 +462,15 @@ export default function Home() {
   async function handleAnswer(text: string) {
     if (!state) return;
     const next = await run(() => interviewApi.answer(state.sessionId, text));
+    if (next) setState(next);
+  }
+
+  /** Correct a slot at the confirmation gate (appends a correction to the transcript). */
+  async function handleEditSlot(slotKey: string, value: string) {
+    if (!state) return;
+    const next = await run(() =>
+      interviewApi.editSlot(state.sessionId, slotKey, value),
+    );
     if (next) setState(next);
   }
 
@@ -507,6 +528,35 @@ export default function Home() {
     toast({ title: t('toast.refined'), variant: 'success' });
   }
 
+  /**
+   * An approved review fix landed (R11). The server already wrote the artifacts
+   * and returned the updated report, so all that's left is to pull the ones it
+   * says it touched back into view — their `generatedAt` moved, which is what the
+   * staleness notices on the derived tabs read.
+   */
+  async function handleFixApplied(result: FixResult) {
+    setReview(result.review);
+    const id = state?.sessionId;
+    if (!id) return;
+    await Promise.all(
+      result.artifactsTouched.map(async (stage) => {
+        if (stage === 'requirements') setDoc(await requirementsApi.get(id));
+        else if (stage === 'system-design') setDesign(await systemDesignApi.get(id));
+      }),
+    );
+    // This fires for all four R11 flows, and only one of them is a "fix": an
+    // acknowledge or a dismissal writes nothing, so saying "Fix applied" would tell
+    // the owner their document changed when it didn't. `artifactsTouched` is the
+    // honest test — it's empty exactly when nothing was written, which is also
+    // exactly when there's no new version to reload.
+    const changed = result.artifactsTouched.length > 0;
+    if (changed) setVersionsReload((k) => k + 1);
+    toast({
+      title: changed ? t('toast.fixApplied') : t('toast.findingResolved'),
+      variant: 'success',
+    });
+  }
+
   /** Apply a restored version: replace every artifact with the snapshot's. */
   function handleRestored(snapshot: ProjectSnapshot) {
     setDoc(snapshot.requirements);
@@ -539,6 +589,7 @@ export default function Home() {
     setIndustry('');
     setScale('');
     setClientName('');
+    setNotes('');
     setError(null);
   }
 
@@ -606,18 +657,22 @@ export default function Home() {
   }, [dirty]);
 
   if (restoring) {
+    // Shaped like the dashboard that lands, so the arrival is a fill rather than
+    // a reflow: title, example banner, action bar, then real card skeletons (the
+    // `h-[132px]` grey rectangles that used to stand in here were the right
+    // height by luck and told the user nothing about what was coming).
     return (
       <div className="mx-auto max-w-4xl px-5 py-8">
         <Skeleton className="h-7 w-48" />
         <Skeleton className="mt-2 h-4 w-full max-w-md" />
         <Skeleton className="mt-5 h-12 w-full rounded-lg" />
-        <div className="mt-6 mb-4 flex items-center justify-between">
-          <Skeleton className="h-6 w-24" />
-          <Skeleton className="h-9 w-32 rounded-md" />
+        <div className="mb-4 mt-6 flex items-center justify-between">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-9 w-36 rounded-md" />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-[132px] w-full rounded-lg" />
+            <ProjectCardSkeleton key={i} />
           ))}
         </div>
       </div>
@@ -663,6 +718,43 @@ export default function Home() {
     ];
   }
 
+  /**
+   * Whether this project produces the threat model + QA plan (R12). Read from the
+   * interview state — the one place both the confirmation-gate toggle and the
+   * confirmed project view can see, so they can't disagree. Absent (an older
+   * payload) reads as true, the pre-R12 behaviour.
+   */
+  const extendedArtifacts = state?.generateExtendedArtifacts ?? true;
+
+  /**
+   * Persist the extended-artifacts choice and reflect it locally.
+   *
+   * Every other write on this page reports its own failure; this one must too. It's
+   * called from a checkbox, so a silent rejection would leave the box snapping back
+   * with no explanation — the owner would reasonably assume it saved.
+   */
+  async function setExtendedArtifacts(value: boolean) {
+    if (!state) return;
+    try {
+      await interviewApi.update(state.sessionId, {
+        generateExtendedArtifacts: value,
+      });
+      // PATCH returns a ProjectSummary, not an InterviewState — mirror the change
+      // onto the state the toggle and the tabs both read. Only after the write
+      // succeeds, so the UI never shows a setting the server didn't take.
+      setState((prev) =>
+        prev ? { ...prev, generateExtendedArtifacts: value } : prev,
+      );
+      await refreshProjects();
+    } catch (e) {
+      toast({
+        title: t('toast.settingSaveFailed'),
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'error',
+      });
+    }
+  }
+
   // ⌘K command palette: quick actions, jump to a project, or (in a confirmed
   // project) jump to any reachable stage.
   const stageAvailable: Record<TabKey, boolean> = {
@@ -676,8 +768,10 @@ export default function Home() {
     review: !!apiDesign,
     roadmap: !!apiDesign,
     cost: !!apiDesign,
-    threat: !!apiDesign,
-    qa: !!apiDesign,
+    // R12 — a project that opted out of the extended artifacts must not be able to
+    // reach them from the palette either; ProjectStages hides the tabs entirely.
+    threat: !!apiDesign && extendedArtifacts,
+    qa: !!apiDesign && extendedArtifacts,
     export: !!apiDesign,
     apidocs: !!apiDesign,
     refine: !!apiDesign,
@@ -811,45 +905,57 @@ export default function Home() {
 
           {(
             <>
-              {/* Don't sell before any value is earned: the quota/upsell banner
-                  appears only once the user owns at least one project. */}
-              {sub && projects.length > 0 && (
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-                  <span>
-                    <span className="font-semibold capitalize">
-                      {t('quota.plan', { plan: sub.plan })}
-                    </span>{' '}
-                    <span className="text-muted-foreground">
-                      ·{' '}
-                      {t('quota.used', {
-                        count: projects.length,
-                        quota: sub.projectQuota,
-                      })}
-                    </span>
-                  </span>
-                  {sub.plan === 'free' ? (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const upgraded = await openUpgrade();
-                        if (upgraded) await refreshProjects();
-                      }}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {t('quota.upgrade')}
-                    </button>
-                  ) : (
-                    <Link
-                      href="/settings"
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {t('quota.manage')}
-                    </Link>
-                  )}
-                </div>
-              )}
-
               <ProjectsDashboard
+                /*
+                 * The plan meter, inlined beside the "New client scoping" button
+                 * instead of the full-width banner it used to be. It is context
+                 * for that button — "you have one left" only matters at the
+                 * moment you reach for it — and a banner across the top of the
+                 * work said the opposite about its importance.
+                 *
+                 * Still hidden on a zero-project account: don't sell before any
+                 * value has been earned.
+                 */
+                usage={
+                  sub && projects.length > 0 ? (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="hidden sm:inline">
+                        {t('quota.plan', { plan: PLANS[sub.plan].name })} ·
+                      </span>
+                      {isUnlimitedQuota(sub.projectQuota)
+                        ? t('quota.unlimited')
+                        : t('quota.used', {
+                            // The quota is a rate per calendar month, so the meter
+                            // is what was CREATED this period — not what is owned.
+                            used: countInQuotaPeriod(
+                              projects
+                                .map((p) => p.createdAt)
+                                .filter((d): d is string => !!d),
+                            ),
+                            quota: sub.projectQuota,
+                          })}
+                      {sub.plan === 'free' ? (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const upgraded = await openUpgrade();
+                            if (upgraded) await refreshProjects();
+                          }}
+                          className="rounded font-medium text-primary hover:underline"
+                        >
+                          {t('quota.upgrade')}
+                        </button>
+                      ) : (
+                        <Link
+                          href="/settings"
+                          className="rounded font-medium text-primary hover:underline"
+                        >
+                          {t('quota.manage')}
+                        </Link>
+                      )}
+                    </span>
+                  ) : null
+                }
                 projects={projects}
                 creating={creating}
                 setCreating={setCreating}
@@ -863,6 +969,8 @@ export default function Home() {
                 setScale={setScale}
                 clientName={clientName}
                 setClientName={setClientName}
+                notes={notes}
+                setNotes={setNotes}
                 onStart={handleStart}
                 onOpen={openProject}
                 onDelete={handleDeleteProject}
@@ -914,6 +1022,8 @@ export default function Home() {
                 error={error}
                 onAnswer={handleAnswer}
                 onConfirm={handleConfirm}
+                onEditSlot={handleEditSlot}
+                onToggleExtendedArtifacts={(v) => void setExtendedArtifacts(v)}
               />
             </>
           )}
@@ -951,6 +1061,7 @@ export default function Home() {
               onGenerateReview={() =>
                 generateStage<ReviewReport>('review', setReview)
               }
+              onFixApplied={handleFixApplied}
               onSavedDoc={handleSavedDoc}
               onSavedDesign={handleSavedDesign}
               onSavedDbDesign={handleSavedDbDesign}
@@ -958,6 +1069,20 @@ export default function Home() {
               onRefined={handleRefined}
               onRestored={handleRestored}
               onUpgraded={refreshProjects}
+              clientName={
+                projects.find((p) => p.sessionId === state.sessionId)?.clientName ??
+                null
+              }
+              weeklyRate={
+                projects.find((p) => p.sessionId === state.sessionId)?.weeklyRate ??
+                null
+              }
+              onSaveWeeklyRate={async (rate) => {
+                await interviewApi.update(state.sessionId, { weeklyRate: rate });
+                await refreshProjects();
+              }}
+              extendedArtifacts={extendedArtifacts}
+              onEnableExtendedArtifacts={() => void setExtendedArtifacts(true)}
             />
           )}
         </div>

@@ -2,12 +2,17 @@
  * Landing-page constants — the numbers and links that change during customer
  * discovery, kept in one file so they can be edited without touching components.
  *
- * Deliberately NOT sourced from `PLANS` in `@archivato/shared`: that is what the
- * billing system actually charges, and the tiers advertised here are still being
- * validated on discovery calls. Keeping them apart means the page can be repriced
- * without touching live billing — but it also means the two can drift, so
- * reconcile them before the new tiers go on sale.
+ * **The price is now sourced from `PLANS`** (`@archivato/shared`), the same
+ * constant billing charges from. It used to be an independent literal here, on the
+ * theory that the advertised tiers were still being validated and shouldn't touch
+ * live billing — and the two promptly drifted: the page advertised $79/mo and
+ * "unlimited designs" while billing charged $19/mo for 5 projects. A pricing page
+ * that disagrees with the checkout is worse than one that can't be edited freely,
+ * so the tier *structure* still lives here (billing has no "Agency" tier to sell)
+ * but the number a customer reads is the number they are charged.
  */
+
+import { PLANS } from '@archivato/shared';
 
 /**
  * A real, public share link used as the "see a real scoping package" proof.
@@ -16,8 +21,12 @@
 export const DEMO_SHARE_URL =
   process.env.NEXT_PUBLIC_DEMO_SHARE_URL ?? '/s/demo-scoping-package';
 
-/** Monthly price of the paid tier, as displayed. Placeholder until validated. */
-export const TEAM_PRICE = '$79';
+/**
+ * Monthly price of the paid tier, as displayed — read from the billing source of
+ * truth so the pricing page and the checkout can never disagree. To reprice, edit
+ * `PLANS.pro` in `@archivato/shared` (and its `annualPriceUsd`), not this line.
+ */
+export const TEAM_PRICE = `$${PLANS.pro.priceUsd}`;
 
 /** The tier a landing card renders. `price: null` = the "coming soon" tier. */
 export interface LandingPlan {

@@ -33,6 +33,7 @@ interface Harness {
   databaseDesign: DatabaseDesignService;
   apiDesign: ApiDesignService;
   service: CostEstimateService;
+  sessions: InMemoryInterviewSessionRepository;
 }
 
 function makeHarness(): Harness {
@@ -79,6 +80,7 @@ function makeHarness(): Harness {
   );
   const service = new CostEstimateService(
     sessionRepo,
+    docRepo,
     sysRepo,
     dbRepo,
     apiRepo,
@@ -91,6 +93,7 @@ function makeHarness(): Harness {
     databaseDesign,
     apiDesign,
     service,
+    sessions: sessionRepo,
   };
 }
 
@@ -168,6 +171,36 @@ describe('CostEstimateService', () => {
     const b = await h.service.generate(sessionId);
     expect(b.providers).toEqual(a.providers);
     expect(b.recommended).toBe(a.recommended);
+  });
+
+  it('attaches a person-effort estimate and service subscriptions (R9)', async () => {
+    const h = makeHarness();
+    const sessionId = await pipeline(h);
+    const est = await h.service.generate(sessionId);
+
+    expect(est.effort).toBeDefined();
+    expect(est.effort!.weeksMax).toBeGreaterThan(est.effort!.weeksMin);
+    expect(est.effort!.lineItems.length).toBeGreaterThan(0);
+    // The clinic idea implies payments + notifications → bought service lines.
+    expect(Array.isArray(est.serviceSubscriptions)).toBe(true);
+    expect(est.serviceSubscriptions!.length).toBeGreaterThan(0);
+    // No budget slot in a plan-mode run → no owner-only warning.
+    expect(est.budgetWarning).toBeNull();
+  });
+
+  it('raises an owner-only budget warning when the design outruns the stated budget (R9)', async () => {
+    const h = makeHarness();
+    const sessionId = await pipeline(h);
+    // Seed a tight budget slot the way the interview would.
+    const session = await h.sessions.findById(sessionId);
+    session!.slots = {
+      budget_range: { value: '$2000', confidence: 'high', source: 'explicit' },
+    };
+    await h.sessions.save(session!);
+
+    const est = await h.service.generate(sessionId);
+    expect(est.budgetWarning).not.toBeNull();
+    expect(est.budgetWarning!.values.overPct).toBeGreaterThan(25);
   });
 
   it('get() returns a stored estimate and 404s otherwise', async () => {

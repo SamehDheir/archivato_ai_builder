@@ -1,4 +1,8 @@
-import { estimateCosts } from '@archivato/shared';
+import {
+  buildEffortEstimate,
+  buildServiceCostLines,
+  estimateCosts,
+} from '@archivato/shared';
 import type {
   ApiDesign,
   CostEstimate,
@@ -61,6 +65,8 @@ export const EXAMPLE_SUMMARY: RequirementsSummary = {
 export const EXAMPLE_REQUIREMENTS: RequirementDocument = {
   sessionId: SESSION_ID,
   generatedAt: GENERATED_AT,
+  executiveSummary:
+    'HomeHelper is an on-demand marketplace for local home services, built for homeowners who need a trusted provider and the independent providers who serve them. Customers browse services, book a guaranteed time slot, pay securely online, and rate the work afterward, while providers manage their availability and jobs in one place. The result is a dependable booking experience that fills provider calendars and gives the operator a clean, disputes-and-payouts view of the whole marketplace. It launches web-first in a single city, ready to expand as demand grows.',
   functional: [
     {
       id: 'FR-1',
@@ -167,6 +173,45 @@ export const EXAMPLE_REQUIREMENTS: RequirementDocument = {
     'Providers are independent contractors.',
     'Bookings are typically made 1–7 days ahead.',
   ],
+  outOfScope: [
+    {
+      item: 'Native mobile apps (iOS / Android)',
+      reason: 'Web-first at launch; a mobile app can follow once demand is proven.',
+    },
+    {
+      item: 'In-app chat between customer and provider',
+      reason: 'Coordination happens by phone at launch to keep the first release small.',
+    },
+    {
+      item: 'Real-time GPS tracking of providers',
+      reason: 'Not needed for scheduled home visits; bookings are by time slot, not live dispatch.',
+    },
+    {
+      item: 'Multi-city / multi-region expansion',
+      reason: 'Launching in a single metro area first; geography is a later phase.',
+    },
+    {
+      item: 'Provider background-check integration',
+      reason: 'Vetting is manual at launch; an automated check can be added later.',
+    },
+  ],
+  assumptionsAndOpenQuestions: [
+    {
+      assumption: 'Providers are independent contractors, not employees.',
+      impactIfWrong:
+        'Payouts, tax handling, and the payments model would need to change.',
+    },
+    {
+      assumption: 'Bookings are typically made 1–7 days ahead, not instantly on demand.',
+      impactIfWrong:
+        'A same-day, live-dispatch flow would change the availability and notification design.',
+    },
+    {
+      assumption:
+        "Assumed a sensible default pending the client's answer: which payout schedule do providers expect (weekly, per-job)?",
+      impactIfWrong: 'Scope, timeline, or cost may change once the client confirms.',
+    },
+  ],
 };
 
 export const EXAMPLE_SYSTEM_DESIGN: SystemDesign = {
@@ -212,26 +257,99 @@ export const EXAMPLE_SYSTEM_DESIGN: SystemDesign = {
       name: 'Catalog',
       responsibility: 'Services, pricing, and provider availability.',
       dependencies: [],
+      complexity: 'M',
+      complexityRationale: 'Read-heavy but must model availability accurately.',
     },
     {
       name: 'Booking',
       responsibility: 'Creating, rescheduling, and cancelling bookings; slot locking.',
       dependencies: ['Catalog', 'Payments'],
+      complexity: 'XL',
+      complexityRationale: 'The core flow: transactional slot locking plus reschedule/cancel across two dependencies.',
     },
     {
       name: 'Payments',
       responsibility: 'Authorization, capture, refunds, and provider payouts.',
       dependencies: [],
+      complexity: 'L',
+      complexityRationale: 'Money movement and payouts through an external processor.',
     },
     {
       name: 'Reviews',
       responsibility: 'Ratings and reviews for completed bookings.',
       dependencies: ['Booking'],
+      complexity: 'S',
+      complexityRationale: 'Straightforward CRUD gated on a completed booking.',
     },
     {
       name: 'Notifications',
       responsibility: 'Email and push reminders for bookings and job status.',
       dependencies: ['Booking'],
+      complexity: 'M',
+      complexityRationale: 'Multiple channels and delivery timing, but bought infrastructure.',
+    },
+  ],
+  buildVsBuy: [
+    {
+      capability: 'auth',
+      recommendation: 'build',
+      rationale:
+        'Email/password with JWT + refresh tokens is a solved problem; a managed identity provider is only worth it for enterprise SSO.',
+      impact: 'Build: a few days and no per-user fee.',
+    },
+    {
+      capability: 'payments',
+      recommendation: 'buy',
+      suggestedService: 'Stripe',
+      rationale:
+        'Never build a payment processor — PCI scope, fraud, and payouts are enormous. Stripe keeps card data off our servers and handles payouts.',
+      impact: 'Buy: removes months of PCI work; ~2.9% + fixed fee per transaction.',
+    },
+    {
+      capability: 'notifications',
+      recommendation: 'buy',
+      suggestedService: 'Resend (email) + Firebase Cloud Messaging (push)',
+      rationale:
+        'Deliverability and templating are a specialty; a transactional provider gets reliable delivery from day one.',
+      impact: 'Buy: avoids deliverability tuning; pay per message above a free tier.',
+    },
+    {
+      capability: 'maps_geo',
+      recommendation: 'buy',
+      suggestedService: 'Google Maps Platform',
+      rationale:
+        'Geocoding customer addresses and matching them to a service area needs licensed map data.',
+      impact: 'Buy: no map-data licensing; pay per request above a free tier.',
+    },
+    {
+      capability: 'search',
+      recommendation: 'build',
+      rationale:
+        'PostgreSQL full-text search covers catalog browse and filtering at launch scale.',
+      impact: 'Build: uses the database we already run, no extra cost.',
+    },
+  ],
+  phasedArchitecture: {
+    mvp: 'A modular monolith covering catalog, booking, payments, and reviews on one deployment with managed PostgreSQL and Redis — enough to serve the launch metro area.',
+    growthPath:
+      'As booking volume climbs toward 10,000 concurrent customers, extract Booking and Payments into independently deployable services and add read replicas plus a dedicated availability cache.',
+    migrationNotes:
+      'Module boundaries (catalog/booking/payments/reviews) are already enforced in-process, so extraction is a deployment change rather than a rewrite.',
+  },
+  constraintCompliance: [
+    {
+      constraint: 'Web-first launch; mobile app to follow.',
+      howAddressed:
+        'A Next.js web client only; the REST API is mobile-ready for a later native app.',
+    },
+    {
+      constraint: 'Payments delegated to a third-party PCI-compliant processor.',
+      howAddressed: 'Stripe handles cards and payouts; no card data touches our servers.',
+    },
+    {
+      constraint: 'Single metro area at launch.',
+      howAddressed:
+        'A single-region deployment; multi-region expansion is deferred (see out of scope).',
     },
   ],
 };
@@ -338,8 +456,51 @@ export const EXAMPLE_API_DESIGN: ApiDesign = {
   generatedAt: GENERATED_AT,
   modules: [
     {
+      name: 'Accounts',
+      basePath: '/api/users',
+      coveredEntities: ['users'],
+      endpoints: [
+        {
+          method: 'POST',
+          path: '/api/users',
+          summary: 'Register a customer or provider account.',
+          requestSchema: [
+            { name: 'email', type: 'string', required: true },
+            { name: 'full_name', type: 'string', required: true },
+            { name: 'role', type: 'enum', required: true },
+          ],
+          responseSchema: [
+            { name: 'id', type: 'uuid', required: true },
+            { name: 'email', type: 'string', required: true },
+          ],
+          statusCodes: [201, 400, 409],
+        },
+        {
+          method: 'GET',
+          path: '/api/users/:id',
+          summary: 'Get a user profile.',
+          requestSchema: [],
+          responseSchema: [
+            { name: 'id', type: 'uuid', required: true },
+            { name: 'full_name', type: 'string', required: true },
+            { name: 'role', type: 'enum', required: true },
+          ],
+          statusCodes: [200, 403, 404],
+        },
+        {
+          method: 'PUT',
+          path: '/api/users/:id',
+          summary: 'Update a user profile.',
+          requestSchema: [{ name: 'full_name', type: 'string', required: false }],
+          responseSchema: [{ name: 'id', type: 'uuid', required: true }],
+          statusCodes: [200, 400, 403, 404],
+        },
+      ],
+    },
+    {
       name: 'Catalog',
       basePath: '/api/services',
+      coveredEntities: ['services'],
       endpoints: [
         {
           method: 'GET',
@@ -366,6 +527,7 @@ export const EXAMPLE_API_DESIGN: ApiDesign = {
     {
       name: 'Booking',
       basePath: '/api/bookings',
+      coveredEntities: ['bookings'],
       endpoints: [
         {
           method: 'POST',
@@ -393,8 +555,53 @@ export const EXAMPLE_API_DESIGN: ApiDesign = {
       ],
     },
     {
+      name: 'Payments',
+      basePath: '/api/payments',
+      coveredEntities: ['payments'],
+      endpoints: [
+        {
+          method: 'GET',
+          path: '/api/payments',
+          summary: 'List payments for the signed-in user.',
+          requestSchema: [
+            { name: 'page', type: 'integer', required: false },
+            { name: 'limit', type: 'integer', required: false },
+          ],
+          responseSchema: [
+            { name: 'id', type: 'uuid', required: true },
+            { name: 'booking_id', type: 'uuid', required: true },
+            { name: 'amount', type: 'decimal', required: true },
+            { name: 'status', type: 'enum', required: true },
+          ],
+          statusCodes: [200, 401],
+        },
+        {
+          method: 'GET',
+          path: '/api/payments/:id',
+          summary: 'Get a payment and its capture status.',
+          requestSchema: [],
+          responseSchema: [
+            { name: 'id', type: 'uuid', required: true },
+            { name: 'amount', type: 'decimal', required: true },
+            { name: 'status', type: 'enum', required: true },
+            { name: 'processor_ref', type: 'string', required: false },
+          ],
+          statusCodes: [200, 403, 404],
+        },
+        {
+          method: 'POST',
+          path: '/api/payments/:id/refund',
+          summary: 'Refund a captured payment (admin only).',
+          requestSchema: [{ name: 'reason', type: 'string', required: true }],
+          responseSchema: [{ name: 'status', type: 'enum', required: true }],
+          statusCodes: [200, 403, 404, 409],
+        },
+      ],
+    },
+    {
       name: 'Reviews',
       basePath: '/api/reviews',
+      coveredEntities: ['reviews'],
       endpoints: [
         {
           method: 'POST',
@@ -417,7 +624,7 @@ export const EXAMPLE_REVIEW: ReviewReport = {
   sessionId: SESSION_ID,
   generatedAt: GENERATED_AT,
   overallScore: 82,
-  scores: { security: 78, scalability: 84, performance: 80, cost: 85 },
+  scores: { security: 78, scalability: 84, performance: 80, cost: 85, clientReadiness: 74 },
   scalabilityScore: 84,
   summary:
     'A well-structured modular monolith with clear domain boundaries and sensible technology choices. The design handles the core booking and payment flows safely; the main risks are around concurrent slot locking under load and observability of async payment capture.',
@@ -463,6 +670,36 @@ export const EXAMPLE_REVIEW: ReviewReport = {
     'Add an idempotency key to booking creation to survive client retries.',
     'Emit structured events for payment capture so failures are observable.',
     'Introduce a read replica when catalog traffic grows.',
+  ],
+  // R10 — deal-risk axis + cross-artifact consistency. OWNER-ONLY: stripped from
+  // the public share payload, so this only shows on the owner's review tab.
+  clientReadinessIssues: [
+    {
+      title: 'Payout timing is open-ended',
+      detail:
+        '"Providers are paid out after each job" doesn\'t say how soon, and that shapes cash-flow expectations. Pin a concrete payout schedule before the client reads it as instant.',
+      severity: 'medium',
+      suggestedResolution: 'tighten_requirement',
+      resolutionHint: 'State the payout window explicitly, e.g. "within 3 business days of completion".',
+    },
+    {
+      title: 'Disputes are implied but not scoped',
+      detail:
+        'The vision promises trust, but contested jobs have no workflow in the requirements — a classic post-sign scope surprise.',
+      severity: 'low',
+      suggestedResolution: 'add_out_of_scope',
+      resolutionHint: 'List dispute resolution as explicitly out of scope for v1, or price it in.',
+    },
+  ],
+  consistencyFindings: [
+    {
+      title: 'Availability caching is a design choice, not a requirement',
+      detail:
+        'The architecture caches availability in Redis, but no non-functional requirement mentions read latency. Confirm it belongs in scope.',
+      severity: 'low',
+      source: 'ai',
+      artifacts: ['requirements', 'design'],
+    },
   ],
 };
 
@@ -582,6 +819,12 @@ export const EXAMPLE_ROADMAP: ProjectRoadmap = {
       goal: 'A deployable modular monolith with auth, the data model, and CI in place.',
       effort: '~2 wks',
       dependsOn: [],
+      moduleNames: [],
+      weeksMin: 2,
+      weeksMax: 3,
+      isMvp: true,
+      mvpStatement:
+        'The app is deployable with accounts and the data model in place — the groundwork the first bookable release ships on.',
       milestones: [
         {
           title: 'Project skeleton and infrastructure',
@@ -613,6 +856,9 @@ export const EXAMPLE_ROADMAP: ProjectRoadmap = {
       goal: 'A customer can find an available slot and hold it without risk of double-booking.',
       effort: '~3 wks',
       dependsOn: ['Foundation'],
+      moduleNames: ['Catalog', 'Booking'],
+      weeksMin: 3,
+      weeksMax: 4.5,
       milestones: [
         {
           title: 'Catalog and availability',
@@ -648,6 +894,9 @@ export const EXAMPLE_ROADMAP: ProjectRoadmap = {
       goal: 'Money moves safely and customers can judge provider quality.',
       effort: '~3 wks',
       dependsOn: ['Booking core'],
+      moduleNames: ['Payments', 'Reviews'],
+      weeksMin: 3,
+      weeksMax: 4.5,
       milestones: [
         {
           title: 'Authorize and capture',
@@ -678,6 +927,9 @@ export const EXAMPLE_ROADMAP: ProjectRoadmap = {
       goal: 'Admins can run the marketplace and the system is safe to open to real traffic.',
       effort: '~3 wks',
       dependsOn: ['Payments and trust'],
+      moduleNames: ['Notifications'],
+      weeksMin: 2.5,
+      weeksMax: 4,
       milestones: [
         {
           title: 'Admin console',
@@ -1051,4 +1303,10 @@ export const EXAMPLE_COST_ESTIMATE: CostEstimate = {
     databaseType: EXAMPLE_DATABASE_DESIGN.databaseType,
     architecture: EXAMPLE_SYSTEM_DESIGN.architecture,
   }),
+  // R9: effort + service subscriptions are derived from the same design via the
+  // pure builders, so the example can never drift from the numbers it shows. The
+  // budget warning is owner-only, so the read-only tour omits it.
+  effort: buildEffortEstimate(EXAMPLE_SYSTEM_DESIGN),
+  serviceSubscriptions: buildServiceCostLines(EXAMPLE_SYSTEM_DESIGN),
+  budgetWarning: null,
 };

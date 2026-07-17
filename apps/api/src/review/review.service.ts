@@ -4,7 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { upstreamStamp, type ReviewReport } from '@archivato/shared';
+import {
+  buildConsistencyFindings,
+  buildEffortEstimate,
+  upstreamStamp,
+  type ReviewReport,
+} from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -25,6 +30,10 @@ import {
   API_DESIGN_REPOSITORY,
   type ApiDesignRepository,
 } from '../api-design/api-design.repository';
+import {
+  COST_ESTIMATE_REPOSITORY,
+  type CostEstimateRepository,
+} from '../cost-estimate/cost-estimate.repository';
 import { ReviewerAgent } from '../llm/agents/reviewer.agent';
 import {
   REVIEW_REPORT_REPOSITORY,
@@ -44,6 +53,8 @@ export class ReviewService {
     private readonly databaseDesigns: DatabaseDesignRepository,
     @Inject(API_DESIGN_REPOSITORY)
     private readonly apiDesigns: ApiDesignRepository,
+    @Inject(COST_ESTIMATE_REPOSITORY)
+    private readonly estimates: CostEstimateRepository,
     @Inject(REVIEW_REPORT_REPOSITORY)
     private readonly reports: ReviewReportRepository,
     private readonly reviewer: ReviewerAgent,
@@ -70,14 +81,40 @@ export class ReviewService {
       );
     }
 
-    const [requirements, systemDesign, databaseDesign] = await Promise.all([
-      this.requirements.findBySessionId(sessionId),
-      this.systemDesigns.findBySessionId(sessionId),
-      this.databaseDesigns.findBySessionId(sessionId),
-    ]);
+    const [requirements, systemDesign, databaseDesign, costEstimate] =
+      await Promise.all([
+        this.requirements.findBySessionId(sessionId),
+        this.systemDesigns.findBySessionId(sessionId),
+        this.databaseDesigns.findBySessionId(sessionId),
+        this.estimates.findBySessionId(sessionId),
+      ]);
     if (!requirements || !systemDesign || !databaseDesign) {
       throw new ConflictException('Upstream design artifacts are missing.');
     }
+
+    // R10 — deterministic cross-artifact consistency (A2). All pure code, so it
+    // runs regardless of the LLM: the effort is derived from the design, the
+    // timeline/constraints from the interview slots, and the cost lines from the
+    // (possibly stale) cost estimate. The reviewer merges these into the report.
+    const effort = buildEffortEstimate(systemDesign);
+    const timelineSlot = session.slots?.timeline;
+    const timeline =
+      timelineSlot && !timelineSlot.na ? timelineSlot.value : undefined;
+    const constraintSlot = session.slots?.constraints;
+    const constraints = [
+      ...(requirements.constraints ?? []),
+      ...(constraintSlot && !constraintSlot.na && constraintSlot.value
+        ? [constraintSlot.value]
+        : []),
+    ];
+    const automatedConsistency = buildConsistencyFindings({
+      effort,
+      timeline,
+      constraints,
+      constraintCompliance: systemDesign.constraintCompliance,
+      buildVsBuy: systemDesign.buildVsBuy,
+      serviceSubscriptions: costEstimate?.serviceSubscriptions,
+    });
 
     const report = await this.reviewer.generate(sessionId, {
       idea: session.input.idea,
@@ -86,6 +123,9 @@ export class ReviewService {
       systemDesign,
       databaseDesign,
       apiDesign,
+      slots: session.slots,
+      effort,
+      automatedConsistency,
     });
 
     return this.reports.upsert({

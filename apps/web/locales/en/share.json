@@ -14,7 +14,7 @@
     },
     "scope": {
       "title": "What's included",
-      "lead": "Everything in scope — and the rules the system has to follow."
+      "lead": "The features in scope, who uses them, and what's deliberately left out."
     },
     "cost": {
       "title": "What it costs to run",
@@ -27,7 +27,8 @@
   },
   "appendix": {
     "title": "Technical details",
-    "lead": "For the developers who will build this. You don't need any of it to make a decision — open it if you're curious, or forward it to your technical team.",
+    "lead": "For the developers who will build this. You don't need any of it to make a decision — forward it to your technical team if you'd like it reviewed.",
+    "requirements": "Technical requirements",
     "architecture": "System architecture",
     "database": "Database design",
     "api": "API specification",

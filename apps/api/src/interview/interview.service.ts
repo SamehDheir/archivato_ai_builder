@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Inject,
   Injectable,
   Logger,
@@ -10,17 +11,29 @@ import {
 import { randomUUID } from 'node:crypto';
 import {
   COMPLETENESS_THRESHOLD,
+  resolveExtendedArtifacts,
   INTERVIEW_MAX_QUESTIONS,
   INTERVIEW_PHASE_ORDER,
   InterviewPhase,
+  isUnlimitedQuota,
+  startOfQuotaPeriod,
   type InterviewExchange,
   type InterviewQuestion,
   type InterviewState,
   type IntentAnalysis,
+  type OpenQuestion,
   type ProjectIdeaInput,
   type ProjectSummary,
   type RequirementsSummary,
+  type SlotMap,
 } from '@archivato/shared';
+import {
+  isSlotKey,
+  mergeSlots,
+  notesHistoryEntry,
+  reconcileOpenQuestions,
+  SLOT_CATALOG,
+} from './slots';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
 import { InterviewerAgent } from '../llm/agents/interviewer.agent';
 import {
@@ -44,6 +57,10 @@ interface InterviewDecision {
   done: boolean;
   coverage: number;
   question: InterviewQuestion | null;
+  /** Slot values extracted this turn (adaptive path only; plan mode fills none). */
+  slots?: SlotMap;
+  /** Gaps to forward to the client, surfaced this turn. */
+  openQuestions?: OpenQuestion[];
 }
 
 @Injectable()
@@ -68,28 +85,43 @@ export class InterviewService {
     input: ProjectIdeaInput,
     userId: string | null = null,
     clientName: string | null = null,
+    notes: string | null = null,
   ): Promise<InterviewState> {
-    // Enforce the plan's project-count quota (Free = 1, Pro = 5): a user at
-    // their limit must delete a project or upgrade before starting another.
-    // Skipped for owner-less sessions (unit tests drive the state machine).
+    // Enforce the plan's quota, which is a **creation rate per calendar month**
+    // (Starter = 1/month), not a lifetime count of projects owned: last month's
+    // design must not be held against this month.
+    //
+    // The meter is still the project list — there is no usage table (see the
+    // billing notes) — which leaves one accepted hole: a *deleted* project stops
+    // being counted, so a Starter user can delete-and-retry within a month. That
+    // is not a regression (the old owned-count quota behaved the same) and it
+    // costs them the design they delete, so it buys nothing but a re-run. Closing
+    // it needs creations recorded somewhere that survives the delete. Pinned by a
+    // test in `project-quota.spec.ts` so it stays a decision, not a surprise.
+    //
+    // Team is unlimited and skips the check entirely. Owner-less sessions are
+    // never metered (unit tests drive the state machine).
     if (userId) {
-      const [count, quota] = await Promise.all([
-        this.repo.countByUserId(userId),
-        this.billing.getProjectQuota(userId),
-      ]);
-      if (count >= quota) {
-        throw new HttpException(
-          {
-            statusCode: HttpStatus.PAYMENT_REQUIRED,
-            error: 'Payment Required',
-            code: 'quota_exceeded',
-            message:
-              quota === 1
-                ? 'Your Free plan allows 1 project. Delete it or upgrade to Pro (5 projects) to start another.'
-                : `You've reached your plan limit of ${quota} projects. Delete one or upgrade to start another.`,
-          },
-          HttpStatus.PAYMENT_REQUIRED,
+      const quota = await this.billing.getProjectQuota(userId);
+      if (!isUnlimitedQuota(quota)) {
+        const used = await this.repo.countByUserIdCreatedSince(
+          userId,
+          startOfQuotaPeriod(),
         );
+        if (used >= quota!) {
+          throw new HttpException(
+            {
+              statusCode: HttpStatus.PAYMENT_REQUIRED,
+              error: 'Payment Required',
+              code: 'quota_exceeded',
+              message:
+                quota === 1
+                  ? 'Your Starter plan includes 1 design per month. Upgrade to Team for unlimited designs, or wait until next month.'
+                  : `You've used all ${quota} designs included in your plan this month. Upgrade to Team for unlimited designs, or wait until next month.`,
+            },
+            HttpStatus.PAYMENT_REQUIRED,
+          );
+        }
       }
     }
     const now = new Date();
@@ -99,15 +131,33 @@ export class InterviewService {
       input,
       title: null,
       clientName: blankToNull(clientName),
+      weeklyRate: null,
       status: 'collecting',
       intent: await this.analyzeIntent(input),
       history: [],
       pendingQuestion: null,
       coverage: 0,
       summary: null,
+      slots: null,
+      openQuestions: null,
+      fixLog: null,
+      proposalDrafts: null,
+      // Null = not decided: the budget-derived default applies on read, so the
+      // toggle at the gate keeps tracking a corrected budget until the owner
+      // touches it. `confirm()` pins whatever it lands on.
+      generateExtendedArtifacts: null,
       createdAt: now,
       updatedAt: now,
     };
+    // Notes-first mode: the pasted call notes become the first transcript entry,
+    // then the SAME advance() loop runs — no parallel path. The first adaptive
+    // turn will extract many slots at once and ask about the first real gap; in
+    // plan mode the notes are simply answer #0 and the linear plan continues from
+    // position 1.
+    const trimmedNotes = notes?.trim();
+    if (trimmedNotes) {
+      session.history.push(notesHistoryEntry(trimmedNotes));
+    }
     await this.advance(session); // choose the first question
     await this.repo.create(session);
     return this.toState(session);
@@ -147,6 +197,14 @@ export class InterviewService {
     }
 
     session.status = 'confirmed';
+    // R12 — pin the extended-artifacts answer. Until now it could still be null
+    // ("not decided"), tracking the budget slot; confirming is the moment that stops
+    // being editable, so every confirmed project carries an explicit value instead
+    // of one that depends on re-parsing a sentence later.
+    session.generateExtendedArtifacts = resolveExtendedArtifacts(
+      session.generateExtendedArtifacts,
+      session.slots,
+    );
     await this.repo.save(session);
     return this.toState(session);
   }
@@ -168,12 +226,28 @@ export class InterviewService {
    */
   async update(
     sessionId: string,
-    patch: { title?: string; clientName?: string },
+    patch: {
+      title?: string;
+      clientName?: string;
+      weeklyRate?: number | null;
+      generateExtendedArtifacts?: boolean;
+    },
   ): Promise<ProjectSummary> {
     const session = await this.require(sessionId);
     if (patch.title !== undefined) session.title = blankToNull(patch.title);
     if (patch.clientName !== undefined) {
       session.clientName = blankToNull(patch.clientName);
+    }
+    // undefined = untouched; null = clear; a number sets the rate.
+    if (patch.weeklyRate !== undefined) {
+      session.weeklyRate = patch.weeklyRate ?? null;
+    }
+    // R12 — the owner's override, from the confirmation-gate toggle or the later
+    // "generate security & QA artifacts" action. Turning it back on is the whole
+    // activation path: no new endpoint, no new pipeline state — the stages simply
+    // become visible and generate the way they always did.
+    if (patch.generateExtendedArtifacts !== undefined) {
+      session.generateExtendedArtifacts = patch.generateExtendedArtifacts;
     }
     await this.repo.save(session);
     return this.toSummary(session);
@@ -181,6 +255,65 @@ export class InterviewService {
 
   async getState(sessionId: string): Promise<InterviewState> {
     return this.toState(await this.require(sessionId));
+  }
+
+  /**
+   * Correct a slot value at the confirmation gate (owner-guarded at the
+   * controller). Because the **transcript is the source of truth**, this appends
+   * a correction turn to `history` and then updates the derived snapshot to match
+   * — so a later re-derivation from history sees the correction, and the two never
+   * disagree. The corrected value is always `explicit`/`high` (the owner stated it
+   * outright), which by the merge rules can never be silently overwritten by a
+   * later inference.
+   *
+   * Allowed only before the interview is confirmed — once locked, the requirements
+   * are generated and editing a slot would desync the transcript from the design.
+   */
+  async editSlot(
+    sessionId: string,
+    slotKey: string,
+    value: string,
+  ): Promise<InterviewState> {
+    const session = await this.require(sessionId);
+    if (session.status === 'confirmed') {
+      throw new ConflictException(
+        'The interview is already confirmed; slots can no longer be edited.',
+      );
+    }
+    if (!isSlotKey(slotKey)) {
+      throw new BadRequestException(`Unknown slot "${slotKey}".`);
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new BadRequestException('A slot value cannot be empty.');
+    }
+
+    // 1) Transcript first — the correction is a real turn in the conversation.
+    session.history.push({
+      question: {
+        id: `correction:${slotKey}`,
+        phase: session.pendingQuestion?.phase ?? InterviewPhase.Understanding,
+        prompt: `Correction — ${SLOT_CATALOG[slotKey].description}`,
+      },
+      answer: trimmed,
+    });
+
+    // 2) Snapshot follows: an explicit, high-confidence value the merge rules
+    //    protect from any later inference.
+    const slots: SlotMap = {
+      ...(session.slots ?? {}),
+      [slotKey]: { value: trimmed, confidence: 'high', source: 'explicit' },
+    };
+    session.slots = slots;
+    // An answered gap is no longer open.
+    session.openQuestions = reconcileOpenQuestions(
+      session.openQuestions ?? [],
+      undefined,
+      slots,
+    );
+
+    await this.repo.save(session);
+    return this.toState(session);
   }
 
   /** List the projects owned by a user, most recently updated first. */
@@ -200,6 +333,14 @@ export class InterviewService {
       clientName: s.clientName ?? undefined,
       status: s.status,
       completeness: round2(s.coverage),
+      weeklyRate: s.weeklyRate ?? null,
+      generateExtendedArtifacts: resolveExtendedArtifacts(
+        s.generateExtendedArtifacts,
+        s.slots,
+      ),
+      // The per-month quota's meter: the client counts what was created this
+      // period rather than what is owned (see `countInQuotaPeriod`).
+      createdAt: s.createdAt.toISOString(),
       updatedAt: s.updatedAt.toISOString(),
     };
   }
@@ -260,6 +401,23 @@ export class InterviewService {
   private async advance(session: InterviewSession): Promise<void> {
     const next = await this.decideNext(session);
     session.coverage = round2(next.coverage);
+
+    // Fold any slot extractions from this turn onto the session BEFORE deciding
+    // status, so the summary at the gate reflects the final turn's slots too. The
+    // merge is guardrailed in `mergeSlots` (explicit beats inferred, never the
+    // reverse); reconciliation drops an open question once its slot is answered.
+    // Plan-mode turns carry no slots, so this is a no-op there — slots simply stay
+    // empty, which every consumer tolerates.
+    if (next.slots || next.openQuestions) {
+      const slots = mergeSlots(session.slots ?? {}, next.slots);
+      session.slots = slots;
+      session.openQuestions = reconcileOpenQuestions(
+        session.openQuestions ?? [],
+        next.openQuestions,
+        slots,
+      );
+    }
+
     if (next.done) {
       session.status = 'awaiting_confirmation';
       session.summary = this.buildSummary(session);
@@ -294,18 +452,25 @@ export class InterviewService {
         idea: session.input.idea,
         intent: session.intent,
         history: session.history,
+        slots: session.slots ?? {},
         language,
       });
       if (!d || typeof d.done !== 'boolean') return null;
 
       const coverage = clamp01(typeof d.coverage === 'number' ? d.coverage : 0);
       const canFinish = session.history.length >= MIN_ADAPTIVE_QUESTIONS;
+      // The model's slot extractions + open questions ride along on every turn,
+      // sanitized to the known shape; `advance()` merges them onto the session.
+      const slots = this.sanitizeSlots(d.slots);
+      const openQuestions = this.sanitizeOpenQuestions(d.openQuestions);
 
       if (d.done && canFinish) {
         return {
           done: true,
           coverage: Math.max(coverage, COMPLETENESS_THRESHOLD),
           question: null,
+          slots,
+          openQuestions,
         };
       }
       if (typeof d.question === 'string' && d.question.trim().length > 0) {
@@ -318,6 +483,8 @@ export class InterviewService {
         return {
           done: false,
           coverage,
+          slots,
+          openQuestions,
           question: {
             id: `q${session.history.length + 1}`,
             phase: this.resolvePhase(d.phase, session),
@@ -327,8 +494,12 @@ export class InterviewService {
           },
         };
       }
-      // "done" too early, or no question supplied → let the plan provide one.
-      return null;
+      // "done" too early, or no question supplied → let the plan provide one. The
+      // slots extracted this turn are still returned so nothing the model learned
+      // is lost when we fall through to the plan for the QUESTION.
+      return slots || openQuestions
+        ? { ...this.planDecision(session), slots, openQuestions }
+        : null;
     } catch (err) {
       this.logger.warn(`Adaptive interview failed; using question plan: ${err}`);
       return null;
@@ -353,6 +524,56 @@ export class InterviewService {
     );
     const done = question === null || coverage >= COMPLETENESS_THRESHOLD;
     return { done, coverage, question: done ? null : question };
+  }
+
+  /**
+   * Coerce the model's `slots` into the known shape — an LLM's JSON is untrusted.
+   * Drops unknown keys, non-string/empty values, and bad enums; returns undefined
+   * when nothing valid survives (so `advance()` treats the turn as slot-free).
+   */
+  private sanitizeSlots(raw: unknown): SlotMap | undefined {
+    if (!raw || typeof raw !== 'object') return undefined;
+    const out: SlotMap = {};
+    let any = false;
+    for (const [key, value] of Object.entries(raw)) {
+      if (!isSlotKey(key) || !value || typeof value !== 'object') continue;
+      const v = value as Record<string, unknown>;
+      const na = v.na === true;
+      const text = typeof v.value === 'string' ? v.value.trim() : '';
+      // A real slot needs a value; an n/a slot doesn't (it's a "skip this" marker).
+      if (!na && text.length === 0) continue;
+      out[key] = {
+        value: text,
+        confidence: v.confidence === 'high' ? 'high' : 'low',
+        source: v.source === 'explicit' ? 'explicit' : 'inferred',
+        ...(na ? { na: true } : {}),
+        ...(na && typeof v.naReason === 'string'
+          ? { naReason: v.naReason.trim() }
+          : {}),
+      };
+      any = true;
+    }
+    return any ? out : undefined;
+  }
+
+  /** Coerce the model's `openQuestions` into the known shape (untrusted JSON). */
+  private sanitizeOpenQuestions(raw: unknown): OpenQuestion[] | undefined {
+    if (!Array.isArray(raw)) return undefined;
+    const out = (raw as unknown[])
+      .filter(
+        (q): q is OpenQuestion =>
+          !!q &&
+          typeof q === 'object' &&
+          typeof (q as OpenQuestion).slotKey === 'string' &&
+          isSlotKey((q as OpenQuestion).slotKey) &&
+          typeof (q as OpenQuestion).questionForClient === 'string' &&
+          (q as OpenQuestion).questionForClient.trim().length > 0,
+      )
+      .map((q) => ({
+        slotKey: q.slotKey,
+        questionForClient: q.questionForClient.trim(),
+      }));
+    return out.length ? out : undefined;
   }
 
   /** Map a free-text phase from the model onto a known phase. */
@@ -401,6 +622,9 @@ export class InterviewService {
       constraints: [
         ...this.answersForPhase(session, InterviewPhase.Technical),
         ...this.answersForPhase(session, InterviewPhase.Scale),
+        // Budget + timeline (the Commercial phase) are hard constraints on the
+        // design as much as any technical limit is.
+        ...this.answersForPhase(session, InterviewPhase.Commercial),
       ],
       assumptions: [
         'Derived from a structured interview; pending formal requirement engineering in the next stage.',
@@ -420,6 +644,16 @@ export class InterviewService {
       history: session.history as InterviewExchange[],
       currentQuestion,
       summary: session.summary,
+      // Always present (possibly empty) so the confirmation gate can render the
+      // filled slots + the questions-for-your-client list without a null check.
+      slots: session.slots ?? {},
+      openQuestions: session.openQuestions ?? [],
+      // Derived on read while it's still null, so correcting `budget_range` at the
+      // gate moves the toggle — the whole point of the marker.
+      generateExtendedArtifacts: resolveExtendedArtifacts(
+        session.generateExtendedArtifacts,
+        session.slots,
+      ),
     };
   }
 }

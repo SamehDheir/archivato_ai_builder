@@ -23,6 +23,7 @@ import { SessionOwnerGuard } from './session-owner.guard';
 import { StartInterviewDto } from './dto/start-interview.dto';
 import { SubmitAnswerDto } from './dto/submit-answer.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { EditSlotDto } from './dto/edit-slot.dto';
 
 // Every interview route requires a signed-in user (pipeline is now per-user).
 @UseGuards(JwtAuthGuard)
@@ -51,12 +52,17 @@ export class InterviewController {
         'Staff accounts are for platform operations only and cannot create projects.',
       );
     }
-    // Split the client's name off the idea. Everything left in `input` is what the
-    // agents read and what the public share page echoes back — the client's name
-    // belongs to neither, so it travels as a separate argument rather than riding
-    // along inside `ProjectIdeaInput`.
-    const { clientName, ...input } = dto;
-    return this.interview.start(input, user.id, clientName ?? null);
+    // Split the client's name AND the call notes off the idea. Everything left in
+    // `input` is what the agents read and what the public share page echoes back —
+    // neither the client's name nor the raw notes belongs there, so both travel as
+    // separate arguments rather than riding along inside `ProjectIdeaInput`.
+    const { clientName, notes, ...input } = dto;
+    return this.interview.start(
+      input,
+      user.id,
+      clientName ?? null,
+      notes ?? null,
+    );
   }
 
   /** Fetch current session state (owner only). */
@@ -81,6 +87,19 @@ export class InterviewController {
   @Post(':id/confirm')
   confirm(@Param('id') id: string): Promise<InterviewState> {
     return this.interview.confirm(id);
+  }
+
+  /**
+   * Correct a slot value at the confirmation gate (owner only). Appends the
+   * correction to the transcript and updates the derived snapshot to match.
+   */
+  @UseGuards(SessionOwnerGuard)
+  @Patch(':id/slots')
+  editSlot(
+    @Param('id') id: string,
+    @Body() dto: EditSlotDto,
+  ): Promise<InterviewState> {
+    return this.interview.editSlot(id, dto.slotKey, dto.value);
   }
 
   /**

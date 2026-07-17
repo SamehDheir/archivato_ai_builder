@@ -6,7 +6,7 @@ import { Coins } from 'lucide-react';
 import type { CostEstimate, UpstreamRevisions } from '@archivato/shared';
 import { costEstimateApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ArtifactSkeleton } from '@/components/shared/ArtifactSkeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { CostView } from '@/components/cost/CostView';
 import { StaleNotice } from '@/components/project/StaleNotice';
@@ -21,12 +21,18 @@ export function CostEstimatePanel({
   sessionId,
   reloadKey,
   revisions,
+  weeklyRate,
+  onSaveWeeklyRate,
 }: {
   sessionId: string;
   /** Bump to refetch (e.g. after a restore). */
   reloadKey: number;
   /** Current design revisions — an estimate priced off an older one is stale. */
   revisions: UpstreamRevisions;
+  /** The owner's internal weekly rate (owner-only pricing). */
+  weeklyRate?: number | null;
+  /** Persist a new weekly rate — enables the owner-only suggested price. */
+  onSaveWeeklyRate?: (rate: number | null) => Promise<void>;
 }) {
   const toast = useToast();
   const { t } = useTranslation('stages');
@@ -65,12 +71,7 @@ export function CostEstimatePanel({
   }
 
   if (!loaded) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
+    return <ArtifactSkeleton />;
   }
 
   if (!estimate) {
@@ -96,7 +97,11 @@ export function CostEstimatePanel({
         busy={busy}
         onRegenerate={generate}
       />
-      <CostView estimate={estimate} />
+      <CostView
+        estimate={estimate}
+        weeklyRate={weeklyRate}
+        onSaveWeeklyRate={onSaveWeeklyRate}
+      />
       <Button variant="secondary" onClick={generate} disabled={busy}>
         {busy ? t('cost.working') : t('cost.regenerate')}
       </Button>

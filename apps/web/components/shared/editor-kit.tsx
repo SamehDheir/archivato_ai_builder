@@ -111,15 +111,15 @@ function SaveStatus({
   }
   if (dirty && !canSave) {
     return (
-      <span className="text-xs font-medium text-amber-600 dark:text-amber-500">
+      <span className="text-xs font-medium text-warning">
         {t('editor.fixErrors')}
       </span>
     );
   }
   if (dirty) {
     return (
-      <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-500">
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />{' '}
+      <span className="flex items-center gap-1 text-xs font-medium text-warning">
+        <span className="h-1.5 w-1.5 rounded-full bg-warning" />{' '}
         {t('editor.unsaved')}
       </span>
     );

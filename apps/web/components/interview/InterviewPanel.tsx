@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SummaryView } from "@/components/interview/SummaryView";
+import { SlotReview } from "@/components/interview/SlotReview";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
@@ -23,12 +24,21 @@ export function InterviewPanel({
   error,
   onAnswer,
   onConfirm,
+  onEditSlot,
+  onToggleExtendedArtifacts,
 }: {
   state: InterviewState;
   busy: boolean;
   error: string | null;
   onAnswer: (text: string) => void;
   onConfirm: () => void;
+  /** Correct a filled slot at the confirmation gate (appends to the transcript). */
+  onEditSlot: (slotKey: string, value: string) => void;
+  /**
+   * Override the budget-derived default for the threat model + QA plan (R12).
+   * Omitted ⇒ the toggle isn't shown (it's the owner's call, and only theirs).
+   */
+  onToggleExtendedArtifacts?: (value: boolean) => void;
 }) {
   const { t } = useTranslation("interview");
   const question = state.currentQuestion;
@@ -226,7 +236,42 @@ export function InterviewPanel({
             <Alert variant="info" className="mb-3">
               <AlertDescription>{t("summaryHelp")}</AlertDescription>
             </Alert>
-            <SummaryView summary={state.summary} />
+            <SlotReview
+              slots={state.slots ?? {}}
+              openQuestions={state.openQuestions ?? []}
+              busy={busy}
+              onEditSlot={onEditSlot}
+            />
+            <div className="mt-4">
+              <SummaryView summary={state.summary} />
+            </div>
+
+            {/*
+              R12 — the threat model + QA plan are Pro, LLM-billed and slow, and a
+              small fixed-price job rarely needs them. The default is derived from
+              the stated budget; this is where the owner sees that guess and
+              overrides it, before any of it is generated.
+            */}
+            {onToggleExtendedArtifacts && (
+              <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-border p-3">
+                <input
+                  type="checkbox"
+                  checked={state.generateExtendedArtifacts ?? true}
+                  onChange={(e) => onToggleExtendedArtifacts(e.target.checked)}
+                  disabled={busy}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                />
+                <span>
+                  <span className="text-sm font-medium">
+                    {t("extended.label")}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {t("extended.hint")}
+                  </span>
+                </span>
+              </label>
+            )}
+
             <div className="mt-4 flex gap-2">
               <Button variant="success" onClick={onConfirm} disabled={busy}>
                 {busy ? t("confirming") : t("confirm")}

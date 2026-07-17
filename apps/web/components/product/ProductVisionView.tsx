@@ -21,8 +21,8 @@ export function ProductVisionView({ vision }: { vision: ProductVision }) {
   const fmt = useFormat();
   return (
     <div>
-      <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
+        <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-lg font-semibold">
             <Sparkles className="h-5 w-5 text-primary" /> {t('vision.title')}
           </h3>

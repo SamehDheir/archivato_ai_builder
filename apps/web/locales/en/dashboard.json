@@ -50,9 +50,10 @@
   },
   "quota": {
     "plan": "{{plan}} plan",
-    "used": "{{count}} of {{quota}} scopings used",
-    "upgrade": "Upgrade to Pro",
-    "manage": "Manage plan"
+    "used": "{{used}} of {{quota}} designs used this month",
+    "upgrade": "Upgrade to Team",
+    "manage": "Manage plan",
+    "unlimited": "Unlimited designs"
   },
   "projects": {
     "heading": "Your client scopings",
@@ -66,6 +67,11 @@
     "ideaPlaceholder": "e.g. A clinic management system with appointments, billing, doctors, and patient records.",
     "clientLabel": "Client (optional)",
     "clientPlaceholder": "e.g. Acme Clinics",
+    "modeSteps": "Answer step by step",
+    "modeNotes": "Paste call notes",
+    "notesLabel": "Call notes / meeting transcript",
+    "notesPlaceholder": "Paste your notes from the client call — the AI reads them, extracts what it can, and only asks about the gaps.",
+    "notesHint": "The notes become the start of the interview; you'll answer far fewer questions.",
     "industryLabel": "Industry (optional)",
     "industryPlaceholder": "healthcare",
     "scaleLabel": "Scale (optional)",
@@ -157,7 +163,11 @@
     "awaiting_confirmation": "Review & confirm",
     "confirmed": "Confirmed"
   },
-  "scale": { "mvp": "MVP", "startup": "Startup", "enterprise": "Enterprise" },
+  "scale": {
+    "mvp": "MVP",
+    "startup": "Startup",
+    "enterprise": "Enterprise"
+  },
   "stage": {
     "requirements": "Requirement document",
     "system-design": "System design",
@@ -182,7 +192,10 @@
     "history": "History",
     "interview": "Interview"
   },
-  "breadcrumb": { "projects": "Scopings", "project": "Scoping" },
+  "breadcrumb": {
+    "projects": "Scopings",
+    "project": "Scoping"
+  },
   "palette": {
     "actions": "Actions",
     "projects": "Scopings",
@@ -216,6 +229,9 @@
     "databaseSaved": "Database saved",
     "apiSaved": "API design saved",
     "refined": "Design refined",
+    "fixApplied": "Fix applied",
+    "findingResolved": "Finding updated",
+    "settingSaveFailed": "Couldn't save that setting",
     "restored": "Scoping restored to selected version",
     "generated": "{{stage}} generated",
     "generateFailed": "Could not generate {{stage}}",
@@ -230,5 +246,12 @@
     "exportIncomplete": "Finish generating the design before exporting.",
     "exportFeature": "Export"
   },
-  "upgradeFeature": { "anotherProject": "start another scoping" }
+  "upgradeFeature": {
+    "anotherProject": "start another scoping"
+  },
+  "workflow": {
+    "call": "Client call",
+    "scope": "AI scoping",
+    "send": "Sent to client"
+  }
 }

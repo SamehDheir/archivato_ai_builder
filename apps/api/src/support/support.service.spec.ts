@@ -157,12 +157,17 @@ describe('SupportService', () => {
 
   it('notifies the ticket owner in-app when the ticket is created', async () => {
     const h = await makeHarness();
-    await h.support.createTicket(h.customer, NEW_TICKET);
+    const created = await h.support.createTicket(h.customer, NEW_TICKET);
 
     const page = await h.inApp.page(h.customer.id);
     expect(page.unread).toBe(1);
     expect(page.items[0].type).toBe('ticket_created');
-    expect(page.items[0].link).toContain('/support/tickets/');
+    // The link must address the web app's REAL route: /support/:id, matching
+    // apps/web/app/(app)/support/[id]. This asserted `toContain('/support/tickets/')`
+    // and passed the whole time every notification click was 404ing — a substring
+    // check on a path cannot tell a live route from a dead one. Pin the exact
+    // path; `support-notification-links.spec.ts` pins that the route exists.
+    expect(page.items[0].link).toBe(`/support/${created.id}`);
     // The other customer got nothing (no broadcast).
     expect((await h.inApp.page(h.other.id)).unread).toBe(0);
   });

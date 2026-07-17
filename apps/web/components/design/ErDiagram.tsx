@@ -39,6 +39,13 @@ export function ErDiagram({
   const backgroundOf = (svg: SVGSVGElement): string => {
     const host = svg.parentElement;
     const bg = host ? getComputedStyle(host).backgroundColor : '';
+    // A literal is unavoidable here: this value is baked into an exported PNG/SVG
+    // file, which leaves the page and has no stylesheet to resolve a var()
+    // against. The theme-aware colour is read from the live DOM above; this is
+    // only the last-resort fallback for when the host has no computed background
+    // (an export fired before paint), and white is the safe answer for a file
+    // someone will put in a document.
+    // eslint-disable-next-line no-restricted-syntax
     return bg || '#ffffff';
   };
 

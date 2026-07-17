@@ -1,10 +1,14 @@
 import type {
+  FixLogEntry,
   InterviewExchange,
   InterviewQuestion,
   InterviewStatus,
   IntentAnalysis,
+  OpenQuestion,
+  ProposalDraft,
   RequirementsSummary,
   ProjectIdeaInput,
+  SlotMap,
 } from '@archivato/shared';
 
 /**
@@ -25,6 +29,11 @@ export interface InterviewSession {
    * a prompt or onto the public share page.
    */
   clientName: string | null;
+  /**
+   * The owner's internal weekly rate (USD/person-week) for pricing this project
+   * (R9). Owner-only — never crosses onto the public share page.
+   */
+  weeklyRate: number | null;
   status: InterviewStatus;
   intent: IntentAnalysis | null;
   /** Answered questions, in the order they were asked. */
@@ -37,6 +46,48 @@ export interface InterviewSession {
   /** Latest requirement-coverage estimate, 0..1 (drives the progress bar). */
   coverage: number;
   summary: RequirementsSummary | null;
+  /**
+   * The derived slot snapshot (R6) — a cache over `history`, never authoritative
+   * over it. Null on legacy rows and pure plan-mode runs; consumers must tolerate
+   * that (an absent snapshot reads as "no slots filled").
+   */
+  slots: SlotMap | null;
+  /** Gaps to forward to the client, accumulated as the interview couldn't fill them. */
+  openQuestions: OpenQuestion[] | null;
+  /**
+   * Append-only record of the review fixes the owner approved (R11). Null on rows
+   * predating it, and on any project where no fix was ever applied.
+   *
+   * It lives on the session, not the review, because a re-run replaces the review
+   * row (statuses reset — a re-run is a fresh assessment) and the review is carried
+   * in version snapshots, so a restore would rewind a log stored there.
+   */
+  fixLog: FixLogEntry[] | null;
+  /**
+   * The last 5 proposal cover messages written for this project (R13), newest
+   * first. Null until the owner writes one.
+   *
+   * **Owner-only** — this is the owner's outbox, not an artifact: it carries their
+   * price, their sender name, and what they chose to tell the client, and it is
+   * never projected onto the public share payload. It lives on the session for the
+   * same reason as `fixLog`: version snapshots rewind design artifacts, and a
+   * restore must not rewind messages the owner has already sent.
+   */
+  proposalDrafts: ProposalDraft[] | null;
+  /**
+   * Whether this project generates the threat model + QA plan (R12).
+   *
+   * **`null` = the owner hasn't decided**, so the budget-derived default applies —
+   * read it through `resolveExtendedArtifacts(…, slots)`, never bare. That marker
+   * is what lets the toggle at the gate keep tracking a corrected `budget_range`
+   * until the owner touches it; once they do, this holds their choice and no slot
+   * edit can overrule it. `confirm()` pins a value, so every confirmed project has
+   * an explicit answer.
+   *
+   * Rows predating R12 were backfilled to `true`, so nothing already created
+   * changed behaviour.
+   */
+  generateExtendedArtifacts: boolean | null;
   createdAt: Date;
   updatedAt: Date;
 }

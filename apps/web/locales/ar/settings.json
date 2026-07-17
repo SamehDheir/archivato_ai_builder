@@ -38,17 +38,9 @@
     "title": "الخطة والفوترة",
     "description": "تُقاس المشاريع حسب الخطة — يُحتسب المشروع بمجرد تأكيد مقابلته.",
     "planLabel": "خطة {{plan}}",
-    "planFree": "مجانية",
-    "planPro": "احترافية",
     "proBadge": "احترافي",
     "annualBadge": "سنوي",
     "cancelsBadge": "يُلغى في نهاية الفترة",
-    "usage_zero": "{{used}} من {{quota}} مشروع مستخدم",
-    "usage_one": "{{used}} من {{quota}} مشروع مستخدم",
-    "usage_two": "{{used}} من {{quota}} مشروعين مستخدمين",
-    "usage_few": "{{used}} من {{quota}} مشاريع مستخدمة",
-    "usage_many": "{{used}} من {{quota}} مشروعًا مستخدمًا",
-    "usage_other": "{{used}} من {{quota}} مشروع مستخدم",
     "renews": "يتجدّد في {{date}}",
     "ends": "ينتهي في {{date}}",
     "cancel": "إلغاء الاحترافي",
@@ -64,7 +56,9 @@
     "cancelConfirm": "إلغاء الاشتراك",
     "cancelKeep": "الاحتفاظ بالاحترافي",
     "canceled": "تم إلغاء الاشتراك",
-    "cancelFailed": "تعذّر الإلغاء"
+    "cancelFailed": "تعذّر الإلغاء",
+    "usageMonth": "استخدمت {{used}} من {{quota}} تصميم هذا الشهر",
+    "usageUnlimited": "تصاميم بلا حدود"
   },
   "security": {
     "changeTitle": "تغيير كلمة المرور",

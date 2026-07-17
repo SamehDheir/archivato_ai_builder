@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { ApiDesign } from '@archivato/shared';
+import { normalizeApiDesign, type ApiDesign } from '@archivato/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ApiDesignRepository } from './api-design.repository';
 
@@ -23,7 +23,13 @@ export class PrismaApiDesignRepository implements ApiDesignRepository {
     const row = await this.prisma.apiDesign.findUnique({
       where: { sessionId },
     });
-    return row ? (row.data as unknown as ApiDesign) : null;
+    // The cast is a claim, not a check: `data` is Json, so nothing guarantees a
+    // stored row still satisfies `ApiDesign`. Rows written before the agent
+    // normalized its LLM output can be missing required arrays (`statusCodes`),
+    // and they reach every consumer — OpenAPI/Postman/scaffold/mock/the view —
+    // through this one read. Normalizing here is what heals them, since a
+    // write-side rule can never reach a row that is already in the table.
+    return row ? normalizeApiDesign(row.data as unknown as ApiDesign) : null;
   }
 
   async deleteBySessionId(sessionId: string): Promise<void> {

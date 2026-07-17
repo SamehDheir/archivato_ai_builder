@@ -6,7 +6,7 @@ import { Flag } from 'lucide-react';
 import type { ProjectRoadmap, UpstreamRevisions } from '@archivato/shared';
 import { roadmapApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ArtifactSkeleton } from '@/components/shared/ArtifactSkeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { RoadmapView } from '@/components/roadmap/RoadmapView';
 import { StaleNotice } from '@/components/project/StaleNotice';
@@ -65,12 +65,7 @@ export function RoadmapPanel({
   }
 
   if (!loaded) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
+    return <ArtifactSkeleton />;
   }
 
   if (!roadmap) {
