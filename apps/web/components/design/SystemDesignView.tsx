@@ -239,8 +239,12 @@ export function SystemDesignView({
           {design.services.map((s) => (
             <Card key={s.name} className="border-s-2 border-s-primary/50">
               <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                {/* The explain label is a nowrap phrase and these cards are a
+                    half-width grid column — the narrowest spot it appears in.
+                    Without flex-wrap it can neither shrink nor break, so it
+                    overflowed the card (R14). */}
+                <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                  <div className="flex min-w-0 items-center gap-2">
                     <div className="font-semibold" dir="auto">{s.name}</div>
                     {s.complexity && (
                       <ComplexityBadge
