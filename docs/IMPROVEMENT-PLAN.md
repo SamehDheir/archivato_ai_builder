@@ -86,7 +86,26 @@ the budget; a queue test asserts a 503 is retried and a parse error is not.
 
 ---
 
-### C2 — Generation provenance on every artifact
+### C2 — Generation provenance on every artifact ✅ **DONE** (`fix/llm-timeouts`)
+
+> **Shipped:** `packages/shared/src/generation.ts` + optional `generation?` on the
+> nine LLM artifacts (migration-free). Stamping is **one template method** —
+> `BaseAgent.generateArtifact` — onto which the eight uniform agents were
+> refactored, so a new agent is stamped for free; the chunked API designer stamps
+> via `this.provenance()`. `GenerationNotice` renders the warning + a one-click
+> regenerate on all nine tabs (EN+AR).
+>
+> **Two decisions worth knowing.** The **cost estimate is deliberately not
+> stamped** — it is 100% deterministic, so a generation mode on it would imply
+> LLM involvement that does not exist (which is also why the field did not go on
+> `DerivedArtifact`, since `CostEstimate` extends it). And **provenance is
+> owner-only**: `withoutGeneration()` strips it in `ShareService.view`, because it
+> tells a client their vendor's proposal was machine-templated and names our
+> provider and model. A security test asserts it never reaches the public page.
+>
+> 854 API + 60 web tests green, lint + typecheck clean on both workspaces.
+
+
 
 **Problem.** Users cannot tell an LLM-generated artifact from a deterministic
 fallback. `CLAUDE.md` already lists "templated / mock-looking artifacts" as a

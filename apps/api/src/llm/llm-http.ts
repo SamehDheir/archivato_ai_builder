@@ -31,18 +31,39 @@ const DEFAULT_BACKOFF_BASE_MS = 500;
 const MAX_BACKOFF_MS = 8_000;
 
 /**
+ * Ceiling on a single attempt's timeout.
+ *
+ * Node's timers are 32-bit: past 2^31-1 ms a `setTimeout` overflows and fires
+ * almost immediately, so an over-large `LLM_TIMEOUT_MS` would abort every call
+ * instantly — the exact inverse of what the operator asked for, with nothing in
+ * the logs explaining it. Clamping is the only failure mode that stays honest.
+ * (A day is already far past any real model call; the reasoning multiplier in
+ * the SiliconFlow provider is applied before this clamp.)
+ */
+export const MAX_LLM_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
+/** What kind of transport fault occurred — the reason classifier keys off this. */
+export type LlmHttpErrorKind = 'http' | 'timeout' | 'network';
+
+/**
  * A failed LLM HTTP call.
  *
  * The message keeps each provider's original
  * `"<Provider> request failed with status <n>"` wording so existing callers and
- * assertions keep working; `status` and `retryable` are the machine-readable
- * additions.
+ * assertions keep working; `status`, `kind` and `retryable` are the
+ * machine-readable additions.
+ *
+ * `kind` exists so callers can tell a timeout from an outage **without matching
+ * on the message text**. The agent layer needs that distinction (it becomes the
+ * artifact's `degradedReason`), and deriving it from prose built in this file
+ * meant a reworded string would silently reclassify every timeout.
  */
 export class LlmHttpError extends Error {
   constructor(
     message: string,
     readonly status: number | null,
     readonly retryable: boolean,
+    readonly kind: LlmHttpErrorKind = 'http',
   ) {
     super(message);
     this.name = 'LlmHttpError';
@@ -61,14 +82,37 @@ export function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
 
+/**
+ * Did the run out of time?
+ *
+ * `AbortSignal.timeout()` rejects with a DOMException named TimeoutError; an
+ * otherwise-aborted fetch surfaces as AbortError. One helper because the retry
+ * predicate and the message builder both need the answer, and a third abort-like
+ * name added to only one of them would produce a call that retries correctly and
+ * then reports the wrong reason.
+ */
+function isAbortLike(err: unknown): boolean {
+  const name = (err as { name?: string } | null | undefined)?.name;
+  return name === 'TimeoutError' || name === 'AbortError';
+}
+
+/**
+ * Is this a genuine network fault, as opposed to a bug in our own code?
+ *
+ * undici reports DNS/TLS/connection failures as `TypeError('fetch failed')` with
+ * the underlying error attached as `cause`. Treating **every** TypeError as a
+ * network fault was too broad: a real programming error inside the request path
+ * (a response object without `.text()`, say) would then be retried three times
+ * and reported to the user as an outage, permanently disguising the bug.
+ */
+function isNetworkThrow(err: unknown): boolean {
+  if (!(err instanceof TypeError)) return false;
+  return err.message === 'fetch failed' || 'cause' in err;
+}
+
 /** Classify a thrown (non-HTTP) error: timeouts and network faults are transient. */
 function isRetryableThrow(err: unknown): boolean {
-  const name = (err as { name?: string } | null | undefined)?.name;
-  // `AbortSignal.timeout()` rejects with a DOMException named TimeoutError;
-  // an otherwise-aborted fetch surfaces as AbortError.
-  if (name === 'TimeoutError' || name === 'AbortError') return true;
-  // undici reports DNS/TLS/connection failures as TypeError('fetch failed').
-  return err instanceof TypeError;
+  return isAbortLike(err) || isNetworkThrow(err);
 }
 
 /** `Retry-After` in seconds, when the provider sends a usable one. */
@@ -94,15 +138,14 @@ function sleep(ms: number): Promise<void> {
 
 /** Wrap a thrown transport fault as an `LlmHttpError` with a readable message. */
 function transportError(err: unknown, label: string, timeoutMs: number): LlmHttpError {
-  const name = (err as { name?: string } | null | undefined)?.name;
-  const timedOut = name === 'TimeoutError' || name === 'AbortError';
-  return new LlmHttpError(
-    timedOut
-      ? `${label} request timed out after ${timeoutMs}ms`
-      : `${label} request failed: network error`,
-    null,
-    true,
-  );
+  return isAbortLike(err)
+    ? new LlmHttpError(
+        `${label} request timed out after ${timeoutMs}ms`,
+        null,
+        true,
+        'timeout',
+      )
+    : new LlmHttpError(`${label} request failed: network error`, null, true, 'network');
 }
 
 export interface LlmFetchOptions {
@@ -137,7 +180,14 @@ export async function postLlmJson<T>(
     backoffBaseMs = DEFAULT_BACKOFF_BASE_MS,
   } = options;
 
-  const attempts = Math.max(1, Math.floor(maxAttempts));
+  // `Math.max(1, NaN)` is NaN, which would make the loop condition false on the
+  // first pass — returning a "request failed" the operator would read as an
+  // outage for a request that was never sent. Coerce to a usable count first.
+  const attempts = positiveInt(maxAttempts, DEFAULT_LLM_MAX_ATTEMPTS);
+  const budgetMs = Math.min(
+    positiveInt(timeoutMs, DEFAULT_LLM_TIMEOUT_MS),
+    MAX_LLM_TIMEOUT_MS,
+  );
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -149,14 +199,20 @@ export async function postLlmJson<T>(
         headers: init.headers,
         body: init.body,
         // A fresh signal per attempt — a signal only fires once.
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.timeout(budgetMs),
       });
 
       if (res.ok) return (await res.json()) as T;
 
       const detail = await res.text().catch(() => res.statusText);
       const retryable = isRetryableStatus(res.status);
-      logger.error(`${label} request failed (${res.status}): ${detail}`);
+      // Only the FINAL outcome is an error. A 503 that succeeds on attempt 3 is
+      // a non-event, and logging each attempt at error level buried the one line
+      // that mattered under three that didn't — multiplied by every concurrent
+      // pipeline stage during a provider blip.
+      const detailLine = `${label} request failed (${res.status}): ${detail}`;
+      if (retryable && attempt < attempts) logger.debug(detailLine);
+      else logger.error(detailLine);
       const httpError = new LlmHttpError(
         `${label} request failed with status ${res.status}`,
         res.status,
@@ -172,8 +228,8 @@ export async function postLlmJson<T>(
       // LlmHttpError that can land here is the terminal one just raised.
       if (err instanceof LlmHttpError) throw err;
       if (!isRetryableThrow(err)) throw err;
-      lastError = transportError(err, label, timeoutMs);
-      logger.warn(`${label} attempt ${attempt}/${attempts} failed: ${String(err)}`);
+      lastError = transportError(err, label, budgetMs);
+      logger.debug(`${label} attempt ${attempt}/${attempts}: ${String(err)}`);
     }
 
     if (attempt < attempts) {
@@ -182,6 +238,9 @@ export async function postLlmJson<T>(
         `${label} attempt ${attempt}/${attempts} failed; retrying in ${delay}ms.`,
       );
       await sleep(delay);
+    } else if (lastError instanceof Error) {
+      // Exhausted: this is the line that matters, so it is the one at error level.
+      logger.error(`${label} failed after ${attempts} attempts: ${lastError.message}`);
     }
   }
 

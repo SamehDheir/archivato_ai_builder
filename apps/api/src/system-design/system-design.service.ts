@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   applySystemDesignPatch,
+  preserveGeneration,
   type DecisionExplanation,
   type DecisionRef,
   type PatchSection,
@@ -157,15 +158,20 @@ export class SystemDesignService {
         complexityRationale: s.complexityRationale ?? prior?.complexityRationale,
       };
     });
-    return this.designs.upsert({
-      ...edited,
-      services,
-      buildVsBuy: edited.buildVsBuy ?? existing.buildVsBuy,
-      phasedArchitecture: edited.phasedArchitecture ?? existing.phasedArchitecture,
-      constraintCompliance:
-        edited.constraintCompliance ?? existing.constraintCompliance,
-      sessionId,
-      generatedAt: new Date().toISOString(),
-    });
+    return this.designs.upsert(
+      preserveGeneration(
+        {
+          ...edited,
+          services,
+          buildVsBuy: edited.buildVsBuy ?? existing.buildVsBuy,
+          phasedArchitecture: edited.phasedArchitecture ?? existing.phasedArchitecture,
+          constraintCompliance:
+            edited.constraintCompliance ?? existing.constraintCompliance,
+          sessionId,
+          generatedAt: new Date().toISOString(),
+        },
+        existing,
+      ),
+    );
   }
 }

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   STRIDE_CATEGORIES,
@@ -41,8 +41,6 @@ const VALID_SEVERITIES = new Set<Severity>(['low', 'medium', 'high', 'critical']
 export class ThreatModelerAgent extends BaseAgent {
   readonly role = AgentRole.ThreatModeler;
 
-  private readonly logger = new Logger(ThreatModelerAgent.name);
-
   protected readonly systemPrompt = [
     'You are an application security engineer performing a STRIDE threat model of a',
     'generated system design, before it is built.',
@@ -69,18 +67,13 @@ export class ThreatModelerAgent extends BaseAgent {
     ctx: ThreatModelContext,
   ): Promise<ThreatModel> {
     const generatedAt = new Date().toISOString();
-    try {
-      const raw = await this.thinkJson<Partial<ThreatModel>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        return this.normalize({ ...raw, sessionId, generatedAt }, ctx);
-      }
-      this.logger.debug('Threat model malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`Threat model failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<ThreatModel>({
+      label: 'Threat model',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) => this.normalize({ ...raw, sessionId, generatedAt }, ctx),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   private buildPrompt(ctx: ThreatModelContext): string {

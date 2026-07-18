@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   applyRequirementsPatch,
+  preserveGeneration,
   type OpenQuestion,
   type OutOfScopeItem,
   type PatchSection,
@@ -176,18 +177,23 @@ export class RequirementsService {
         'Generate the requirement document before editing it.',
       );
     }
-    return this.docs.upsert({
-      ...edited,
-      // The narrative / interview-derived sections (R6/R7) are not part of the
-      // structured editor, so an edit must not wipe them: carry them over from
-      // the generated document. `openQuestions` in particular is derived from the
-      // interview, never user-authored here.
-      executiveSummary: existing.executiveSummary,
-      outOfScope: existing.outOfScope,
-      assumptionsAndOpenQuestions: existing.assumptionsAndOpenQuestions,
-      openQuestions: existing.openQuestions,
-      sessionId,
-      generatedAt: new Date().toISOString(),
-    });
+    return this.docs.upsert(
+      preserveGeneration(
+        {
+          ...edited,
+          // The narrative / interview-derived sections (R6/R7) are not part of the
+          // structured editor, so an edit must not wipe them: carry them over from
+          // the generated document. `openQuestions` in particular is derived from the
+          // interview, never user-authored here.
+          executiveSummary: existing.executiveSummary,
+          outOfScope: existing.outOfScope,
+          assumptionsAndOpenQuestions: existing.assumptionsAndOpenQuestions,
+          openQuestions: existing.openQuestions,
+          sessionId,
+          generatedAt: new Date().toISOString(),
+        },
+        existing,
+      ),
+    );
   }
 }

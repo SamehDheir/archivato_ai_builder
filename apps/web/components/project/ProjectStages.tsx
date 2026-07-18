@@ -60,6 +60,7 @@ import { CostEstimatePanel } from '@/components/cost/CostEstimatePanel';
 import { ThreatModelPanel } from '@/components/security/ThreatModelPanel';
 import { QaPlanPanel } from '@/components/qa/QaPlanPanel';
 import { StaleNotice } from '@/components/project/StaleNotice';
+import { GenerationNotice } from '@/components/project/GenerationNotice';
 import { ShareLinkCard } from '@/components/project/ShareLinkCard';
 import { ExportView } from '@/components/project/ExportView';
 import { ProposalModal } from '@/components/project/ProposalModal';
@@ -589,6 +590,11 @@ export function ProjectStages({
               />
             ) : (
               <>
+                <GenerationNotice
+                  generation={doc.generation}
+                  busy={busy}
+                  onRegenerate={onGenerateRequirements}
+                />
                 <RequirementDocumentView doc={doc} />
                 <StageActions
                   busy={busy}
@@ -636,6 +642,11 @@ export function ProjectStages({
               />
             ) : (
               <>
+                <GenerationNotice
+                  generation={design.generation}
+                  busy={busy}
+                  onRegenerate={onGenerateSystem}
+                />
                 <SystemDesignView design={design} />
                 <StageActions
                   busy={busy}
@@ -683,6 +694,11 @@ export function ProjectStages({
               />
             ) : (
               <>
+                <GenerationNotice
+                  generation={dbDesign.generation}
+                  busy={busy}
+                  onRegenerate={onGenerateDatabase}
+                />
                 <DatabaseDesignView design={dbDesign} />
                 <StageActions
                   busy={busy}
@@ -734,6 +750,11 @@ export function ProjectStages({
               />
             ) : (
               <>
+                <GenerationNotice
+                  generation={apiDesign.generation}
+                  busy={busy}
+                  onRegenerate={onGenerateApi}
+                />
                 <ApiDesignView design={apiDesign} />
                 <StageActions
                   busy={busy}
@@ -783,6 +804,11 @@ export function ProjectStages({
                   stage="review"
                   artifact={review}
                   revisions={revisions}
+                  busy={busy}
+                  onRegenerate={onGenerateReview}
+                />
+                <GenerationNotice
+                  generation={review.generation}
                   busy={busy}
                   onRegenerate={onGenerateReview}
                 />

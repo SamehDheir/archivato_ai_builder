@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   buildPhaseEffort,
@@ -51,8 +51,6 @@ export interface RoadmapContext {
 export class RoadmapPlannerAgent extends BaseAgent {
   readonly role = AgentRole.RoadmapPlanner;
 
-  private readonly logger = new Logger(RoadmapPlannerAgent.name);
-
   protected readonly systemPrompt = [
     'You are a pragmatic Engineering Lead turning a completed design into a',
     'realistic, buildable delivery plan a small team could execute.',
@@ -85,18 +83,13 @@ export class RoadmapPlannerAgent extends BaseAgent {
     ctx: RoadmapContext,
   ): Promise<ProjectRoadmap> {
     const generatedAt = new Date().toISOString();
-    try {
-      const raw = await this.thinkJson<Partial<ProjectRoadmap>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        return this.normalize({ ...raw, sessionId, generatedAt }, ctx);
-      }
-      this.logger.debug('Roadmap malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`Roadmap failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<ProjectRoadmap>({
+      label: 'Roadmap',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) => this.normalize({ ...raw, sessionId, generatedAt }, ctx),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   private buildPrompt(ctx: RoadmapContext): string {

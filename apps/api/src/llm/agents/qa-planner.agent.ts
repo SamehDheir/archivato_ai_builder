@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   TEST_TYPES,
@@ -41,8 +41,6 @@ const VALID_PRIORITIES = new Set<TestPriority>(['high', 'medium', 'low']);
 export class QaPlannerAgent extends BaseAgent {
   readonly role = AgentRole.QaPlanner;
 
-  private readonly logger = new Logger(QaPlannerAgent.name);
-
   protected readonly systemPrompt = [
     'You are a pragmatic QA Lead authoring the test plan for a specific system',
     'before it is built.',
@@ -66,16 +64,13 @@ export class QaPlannerAgent extends BaseAgent {
 
   async generate(sessionId: string, ctx: QaPlanContext): Promise<QaPlan> {
     const generatedAt = new Date().toISOString();
-    try {
-      const raw = await this.thinkJson<Partial<QaPlan>>(this.buildPrompt(ctx));
-      if (this.isValid(raw)) {
-        return this.normalize({ ...raw, sessionId, generatedAt }, ctx);
-      }
-      this.logger.debug('QA plan malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`QA plan failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<QaPlan>({
+      label: 'QA plan',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) => this.normalize({ ...raw, sessionId, generatedAt }, ctx),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   private buildPrompt(ctx: QaPlanContext): string {

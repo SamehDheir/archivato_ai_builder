@@ -105,3 +105,62 @@ describe('RefinementAgent narrative reconciliation (R7)', () => {
     );
   });
 });
+
+describe('provenance across a refine', () => {
+  /** A refine rewrites the content, so it must re-stamp rather than inherit. */
+  const stale = {
+    mode: 'llm' as const,
+    provider: 'groq',
+    model: 'llama-3.3-70b-versatile',
+  };
+
+  it('replaces an inherited stamp when the model answers', async () => {
+    const llm = new MockLlmProvider();
+    llm.enqueueJson({
+      document: {
+        functional: [
+          { id: 'FR-1', title: 'Place order', description: 'd', priority: 'must' },
+          { id: 'FR-2', title: 'Loyalty', description: 'd', priority: 'should' },
+        ],
+        nonFunctional: [],
+        roles: [{ name: 'Customer', description: 'd', permissions: [] }],
+      },
+      summary: 'Added loyalty.',
+    });
+
+    const out = await new RefinementAgent(llm).refine(
+      's1',
+      ctx({ current: { ...current(), generation: stale } }),
+    );
+
+    // Spreading `ctx.current` would have carried the old groq stamp through.
+    expect(out.document.generation).toEqual({
+      mode: 'llm',
+      provider: 'mock',
+      model: 'mock',
+    });
+  });
+
+  it('stamps a fallback when the refine fails, not the inherited success', async () => {
+    const failing = {
+      name: 'groq',
+      defaultModel: 'llama-3.3-70b-versatile',
+      complete: async () => {
+        throw new Error('down');
+      },
+      completeJson: async () => {
+        throw new Error('down');
+      },
+    };
+
+    const out = await new RefinementAgent(failing).refine(
+      's1',
+      ctx({ current: { ...current(), generation: stale } }),
+    );
+
+    // The doc was AI-written before and is template-amended now — saying "llm"
+    // here is exactly the lie the stamp exists to prevent.
+    expect(out.document.generation?.mode).toBe('fallback');
+    expect(out.document.generation?.degradedReason).toBe('call_failed');
+  });
+});

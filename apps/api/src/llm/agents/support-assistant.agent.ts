@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   SUPPORT_CATEGORIES,
@@ -63,8 +63,6 @@ export interface TicketAnalysisContext {
 @Injectable()
 export class SupportAssistantAgent extends BaseAgent {
   readonly role = AgentRole.SupportAssistant;
-
-  private readonly logger = new Logger(SupportAssistantAgent.name);
 
   protected readonly systemPrompt = [
     'You are a senior Customer Support engineer for "Archivato AI Builder", an',

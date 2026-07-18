@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   PATCH_SECTIONS,
@@ -38,8 +38,6 @@ export interface PatchContext {
 @Injectable()
 export class PatchAgent extends BaseAgent {
   readonly role = AgentRole.Patcher;
-
-  private readonly logger = new Logger(PatchAgent.name);
 
   protected readonly systemPrompt = [
     'You are a senior technical writer and solution architect at a software',

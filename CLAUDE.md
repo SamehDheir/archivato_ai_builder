@@ -1192,6 +1192,16 @@ tsconfig and never needs shared's `dist`.
      wall-clock thinking before it writes (which is also why it gets
      `REASONING_HEADROOM_TOKENS`); holding it to the standard ceiling would abort
      calls that were about to succeed — turning a slow answer into no answer.
+  6. **`LlmHttpError.kind` (`http | timeout | network`) is how callers classify a
+     failure — never a regex over `err.message`.** `degradedReasonFor` needs the
+     timeout/outage distinction (it becomes the artifact's `degradedReason`), and
+     deriving it from prose built in `llm-http.ts` meant a reworded string would
+     silently reclassify every timeout. Two more traps closed with it: only
+     undici-shaped `TypeError`s (`'fetch failed'` or carrying a `cause`) count as
+     network faults — treating *every* TypeError as one retried genuine code bugs
+     three times and reported them as outages; and `timeoutMs` is clamped to
+     `MAX_LLM_TIMEOUT_MS`, because past 2^31-1 ms a Node timer overflows and fires
+     **immediately**, so an over-large value aborted every call at once.
   Config is `LLM_TIMEOUT_MS` (default 90s, **per attempt**) + `LLM_MAX_ATTEMPTS`
   (default 3 = one call plus two retries), read through `readLlmHttpConfig()`,
   which **coerces explicitly** — `config.get<number>()` does not, and a string
@@ -1199,6 +1209,65 @@ tsconfig and never needs shared's `dist`.
   attempt may still have been billed upstream but reports no usage (usage is read
   off a response we never received), so retries **under**-report spend rather than
   over-report it — the honest direction for a margin meter.
+- **Generation provenance (`generation.ts`) — degradation has to be VISIBLE.**
+  Every agent falls back deterministically, which is what makes the pipeline
+  resilient; the cost is that a degraded artifact is indistinguishable from a
+  real one. A Pro user paid for an LLM-generated API design, one transient
+  failure handed them the template, and **nothing in the document said so** —
+  they then forwarded it to a client. Additive/optional `generation?:
+  GenerationProvenance` (`{mode, provider, model, degradedReason?}`) on the nine
+  LLM artifacts (requirements · system · database · api · review · vision ·
+  roadmap · threat · qa), JSON-blob convention, migration-free. Seven things not
+  to undo:
+  1. **The stamp is applied by ONE template method, `BaseAgent.generateArtifact`.**
+     Eight agents had byte-for-byte the same try/validate/catch/fallback shape,
+     so they were refactored onto it rather than hand-stamped — provenance each
+     agent sets by hand is provenance the ninth agent forgets. A new agent gets an
+     accurate stamp for free. The API designer keeps its own flow (it **chunks**,
+     so it has several success paths) and stamps via the exposed
+     `this.provenance()`; per-module attribution already lives on `ApiModule.source`.
+  2. **`mode` records what the agent DID WITH the output, not whether HTTP
+     succeeded.** A 200 carrying JSON that fails `isValid` is `fallback`, because
+     the artifact the user receives was built by the code.
+  3. **The mock provider is degraded even on the `llm` path.** `MockLlmProvider`
+     returns parseable JSON, so a scripted response can pass `isValid` and be
+     stamped `llm` — it is still not AI output. `isDegradedGeneration()` ORs
+     `mode === 'fallback'` with `provider === 'mock'`, so that judgment lives in
+     one pure function instead of in every agent.
+  4. **An unstamped artifact is NOT degraded.** Rows written before this existed
+     carry no stamp and we cannot know how they were built; warning on a guess
+     would nag every old project into re-running a **billed, Pro, LLM** stage.
+     Same rule as an unstamped `sourceStamp` never being stale.
+  5. **`parse_error` is deliberately distinct from `call_failed`.** It is the
+     expensive one — the model call **succeeded and was billed**, and only the
+     JSON was unusable — so it points at the prompt or the model, not the network.
+  6. **A (re)generation REPLACES the stamp; a human edit PRESERVES it.** That
+     one rule covers every write path, and each half was wrong once: the chat
+     **refine** spread `...ctx.current` and inherited the old stamp (so a doc
+     refined during an outage still read "AI-generated"), while `save()` dropped
+     it entirely (the global `ValidationPipe` runs `whitelist: true`, so the
+     client's payload never carries it) — meaning one edit silently erased the
+     warning. The refine now re-stamps with its own outcome; every `save()` calls
+     **`preserveGeneration(edited, existing)`**, which also closes the forgery
+     path by taking the stamp from the *server's* row rather than the request.
+     Editing one sentence of a document the model never wrote does not make it
+     AI-written.
+  7. **Provenance is OWNER-ONLY.** `withoutGeneration()` runs in
+     `ShareService.view` on every artifact — same enforcement as R9's
+     `budgetWarning` and R10/R11's deal-risk fields (**the payload IS the
+     boundary**). It tells a client their vendor's proposal was machine-templated
+     and names our provider and model; neither is theirs. A security test asserts
+     no `generation` and no `degradedReason` reaches the public page.
+  8. **The cost estimate is NOT stamped, on purpose.** It is 100% deterministic
+     (`estimateCosts`, zero LLM calls), so a "generation mode" on it would be
+     meaningless at best and would imply LLM involvement at worst. Same for the
+     scaffold. `DerivedArtifact` was therefore *not* the home for the field —
+     `CostEstimate` extends it.
+  **Web:** `GenerationNotice` (mirrors `StaleNotice` — renders **nothing** when
+  healthy, missing, or unstamped, so callers mount it unconditionally above the
+  artifact) on all nine tabs, with a one-click regenerate. The regenerate action
+  is optional, so the share page and example project render read-only. i18n
+  `stages.generation.*` incl. a per-reason message (EN+AR).
 - **LLM usage metering (`llm/usage`) — margin protection.** Every model call made
   through the `LlmProvider` seam is recorded: provider, model, **agent**, stage,
   user, session, tokens, cost, ok/failed, duration. One `llm_usage` row per call

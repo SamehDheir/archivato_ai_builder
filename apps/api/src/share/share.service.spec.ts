@@ -524,6 +524,31 @@ describe('ShareService', () => {
     expect(link?.viewCount).toBe(2);
   });
 
+  it('never leaks generation provenance to the public page', async () => {
+    const h = makeHarness();
+    const sessionId = await fullPipeline(h);
+    const { token } = await h.share.create(sessionId);
+
+    // The whole harness runs on MockLlmProvider, so every artifact the owner
+    // holds IS stamped — this asserts redaction, not an accident of the fixture.
+    const owned = await h.requirements.get(sessionId);
+    expect(owned?.generation).toBeDefined();
+
+    const shared = await h.share.view(token);
+
+    // OWNER-ONLY: provenance tells a client their vendor's proposal was
+    // machine-templated, and names our provider and model. Neither is theirs.
+    expect(shared.requirements).not.toHaveProperty('generation');
+    expect(shared.systemDesign).not.toHaveProperty('generation');
+    expect(shared.databaseDesign).not.toHaveProperty('generation');
+    expect(shared.apiDesign).not.toHaveProperty('generation');
+    expect(shared.vision ?? {}).not.toHaveProperty('generation');
+    // Belt and braces across the whole payload, including artifacts a richer
+    // fixture would add later.
+    expect(JSON.stringify(shared)).not.toContain('degradedReason');
+    expect(JSON.stringify(shared)).not.toContain('"generation"');
+  });
+
   it('prefers the owner-set title over the raw idea', async () => {
     const h = makeHarness();
     const sessionId = await fullPipeline(h);

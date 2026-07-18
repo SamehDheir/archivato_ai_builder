@@ -4,6 +4,7 @@
  */
 
 import type { OpenQuestion } from './interview';
+import type { GenerationProvenance } from './generation';
 
 export type RequirementPriority = 'must' | 'should' | 'could';
 
@@ -66,6 +67,12 @@ export interface RequirementDocument {
   sessionId: string;
   /** ISO timestamp. */
   generatedAt: string;
+  /**
+   * How this document was produced (see `generation.ts`). Optional: rows written
+   * before provenance existed carry none, and absent means "unknown", never
+   * "degraded".
+   */
+  generation?: GenerationProvenance;
   /**
    * A 3–4 sentence, jargon-free executive summary written for the non-technical
    * end client: who the system serves, what it lets them do, and the business

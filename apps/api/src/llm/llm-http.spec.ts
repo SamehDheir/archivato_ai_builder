@@ -3,6 +3,7 @@ import {
   DEFAULT_LLM_MAX_ATTEMPTS,
   DEFAULT_LLM_TIMEOUT_MS,
   LlmHttpError,
+  MAX_LLM_TIMEOUT_MS,
   isRetryableStatus,
   postLlmJson,
   readLlmHttpConfig,
@@ -183,5 +184,76 @@ describe('readLlmHttpConfig', () => {
 
   it.each(['nonsense', '0', '-1', ''])('ignores the unusable value %p', (raw) => {
     expect(read({ LLM_TIMEOUT_MS: raw }).timeoutMs).toBe(DEFAULT_LLM_TIMEOUT_MS);
+  });
+});
+
+describe('hardening (post-review)', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+    jest.restoreAllMocks();
+  });
+
+  it('tags a timeout with kind so callers need no message matching', async () => {
+    scriptFetch([{ throws: timeoutError() }]);
+    const err = await postLlmJson(
+      'https://x/y',
+      { headers: {}, body: '{}' },
+      { ...OPTS, logger: quietLogger(), maxAttempts: 1 },
+    ).catch((e: unknown) => e);
+
+    expect((err as LlmHttpError).kind).toBe('timeout');
+  });
+
+  it('tags a network fault as network, not timeout', async () => {
+    const undiciStyle = new TypeError('fetch failed');
+    scriptFetch([{ throws: undiciStyle }]);
+    const err = await postLlmJson(
+      'https://x/y',
+      { headers: {}, body: '{}' },
+      { ...OPTS, logger: quietLogger(), maxAttempts: 1 },
+    ).catch((e: unknown) => e);
+
+    expect((err as LlmHttpError).kind).toBe('network');
+  });
+
+  it('does NOT retry a plain TypeError — that is our bug, not an outage', async () => {
+    // Previously any TypeError was retried and reported as a network failure,
+    // permanently disguising a code defect (e.g. a response without .text()).
+    const bug = new TypeError('res.text is not a function');
+    const fetchMock = scriptFetch([{ throws: bug }]);
+
+    await expect(
+      postLlmJson('https://x/y', { headers: {}, body: '{}' }, { ...OPTS, logger: quietLogger() }),
+    ).rejects.toBe(bug);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still makes a request when maxAttempts is NaN', async () => {
+    // Math.max(1, Math.floor(NaN)) is NaN, which skipped the loop entirely and
+    // reported an outage for a request that was never sent.
+    const fetchMock = scriptFetch([{ status: 200, body: { ok: true } }]);
+
+    await expect(
+      postLlmJson(
+        'https://x/y',
+        { headers: {}, body: '{}' },
+        { ...OPTS, logger: quietLogger(), maxAttempts: Number('nope') },
+      ),
+    ).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('clamps an over-large timeout instead of overflowing the timer', async () => {
+    // Past 2^31-1 ms a Node timer fires immediately, so an unclamped value would
+    // abort every call at once — the inverse of what was configured.
+    scriptFetch([{ throws: timeoutError() }]);
+    const err = await postLlmJson(
+      'https://x/y',
+      { headers: {}, body: '{}' },
+      { ...OPTS, logger: quietLogger(), maxAttempts: 1, timeoutMs: 5_000_000_000 },
+    ).catch((e: unknown) => e);
+
+    expect((err as Error).message).toContain(`${MAX_LLM_TIMEOUT_MS}ms`);
   });
 });

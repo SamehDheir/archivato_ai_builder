@@ -9,6 +9,7 @@
  */
 
 import type { DerivedArtifact } from './freshness';
+import type { GenerationProvenance } from './generation';
 import { roundHalf, type EffortEstimate } from './effort';
 
 export interface RoadmapTask {
@@ -73,6 +74,8 @@ export interface AlternativeRoadmaps {
 }
 
 export interface ProjectRoadmap extends DerivedArtifact {
+  /** How this roadmap was produced — see `generation.ts`. Absent = unknown. */
+  generation?: GenerationProvenance;
   sessionId: string;
   generatedAt: string;
   summary: string;

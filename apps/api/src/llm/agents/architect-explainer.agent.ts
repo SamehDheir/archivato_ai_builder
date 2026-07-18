@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   buildDecisionExplanation,
@@ -27,8 +27,6 @@ export interface ExplainContext {
 @Injectable()
 export class ArchitectExplainerAgent extends BaseAgent {
   readonly role = AgentRole.ArchitectExplainer;
-
-  private readonly logger = new Logger(ArchitectExplainerAgent.name);
 
   protected readonly systemPrompt = [
     'You are a Principal Software Architect explaining ONE design decision to your',

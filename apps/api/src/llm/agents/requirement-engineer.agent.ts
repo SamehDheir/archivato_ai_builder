@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   SLOT_KEYS,
@@ -56,8 +56,6 @@ export interface RequirementContext {
 export class RequirementEngineerAgent extends BaseAgent {
   readonly role = AgentRole.RequirementEngineer;
 
-  private readonly logger = new Logger(RequirementEngineerAgent.name);
-
   protected readonly systemPrompt = [
     'You are a meticulous Requirement Engineer who turns a confirmed discovery',
     'interview into a formal Requirement Document that is a CLIENT-FACING scoping',
@@ -109,18 +107,14 @@ export class RequirementEngineerAgent extends BaseAgent {
     // the model — so they're folded into the assumptions on BOTH paths, and the
     // raw client-question list is attached verbatim too.
     const openQuestions = ctx.openQuestions ?? [];
-    try {
-      const raw = await this.thinkJson<Partial<RequirementDocument>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        return this.normalize(sessionId, generatedAt, raw, ctx, openQuestions);
-      }
-      this.logger.debug('Requirement doc malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`Requirement generation failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<RequirementDocument>({
+      label: 'Requirement doc',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) =>
+        this.normalize(sessionId, generatedAt, raw, ctx, openQuestions),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   /**

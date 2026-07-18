@@ -4,6 +4,8 @@
  * status codes. Derived from the Database Design + System Design services.
  */
 
+import type { GenerationProvenance } from './generation';
+
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface SchemaField {
@@ -70,6 +72,15 @@ export interface ExcludedEntity {
 export interface ApiDesign {
   sessionId: string;
   generatedAt: string;
+  /**
+   * How this design was produced — see `generation.ts`. Absent = unknown.
+   *
+   * Artifact-level, and coarser than `ApiModule.source`: this stage is chunked,
+   * so a run can be partly model-authored and partly repaired. `llm` here means
+   * at least one module came from the model; `fallback` means the whole design
+   * was built deterministically.
+   */
+  generation?: GenerationProvenance;
   modules: ApiModule[];
   /**
    * Entities intentionally not given a resource, each with a justification. The

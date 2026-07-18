@@ -388,6 +388,18 @@
     "regenerate": "Regenerate",
     "working": "Working…"
   },
+  "generation": {
+    "title": "This was generated offline, not by AI",
+    "reason": {
+      "no_provider": "No AI provider is configured, so this is a template built from your answers — not an AI-written document. Check your setup, then regenerate.",
+      "call_failed": "The AI provider could not be reached, so a template was used instead. Regenerate to get the AI version.",
+      "timeout": "The AI provider took too long to answer, so a template was used instead. Regenerate to try again.",
+      "parse_error": "The AI answered, but not in a usable format, so a template was used instead. Regenerate to try again.",
+      "invalid_output": "The AI answer was incomplete, so a template was used instead. Regenerate to try again."
+    },
+    "regenerate": "Regenerate",
+    "working": "Working…"
+  },
   "roadmap": {
     "title": "Implementation Roadmap",
     "totalEstimate": "Total estimate:",

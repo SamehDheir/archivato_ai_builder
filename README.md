@@ -195,6 +195,7 @@ switches:
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude provider (`claude-sonnet-4-6` default) |
 | `AZURE_OPENAI_API_KEY` / `_ENDPOINT` / `_DEPLOYMENT` | Azure OpenAI provider (deployment-name routing) |
 | `SILICONFLOW_API_KEY` / `SILICONFLOW_MODEL` | SiliconFlow provider (`deepseek-ai/DeepSeek-R1` default — a reasoning model) |
+| `LLM_TIMEOUT_MS` / `LLM_MAX_ATTEMPTS` | Per-**attempt** timeout (default 90s) and total attempts (default 3). Applies to every provider; only transient failures (408/429/5xx, timeouts, network) are retried |
 | `BILLING_PROVIDER` / `PADDLE_*` | Paddle checkout + HMAC-verified webhook; offline mock otherwise |
 | `MAIL_PROVIDER` / `RESEND_API_KEY` / `SMTP_*` | Transactional email; logs to console otherwise |
 | `DATABASE_URL` / `DIRECT_URL` / `REDIS_URL` | Postgres (pooled + direct for migrations) and Redis (`rediss://` supported) |
@@ -203,6 +204,14 @@ switches:
 
 The API logs the resolved providers on startup
 (`Agent LLM provider: …`, `Billing provider: …`, `Mail provider: …`).
+
+**Every agent has a deterministic fallback**, so a missing key or a failed model
+call still yields a valid artifact rather than an error. Because that makes
+degradation invisible, each generated artifact records **how it was produced**
+(`generation`: mode, provider, model, and why it degraded). Anything not written
+by a model — including everything produced in mock mode — is flagged in the UI
+with a one-click regenerate, so a template is never mistaken for AI output. The
+stamp is owner-only and is stripped from the public share page.
 
 ## Testing & CI
 
