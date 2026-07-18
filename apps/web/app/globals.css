@@ -466,7 +466,24 @@
   }
 
   /* Force every element child into the value track. Without this the second
-     child auto-places back under the LABEL (auto-flow fills col 1, then col 2). */
+     child auto-places back under the LABEL (auto-flow fills col 1, then col 2).
+     *
+     * CALLER CONTRACT: `> *` matches ELEMENTS only. Bare text in a cell becomes
+     * an ANONYMOUS grid item this rule cannot reach, so it auto-flows to the
+     * first free slot — and whether that is right depends on DOCUMENT ORDER:
+     *
+     *   text alone        → r1c1 is the ::before label, so text takes r1c2  OK
+     *   text, then <span> → text r1c2, then the span r2c2                   OK
+     *   <span>, then text → span takes r1c2, so the text falls to r2 COL 1  BUG
+     *
+     * That last case renders a full sentence inside the 6.5rem label track at
+     * roughly two words per line. It is not hypothetical — it shipped in the
+     * build-vs-buy table, where a `suggestedService` span precedes the
+     * rationale.
+     *
+     * So: once a cell holds any element, wrap its loose text in a <span> too.
+     * There is no CSS selector for a text node, which is why this is a contract
+     * and not a rule. */
   table[data-stack='true'] > tbody > tr > td > * {
     grid-column: 2;
     min-width: 0;

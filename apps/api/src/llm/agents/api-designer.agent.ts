@@ -40,8 +40,14 @@ export interface ApiDesignContext {
  * tail entities silently have no API.
  *
  * So a big design is generated in chunks and merged by code, rather than betting
- * a bigger `maxTokens` will hold. Four entities ≈ 20 endpoints, which fits every
- * provider's default with room to spare.
+ * a bigger `maxTokens` will hold. Four entities ≈ 20 endpoints, which fits the
+ * explicit `CHUNK_MAX_TOKENS` below.
+ *
+ * The margin narrowed when list endpoints gained real query parameters (search /
+ * lifecycle / date range / FK filters) — roughly +5 schema fields per entity. It
+ * still fits, and a chunk that doesn't costs precision rather than coverage: it
+ * contributes nothing, and its entities fall through repair to the deterministic
+ * builder. Lower this before raising `CHUNK_MAX_TOKENS` if that starts happening.
  */
 export const MAX_ENTITIES_PER_CALL = 4;
 
@@ -70,8 +76,11 @@ export class ApiDesignerAgent extends BaseAgent {
     'against without further clarification.',
     'Method: group endpoints by resource/module; use noun-based, pluralized,',
     'lowercase paths (/api/orders, /api/orders/:id) and the correct HTTP verb',
-    '(GET read, POST create, PUT/PATCH update, DELETE remove). List endpoints',
-    'expose page/limit pagination. Request schemas exclude server-managed fields',
+    '(GET read, POST create, PUT/PATCH update, DELETE remove). List endpoints are',
+    'queryable, not merely paginated: alongside page/limit they expose free-text',
+    'search, a filter for the resource\'s lifecycle state, a date range, and a',
+    'filter per relevant foreign key. Update endpoints can move a resource through',
+    'its lifecycle, not just edit its attributes. Request schemas exclude',
     '(id, timestamps, password_hash); response schemas reflect what is actually',
     'returned. Every endpoint declares realistic status codes including its error',
     'cases (400 validation, 401/403 auth, 404 not found, 409 conflict).',
@@ -288,9 +297,16 @@ export class ApiDesignerAgent extends BaseAgent {
       '- One group per resource: never two groups for the same entity.',
       '',
       opts.includeAuth
-        ? 'Include an Auth module (register/login/refresh) alongside the resource groups; it covers no checklist entity, so give it coveredEntities: [].'
+        ? 'Include an Auth module (register/login/refresh) alongside the resource groups; it covers no checklist entity, so give it coveredEntities: [].\nA public registration endpoint must NOT accept role, permission, or tenant/organization ids in its request body — a caller who can name their own role can register as an administrator. Those are assigned by an authenticated admin endpoint.'
         : 'Do not include an Auth module — another part of this design already has it.',
-      'Add page/limit to list endpoints; omit server-managed fields (id, created_at, updated_at, password_hash) from request bodies.',
+      'LIST ENDPOINTS — a GET collection\'s requestSchema is its query string. Beyond page/limit, include (where the entity\'s columns support it):',
+      '- search: free-text over the entity\'s own text columns, when it has any.',
+      '- the lifecycle column itself (status/state), when the entity has one.',
+      '- a date range as <date_column_without_at>_from / _to (e.g. created_from, created_to).',
+      '- one filter per relevant foreign-key column, named exactly as the column (e.g. customer_id).',
+      'Use the data model\'s own column names, all optional (required: false). Never expose a password, hash, token, or secret column as a filter.',
+      'Updates must be able to change the lifecycle state too, not only descriptive fields.',
+      'Omit server-managed fields (id, created_at, updated_at, password_hash) from request BODIES (POST/PUT/PATCH).',
     );
 
     return lines.join('\n');

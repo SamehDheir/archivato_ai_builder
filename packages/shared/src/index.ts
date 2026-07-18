@@ -31,6 +31,7 @@ export * from './threat-model';
 export * from './qa-plan';
 export * from './product-vision';
 export * from './roadmap';
+export * from './region';
 export * from './cost-estimate';
 export * from './export';
 export * from './share';

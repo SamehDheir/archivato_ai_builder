@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AgentRole,
   SLOT_KEYS,
+  regulationsForMarket,
   type BusinessRule,
   type FunctionalRequirement,
   type IntentAnalysis,
@@ -83,6 +84,12 @@ export class RequirementEngineerAgent extends BaseAgent {
     'core features are "must". Roles carry concrete, least-privilege permissions.',
     'Never mention budget or timeline anywhere in the document — those belong to',
     'the roadmap and cost deliverables, not here.',
+    'Data-protection requirements follow the project\'s stated target market, never',
+    'habit. Cite only the regime named in the scoping facts below; if no market was',
+    'stated, write the compliance requirement generically (protect personal data,',
+    'confirm the hosting region) and record the applicable regime as an assumption',
+    'for the client to confirm. Never cite GDPR, HIPAA, CCPA or any other law that',
+    'the stated market does not actually invoke — a wrong law is worse than none.',
     'Output standard: every requirement is specific and verifiable, traceable to',
     'the interview, and non-redundant. Never invent scope the interview did not',
     'establish; surface genuine gaps as assumptions.',
@@ -171,6 +178,36 @@ export class RequirementEngineerAgent extends BaseAgent {
     };
   }
 
+  /**
+   * The data-protection regime to cite, resolved from the target-market slot in
+   * code rather than recalled by the model.
+   *
+   * With no stated market this returns an instruction to leave the question open
+   * — which is the whole point. The model's untutored default is GDPR/HIPAA
+   * regardless of who the client is, and for this product's market that is both
+   * wrong and expensive to be wrong about.
+   */
+  private complianceHint(ctx: RequirementContext): string {
+    const slot = ctx.slots?.target_market;
+    const market = slot && !slot.na ? slot.value.trim() : '';
+    const regime = regulationsForMarket(market);
+    if (!regime) {
+      return [
+        '\nCOMPLIANCE — no target market has been confirmed for this project.',
+        'Do NOT name any specific data-protection law. Write the compliance requirement generically',
+        '(protect personal data, agree the hosting region) and add an assumption asking the client to',
+        'confirm the country/region so the applicable regime can be named.',
+      ].join('\n');
+    }
+    return [
+      `\nCOMPLIANCE — the stated target market is "${market}". The regimes that apply:`,
+      ...regime.laws.map((l) => `- ${l}`),
+      `Data residency: ${regime.dataResidency}`,
+      regime.note,
+      'Cite these and only these. Do not add a law this market does not invoke.',
+    ].join('\n');
+  }
+
   private buildPrompt(ctx: RequirementContext): string {
     const qa = ctx.history
       .map((h) => `Q: ${h.question.prompt}\nA: ${h.answer}`)
@@ -212,6 +249,7 @@ export class RequirementEngineerAgent extends BaseAgent {
         : '',
       oqLines,
       `\nCapabilities buyers typically expect in this kind of product — list any NOT being built under outOfScope: ${commonScope.join(', ')}.`,
+      this.complianceHint(ctx),
       '',
       'Produce the Requirement Document as JSON with these keys:',
       '- executiveSummary: 3–4 plain sentences for a NON-TECHNICAL client — who the system serves, what it lets them do, and the business outcome. No technical jargon.',
@@ -272,6 +310,21 @@ export class RequirementEngineerAgent extends BaseAgent {
           'Sensitive data must be encrypted in transit and at rest; access is role-based.',
       },
     ];
+
+    // Offline, the applicable regime is still knowable when the client stated a
+    // market — it's a table lookup, not a judgement call. With no market stated
+    // the fallback names no law at all, which is the honest answer.
+    const marketSlot = ctx.slots?.target_market;
+    const regime = regulationsForMarket(
+      marketSlot && !marketSlot.na ? marketSlot.value : undefined,
+    );
+    if (regime) {
+      nonFunctional.push({
+        id: `NFR-${nonFunctional.length + 1}`,
+        category: 'security',
+        description: `Personal data handling follows ${regime.laws.join(', ')}. ${regime.dataResidency}`,
+      });
+    }
 
     const roles: UserRole[] = summary.users.map((name) => ({
       name,

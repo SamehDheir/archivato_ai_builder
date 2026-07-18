@@ -88,6 +88,7 @@ export interface InterviewExchange {
 export const SLOT_KEYS = [
   'business_domain',
   'target_users_roles',
+  'target_market',
   'core_workflows',
   'data_entities',
   'integrations',

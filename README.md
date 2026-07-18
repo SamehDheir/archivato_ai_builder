@@ -191,9 +191,10 @@ switches:
 | Variable | Effect |
 | --- | --- |
 | `GROQ_API_KEY` | One free key flips the **entire pipeline** to real AI (leave `LLM_PROVIDER` unset) |
-| `LLM_PROVIDER` | Force `mock` · `claude` · `groq` · `azure` for all agents |
+| `LLM_PROVIDER` | Force `mock` · `claude` · `groq` · `azure` · `siliconflow` for all agents |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude provider (`claude-sonnet-4-6` default) |
 | `AZURE_OPENAI_API_KEY` / `_ENDPOINT` / `_DEPLOYMENT` | Azure OpenAI provider (deployment-name routing) |
+| `SILICONFLOW_API_KEY` / `SILICONFLOW_MODEL` | SiliconFlow provider (`deepseek-ai/DeepSeek-R1` default — a reasoning model) |
 | `BILLING_PROVIDER` / `PADDLE_*` | Paddle checkout + HMAC-verified webhook; offline mock otherwise |
 | `MAIL_PROVIDER` / `RESEND_API_KEY` / `SMTP_*` | Transactional email; logs to console otherwise |
 | `DATABASE_URL` / `DIRECT_URL` / `REDIS_URL` | Postgres (pooled + direct for migrations) and Redis (`rediss://` supported) |

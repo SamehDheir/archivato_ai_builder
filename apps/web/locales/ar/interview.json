@@ -57,6 +57,7 @@
   "slot": {
     "business_domain": "مجال العمل",
     "target_users_roles": "المستخدمون والأدوار",
+    "target_market": "السوق المستهدف",
     "core_workflows": "سير العمل الأساسي",
     "data_entities": "البيانات الرئيسية",
     "integrations": "التكاملات",

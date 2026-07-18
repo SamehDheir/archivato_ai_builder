@@ -56,6 +56,12 @@ export const SLOT_CATALOG: Record<
     askClientTemplate:
       'Who will use this system, and what different types of users (roles) are there?',
   },
+  target_market: {
+    description:
+      'The country or region the software serves — whose users, whose currency, whose law. Drives data-protection obligations and payment-processing choices; never assume one.',
+    askClientTemplate:
+      'Which country or region will this serve — where are the users, and where is the business registered? (This decides which data-protection rules apply and which payment providers we can use.)',
+  },
   core_workflows: {
     description:
       'The main things users do end to end — the day-to-day flows the system must support.',

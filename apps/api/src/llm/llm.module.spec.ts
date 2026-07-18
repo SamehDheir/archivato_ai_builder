@@ -35,6 +35,26 @@ describe('selectProviderKind (one-switch resolution)', () => {
   it('lets LLM_PROVIDER=azure force azure over a groq key', () => {
     expect(selectProviderKind('azure', 'gsk_real_key', 'az_key')).toBe('azure');
   });
+
+  it('falls back to siliconflow when only SILICONFLOW_API_KEY is set', () => {
+    expect(selectProviderKind(undefined, undefined, undefined, 'sf_key')).toBe(
+      'siliconflow',
+    );
+  });
+
+  // Adding a key must never move an existing install off its current provider.
+  it('keeps groq and azure ahead of siliconflow', () => {
+    expect(selectProviderKind(undefined, 'gsk_real_key', undefined, 'sf_key')).toBe(
+      'groq',
+    );
+    expect(selectProviderKind(undefined, undefined, 'az_key', 'sf_key')).toBe('azure');
+  });
+
+  it('lets LLM_PROVIDER=siliconflow force it over the other keys', () => {
+    expect(
+      selectProviderKind('siliconflow', 'gsk_real_key', 'az_key', 'sf_key'),
+    ).toBe('siliconflow');
+  });
 });
 
 describe('mockOverriddenKeys (silent-mock guard)', () => {
@@ -82,5 +102,11 @@ describe('selectInterviewKind', () => {
     expect(selectInterviewKind(undefined, undefined, undefined, 'az_key')).toBe(
       'azure',
     );
+  });
+
+  it('threads the siliconflow fallback through to the interview', () => {
+    expect(
+      selectInterviewKind(undefined, undefined, undefined, undefined, 'sf_key'),
+    ).toBe('siliconflow');
   });
 });

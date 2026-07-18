@@ -16,9 +16,25 @@ export function saveBlob(filename: string, blob: Blob) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * File types that get a UTF-8 BOM.
+ *
+ * A `Blob` built from a JS string is always UTF-8, and the API sends
+ * `charset=utf-8` — the bytes are correct. Windows doesn't care: Notepad, Word
+ * and Excel guess the ANSI codepage for a BOM-less file, so an em-dash arrives
+ * as `â€"` and a `·` as `Â·`. That lands on the artifacts an owner forwards to a
+ * client, where a document full of mojibake reads as broken software.
+ *
+ * Strictly limited to formats a person opens: a BOM makes `JSON.parse` throw,
+ * and `psql` will happily try to execute one.
+ */
+const BOM_TYPES = ['text/markdown', 'text/csv', 'text/plain'];
+
 /** Trigger a browser download for a string payload. */
 export function saveFile(filename: string, content: string, mime: string) {
-  saveBlob(filename, new Blob([content], { type: mime }));
+  const needsBom = BOM_TYPES.some((t) => mime.startsWith(t));
+  const body = needsBom && !content.startsWith('﻿') ? `﻿${content}` : content;
+  saveBlob(filename, new Blob([body], { type: mime }));
 }
 
 /**

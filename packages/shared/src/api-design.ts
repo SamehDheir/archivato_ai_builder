@@ -104,6 +104,40 @@ export function isHttpMethod(value: string): value is HttpMethod {
  * builder, `.map` in the view, the Postman/scaffold/mock builders). A missing
  * array must read as empty, never as undefined.
  */
+/**
+ * Force an endpoint path to the absolute form the type promises
+ * (`/** Full path including the /api prefix *​/`).
+ *
+ * Nothing enforced that promise, and models routinely break it — a single real
+ * design mixed **three** conventions, sometimes inside one module: `/api/clinics`
+ * for the collection but `/:id` for the item, `/` and `/:appointmentId` in the
+ * next module, and fully-qualified paths only in the groups the deterministic
+ * builder produced. Every downstream consumer trusts the field: the OpenAPI
+ * export publishes `/{id}` as a top-level route, the scaffold mounts a
+ * controller at the wrong place, and the Postman collection points at nothing.
+ *
+ * Because this runs at the store's read boundary as well as on write, it also
+ * repairs designs already sitting in the table.
+ */
+function absolutePath(raw: unknown, basePath: string): string {
+  const path = typeof raw === 'string' ? raw.trim() : '';
+  if (!path) return basePath;
+  if (path.startsWith('/api')) return path;
+  if (!basePath) return path.startsWith('/') ? path : `/${path}`;
+  if (path === '/') return basePath;
+  if (path.startsWith(basePath)) return path;
+
+  // A relative path that repeats its own resource ("/orders/:id" under
+  // "/api/orders") would otherwise join into "/api/orders/orders/:id". Compared
+  // segment-wise rather than with a RegExp built from `basePath` — that string is
+  // LLM output and may carry regex metacharacters.
+  const base = basePath.replace(/\/+$/, '');
+  const resource = base.split('/').filter(Boolean).pop();
+  const rest = path.replace(/^\/+/, '').split('/');
+  if (resource && rest[0] === resource) rest.shift();
+  return rest.length ? `${base}/${rest.join('/')}` : base;
+}
+
 export function normalizeApiEndpoint(
   endpoint: ApiEndpoint,
   basePath: string,
@@ -116,7 +150,7 @@ export function normalizeApiEndpoint(
   return {
     ...e,
     method,
-    path: typeof e.path === 'string' && e.path.trim() ? e.path : basePath,
+    path: absolutePath(e.path, basePath),
     summary: typeof e.summary === 'string' ? e.summary : '',
     requestSchema: Array.isArray(e.requestSchema) ? e.requestSchema : [],
     responseSchema: Array.isArray(e.responseSchema) ? e.responseSchema : [],

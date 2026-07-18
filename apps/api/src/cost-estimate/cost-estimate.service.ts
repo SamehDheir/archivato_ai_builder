@@ -96,11 +96,13 @@ export class CostEstimateService {
 
     // R9 economics — all deterministic (no LLM). Effort + service subscriptions
     // are client-facing; the budget warning is OWNER-ONLY (the share view()
-    // strips it). `budget_range` comes from the interview slot snapshot; a target
-    // market slot doesn't exist yet, so the regional PSP note stays dormant.
+    // strips it). Both `budget_range` and `target_market` come from the interview
+    // slot snapshot; an unfilled or unrecognized market resolves to no regional
+    // note rather than a guessed one.
     const effort = buildEffortEstimate(systemDesign);
+    const marketSlot = session.slots?.target_market;
     const serviceSubscriptions = buildServiceCostLines(systemDesign, {
-      targetMarket: undefined,
+      targetMarket: marketSlot && !marketSlot.na ? marketSlot.value : undefined,
     });
     const budgetSlot = session.slots?.budget_range;
     const budgetText = budgetSlot && !budgetSlot.na ? budgetSlot.value : undefined;

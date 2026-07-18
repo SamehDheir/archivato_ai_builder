@@ -12,6 +12,7 @@
 import type { DerivedArtifact } from './freshness';
 import type { BudgetWarning, EffortEstimate } from './effort';
 import type { BuildVsBuyCapability, SystemDesign } from './system-design';
+import { resolveRegionKey, type RegionKey } from './region';
 
 /** The user scales we project a monthly bill at. */
 export const COST_USER_SCALES = [100, 1000, 10000] as const;
@@ -145,10 +146,11 @@ export const SERVICE_COST_HINTS: Record<
 
 /**
  * Regional payment-processing fee bands (market-generic notes, not exact math).
- * Keyed by a coarse market bucket. Extend as target markets are added.
+ * Keyed by the shared market buckets, so pricing and compliance can never
+ * disagree about which region a project is in.
  */
 export const REGIONAL_SERVICES: Record<
-  string,
+  RegionKey,
   { paymentsFeeNote: string; approxFeePct: number }
 > = {
   mena: {
@@ -170,25 +172,16 @@ export const REGIONAL_SERVICES: Record<
   },
 };
 
-/** Normalize a free-text target market to a REGIONAL_SERVICES bucket, or null. */
+/**
+ * The payment-fee band for a free-text target market, or null when it doesn't
+ * resolve. Classification itself lives in `region.ts` — one classifier shared
+ * with the compliance lookup.
+ */
 export function resolveRegion(
   targetMarket: string | undefined | null,
 ): { paymentsFeeNote: string; approxFeePct: number } | null {
-  if (!targetMarket) return null;
-  const t = targetMarket.toLowerCase();
-  if (/mena|middle east|gulf|gcc|saudi|emirat|uae|egypt|jordan|arab/.test(t)) {
-    return REGIONAL_SERVICES.mena;
-  }
-  if (/\bus\b|usa|united states|america|canada|north america/.test(t)) {
-    return REGIONAL_SERVICES.us;
-  }
-  if (/\beu\b|europe|european|uk|britain|germany|france|sepa/.test(t)) {
-    return REGIONAL_SERVICES.eu;
-  }
-  if (/global|worldwide|international|multiple/.test(t)) {
-    return REGIONAL_SERVICES.global;
-  }
-  return null;
+  const key = resolveRegionKey(targetMarket);
+  return key ? REGIONAL_SERVICES[key] : null;
 }
 
 /**

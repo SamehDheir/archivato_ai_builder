@@ -243,7 +243,19 @@
       "Bash(nslookup valkey-90f7620-redis-server.c.aivencloud.com 8.8.8.8)",
       "Bash(nslookup aivencloud.com 8.8.8.8)",
       "Bash(curl -s -m 25 -w \"\\\\n[http %{http_code}]\\\\n\" https://archivato-api.onrender.com/health/ready)",
-      "Bash(echo \"[eslint exit $?]\")"
+      "Bash(echo \"[eslint exit $?]\")",
+      "Bash(curl -s -m 60 -w \"\\\\n[http %{http_code}]\\\\n\" https://archivato-api.onrender.com/api/auth/oauth/providers)",
+      "Bash(curl -s -D - -o /dev/null -m 40 -H \"Origin: https://archivato.vercel.app\" https://archivato-api.onrender.com/api/auth/oauth/providers)",
+      "Bash(curl -s -D - -o /dev/null -m 40 -X OPTIONS -H \"Origin: https://archivato.vercel.app\" -H \"Access-Control-Request-Method: GET\" https://archivato-api.onrender.com/api/auth/oauth/providers)",
+      "Bash(curl -s -m 30 -o /dev/null -w \"http=%{http_code}  dns=%{time_namelookup}s\\\\n\" https://archivato-ai-builder.onrender.com/api/auth/oauth/providers)",
+      "Bash(curl -s -m 45 -w \"\\\\n[http %{http_code}]\\\\n\" https://archivato-api.onrender.com/api/auth/oauth/providers)",
+      "Bash(curl -s -m 30 https://archivato.vercel.app/demo-scoping-package)",
+      "Bash(curl -s -m 30 https://archivato.vercel.app/sitemap.xml)",
+      "Bash(grep -B 2 -A 2 \"^\\\\S*-\\\\s*{[a-z][a-zA-Z.]*}$\")",
+      "Bash(perl -0pi -e \"s/        generatedAt: 'now',\\\\n        scores: \\\\{ security: 70, scalability: 70, performance: 70, cost: 70 \\\\},/        generatedAt: 'now',\\\\n        overallScore: 70,\\\\n        scores: { security: 70, scalability: 70, performance: 70, cost: 70 },/g\" apps/api/src/llm/agents/reviewer.agent.spec.ts)",
+      "WebFetch(domain:docs.siliconflow.com)",
+      "Bash(grep -n \"Azure OpenAI \\(\\\\`AzureOpenAiLlmProvider\\\\`\\)\" -A 12 CLAUDE.md)",
+      "PowerShell(npm run test:api 2>&1)"
     ],
     "additionalDirectories": [
       "\\tmp"

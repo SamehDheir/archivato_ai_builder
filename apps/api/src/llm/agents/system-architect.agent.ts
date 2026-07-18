@@ -3,6 +3,7 @@ import {
   AgentRole,
   isBuildVsBuyCapability,
   isModuleComplexity,
+  regulationsForMarket,
   significantTokens,
   type ArchitectureType,
   type BuildVsBuyItem,
@@ -113,6 +114,8 @@ export class SystemArchitectAgent extends BaseAgent {
       `- Expected scale: ${slotText(s, 'scale_expectations') || 'not stated'}`,
       `- Hard constraints: ${slotText(s, 'constraints') || 'none stated'}`,
       `- Existing assets to build on: ${slotText(s, 'existing_assets') || 'none stated'}`,
+      `- Target market: ${slotText(s, 'target_market') || 'not stated'}`,
+      residencyLine(slotText(s, 'target_market')),
       '',
       'Rules:',
       '- Pick the simplest architecture that meets the requirements. Under a tight',
@@ -446,6 +449,19 @@ export class SystemArchitectAgent extends BaseAgent {
 function slotText(slots: SlotMap | undefined, key: SlotKey): string {
   const s = slots?.[key];
   return s && !s.na ? s.value.trim() : '';
+}
+
+/**
+ * The hosting-region line for the prompt. Where data may legally live is an
+ * architecture decision (it constrains the provider and the region), so the
+ * architect is told the residency expectation rather than left to infer one from
+ * the market name — or, with no market stated, told explicitly not to assume.
+ */
+function residencyLine(market: string): string {
+  const regime = regulationsForMarket(market);
+  return regime
+    ? `- Data residency: ${regime.dataResidency} Name the hosting region in the rationale.`
+    : '- Data residency: no target market stated — do not assume a jurisdiction or a default hosting region.';
 }
 
 const LARGE_SCALE =
