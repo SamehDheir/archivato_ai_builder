@@ -242,7 +242,8 @@
       "Bash(node -e \"const p=require\\('./apps/api/package.json'\\); console.log\\(JSON.stringify\\({bullmq:p.dependencies.bullmq,'@nestjs/bullmq':p.dependencies['@nestjs/bullmq'],ioredis:p.dependencies.ioredis,throttler:p.dependencies['@nestjs/throttler']},null,2\\)\\)\")",
       "Bash(nslookup valkey-90f7620-redis-server.c.aivencloud.com 8.8.8.8)",
       "Bash(nslookup aivencloud.com 8.8.8.8)",
-      "Bash(curl -s -m 25 -w \"\\\\n[http %{http_code}]\\\\n\" https://archivato-api.onrender.com/health/ready)"
+      "Bash(curl -s -m 25 -w \"\\\\n[http %{http_code}]\\\\n\" https://archivato-api.onrender.com/health/ready)",
+      "Bash(echo \"[eslint exit $?]\")"
     ],
     "additionalDirectories": [
       "\\tmp"
