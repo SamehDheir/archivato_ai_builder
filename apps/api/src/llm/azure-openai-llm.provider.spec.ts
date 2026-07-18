@@ -162,7 +162,48 @@ describe('AzureOpenAiLlmProvider', () => {
   it('throws with the status when Azure returns an error', async () => {
     mockFetch('', false, 429);
     await expect(
-      makeProvider().complete([{ role: 'user', content: 'x' }]),
+      // 429 is transient, so the shared transport would retry it — pin attempts
+      // to 1 to assert the surfaced message without paying the backoff.
+      makeProvider({ LLM_MAX_ATTEMPTS: '1' }).complete([
+        { role: 'user', content: 'x' },
+      ]),
     ).rejects.toThrow('status 429');
+  });
+
+  describe('shared HTTP transport', () => {
+    it('sends an abort signal, so a hung Azure call cannot run forever', async () => {
+      const fetchMock = mockFetch('ok');
+      await makeProvider().complete([{ role: 'user', content: 'x' }]);
+      expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('retries a transient failure rather than falling back on one blip', async () => {
+      let call = 0;
+      const fn = jest.fn(async () => {
+        call++;
+        return {
+          ok: call > 1,
+          status: call > 1 ? 200 : 503,
+          json: async () => ({ choices: [{ message: { content: 'recovered' } }] }),
+          text: async () => 'upstream unavailable',
+        };
+      });
+      (global as unknown as { fetch: unknown }).fetch = fn;
+
+      await expect(
+        makeProvider().complete([{ role: 'user', content: 'x' }]),
+      ).resolves.toBe('recovered');
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it('respects LLM_MAX_ATTEMPTS from config', async () => {
+      const fetchMock = mockFetch('', false, 503);
+      await expect(
+        makeProvider({ LLM_MAX_ATTEMPTS: '2' }).complete([
+          { role: 'user', content: 'x' },
+        ]),
+      ).rejects.toThrow('status 503');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
   });
 });

@@ -1160,6 +1160,45 @@ tsconfig and never needs shared's `dist`.
   json_object`** for guaranteed JSON (the structured-output path for the default
   real-AI provider). The deterministic fallbacks are a **resilience layer, not
   mock data** — they only run when no LLM is configured or the model fails.
+- **LLM transport: timeouts + retries (`llm-http.ts`).** One shared
+  `postLlmJson()` behind the three OpenAI-shaped providers (Groq / Azure /
+  SiliconFlow), which all POST and read the same shape. It exists because
+  **Node's `fetch` has no default timeout**: a hung upstream held a BullMQ worker
+  or an open SSE connection *indefinitely*, and on a 512 MB instance a handful of
+  those is an outage. Every attempt now carries its own `AbortSignal.timeout`
+  (fresh per attempt — a signal only fires once). Five things not to undo:
+  1. **The retry is at the PROVIDER layer, never on the BullMQ job.** Every agent
+     catches its own LLM failure and returns its deterministic fallback, so
+     `service.generate()` **resolves** and the job **completes** — `attempts` on
+     the queue would be dead config that never fires. And if it ever did fire,
+     `PipelineProcessor` writes a version snapshot per run, so a retry would
+     re-persist the artifact and cut a second snapshot. This layer is the only one
+     where a transient 503 is still visible *as* a transient 503.
+  2. **Why retry at all:** the fallback makes a blip invisible. Before this, one
+     503 from Groq meant a **Pro user paid for an LLM-generated artifact and
+     silently received the templated one**, with nothing in the document saying so.
+     (Making that visible is a separate, still-open item — see the C2 provenance
+     stamp in [docs/IMPROVEMENT-PLAN.md](docs/IMPROVEMENT-PLAN.md).)
+  3. **Only transient failures retry.** `isRetryableStatus` = 408 / 429 / 5xx,
+     plus timeouts and undici's `TypeError('fetch failed')`. A 400/401/403/404
+     fails identically on every attempt, so retrying only delays the fallback and
+     burns latency. **`LlmJsonParseError` is never retried here** — it happens
+     *after* the HTTP call, in `parseJsonFromLlm`, and is not a transport fault.
+  4. **Claude is CONFIGURED, not wrapped.** The Anthropic SDK already retries with
+     backoff and already has a timeout — but its default ceiling is **ten
+     minutes**. It gets the same budget via `timeout` + `maxRetries`; wrapping it
+     in `postLlmJson` would nest two retry loops and multiply the worst case.
+  5. **A reasoning model gets `REASONING_TIMEOUT_FACTOR` (2x).** R1 spends real
+     wall-clock thinking before it writes (which is also why it gets
+     `REASONING_HEADROOM_TOKENS`); holding it to the standard ceiling would abort
+     calls that were about to succeed — turning a slow answer into no answer.
+  Config is `LLM_TIMEOUT_MS` (default 90s, **per attempt**) + `LLM_MAX_ATTEMPTS`
+  (default 3 = one call plus two retries), read through `readLlmHttpConfig()`,
+  which **coerces explicitly** — `config.get<number>()` does not, and a string
+  handed to `AbortSignal.timeout` misbehaves silently. Metering note: a timed-out
+  attempt may still have been billed upstream but reports no usage (usage is read
+  off a response we never received), so retries **under**-report spend rather than
+  over-report it — the honest direction for a margin meter.
 - **LLM usage metering (`llm/usage`) — margin protection.** Every model call made
   through the `LlmProvider` seam is recorded: provider, model, **agent**, stage,
   user, session, tokens, cost, ok/failed, duration. One `llm_usage` row per call

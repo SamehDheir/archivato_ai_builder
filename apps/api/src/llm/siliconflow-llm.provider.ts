@@ -7,6 +7,7 @@ import type {
 } from './llm-provider.interface';
 import { parseJsonFromLlm } from './json.util';
 import { readOpenAiUsage, type OpenAiStyleUsage } from './openai-usage';
+import { postLlmJson, readLlmHttpConfig } from './llm-http';
 
 const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-R1';
 const DEFAULT_BASE_URL = 'https://api.siliconflow.com/v1';
@@ -32,6 +33,17 @@ const REASONING_HEADROOM_TOKENS = 8192;
  * `completeJson` asks every provider for 0. Reasoning models get a floor instead.
  */
 const REASONING_MIN_TEMPERATURE = 0.6;
+
+/**
+ * Timeout multiplier for a reasoning model.
+ *
+ * The shared default is sized for a model that starts writing immediately; R1
+ * spends real wall-clock thinking first (and gets `REASONING_HEADROOM_TOKENS`
+ * of extra budget to do it in). Holding it to the standard ceiling would abort
+ * calls that were going to succeed — turning a slow answer into no answer, and
+ * dropping the agent onto its deterministic fallback for no reason.
+ */
+const REASONING_TIMEOUT_FACTOR = 2;
 
 /** Models that emit a chain of thought before their answer. */
 export function isReasoningModel(model: string): boolean {
@@ -96,6 +108,7 @@ export class SiliconFlowLlmProvider implements LlmProvider {
   private readonly logger = new Logger(SiliconFlowLlmProvider.name);
   private readonly apiKey: string;
   private readonly baseUrl: string;
+  private readonly http: { timeoutMs: number; maxAttempts: number };
   readonly defaultModel: string;
 
   constructor(config: ConfigService) {
@@ -112,6 +125,7 @@ export class SiliconFlowLlmProvider implements LlmProvider {
       .get<string>('SILICONFLOW_BASE_URL', DEFAULT_BASE_URL)
       .trim()
       .replace(/\/+$/, '');
+    this.http = readLlmHttpConfig(config);
   }
 
   async complete(
@@ -157,26 +171,28 @@ export class SiliconFlowLlmProvider implements LlmProvider {
       payload.response_format = { type: 'json_object' };
     }
 
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const detail = await res.text().catch(() => res.statusText);
-      this.logger.error(`SiliconFlow request failed (${res.status}): ${detail}`);
-      throw new Error(`SiliconFlow request failed with status ${res.status}`);
-    }
-
-    const data = (await res.json()) as {
+    const data = await postLlmJson<{
       choices?: { message?: { content?: string } }[];
       usage?: OpenAiStyleUsage;
       model?: string;
-    };
+    }>(
+      `${this.baseUrl}/chat/completions`,
+      {
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      },
+      {
+        label: 'SiliconFlow',
+        logger: this.logger,
+        ...this.http,
+        timeoutMs: reasoning
+          ? this.http.timeoutMs * REASONING_TIMEOUT_FACTOR
+          : this.http.timeoutMs,
+      },
+    );
     // Price off the model the API says it ran, not the id we asked for.
     options?.onUsage?.({
       model: data.model || model,

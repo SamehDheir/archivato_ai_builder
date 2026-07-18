@@ -7,6 +7,7 @@ import type {
 } from './llm-provider.interface';
 import { parseJsonFromLlm } from './json.util';
 import { readOpenAiUsage, type OpenAiStyleUsage } from './openai-usage';
+import { postLlmJson, readLlmHttpConfig } from './llm-http';
 
 /** GA api-version that supports `response_format: json_object`. */
 const DEFAULT_API_VERSION = '2024-10-21';
@@ -36,6 +37,7 @@ export class AzureOpenAiLlmProvider implements LlmProvider {
   private readonly endpoint: string;
   private readonly deployment: string;
   private readonly apiVersion: string;
+  private readonly http: { timeoutMs: number; maxAttempts: number };
 
   /** Azure has no model field — the deployment IS the model selector. */
   get defaultModel(): string {
@@ -69,6 +71,7 @@ export class AzureOpenAiLlmProvider implements LlmProvider {
       'AZURE_OPENAI_API_VERSION',
       DEFAULT_API_VERSION,
     );
+    this.http = readLlmHttpConfig(config);
   }
 
   async complete(
@@ -118,28 +121,23 @@ export class AzureOpenAiLlmProvider implements LlmProvider {
     const model = options?.model ?? this.deployment;
     const url = this.buildUrl(model);
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'api-key': this.apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const detail = await res.text().catch(() => res.statusText);
-      this.logger.error(`Azure OpenAI request failed (${res.status}): ${detail}`);
-      throw new Error(`Azure OpenAI request failed with status ${res.status}`);
-    }
-
-    const data = (await res.json()) as {
+    const data = await postLlmJson<{
       choices?: { message?: { content?: string } }[];
       usage?: OpenAiStyleUsage;
       /** Azure echoes the model behind the deployment — price off that, not the
        *  deployment name, which is an arbitrary string the operator chose. */
       model?: string;
-    };
+    }>(
+      url,
+      {
+        headers: {
+          'api-key': this.apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      },
+      { label: 'Azure OpenAI', logger: this.logger, ...this.http },
+    );
     options?.onUsage?.({
       model: data.model || model,
       usage: readOpenAiUsage(data.usage),

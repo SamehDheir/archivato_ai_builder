@@ -7,6 +7,7 @@ import type {
 } from './llm-provider.interface';
 import { parseJsonFromLlm } from './json.util';
 import { readOpenAiUsage, type OpenAiStyleUsage } from './openai-usage';
+import { postLlmJson, readLlmHttpConfig } from './llm-http';
 
 const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 const DEFAULT_MAX_TOKENS = 2048;
@@ -25,6 +26,7 @@ export class GroqLlmProvider implements LlmProvider {
 
   private readonly logger = new Logger(GroqLlmProvider.name);
   private readonly apiKey: string;
+  private readonly http: { timeoutMs: number; maxAttempts: number };
   readonly defaultModel: string;
 
   constructor(config: ConfigService) {
@@ -34,6 +36,7 @@ export class GroqLlmProvider implements LlmProvider {
     }
     this.apiKey = apiKey;
     this.defaultModel = config.get<string>('GROQ_MODEL', DEFAULT_MODEL);
+    this.http = readLlmHttpConfig(config);
   }
 
   async complete(
@@ -64,25 +67,20 @@ export class GroqLlmProvider implements LlmProvider {
     };
     if (jsonMode) payload.response_format = { type: 'json_object' };
 
-    const res = await fetch(GROQ_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const detail = await res.text().catch(() => res.statusText);
-      this.logger.error(`Groq request failed (${res.status}): ${detail}`);
-      throw new Error(`Groq request failed with status ${res.status}`);
-    }
-
-    const data = (await res.json()) as {
+    const data = await postLlmJson<{
       choices?: { message?: { content?: string } }[];
       usage?: OpenAiStyleUsage;
-    };
+    }>(
+      GROQ_URL,
+      {
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      },
+      { label: 'Groq', logger: this.logger, ...this.http },
+    );
     options?.onUsage?.({ model, usage: readOpenAiUsage(data.usage) });
     return data.choices?.[0]?.message?.content ?? '';
   }
