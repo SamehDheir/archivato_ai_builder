@@ -15,11 +15,19 @@
 import { PLANS } from '@archivato/shared';
 
 /**
- * A real, public share link used as the "see a real scoping package" proof.
- * Set `NEXT_PUBLIC_DEMO_SHARE_URL` to the token URL of a finished project.
+ * The "see a real scoping package" proof link is `DEMO_PATH` in `lib/site.ts`.
+ *
+ * It used to be a `DEMO_SHARE_URL` here, pointing at `/s/demo-scoping-package`
+ * unless `NEXT_PUBLIC_DEMO_SHARE_URL` overrode it — a live share **token**, from
+ * back when the only way to show a finished package was to keep a real project
+ * shared. That override was never set in any environment, so what shipped was
+ * the fallback: a token no `share_links` row has ever held, which the share page
+ * answers with `ShareNotFound`. The page's primary proof CTA was a 404.
+ *
+ * `/demo-scoping-package` replaces it and cannot rot the same way — it is a
+ * statically prerendered route in this repo, needs no API call and no live
+ * project, and renders the same `SharedProjectView` a real link does.
  */
-export const DEMO_SHARE_URL =
-  process.env.NEXT_PUBLIC_DEMO_SHARE_URL ?? '/s/demo-scoping-package';
 
 /**
  * Monthly price of the paid tier, as displayed — read from the billing source of

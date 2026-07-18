@@ -13,8 +13,15 @@ import {
   EXAMPLE_VISION,
 } from '@/lib/example-project';
 
-/** The demo package's public route. Also its SEO landing path. */
-export const DEMO_PATH = '/demo-scoping-package';
+/**
+ * The demo package's public route. Also its SEO landing path.
+ *
+ * Defined in `lib/site.ts` and re-exported here so this module stays the one
+ * import for everything demo-related, while a caller that needs only the path
+ * (the landing page) can take it from `site.ts` without pulling in the fixture
+ * built below.
+ */
+export { DEMO_PATH } from '@/lib/site';
 
 /** The name a visitor sees. Matches `dashboard.example.name`'s subject. */
 export const DEMO_TITLE = 'HomeHelper — on-demand home-services booking';

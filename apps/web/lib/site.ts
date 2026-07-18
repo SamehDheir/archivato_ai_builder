@@ -62,6 +62,17 @@ export const brand = {
 } as const;
 
 /**
+ * The public demo package's route.
+ *
+ * It lives here rather than in `lib/demo-scoping-package.ts` (its natural home)
+ * because the landing page needs the path and nothing else: that module builds
+ * the whole fixture, so importing the constant from it risks pulling the entire
+ * example project into the landing bundle. `site.ts` has no dependencies, so
+ * every consumer can share one literal without paying for the payload.
+ */
+export const DEMO_PATH = '/demo-scoping-package';
+
+/**
  * Public routes worth putting in the sitemap (everything else is auth-gated).
  *
  * `/demo-scoping-package` is here on purpose and `/s/<token>` never will be:
@@ -71,7 +82,7 @@ export const brand = {
  */
 export const publicRoutes = [
   '/',
-  '/demo-scoping-package',
+  DEMO_PATH,
   '/login',
   '/register',
   '/privacy',
