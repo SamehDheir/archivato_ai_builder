@@ -1349,6 +1349,30 @@ tsconfig and never needs shared's `dist`.
     (`requirements.service` → agent, attached on both LLM + deterministic paths).
     R6 plumbed it; **R7 (below) consumes it** — folding each gap into the
     requirement document's "Assumptions & open questions".
+  - **`question.phase` IS NOT A DATA BUCKET on the adaptive path — `buildSummary`
+    reads SLOTS.** This is the fix for a bug that corrupted an entire generated
+    package. `RequirementsSummary` was derived by bucketing the transcript on
+    `question.phase`: `goal = understanding[0]`, `users =
+    understanding.slice(1)`, `features = answersForPhase(Features)`. That is
+    correct **only in plan mode**, where `QUESTION_PLAN` hard-codes the phase per
+    question (a1 *is* the goal, a2 *is* the roles). On the adaptive path the phase
+    is a **free-text label the model attaches to a question it chose for
+    slot-filling reasons** — so several unrelated answers land under one phase and
+    others are never used at all. On a real run that made the data-entity,
+    integrations and target-market answers render as **user roles**, left
+    `features` **empty** (so the whole document collapsed to one requirement
+    restating the industry), and fed the industry answer in as the goal. The
+    summary now reads the slot snapshot (`summaryFromSlots`) — the structured
+    extraction built for exactly this — and the positional fallbacks are applied
+    **only when no slot was filled** (`hasFilledSlots` ⇒ a true plan-mode run).
+    Three things not to undo: the phase buckets must stay for plan mode (they are
+    exact there); `splitSlotList` must **not** split prose on its commas (a
+    one-sentence workflow is one requirement, not three — the comma split is
+    vetoed by a long fragment); and the **Commercial phase is deliberately no
+    longer folded into `constraints`**, because that list flows into the
+    Requirement Document, which may never state a budget or a date. Pinned by
+    `adaptive-summary.spec.ts` (drives a scripted adaptive interview whose every
+    question is labelled `understanding`) and `slot-summary.spec.ts`.
   - **`target_market` — the slot that makes compliance and PSP fees real.** Which
     country/region the software serves. It was the missing input behind two
     features that were already built but **dormant**: R9's regional payment-fee
@@ -1469,6 +1493,23 @@ tsconfig and never needs shared's `dist`.
   4. **`constraintCompliance[]` (`{constraint, howAddressed}`)** — passthrough of the
      `constraints` slot + `requirements.constraints` (deduped), each mapped to a
      `howAddressed` line. Empty array when no constraints.
+  - **The deterministic `inferServices` derives DOMAIN services from the entities.**
+    It used to be a pure keyword template that could only ever emit `Auth · Users ·
+    Billing · Notifications · Reporting` — so a fashion store and a clinic system
+    got **byte-identical** service lists and the actual product (catalog, orders,
+    inventory) appeared nowhere in its own architecture. `domainServices()` now
+    reads the `data_entities` slot (falling back to the functional-requirement
+    titles), and inserts those modules straight after the account services. Four
+    guards, each from output that shipped wrong: a name shorter than
+    `MIN_ENTITY_NAME_CHARS` is **dropped**, so a placeholder `x` answer can't
+    become a service module named `Xs`; `GENERIC_SERVICE_NOUNS` stops a `User`
+    entity duplicating the `Users` service; `belongsTo` folds a dependent record
+    into its parent (`Order Item` → Orders, `Product Variant` → Products) by
+    **prefix** match, so the stage emits a service per *capability* rather than one
+    per table — candidates are sorted shortest-name-first precisely so the parent
+    is accepted before its child; and the count is capped at
+    `MAX_DOMAIN_SERVICES`. Note this is the **fallback**, which is what an install
+    with no LLM key ships for every project — see the mock-provider gotcha.
   - **Constraint-grounded rationale + simplicity bias.** The prompt makes every major
     decision cite the relevant constraint and NAME the rejected alternative and why it
     loses; under a tight budget/timeline the architect prefers the **simplest**

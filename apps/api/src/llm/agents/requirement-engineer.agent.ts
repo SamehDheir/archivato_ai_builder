@@ -326,11 +326,20 @@ export class RequirementEngineerAgent extends BaseAgent {
       });
     }
 
-    const roles: UserRole[] = summary.users.map((name) => ({
-      name,
-      description: `${name} role identified during the requirements interview.`,
-      permissions: [],
-    }));
+    // A role entry may arrive as a full phrase ("Shipping staff who pack and
+    // dispatch orders"), so the short lead becomes the name and the client's own
+    // wording is preserved as the description rather than being thrown away.
+    const roles: UserRole[] = summary.users.map((entry) => {
+      const name = shortPhrase(entry, 40) || entry;
+      return {
+        name,
+        description:
+          name === entry.trim()
+            ? `${name} role identified during the requirements interview.`
+            : entry.trim(),
+        permissions: [],
+      };
+    });
 
     const businessRules: BusinessRule[] = summary.businessRules.map(
       (description, i) => ({ id: `BR-${i + 1}`, description }),
@@ -355,9 +364,29 @@ export class RequirementEngineerAgent extends BaseAgent {
 
 // ── pure helpers (shared by the LLM-normalize and deterministic paths) ───────
 
+/**
+ * A short requirement title.
+ *
+ * A workflow line usually leads with its own label ("Order placement: Customer
+ * browses the catalog, adds items…"), so the label is the title and the rest
+ * stays in the description. Only when there is no such lead does this fall back
+ * to a hard truncation, which is what every title used to be.
+ */
 function truncateTitle(text: string): string {
   const trimmed = text.trim();
-  return trimmed.length <= 60 ? trimmed : `${trimmed.slice(0, 57)}…`;
+  // Prefer a real clause boundary — the label before a colon, else the first
+  // comma clause. Cutting at a fixed character count instead produced titles like
+  // "Inventory decrement on order confirmation, preventing ove…", which stops
+  // mid-word in the one line a client actually scans.
+  for (const separator of [/[:—–]|\s-\s/, /,/]) {
+    const lead = trimmed.split(separator)[0]?.trim() ?? '';
+    if (lead && lead !== trimmed && lead.length <= 60 && wordCount(lead) >= 2) {
+      return lead;
+    }
+  }
+  const single = trimmed.replace(/\.$/, '');
+  if (single.length <= 80) return single;
+  return `${single.slice(0, 57)}…`;
 }
 
 function inferCategory(text: string): string {
@@ -380,9 +409,70 @@ function joinList(items: string[]): string {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
-function lowerFirst(text: string): string {
+function capitalizeFirst(text: string): string {
   const t = text.trim();
-  return t ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+}
+
+/**
+ * Reduce a raw answer to a short phrase safe to drop into a list or a clause.
+ *
+ * Slot and summary text is the client's own words — often a labelled multi-clause
+ * answer ("Fashion — women's clothing, DTC brand selling through a web
+ * storefront…"). Splicing that whole string into a sentence frame is what made the
+ * executive summary ungrammatical, so anything used *inside* a sentence is cut to
+ * its leading clause first.
+ */
+function shortPhrase(text: string, maxChars = 60): string {
+  const lead = text
+    .split(/[:.;—–]|\s-\s/)[0]
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!lead) return '';
+  if (lead.length <= maxChars) return lead;
+  const cut = lead.slice(0, maxChars);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > 20 ? cut.slice(0, lastSpace) : cut).trim()}…`;
+}
+
+/**
+ * One capability, named for the middle of a sentence ("Core capabilities include
+ * X, Y and Z").
+ *
+ * Unlike `shortPhrase` this never emits a trailing ellipsis: a clipped clause in
+ * a prose sentence produced "…lifecycle from pending through packed to…." — an
+ * ellipsis immediately followed by the sentence's own full stop. A capability is
+ * better named by its own leading clause than by the first 60 characters of its
+ * description, so the text is cut at a clause boundary and, failing that, the
+ * whole capability is dropped rather than shown mangled.
+ */
+function capabilityPhrase(text: string): string {
+  const lead = (text.split(/[:;—–]|\s-\s/)[0] ?? '').replace(/\s+/g, ' ').trim();
+  const clause = (lead.split(',')[0] ?? '').trim();
+  const best = clause.length >= 8 ? clause : lead;
+  const cleaned = best.replace(/[.,\s]+$/, '');
+  return cleaned.length <= 70 && wordCount(cleaned) >= 2 ? cleaned : '';
+}
+
+/**
+ * Render the project goal as a STANDALONE sentence.
+ *
+ * The previous frame — `It lets them ${goal}` — assumed the goal was a verb
+ * phrase ("book appointments online"). A goal that is a noun phrase, which is what
+ * an industry or domain answer always is, produced "It lets them fashion —
+ * Fashion e-commerce — women's clothing…". Emitting the goal as its own sentence
+ * is grammatical for both shapes, so the frame is gone rather than patched.
+ */
+function goalSentence(goal: string): string {
+  const first = goal.split(/(?<=[.!?])\s+/)[0]?.trim() ?? '';
+  if (wordCount(first) < 3) return '';
+  const trimmed = first.length > 200 ? `${shortPhrase(first, 200)}` : first;
+  const sentence = capitalizeFirst(trimmed.replace(/[.\s]+$/, ''));
+  return sentence ? `${sentence}.` : '';
+}
+
+function wordCount(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
 /**
@@ -393,11 +483,20 @@ function lowerFirst(text: string): string {
 function buildExecutiveSummary(ctx: RequirementContext): string {
   const { summary, idea } = ctx;
   const slots = ctx.slots ?? {};
-  const domain = (ctx.intent?.domain || slotText(slots.business_domain)).trim();
+  const domain = shortPhrase(
+    (ctx.intent?.domain || slotText(slots.business_domain)).trim(),
+    40,
+  );
+  // The split role list is preferred over the raw slot text: the slot holds one
+  // sentence about who uses the system, which reads badly mid-clause.
   const users =
-    slotText(slots.target_users_roles) || joinList(summary.users) || 'its users';
-  const goal = (summary.goal || idea).trim();
-  const features = summary.features.slice(0, 3);
+    joinList(summary.users.map((u) => shortPhrase(u, 40))) ||
+    shortPhrase(slotText(slots.target_users_roles), 60) ||
+    'its users';
+  const features = summary.features
+    .slice(0, 3)
+    .map(capabilityPhrase)
+    .filter(Boolean);
 
   const parts: string[] = [];
   parts.push(
@@ -405,7 +504,8 @@ function buildExecutiveSummary(ctx: RequirementContext): string {
       ? `This is a ${domain} solution built for ${users}.`
       : `This solution is built for ${users}.`,
   );
-  if (goal) parts.push(`It lets them ${lowerFirst(goal)}.`);
+  const goal = goalSentence((summary.goal || idea).trim());
+  if (goal) parts.push(goal);
   if (features.length) parts.push(`Core capabilities include ${joinList(features)}.`);
   parts.push(
     'The result is a system that supports their day-to-day work and is ready to grow with the business.',

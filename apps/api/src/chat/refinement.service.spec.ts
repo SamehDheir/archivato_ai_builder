@@ -176,6 +176,7 @@ describe('RefinementService', () => {
     // Baseline has no Notifications service.
     const before = await h.systemDesign.get(sessionId);
     expect(before.services.some((s) => s.name === 'Notifications')).toBe(false);
+    const beforeDoc = await h.requirements.get(sessionId);
 
     const result = await h.service.refine(
       sessionId,
@@ -185,9 +186,11 @@ describe('RefinementService', () => {
     expect(
       result.systemDesign.services.some((s) => s.name === 'Notifications'),
     ).toBe(true);
-    // The requirement document grew by the new FR.
+    // The requirement document grew by the new FR. Compared against its OWN prior
+    // length — this used to compare against the service count, which is an
+    // unrelated quantity that happened to be smaller.
     expect(result.requirementDocument.functional.length).toBeGreaterThan(
-      before.services.length,
+      beforeDoc.functional.length,
     );
     // Transcript persisted: user instruction + assistant summary.
     expect(result.messages).toHaveLength(2);

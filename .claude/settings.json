@@ -258,7 +258,12 @@
       "PowerShell(npm run test:api 2>&1)",
       "WebFetch(domain:www.siliconflow.com)",
       "PowerShell(npm run lint --workspace @archivato/web)",
-      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3000\" -TimeoutSec 5 -UseBasicParsing; \"web dev server: UP \\($\\($r.StatusCode\\)\\)\" } catch { \"web dev server: not reachable\" })"
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3000\" -TimeoutSec 5 -UseBasicParsing; \"web dev server: UP \\($\\($r.StatusCode\\)\\)\" } catch { \"web dev server: not reachable\" })",
+      "Bash(cp apps/api/src/interview/interview.service.ts /tmp/isvc.bak)",
+      "Bash(cp /tmp/isvc.bak apps/api/src/interview/interview.service.ts)",
+      "Bash(rm /tmp/isvc.bak)",
+      "Bash(grep -vE \"Nest\\\\]|DEBUG|LOG |^\\\\s*$\")",
+      "Bash(grep -n \"Downstream:\\\\*\\\\* \\\\`openQuestions\\\\` rides onto\" CLAUDE.md)"
     ],
     "additionalDirectories": [
       "\\tmp"

@@ -21,6 +21,7 @@ import {
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
+import { splitSlotList } from '../../interview/slots';
 
 /** What the System Architect needs from the upstream stages. */
 export interface SystemDesignContext {
@@ -218,7 +219,7 @@ export class SystemArchitectAgent extends BaseAgent {
   ): SystemDesign {
     const haystack = this.haystack(ctx);
     const architecture = this.inferArchitecture(haystack, ctx.slots);
-    const services = this.inferServices(haystack).map((svc) => {
+    const services = this.inferServices(haystack, ctx).map((svc) => {
       const { complexity, rationale } = this.complexityFor(svc, ctx);
       return { ...svc, complexity, complexityRationale: rationale };
     });
@@ -346,7 +347,21 @@ export class SystemArchitectAgent extends BaseAgent {
     return stack;
   }
 
-  private inferServices(text: string): ServiceModule[] {
+  /**
+   * The service breakdown for the offline path.
+   *
+   * The generic services below are keyword-triggered and were once the whole
+   * list — which meant this fallback produced `Auth · Users · Billing ·
+   * Notifications · Reporting` for **every** project, no matter what it was. A
+   * fashion store and a clinic system got byte-identical service lists, and the
+   * domain of the actual product (catalog, orders, inventory) appeared nowhere.
+   *
+   * Domain services are therefore derived from the things the system stores —
+   * the `data_entities` slot, falling back to the entity nouns in the functional
+   * requirements — and inserted directly after the account services, which is
+   * where a reader looks for the substance of the design.
+   */
+  private inferServices(text: string, ctx: SystemDesignContext): ServiceModule[] {
     const services: ServiceModule[] = [
       {
         name: 'Auth',
@@ -359,6 +374,7 @@ export class SystemArchitectAgent extends BaseAgent {
         dependencies: [],
       },
     ];
+    services.push(...this.domainServices(ctx, services));
     if (/(payment|billing|invoice|subscription|checkout)/.test(text)) {
       services.push({
         name: 'Billing',
@@ -381,6 +397,65 @@ export class SystemArchitectAgent extends BaseAgent {
       });
     }
     return services;
+  }
+
+  /**
+   * Domain services derived from the entities this system actually stores.
+   *
+   * Entities are read from the `data_entities` slot first (the client's own list)
+   * and from the functional requirements when that slot went unfilled. Anything a
+   * generic service already owns is skipped, so a "User" entity does not produce a
+   * `Users` service beside the one that is always present.
+   */
+  private domainServices(
+    ctx: SystemDesignContext,
+    existing: ServiceModule[],
+  ): ServiceModule[] {
+    // Shortest names first, so a parent entity ("Product") is accepted before its
+    // dependent ("Product Variant") and therefore absorbs it — see `belongsTo`.
+    // Ties keep the client's original ordering, so the result stays deterministic.
+    const entities = this.entityNames(ctx)
+      .map((name, index) => ({ name, index }))
+      .sort(
+        (a, b) =>
+          a.name.split(' ').length - b.name.split(' ').length || a.index - b.index,
+      )
+      .map((e) => e.name);
+
+    const taken = new Set(existing.map((s) => s.name.toLowerCase()));
+    const accepted: string[] = [];
+    const out: ServiceModule[] = [];
+
+    for (const entity of entities) {
+      const name = pluralize(titleCase(entity));
+      const key = name.toLowerCase();
+      if (!name || taken.has(key) || GENERIC_SERVICE_NOUNS.test(key)) continue;
+      // A dependent record is part of its parent's module, not a module of its
+      // own: "Order Item" is owned by Orders, and splitting it out would ship a
+      // service per table instead of a service per capability.
+      if (accepted.some((owner) => belongsTo(entity, owner))) continue;
+      taken.add(key);
+      accepted.push(entity);
+      out.push({
+        name,
+        responsibility: `Records, lifecycle rules, and the operations the workflow performs on ${name.toLowerCase()}.`,
+        dependencies: [],
+      });
+      if (out.length >= MAX_DOMAIN_SERVICES) break;
+    }
+    return out;
+  }
+
+  /** Candidate entity nouns: the data-entities slot, else requirement titles. */
+  private entityNames(ctx: SystemDesignContext): string[] {
+    const slot = ctx.slots?.data_entities;
+    const fromSlot =
+      slot && !slot.na ? splitSlotList(slot.value).map(entityHead) : [];
+    if (fromSlot.filter(Boolean).length) return fromSlot.filter(Boolean);
+
+    return ctx.requirements.functional
+      .map((f) => entityHead(f.title))
+      .filter(Boolean);
   }
 
   // ── R8 deterministic builders ───────────────────────────────────────────
@@ -717,3 +792,80 @@ const BUILD_VS_BUY_TABLE: Array<{
     },
   },
 ];
+
+// ── domain-service naming ───────────────────────────────────────────────────
+
+/** Ceiling on derived domain services, so a long entity list stays readable. */
+const MAX_DOMAIN_SERVICES = 6;
+
+/** Entity nouns a generic service already owns — never duplicated as a module. */
+const GENERIC_SERVICE_NOUNS =
+  /^(users?|accounts?|auth|roles?|permissions?|sessions?|billings?|payments?|invoices?|subscriptions?|notifications?|messages?|emails?|reports?|analytics|logs?|audit logs?|settings?)$/;
+
+/** Words that describe an entity rather than name it. */
+const ENTITY_STOP_WORDS =
+  /^(the|a|an|each|every|all|main|key|core|primary|its|their|new|manage|managing|track|tracking|store|storing|handle|handling|support|supporting|create|creating)$/i;
+
+/**
+ * Shortest credible entity name. Below this the token is a placeholder or an
+ * initial, and turning it into a service invents a module the design never had —
+ * a stray "x" answer would otherwise ship a service module named "Xs".
+ */
+const MIN_ENTITY_NAME_CHARS = 3;
+
+/**
+ * The head noun of one entity line: "Product — name, description, category"
+ * becomes "Product". Entity lists are the client's own words, so the descriptive
+ * tail after a separator is dropped and leading filler verbs are stripped.
+ * Returns '' when nothing name-like survives — the caller skips those.
+ */
+function entityHead(raw: string): string {
+  const lead = (raw ?? '')
+    .split(/[—–:(]|\s-\s/)[0]
+    .replace(/[^\p{L}\p{N}\s/&_-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const words = lead
+    .split(' ')
+    .filter(Boolean)
+    .filter((w, i) => !(i === 0 && ENTITY_STOP_WORDS.test(w)));
+  // Beyond three words it is a sentence about the entity, not the entity's name.
+  const name = words.length && words.length <= 3 ? words.join(' ') : (words[0] ?? '');
+  return name.replace(/\s+/g, '').length >= MIN_ENTITY_NAME_CHARS ? name : '';
+}
+
+/**
+ * True when `entity` is a dependent record of the already-accepted `owner` —
+ * "Order Item" belongs to "Order", "Product Variant" to "Product".
+ *
+ * The test is that the owner's words are a prefix of the entity's, not merely
+ * present in them: a prefix match is what distinguishes a qualified child
+ * ("Order Item") from an unrelated entity that happens to share a word
+ * ("Inventory Log" is not owned by "Log").
+ */
+function belongsTo(entity: string, owner: string): boolean {
+  const words = entity.toLowerCase().split(/\s+/).filter(Boolean);
+  const ownerWords = owner.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length <= ownerWords.length) return false;
+  return ownerWords.every((w, i) => words[i] === w);
+}
+
+function titleCase(text: string): string {
+  return text
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+/** Naive English pluralization — service modules read as plural collections. */
+function pluralize(name: string): string {
+  const parts = name.split(' ');
+  const last = parts[parts.length - 1] ?? '';
+  if (!last) return name;
+  if (/(s|x|z|ch|sh)$/i.test(last)) parts[parts.length - 1] = `${last}es`;
+  else if (/[^aeiou]y$/i.test(last)) {
+    parts[parts.length - 1] = `${last.slice(0, -1)}ies`;
+  } else if (!/s$/i.test(last)) parts[parts.length - 1] = `${last}s`;
+  return parts.join(' ');
+}
