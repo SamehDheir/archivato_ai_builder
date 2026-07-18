@@ -107,6 +107,30 @@ export class ReviewService {
         ? [constraintSlot.value]
         : []),
     ];
+    // Everything the package promises to deliver, from the three artifacts that
+    // make a promise in the client's own vocabulary — checked against what the
+    // document says is excluded.
+    // Title AND description: a requirement's title is a headline ("Billing and
+    // Payments") while the capability that contradicts an exclusion is usually
+    // buried in the sentence ("…and manage insurance claims"). Matching titles
+    // alone missed exactly that case on a real project.
+    const promisedCapabilities = [
+      ...requirements.functional.map((f) => ({
+        label: f.title,
+        text: `${f.title}. ${f.description ?? ''}`.trim(),
+        artifact: 'the functional requirements',
+      })),
+      ...systemDesign.services.map((s) => ({
+        label: s.name,
+        text: `${s.name}. ${s.responsibility ?? ''}`.trim(),
+        artifact: 'the architecture',
+      })),
+      ...apiDesign.modules.map((m) => ({
+        label: m.name,
+        artifact: 'the API design',
+      })),
+    ];
+
     const automatedConsistency = buildConsistencyFindings({
       effort,
       timeline,
@@ -114,6 +138,8 @@ export class ReviewService {
       constraintCompliance: systemDesign.constraintCompliance,
       buildVsBuy: systemDesign.buildVsBuy,
       serviceSubscriptions: costEstimate?.serviceSubscriptions,
+      outOfScope: requirements.outOfScope,
+      promisedCapabilities,
     });
 
     const report = await this.reviewer.generate(sessionId, {

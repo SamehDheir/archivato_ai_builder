@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   TEST_TYPES,
@@ -41,8 +41,6 @@ const VALID_PRIORITIES = new Set<TestPriority>(['high', 'medium', 'low']);
 export class QaPlannerAgent extends BaseAgent {
   readonly role = AgentRole.QaPlanner;
 
-  private readonly logger = new Logger(QaPlannerAgent.name);
-
   protected readonly systemPrompt = [
     'You are a pragmatic QA Lead authoring the test plan for a specific system',
     'before it is built.',
@@ -66,22 +64,25 @@ export class QaPlannerAgent extends BaseAgent {
 
   async generate(sessionId: string, ctx: QaPlanContext): Promise<QaPlan> {
     const generatedAt = new Date().toISOString();
-    try {
-      const raw = await this.thinkJson<Partial<QaPlan>>(this.buildPrompt(ctx));
-      if (this.isValid(raw)) {
-        return this.normalize({ ...raw, sessionId, generatedAt }, ctx);
-      }
-      this.logger.debug('QA plan malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`QA plan failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<QaPlan>({
+      label: 'QA plan',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) => this.normalize({ ...raw, sessionId, generatedAt }, ctx),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   private buildPrompt(ctx: QaPlanContext): string {
     return [
       `Idea: ${ctx.idea}`,
       `Architecture: ${ctx.systemDesign.architecture}`,
+      // Without this the model cannot possibly match tooling to the stack, and
+      // it doesn't fail loudly — it recommends the ecosystem it has seen most.
+      // A real Node.js/React plan came back proposing JUnit.
+      `Tech stack: ${ctx.systemDesign.techStack
+        .map((t) => `${t.layer}: ${t.technology}`)
+        .join(', ')}`,
       `Services: ${ctx.systemDesign.services.map((s) => s.name).join(', ')}`,
       `Entities: ${ctx.databaseDesign.entities.map((e) => e.name).join(', ')}`,
       `API modules: ${ctx.apiDesign.modules
@@ -98,7 +99,7 @@ export class QaPlannerAgent extends BaseAgent {
       '- strategy[]: the guiding principles for the plan (strings).',
       '- suites[]: {name, type, objective, cases[] {id (TC-n), title, expected (the pass condition), priority}}.',
       '- coverageGoals[]: measurable coverage targets (strings).',
-      '- tooling[]: recommended tools matched to the stack (strings).',
+      '- tooling[]: recommended tools that actually run on the tech stack above — never a tool from another language ecosystem.',
       '- outOfScope[]: what this plan deliberately does not cover (strings).',
       'type ∈ unit | integration | e2e | security | performance | acceptance. priority ∈ high | medium | low.',
       'Provide at least one suite (with cases) for every test type.',

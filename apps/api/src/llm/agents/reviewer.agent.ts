@@ -1,7 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   isSuggestedResolution,
+  namesExcludedCapability,
   normalizeReviewReport,
   patchTargetFor,
   PATCH_SECTION_KEYS,
@@ -55,8 +56,6 @@ export interface ReviewContext {
 export class ReviewerAgent extends BaseAgent {
   readonly role = AgentRole.Reviewer;
 
-  private readonly logger = new Logger(ReviewerAgent.name);
-
   protected readonly systemPrompt = [
     'You are a rigorous Principal Engineer running a design review before build,',
     'who also protects the deal: this design is a scoping proposal a software shop',
@@ -106,20 +105,15 @@ export class ReviewerAgent extends BaseAgent {
     ctx: ReviewContext,
   ): Promise<ReviewReport> {
     const generatedAt = new Date().toISOString();
-    try {
-      const raw = await this.thinkJson<Partial<ReviewReport>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        // Trust the model's content but backfill any dimension it omitted so the
-        // report shape is always complete (scores, cost, scalability findings).
-        return this.normalize({ ...raw, sessionId, generatedAt }, ctx);
-      }
-      this.logger.debug('Review malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`Review failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<ReviewReport>({
+      label: 'Review',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      // Trust the model's content but backfill any dimension it omitted so the
+      // report shape is always complete (scores, cost, scalability findings).
+      accept: (raw) => this.normalize({ ...raw, sessionId, generatedAt }, ctx),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   private buildPrompt(ctx: ReviewContext): string {
@@ -235,10 +229,12 @@ export class ReviewerAgent extends BaseAgent {
       clientReadiness:
         raw.scores?.clientReadiness ?? this.scoreFrom(clientReadinessIssues),
     };
-    const overallScore =
-      typeof raw.overallScore === 'number'
-        ? raw.overallScore
-        : this.overall(scores);
+    // Always computed, never taken from the model. The prompt asks for a number
+    // "consistent with the four engineering sub-scores" and the model does not
+    // reliably supply one — a real report scored 80/60/70/50 and reported an
+    // overall of 70 where the average is 65. The overall score is the headline
+    // number on a document a client reads; it has to be arithmetic, not a claim.
+    const overallScore = this.overall(scores);
 
     // Deterministic (automated) findings are always merged with any the model
     // flagged; the model's are forced to source 'ai'.
@@ -264,11 +260,30 @@ export class ReviewerAgent extends BaseAgent {
       scalabilityIssues,
       performanceRisks,
       costOptimizations,
-      missingFeatures: raw.missingFeatures ?? [],
+      missingFeatures: this.withoutExcluded(raw.missingFeatures ?? [], ctx),
       recommendations: raw.recommendations ?? [],
       clientReadinessIssues,
       consistencyFindings,
     });
+  }
+
+  /**
+   * Drop "missing" features the requirement document deliberately excluded.
+   *
+   * The model reads the design, notices telemedicine isn't there, and reports it
+   * as missing — while the document's own out-of-scope section says, in the
+   * client's words, that it is not included. Reporting a deliberate exclusion as
+   * a gap tells the owner their scoping failed at precisely the point where it
+   * worked, and it is the exclusions that protect them from unpaid work.
+   */
+  private withoutExcluded(features: string[], ctx: ReviewContext): string[] {
+    const excluded = (ctx.requirements.outOfScope ?? [])
+      .map((o) => o.item?.trim())
+      .filter((i): i is string => !!i);
+    if (excluded.length === 0) return features;
+    return features.filter(
+      (f) => !excluded.some((e) => namesExcludedCapability(e, f)),
+    );
   }
 
   /** Allowlist LLM client-readiness findings; drop malformed ones. */

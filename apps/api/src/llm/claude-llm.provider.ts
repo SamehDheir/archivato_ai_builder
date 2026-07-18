@@ -7,6 +7,7 @@ import type {
   LlmCompleteOptions,
 } from './llm-provider.interface';
 import { parseJsonFromLlm } from './json.util';
+import { readLlmHttpConfig } from './llm-http';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 const DEFAULT_MAX_TOKENS = 4096;
@@ -33,7 +34,17 @@ export class ClaudeLlmProvider implements LlmProvider {
         'ANTHROPIC_API_KEY is required when LLM_PROVIDER=claude',
       );
     }
-    this.client = new Anthropic({ apiKey });
+    // The SDK already retries with backoff and already has a timeout — but its
+    // default ceiling is TEN MINUTES, long enough to hold a worker or an SSE
+    // connection well past any useful point. Configure it to the same budget the
+    // fetch-based providers use rather than wrapping it, which would nest two
+    // retry loops and multiply the worst case.
+    const { timeoutMs, maxAttempts } = readLlmHttpConfig(this.config);
+    this.client = new Anthropic({
+      apiKey,
+      timeout: timeoutMs,
+      maxRetries: Math.max(0, maxAttempts - 1),
+    });
     this.defaultModel = this.config.get<string>(
       'ANTHROPIC_MODEL',
       DEFAULT_MODEL,

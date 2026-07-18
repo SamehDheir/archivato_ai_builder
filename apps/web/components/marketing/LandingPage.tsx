@@ -16,12 +16,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  DEMO_SHARE_URL,
-  LANDING_PLANS,
-  SCREENSHOTS,
-  type LandingPlan,
-} from '@/lib/landing';
+import { LANDING_PLANS, SCREENSHOTS, type LandingPlan } from '@/lib/landing';
+import { DEMO_PATH } from '@/lib/site';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/shared/Logo';
 import { IdeaToProductDemo } from '@/components/marketing/IdeaToProductDemo';
@@ -86,8 +82,8 @@ function DemoLink({
 }) {
   return (
     <Button asChild size="lg" variant={variant}>
-      {/* A real share link, so it opens the actual read-only client view. */}
-      <a href={DEMO_SHARE_URL} target="_blank" rel="noopener noreferrer">
+      {/* The demo package, rendered by the same view a real share link uses. */}
+      <a href={DEMO_PATH} target="_blank" rel="noopener noreferrer">
         {label}
       </a>
     </Button>

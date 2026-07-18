@@ -56,6 +56,12 @@ export const SLOT_CATALOG: Record<
     askClientTemplate:
       'Who will use this system, and what different types of users (roles) are there?',
   },
+  target_market: {
+    description:
+      'The country or region the software serves — whose users, whose currency, whose law. Drives data-protection obligations and payment-processing choices; never assume one.',
+    askClientTemplate:
+      'Which country or region will this serve — where are the users, and where is the business registered? (This decides which data-protection rules apply and which payment providers we can use.)',
+  },
   core_workflows: {
     description:
       'The main things users do end to end — the day-to-day flows the system must support.',
@@ -357,4 +363,139 @@ export function openQuestionForSlot(slotKey: SlotKey): OpenQuestion {
 /** Narrow an arbitrary string to a known slot key. */
 export function isSlotKey(value: string): value is SlotKey {
   return (SLOT_KEYS as readonly string[]).includes(value);
+}
+
+// ── slot text → discrete items ──────────────────────────────────────────────
+
+/** Leading list marker on one item ("1.", "2)", "-", "•", "a)"). */
+const ENUM_PREFIX = /^\s*(?:\d+[.)]|[-*•–—]|[a-z][.)])\s+/i;
+
+/**
+ * Above this many words a comma-separated fragment reads as prose, not as one
+ * entry in a list — so the whole text is left whole rather than shredded
+ * mid-sentence.
+ */
+const COMMA_LIST_MAX_WORDS = 6;
+
+/** Cap on items taken from one slot, so a rambling answer can't flood a section. */
+const MAX_SLOT_ITEMS = 12;
+
+function wordCount(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function cleanListItem(text: string): string {
+  return text
+    .replace(ENUM_PREFIX, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[;,]+$/, '')
+    .trim();
+}
+
+/**
+ * Split one free-text slot value into the discrete items it lists.
+ *
+ * Slot values are the client's own words, so the shape varies wildly: a
+ * newline-separated list, an inline "1. … 2. …" enumeration, a semicolon list, a
+ * comma list of nouns, or a single prose paragraph. Each separator is tried in
+ * descending order of how unambiguous it is, and the text is only split when a
+ * separator actually yields more than one item.
+ *
+ * Commas are last and guarded: "Customers browse the catalog, add items to the
+ * cart, and check out" is ONE workflow, not three requirements, so a fragment
+ * longer than `COMMA_LIST_MAX_WORDS` vetoes the comma split. Bullets are handled
+ * only via the newline path and inline enumeration is **numbers only** — a lone
+ * " - " is punctuation far more often than it is a list marker.
+ */
+export function splitSlotList(text: string, max = MAX_SLOT_ITEMS): string[] {
+  const raw = (text ?? '').trim();
+  if (!raw) return [];
+
+  const candidates = [
+    () => raw.split(/\r?\n+/),
+    () => raw.split(/\s(?=\d+[.)]\s)/),
+    () => raw.split(/;+/),
+    () => splitOnCommas(raw),
+  ];
+
+  let parts: string[] = [raw];
+  for (const attempt of candidates) {
+    const next = attempt().map(cleanListItem).filter(Boolean);
+    if (next.length > 1) {
+      parts = next;
+      break;
+    }
+  }
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of parts) {
+    const item = cleanListItem(part);
+    if (!item) continue;
+    const key = item.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function splitOnCommas(text: string): string[] {
+  // Multiple sentences means prose; a comma inside it separates clauses.
+  if (/[.!?]\s/.test(text)) return [text];
+  const parts = text.split(/,+/);
+  if (parts.length < 2) return [text];
+  return parts.some((p) => wordCount(p) > COMMA_LIST_MAX_WORDS) ? [text] : parts;
+}
+
+/** The value of a filled, applicable slot, or '' when absent / n-a. */
+function filledSlot(slots: SlotMap | undefined | null, key: SlotKey): string {
+  const slot = slots?.[key];
+  return slot && !slot.na ? slot.value.trim() : '';
+}
+
+/** True once the adaptive interviewer has extracted at least one usable slot. */
+export function hasFilledSlots(slots: SlotMap | undefined | null): boolean {
+  return SLOT_KEYS.some((key) => filledSlot(slots, key).length > 0);
+}
+
+/**
+ * The parts of the requirements summary the slot snapshot can answer directly.
+ *
+ * This exists because the phase-bucket heuristic it replaces cannot survive the
+ * adaptive interview: `question.phase` is a free-text guess the model attaches to
+ * a question it chose for slot-filling reasons, so bucketing the transcript by it
+ * mixes unrelated answers together. The slots are the structured extraction built
+ * for exactly this, so the summary reads them instead of re-deriving from labels.
+ *
+ * Fields are omitted (not empty-defaulted) when their slot is unfilled, so the
+ * caller can tell "the interview did not cover this" from "it covered it and the
+ * answer was empty" and pick its own fallback.
+ */
+export function summaryFromSlots(slots: SlotMap | undefined | null): {
+  users?: string[];
+  features?: string[];
+  constraints?: string[];
+} {
+  const users = splitSlotList(filledSlot(slots, 'target_users_roles'));
+  const workflows = splitSlotList(filledSlot(slots, 'core_workflows'));
+  // Entities are a *fallback* feature source, not an additive one: an entity is a
+  // noun the system stores, and listing "Product" beside "Customers can track
+  // their order" produces a requirement list of mixed altitude. They only stand in
+  // when the workflow slot went unfilled, which is the case that otherwise
+  // collapses to a single generic requirement.
+  const features = workflows.length
+    ? workflows
+    : splitSlotList(filledSlot(slots, 'data_entities'));
+  const constraints = [
+    ...splitSlotList(filledSlot(slots, 'constraints')),
+    ...splitSlotList(filledSlot(slots, 'scale_expectations')),
+  ];
+
+  return {
+    ...(users.length ? { users } : {}),
+    ...(features.length ? { features } : {}),
+    ...(constraints.length ? { constraints } : {}),
+  };
 }

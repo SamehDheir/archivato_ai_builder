@@ -4,6 +4,8 @@
  * System Design. Includes entities, primary keys, foreign keys, and relations.
  */
 
+import type { GenerationProvenance } from './generation';
+
 /**
  * Common column types we suggest in the UI. Real models (and real databases)
  * emit many more (e.g. `varchar(255)`, `bigint`, `timestamp with time zone`),
@@ -74,6 +76,8 @@ export interface Relation {
 export interface DatabaseDesign {
   sessionId: string;
   generatedAt: string;
+  /** How this design was produced — see `generation.ts`. Absent = unknown. */
+  generation?: GenerationProvenance;
   /** e.g. "PostgreSQL" (taken from the System Design). */
   databaseType: string;
   entities: Entity[];

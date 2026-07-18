@@ -238,7 +238,9 @@
       "Read(//d/portoflio/apps/api/src/share/**)",
       "Read(//d/node_modules/**)",
       "Bash(node -e \"try{require.resolve\\('playwright'\\);console.log\\('playwright available'\\)}catch\\(e\\){try{require.resolve\\('puppeteer'\\);console.log\\('puppeteer available'\\)}catch\\(e2\\){console.log\\('no browser driver installed'\\)}}\")",
-      "Bash(xargs echo \"untracked entries now:\")"
+      "Bash(xargs echo \"untracked entries now:\")",
+      "Bash(git rev-list *)",
+      "Bash(git merge *)"
     ],
     "additionalDirectories": [
       "\\tmp"

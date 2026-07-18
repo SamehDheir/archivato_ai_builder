@@ -284,9 +284,62 @@ tsconfig and never needs shared's `dist`.
      artifacts that conflict and tagged **`source: 'automated' | 'ai'`** so the UI can
      distinguish a code check from the model's judgment. The **deterministic** layer is
      `buildConsistencyFindings()` (pure, `@archivato/shared`): effort-vs-timeline,
-     constraint-vs-`constraintCompliance` coverage, and build-vs-buy "buy" vs a
-     matching cost line. The **LLM** layer adds its own (forced to `source:'ai'`).
-  Four things not to undo:
+     constraint-vs-`constraintCompliance` coverage, build-vs-buy "buy" vs a
+     matching cost line, and **scope integrity** (below). The **LLM** layer adds its
+     own (forced to `source:'ai'`).
+     - **Scope integrity** compares `requirements.outOfScope` against everything the
+       package *promises* — functional requirements, services, API groups
+       (`promisedCapabilities`, assembled in `ReviewService`). It catches the
+       contradiction a client finds first: "you said mobile apps weren't included,
+       but the plan lists them", which costs the dev shop the argument because the
+       exclusion is the only thing between them and building it for free.
+       Matching runs over `PromisedCapability.text` (**title AND description**),
+       not `label`: a requirement's title is a headline ("Billing and Payments")
+       while the contradicting capability hides inside the sentence ("…and manage
+       insurance claims"), and matching titles alone missed exactly that on a real
+       project. The finding still quotes the short `label`, so widening the
+       haystack never drags a paragraph into what the owner reads.
+       **The matching bar is the whole design.** `describesSameCapability` requires
+       **two** shared distinctive tokens (`SCOPE_MATCH_MIN_TOKENS`) after
+       `SCOPE_STOP_WORDS` strips the filler; one shared word fires on any project
+       that excludes *payouts* while taking *payments* — a distinction the document
+       draws deliberately — and a check that cries wolf teaches the owner to mute
+       the whole panel. A single-token exclusion ("Telemedicine") is the one case
+       that may match on one word. **Deliberately conservative: a miss falls through
+       to the reviewer's LLM pass; a false positive tells an owner their own document
+       contradicts itself when it doesn't.** Pinned by tests, including the
+       near-miss ("Mobile Apps Gateway" is an API gateway, not the native apps).
+     - **Constraint coverage compares tokens, not substrings.** The original
+       `cc.includes(key) || key.includes(cc)` test could not see that the design's
+       *"integration with payment gateways and accounting software"* addresses the
+       requirement's *"The platform must integrate with existing payment gateways
+       and accounting software"* — `integrate with existing` is not a substring of
+       `integration with`. On a real two-constraint project **both** findings it
+       produced were false. `constraintIsAddressed` now ORs containment with
+       `describesSameCapability`; containment stays because it is genuine evidence
+       and it covers constraints too short to yield tokens at all (`PCI DSS`).
+     - **`namesExcludedCapability` is a THIRD matcher, and the split is deliberate.**
+       Comparing a reviewer-coined label ("Telemedicine functionality") to the
+       document's own wording ("Telemedicine / live video consultations") is not the
+       same question as comparing two phrases: they share one word, which the
+       two-token bar rightly rejects for phrase-vs-phrase and wrongly rejects here.
+       So that check tests **containment** — every distinctive word of the feature
+       name appears in the exclusion — which is a strong claim that cannot fire on a
+       partial overlap. Don't collapse the three matchers into one.
+  Five things not to undo:
+  - **`overallScore` is COMPUTED, never taken from the model.** The prompt asks for a
+     number "consistent with the four engineering sub-scores" and the model does not
+     reliably give one — a real report scored 80/60/70/50 and reported 70, where the
+     average is 65. `normalize()` now always calls `this.overall(scores)`. The
+     headline number on a document a client reads has to be arithmetic, not a claim.
+     (`isValid` still gates on the model *supplying* a score — that's a "did we get a
+     real report back" signal, not the source of the number.)
+  - **`missingFeatures` excludes what the document deliberately excluded.** The model
+     notices telemedicine isn't in the design and reports it missing, while the
+     requirement doc's out-of-scope section says in the client's own words that it
+     isn't included — so the review told the owner their scoping had failed at
+     exactly the point where it worked. `withoutExcluded` filters via
+     `namesExcludedCapability`.
   - **`clientReadiness` does NOT feed `overallScore`.** Overall stays the 4-dimension
      *engineering* average, so the public number survives redaction unchanged and
      keeps meaning what it always meant.
@@ -925,6 +978,65 @@ tsconfig and never needs shared's `dist`.
   7. **Code enforces that a reason exists, not that it's a good one.** The prompt
      narrows the valid reasons (junction / internal table / nested-under-a-named-parent);
      the validator can't judge prose.
+  8. **Endpoint paths are forced ABSOLUTE (`absolutePath`).** The type says
+     `/** Full path including the /api prefix */` and nothing enforced it, so models
+     broke it constantly — one real design mixed **three** conventions, twice inside
+     a single module: `/api/clinics` for the collection but `/:id` for the item,
+     `/` and `/:appointmentId` in the next group, and correct absolute paths only
+     where the deterministic builder had filled in. Every consumer trusts this
+     field, so the blast radius is the whole stage: the OpenAPI export publishes
+     `/{id}` as a root route, the scaffold mounts a controller in the wrong place,
+     and the Postman collection points at nothing. Because normalization runs at the
+     store's **read** boundary too, this repairs designs already in the table. Two
+     details: a relative path that repeats its own resource (`/orders/:id` under
+     `/api/orders`) is de-duplicated rather than joined into
+     `/api/orders/orders/:id`; and that comparison is **segment-wise, never a RegExp
+     built from `basePath`** — that string is LLM output and may carry metacharacters.
+  9. **A public registration endpoint may not accept role/permission/tenant ids.**
+     A real design shipped `POST /api/auth/register` taking `role_id` and
+     `clinic_id` in the body — anyone could register as an administrator. The threat
+     model flagged privilege escalation only in the abstract, because it was reading
+     the same artifact that contained the hole.
+  10. **A list endpoint is QUERYABLE, not merely paginated.** Both paths used to emit
+     `page`/`limit` and nothing else — the prompt said so in as many words, so the
+     model was doing what it was told. `listQueryParams(entity)` (pure, in
+     `api-design.rest.ts`) now derives the rest **from the entity's own columns**:
+     `search` (only when a non-secret text column exists), the lifecycle column
+     itself, a `<date>_from`/`_to` range (prefers `created_at`, else any domain
+     timestamp), and one filter per FK, capped at `MAX_FK_FILTERS`. The LLM prompt
+     asks for the same set in the same naming convention, so the two paths agree.
+     Three things worth keeping: on a GET, `requestSchema` **is** the query string
+     (`openapi.builder.ts` maps it to `in:'query'`), so these flow to OpenAPI,
+     Postman, and the scaffold for free — no new type; a `password`/`token`/`hash`
+     column is **never** exposed as a filter; and the nested child-collection
+     endpoint **drops the parent's FK filter**, since the path already pins it.
+     This costs ~5 schema fields per entity, which narrowed the chunking margin —
+     see `MAX_ENTITIES_PER_CALL`, and lower it before raising `CHUNK_MAX_TOKENS`.
+- **Database design = lifecycle, linkage, isolation, and real-world completeness.**
+  Prompt rules on the Database Designer, several previously true only of the
+  *deterministic fallback* (which emitted `status` on invoices/notifications while
+  the LLM path had no such rule — the offline output was cleaner than the model's).
+  Each one comes from a real generated schema that shipped without it:
+  - **Lifecycle `status`.** An entity that moves through states carries an enum
+    `status`; one that never transitions deliberately does not. A clinic schema
+    shipped `appointments` with no status at all — while its own Product Vision
+    named *"Appointment No-Show Rate < 10%"* as the headline success metric. The
+    vision promised a number the database could not produce. Pairs with the
+    list-query rule above: the `status` column is what makes the filter derivable.
+  - **Secondary records link to the transactional event**, not merely to `user_id` —
+    medical records and prescriptions hung off `patient_id`/`doctor_id` with no
+    `appointment_id`, so no diagnosis could be traced to the visit that produced it.
+  - **Multi-tenant means EVERY table, not just `users`.** The same schema put
+    `clinic_id` on `users` and on nothing else, in a product whose whole premise was
+    *"providers operating multiple clinics"* — every patient, bill and record was
+    queryable across tenants. That is also the threat model's own #1 critical
+    threat, which it never traced to this cause.
+  - **No unique constraint on a shared contact field.** `patients.phone @unique`
+    breaks the first family that shares a number. Uniqueness belongs on a national
+    ID or account number.
+  - **An audit-log entity** whenever the requirements restrict who may read or
+    change records, or name a regulated data category — the same schema had a
+    business rule and a repudiation mitigation both demanding one, and no table.
 - **Agents backfill via `normalize()`.** Where an artifact has many optional
   parts (e.g. the reviewer's per-dimension scores/findings), the agent trusts a
   valid LLM response but fills any omitted field deterministically, so the shape
@@ -1048,6 +1160,114 @@ tsconfig and never needs shared's `dist`.
   json_object`** for guaranteed JSON (the structured-output path for the default
   real-AI provider). The deterministic fallbacks are a **resilience layer, not
   mock data** — they only run when no LLM is configured or the model fails.
+- **LLM transport: timeouts + retries (`llm-http.ts`).** One shared
+  `postLlmJson()` behind the three OpenAI-shaped providers (Groq / Azure /
+  SiliconFlow), which all POST and read the same shape. It exists because
+  **Node's `fetch` has no default timeout**: a hung upstream held a BullMQ worker
+  or an open SSE connection *indefinitely*, and on a 512 MB instance a handful of
+  those is an outage. Every attempt now carries its own `AbortSignal.timeout`
+  (fresh per attempt — a signal only fires once). Five things not to undo:
+  1. **The retry is at the PROVIDER layer, never on the BullMQ job.** Every agent
+     catches its own LLM failure and returns its deterministic fallback, so
+     `service.generate()` **resolves** and the job **completes** — `attempts` on
+     the queue would be dead config that never fires. And if it ever did fire,
+     `PipelineProcessor` writes a version snapshot per run, so a retry would
+     re-persist the artifact and cut a second snapshot. This layer is the only one
+     where a transient 503 is still visible *as* a transient 503.
+  2. **Why retry at all:** the fallback makes a blip invisible. Before this, one
+     503 from Groq meant a **Pro user paid for an LLM-generated artifact and
+     silently received the templated one**, with nothing in the document saying so.
+     (Making that visible is a separate, still-open item — see the C2 provenance
+     stamp in [docs/IMPROVEMENT-PLAN.md](docs/IMPROVEMENT-PLAN.md).)
+  3. **Only transient failures retry.** `isRetryableStatus` = 408 / 429 / 5xx,
+     plus timeouts and undici's `TypeError('fetch failed')`. A 400/401/403/404
+     fails identically on every attempt, so retrying only delays the fallback and
+     burns latency. **`LlmJsonParseError` is never retried here** — it happens
+     *after* the HTTP call, in `parseJsonFromLlm`, and is not a transport fault.
+  4. **Claude is CONFIGURED, not wrapped.** The Anthropic SDK already retries with
+     backoff and already has a timeout — but its default ceiling is **ten
+     minutes**. It gets the same budget via `timeout` + `maxRetries`; wrapping it
+     in `postLlmJson` would nest two retry loops and multiply the worst case.
+  5. **A reasoning model gets `REASONING_TIMEOUT_FACTOR` (2x).** R1 spends real
+     wall-clock thinking before it writes (which is also why it gets
+     `REASONING_HEADROOM_TOKENS`); holding it to the standard ceiling would abort
+     calls that were about to succeed — turning a slow answer into no answer.
+  6. **`LlmHttpError.kind` (`http | timeout | network`) is how callers classify a
+     failure — never a regex over `err.message`.** `degradedReasonFor` needs the
+     timeout/outage distinction (it becomes the artifact's `degradedReason`), and
+     deriving it from prose built in `llm-http.ts` meant a reworded string would
+     silently reclassify every timeout. Two more traps closed with it: only
+     undici-shaped `TypeError`s (`'fetch failed'` or carrying a `cause`) count as
+     network faults — treating *every* TypeError as one retried genuine code bugs
+     three times and reported them as outages; and `timeoutMs` is clamped to
+     `MAX_LLM_TIMEOUT_MS`, because past 2^31-1 ms a Node timer overflows and fires
+     **immediately**, so an over-large value aborted every call at once.
+  Config is `LLM_TIMEOUT_MS` (default 90s, **per attempt**) + `LLM_MAX_ATTEMPTS`
+  (default 3 = one call plus two retries), read through `readLlmHttpConfig()`,
+  which **coerces explicitly** — `config.get<number>()` does not, and a string
+  handed to `AbortSignal.timeout` misbehaves silently. Metering note: a timed-out
+  attempt may still have been billed upstream but reports no usage (usage is read
+  off a response we never received), so retries **under**-report spend rather than
+  over-report it — the honest direction for a margin meter.
+- **Generation provenance (`generation.ts`) — degradation has to be VISIBLE.**
+  Every agent falls back deterministically, which is what makes the pipeline
+  resilient; the cost is that a degraded artifact is indistinguishable from a
+  real one. A Pro user paid for an LLM-generated API design, one transient
+  failure handed them the template, and **nothing in the document said so** —
+  they then forwarded it to a client. Additive/optional `generation?:
+  GenerationProvenance` (`{mode, provider, model, degradedReason?}`) on the nine
+  LLM artifacts (requirements · system · database · api · review · vision ·
+  roadmap · threat · qa), JSON-blob convention, migration-free. Seven things not
+  to undo:
+  1. **The stamp is applied by ONE template method, `BaseAgent.generateArtifact`.**
+     Eight agents had byte-for-byte the same try/validate/catch/fallback shape,
+     so they were refactored onto it rather than hand-stamped — provenance each
+     agent sets by hand is provenance the ninth agent forgets. A new agent gets an
+     accurate stamp for free. The API designer keeps its own flow (it **chunks**,
+     so it has several success paths) and stamps via the exposed
+     `this.provenance()`; per-module attribution already lives on `ApiModule.source`.
+  2. **`mode` records what the agent DID WITH the output, not whether HTTP
+     succeeded.** A 200 carrying JSON that fails `isValid` is `fallback`, because
+     the artifact the user receives was built by the code.
+  3. **The mock provider is degraded even on the `llm` path.** `MockLlmProvider`
+     returns parseable JSON, so a scripted response can pass `isValid` and be
+     stamped `llm` — it is still not AI output. `isDegradedGeneration()` ORs
+     `mode === 'fallback'` with `provider === 'mock'`, so that judgment lives in
+     one pure function instead of in every agent.
+  4. **An unstamped artifact is NOT degraded.** Rows written before this existed
+     carry no stamp and we cannot know how they were built; warning on a guess
+     would nag every old project into re-running a **billed, Pro, LLM** stage.
+     Same rule as an unstamped `sourceStamp` never being stale.
+  5. **`parse_error` is deliberately distinct from `call_failed`.** It is the
+     expensive one — the model call **succeeded and was billed**, and only the
+     JSON was unusable — so it points at the prompt or the model, not the network.
+  6. **A (re)generation REPLACES the stamp; a human edit PRESERVES it.** That
+     one rule covers every write path, and each half was wrong once: the chat
+     **refine** spread `...ctx.current` and inherited the old stamp (so a doc
+     refined during an outage still read "AI-generated"), while `save()` dropped
+     it entirely (the global `ValidationPipe` runs `whitelist: true`, so the
+     client's payload never carries it) — meaning one edit silently erased the
+     warning. The refine now re-stamps with its own outcome; every `save()` calls
+     **`preserveGeneration(edited, existing)`**, which also closes the forgery
+     path by taking the stamp from the *server's* row rather than the request.
+     Editing one sentence of a document the model never wrote does not make it
+     AI-written.
+  7. **Provenance is OWNER-ONLY.** `withoutGeneration()` runs in
+     `ShareService.view` on every artifact — same enforcement as R9's
+     `budgetWarning` and R10/R11's deal-risk fields (**the payload IS the
+     boundary**). It tells a client their vendor's proposal was machine-templated
+     and names our provider and model; neither is theirs. A security test asserts
+     no `generation` and no `degradedReason` reaches the public page.
+  8. **The cost estimate is NOT stamped, on purpose.** It is 100% deterministic
+     (`estimateCosts`, zero LLM calls), so a "generation mode" on it would be
+     meaningless at best and would imply LLM involvement at worst. Same for the
+     scaffold. `DerivedArtifact` was therefore *not* the home for the field —
+     `CostEstimate` extends it.
+  **Web:** `GenerationNotice` (mirrors `StaleNotice` — renders **nothing** when
+  healthy, missing, or unstamped, so callers mount it unconditionally above the
+  artifact) on all nine tabs, with a one-click regenerate. The regenerate action
+  is optional, so the share page and example project render read-only. i18n
+  `stages.generation.*` incl. a per-reason message (EN+AR).
 - **LLM usage metering (`llm/usage`) — margin protection.** Every model call made
   through the `LlmProvider` seam is recorded: provider, model, **agent**, stage,
   user, session, tokens, cost, ok/failed, duration. One `llm_usage` row per call
@@ -1130,11 +1350,15 @@ tsconfig and never needs shared's `dist`.
     precedent). `llm_usage` grows with paid work, not traffic, so this is the table
     most likely to need a SQL rollup first — it goes behind the repository
     interface when it does.
-- **Provider selection** (`llm.module.ts`): `LLM_PROVIDER=mock|claude|groq|azure`
-  forces it for all agents; else `GROQ_API_KEY` present → groq for everything;
-  else `AZURE_OPENAI_API_KEY` present → azure; else mock. **Groq keeps priority
-  over Azure** so the documented "paste a free Groq key" behaviour is unchanged —
-  force with `LLM_PROVIDER=azure` when both keys exist.
+- **Provider selection** (`llm.module.ts`):
+  `LLM_PROVIDER=mock|claude|groq|azure|siliconflow` forces it for all agents;
+  else `GROQ_API_KEY` present → groq for everything; else
+  `AZURE_OPENAI_API_KEY` present → azure; else `SILICONFLOW_API_KEY` present →
+  siliconflow; else mock. **Groq keeps priority over Azure** so the documented
+  "paste a free Groq key" behaviour is unchanged, and **SiliconFlow sits last**
+  for the same reason — adding a key must never silently move an existing install
+  off the provider it has been running on. Force with `LLM_PROVIDER=<kind>` when
+  several keys exist.
   `INTERVIEW_LLM_PROVIDER` overrides only the interview. Model via
   `ANTHROPIC_MODEL` (default `claude-sonnet-4-6`; `claude-opus-4-8` available).
 - **Azure OpenAI (`AzureOpenAiLlmProvider`).** OpenAI-shape chat completions, so it
@@ -1148,6 +1372,41 @@ tsconfig and never needs shared's `dist`.
   version with JSON mode). Native `fetch`, no SDK. Targets chat deployments
   (gpt-4o/4.1/35-turbo) — the o-series reasoning models reject `temperature` and
   want `max_completion_tokens`.
+- **SiliconFlow (`SiliconFlowLlmProvider`) — the REASONING-model seam.** Another
+  OpenAI-shape provider mirroring `GroqLlmProvider` (native `fetch`, Bearer auth),
+  aimed at the hosted DeepSeek catalog. Env: `SILICONFLOW_API_KEY` (required),
+  `SILICONFLOW_MODEL` (default **`deepseek-ai/DeepSeek-R1`**), `SILICONFLOW_BASE_URL`
+  (default `https://api.siliconflow.com/v1`; the `.cn` host is the mainland one).
+  It is the first provider here whose default model *thinks before it answers*, and
+  three things follow from that — none of them cosmetic:
+  1. **No native JSON mode for DeepSeek.** SiliconFlow honours `response_format:
+     json_object` across most of its catalog but the DeepSeek **R1 *and* V3** series
+     reject it, so `supportsJsonMode()` gates it — and it is **not** `!isReasoningModel`,
+     because V3 is not a reasoning model and still 400s. The whole `deepseek-ai/*`
+     family is excluded rather than enumerated: too broad costs nothing (it falls back
+     to the prompt nudge + `parseJsonFromLlm`, exactly what the Claude provider always
+     did), too narrow breaks every call.
+  2. **Thinking spends the output budget, so it gets its own allowance.**
+     Everywhere else `maxTokens` means "room for the artifact" — `CHUNK_MAX_TOKENS`
+     is sized to one chunk of endpoints, not to a chain of thought. Passing it
+     through untouched would let the reasoning eat the ceiling and return a
+     truncated answer: **the silent short-parse the API designer's chunking exists
+     to prevent**. So a reasoning model gets `+REASONING_HEADROOM_TOKENS` on top and
+     the caller's number keeps meaning what it means for every other provider.
+     `thinking_budget` is deliberately **not** sent — the docs don't confirm R1
+     accepts it, and an unsupported param is a 400 that takes out the whole provider.
+  3. **`stripReasoning()` runs on every completion.** Reasoning normally arrives in
+     a separate `reasoning_content` field, but a leaked `<think>` block is worse here
+     than it looks: R1 **drafts and revises JSON while reasoning**, so
+     `parseJsonFromLlm`'s balanced-brace scan would lock onto a discarded draft
+     instead of the answer. An *unterminated* block means the response was cut off
+     mid-thought ⇒ yields `''` ⇒ the agent's deterministic fallback, which beats
+     parsing half a thought.
+  Also: `completeJson`'s temperature 0 is **floored to 0.6** for reasoning models —
+  DeepSeek documents that 0 sends R1 into endless repetition. Priced in
+  `MODEL_PRICING` (`deepseek-ai/deepseek-r1`, $0.25/$0.80 per MTok); reasoning
+  tokens bill as **output**, so an R1 call costs several times what its visible
+  answer suggests.
 - **Interview shape.** Kept **short: ≤ 9 questions** (`MAX_ADAPTIVE_QUESTIONS`).
   Questions may carry `options` + `multiple` on `InterviewQuestion` — the web
   renders tap-to-pick chips/checkboxes; the answer stays a **string** the client
@@ -1198,6 +1457,81 @@ tsconfig and never needs shared's `dist`.
     (`requirements.service` → agent, attached on both LLM + deterministic paths).
     R6 plumbed it; **R7 (below) consumes it** — folding each gap into the
     requirement document's "Assumptions & open questions".
+  - **`question.phase` IS NOT A DATA BUCKET on the adaptive path — `buildSummary`
+    reads SLOTS.** This is the fix for a bug that corrupted an entire generated
+    package. `RequirementsSummary` was derived by bucketing the transcript on
+    `question.phase`: `goal = understanding[0]`, `users =
+    understanding.slice(1)`, `features = answersForPhase(Features)`. That is
+    correct **only in plan mode**, where `QUESTION_PLAN` hard-codes the phase per
+    question (a1 *is* the goal, a2 *is* the roles). On the adaptive path the phase
+    is a **free-text label the model attaches to a question it chose for
+    slot-filling reasons** — so several unrelated answers land under one phase and
+    others are never used at all. On a real run that made the data-entity,
+    integrations and target-market answers render as **user roles**, left
+    `features` **empty** (so the whole document collapsed to one requirement
+    restating the industry), and fed the industry answer in as the goal. The
+    summary now reads the slot snapshot (`summaryFromSlots`) — the structured
+    extraction built for exactly this — and the positional fallbacks are applied
+    **only when no slot was filled** (`hasFilledSlots` ⇒ a true plan-mode run).
+    Three things not to undo: the phase buckets must stay for plan mode (they are
+    exact there); `splitSlotList` must **not** split prose on its commas (a
+    one-sentence workflow is one requirement, not three — the comma split is
+    vetoed by a long fragment); and the **Commercial phase is deliberately no
+    longer folded into `constraints`**, because that list flows into the
+    Requirement Document, which may never state a budget or a date. Pinned by
+    `adaptive-summary.spec.ts` (drives a scripted adaptive interview whose every
+    question is labelled `understanding`) and `slot-summary.spec.ts`.
+  - **`target_market` — the slot that makes compliance and PSP fees real.** Which
+    country/region the software serves. It was the missing input behind two
+    features that were already built but **dormant**: R9's regional payment-fee
+    note (`buildServiceCostLines` was called with a hardcoded
+    `targetMarket: undefined`) and any honest data-protection requirement. Its
+    catalog entry says out loud why it's asked, because a client reads the
+    forwarded question. Note the cost: this is an **11th slot in a ≤9-question
+    interview**, so it will often go unfilled — which is fine, because an unfilled
+    slot becomes an open question for the client, and every consumer treats
+    "unknown" as a first-class answer rather than a cue to guess.
+- **Region-aware compliance (`region.ts`) — never a blind GDPR/HIPAA.** An LLM
+  writing a requirement document reaches for GDPR and HIPAA regardless of who the
+  client is; they dominate its training data. For a MENA dev shop that is not a
+  harmless extra — it names the wrong law in front of the one reader who knows
+  better, and misses the one that applies (a Saudi project answers to the **PDPL**
+  and its residency expectations). So the regime is **looked up in code, not
+  recalled**: `resolveRegionKey()` classifies the `target_market` slot into
+  `mena|us|eu|global` (Arabic spellings included — the slot holds the client's own
+  words) and `REGIONAL_REGULATIONS` maps that to the laws, the residency line, and
+  a prompt note. Pure, runtime-free, unit-tested. Four things not to undo:
+  1. **`null`, never a default.** An absent or unrecognized market returns `null`
+     (the `parseBudget` / `parseTimelineWeeks` rule) and the agents are then
+     explicitly told to name **no** law and to raise the jurisdiction as an
+     assumption for the client to confirm. A confident wrong law is the failure
+     mode this whole file exists to prevent.
+  2. **One classifier.** `resolveRegion` (pricing, in `cost-estimate.ts`) is now a
+     thin wrapper over `resolveRegionKey`, so cost and compliance can never
+     disagree about which market a project is in. `REGIONAL_SERVICES` is keyed by
+     `RegionKey` rather than `string` so the compiler enforces that.
+  3. **The US entry qualifies its own laws** (`HIPAA (only if protected health
+     information is handled)`) because "which law applies" in the US is a *sector*
+     question, not a national one — a table that flatly asserted HIPAA for every US
+     project would reproduce the exact bug this replaces.
+  4. **The deterministic fallback names the law too.** With a stated market the
+     regime is a table lookup, not a judgement call, so the offline requirements
+     path appends a real compliance NFR; with no market it appends nothing. The
+     architect gets the residency line for the same reason — where data may legally
+     live constrains the provider and the region, so it's an architecture input.
+  **What this actually looked like before the fix**, on a generated clinic platform
+  for *"providers across Jordan and Saudi Arabia"*: HIPAA and GDPR appeared in
+  **six** places — a business rule, a constraint, an assumption, the out-of-scope
+  list, the architect's justification for choosing PostgreSQL, and the review's
+  single highest-severity risk. HIPAA is a US statute with no jurisdiction there,
+  and the reviewer built its top finding on it. Nothing was broken; every stage was
+  confidently, consistently wrong about the same thing.
+- **QA tooling must be told the stack.** The QA planner's prompt asked for "tools
+  matched to the stack" and **never sent the tech stack** — so a Node.js/React
+  project came back recommending **JUnit** (Java) and Selenium. It didn't fail
+  loudly; with no stack in context the model recommends the ecosystem it has seen
+  most. When a prompt asks the model to match something, check that the something
+  is actually in the prompt.
 - **Requirement Document = a two-audience scoping artifact (R7).** The Requirement
   Engineer now emits a **client-facing** document, not a bare requirements dump —
   additive fields on `RequirementDocument` (`@archivato/shared`), all optional so
@@ -1267,6 +1601,23 @@ tsconfig and never needs shared's `dist`.
   4. **`constraintCompliance[]` (`{constraint, howAddressed}`)** — passthrough of the
      `constraints` slot + `requirements.constraints` (deduped), each mapped to a
      `howAddressed` line. Empty array when no constraints.
+  - **The deterministic `inferServices` derives DOMAIN services from the entities.**
+    It used to be a pure keyword template that could only ever emit `Auth · Users ·
+    Billing · Notifications · Reporting` — so a fashion store and a clinic system
+    got **byte-identical** service lists and the actual product (catalog, orders,
+    inventory) appeared nowhere in its own architecture. `domainServices()` now
+    reads the `data_entities` slot (falling back to the functional-requirement
+    titles), and inserts those modules straight after the account services. Four
+    guards, each from output that shipped wrong: a name shorter than
+    `MIN_ENTITY_NAME_CHARS` is **dropped**, so a placeholder `x` answer can't
+    become a service module named `Xs`; `GENERIC_SERVICE_NOUNS` stops a `User`
+    entity duplicating the `Users` service; `belongsTo` folds a dependent record
+    into its parent (`Order Item` → Orders, `Product Variant` → Products) by
+    **prefix** match, so the stage emits a service per *capability* rather than one
+    per table — candidates are sorted shortest-name-first precisely so the parent
+    is accepted before its child; and the count is capped at
+    `MAX_DOMAIN_SERVICES`. Note this is the **fallback**, which is what an install
+    with no LLM key ships for every project — see the mock-provider gotcha.
   - **Constraint-grounded rationale + simplicity bias.** The prompt makes every major
     decision cite the relevant constraint and NAME the rejected alternative and why it
     loses; under a tight budget/timeline the architect prefers the **simplest**
@@ -2204,6 +2555,15 @@ browser suite is ever reintroduced: never call an unbounded `textContent()` /
   the Export panel has split **OpenAPI (JSON)** / **OpenAPI (YAML)** buttons
   (`export.openapiJson`/`openapiYaml`, EN+AR). Don't add a YAML dependency —
   `toYaml` is intentionally hand-rolled for the JSON-value subset.
+- **Downloaded text files carry a UTF-8 BOM — but only the ones a human opens.**
+  The bytes were never wrong: a `Blob` built from a JS string is UTF-8 and the API
+  sends `charset=utf-8`. Windows doesn't care — Notepad, Word and Excel guess the
+  ANSI codepage for a BOM-less file, so a real exported requirement document read
+  `**Modular Monolith** â€" Given the tight budget…` and a cost table read
+  `1Ã— compute instance`. That lands on the artifact an owner forwards to a client,
+  where mojibake reads as broken software. `saveFile` prepends `﻿` for
+  `BOM_TYPES` (markdown / csv / plain) and **nothing else** — a BOM makes
+  `JSON.parse` throw and `psql` will try to execute one.
 - **Export also offers SQL / Postman / a "Download all" zip.** Two more pure
   builders in `@archivato/shared`: `buildSqlDdl(databaseDesign)` (`sql.ts` —
   runnable **PostgreSQL** DDL; FKs are `ALTER TABLE … ADD CONSTRAINT` *after* all

@@ -161,6 +161,11 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = {
     cacheReadMultiplier: OPENAI_CACHE_READ_MULTIPLIER,
   },
   'gpt-35-turbo': { inputPerMTok: 0.5, outputPerMTok: 1.5 },
+
+  // SiliconFlow (siliconflow.com/pricing) — keyed by the full model id the API
+  // echoes back. Reasoning tokens bill as OUTPUT, so an R1 call costs several
+  // times what its visible answer suggests.
+  'deepseek-ai/deepseek-r1': { inputPerMTok: 0.25, outputPerMTok: 0.8 },
 };
 
 /** A dated snapshot of a base model: `-20250101` or `-2025-01-01`. */

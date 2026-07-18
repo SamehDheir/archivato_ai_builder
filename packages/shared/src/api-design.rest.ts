@@ -48,6 +48,75 @@ function foreignKeys(entity: Entity): EntityColumn[] {
   return (entity.columns ?? []).filter((c) => !!c.references?.entity);
 }
 
+/** Column types a free-text `search` can reasonably match against. */
+const TEXTUAL = new Set(['string', 'text', 'varchar', 'char']);
+
+/** A column holding a lifecycle state, whatever the designer called it. */
+const STATUS_COLUMN = /^(status|state)$|_(status|state)$/i;
+
+/** Never expose these as a filter, even when the type would allow it. */
+const SENSITIVE = /password|secret|token|hash|salt/i;
+
+/**
+ * More than this many foreign-key filters on one list endpoint stops being a
+ * useful contract and starts being noise the frontend never calls.
+ */
+const MAX_FK_FILTERS = 5;
+
+/**
+ * The query parameters a list endpoint for this entity supports — derived from
+ * the entity's own columns, not guessed.
+ *
+ * Pagination alone is not a usable list API: the first thing any real client
+ * needs is to search it, narrow it to a lifecycle state, bound it by date, and
+ * scope it to a parent record. Each of those is inferable from the schema, so it
+ * is built here rather than left to the model to remember — the deterministic
+ * fallback and the LLM path then agree on what a list endpoint looks like.
+ *
+ * On a GET, `requestSchema` is what the OpenAPI export turns into `in: 'query'`
+ * parameters, so these flow through to the spec, Postman, and the scaffold.
+ */
+export function listQueryParams(entity: Entity): SchemaField[] {
+  const params: SchemaField[] = [
+    { name: 'page', type: 'integer', required: false },
+    { name: 'limit', type: 'integer', required: false },
+  ];
+  const columns = entity.columns ?? [];
+  const push = (field: SchemaField) => {
+    if (!params.some((p) => p.name === field.name)) params.push(field);
+  };
+
+  const searchable = columns.some(
+    (c) =>
+      TEXTUAL.has(c.type.trim().toLowerCase()) &&
+      !c.references?.entity &&
+      !SERVER_MANAGED.has(c.name.toLowerCase()) &&
+      !SENSITIVE.test(c.name),
+  );
+  if (searchable) push({ name: 'search', type: 'string', required: false });
+
+  const status = columns.find((c) => STATUS_COLUMN.test(c.name));
+  if (status) push({ name: status.name, type: 'string', required: false });
+
+  // Prefer the audit timestamp every entity carries; fall back to whatever
+  // domain date the entity actually has (issued_at, sent_at, scheduled_for…).
+  const dateColumn =
+    columns.find((c) => c.name.toLowerCase() === 'created_at') ??
+    columns.find((c) => c.type.trim().toLowerCase().startsWith('timestamp')) ??
+    columns.find((c) => c.type.trim().toLowerCase() === 'date');
+  if (dateColumn) {
+    const base = dateColumn.name.replace(/_at$/i, '');
+    push({ name: `${base}_from`, type: 'string', required: false });
+    push({ name: `${base}_to`, type: 'string', required: false });
+  }
+
+  for (const fk of foreignKeys(entity).slice(0, MAX_FK_FILTERS)) {
+    push({ name: fk.name, type: fk.type, required: false });
+  }
+
+  return params;
+}
+
 /**
  * A **pure** join table: two or more foreign keys and nothing else of its own.
  *
@@ -132,10 +201,7 @@ export function buildEntityModule(entity: Entity): ApiModule {
         method: 'GET',
         path: basePath,
         summary: `List ${resource}.`,
-        requestSchema: [
-          { name: 'page', type: 'integer', required: false },
-          { name: 'limit', type: 'integer', required: false },
-        ],
+        requestSchema: listQueryParams(entity),
         responseSchema,
         statusCodes: [200],
       },
@@ -340,10 +406,10 @@ function childCollectionEndpoint(child: Entity, parent: Entity): ApiEndpoint {
     method: 'GET',
     path: `/api/${parent.name}/:id/${child.name}`,
     summary: `List ${child.name} for a ${singular(parent.name)}.`,
-    requestSchema: [
-      { name: 'page', type: 'integer', required: false },
-      { name: 'limit', type: 'integer', required: false },
-    ],
+    // The parent is already pinned by the path, so its FK filter is redundant.
+    requestSchema: listQueryParams(child).filter(
+      (p) => p.name !== parentKey(child, parent),
+    ),
     responseSchema: (child.columns ?? []).map((c) => ({
       name: c.name,
       type: c.type,

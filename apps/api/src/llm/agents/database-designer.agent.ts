@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   type DatabaseDesign,
@@ -29,8 +29,6 @@ export interface DatabaseDesignContext {
 export class DatabaseDesignerAgent extends BaseAgent {
   readonly role = AgentRole.DatabaseDesigner;
 
-  private readonly logger = new Logger(DatabaseDesignerAgent.name);
-
   protected readonly systemPrompt = [
     'You are a careful Database Designer who turns a system design into a clean,',
     'normalized relational schema an engineer could migrate as-is.',
@@ -42,6 +40,25 @@ export class DatabaseDesignerAgent extends BaseAgent {
     'integer, decimal, boolean, timestamp, enum, json) and mark nullability,',
     'uniqueness, and PK/FK explicitly. Store secrets hashed (password_hash), never',
     'plaintext.',
+    'Any entity that moves through a lifecycle — an order, booking, payment,',
+    'request, shipment, ticket — carries an enum "status" column, plus the',
+    'timestamps that lifecycle implies. A record that only ever exists (a country,',
+    'a category) does not: do not add a status nobody transitions.',
+    'A secondary record hangs off the transactional event it belongs to, not just',
+    'off the user: an invoice line references its order, a log entry references the',
+    'visit that produced it. Carry the user FK as well only when it is genuinely',
+    'needed to query by user.',
+    'Entities that represent a real-world party (a branch, supplier, clinic)',
+    'carry the practical contact fields such a record always needs in production',
+    '(phone, email, address) rather than a name alone.',
+    'When the system serves several organizations, branches, or tenants, EVERY',
+    'table holding their data carries the tenant foreign key — not only the user',
+    'table. A tenant column on users alone is not isolation: it leaves every',
+    'record queryable across tenants, which is the single most damaging flaw a',
+    'multi-tenant schema can ship with.',
+    'Do not put a unique constraint on a contact field that real people share',
+    '(a household phone number, a shared family email); uniqueness belongs on',
+    'identifiers such as a national ID or an account number.',
     'Output standard: names are snake_case and consistent (plural tables, singular',
     'columns), every relationship is one-to-one / one-to-many / many-to-many and',
     'is backed by a real FK, and the schema fully covers the services and roles',
@@ -57,18 +74,13 @@ export class DatabaseDesignerAgent extends BaseAgent {
     ctx: DatabaseDesignContext,
   ): Promise<DatabaseDesign> {
     const generatedAt = new Date().toISOString();
-    try {
-      const raw = await this.thinkJson<Partial<DatabaseDesign>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        return { ...(raw as DatabaseDesign), sessionId, generatedAt };
-      }
-      this.logger.debug('Database design malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`Database design failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<DatabaseDesign>({
+      label: 'Database design',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) => ({ ...(raw as DatabaseDesign), sessionId, generatedAt }),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   private buildPrompt(ctx: DatabaseDesignContext): string {
@@ -91,6 +103,10 @@ export class DatabaseDesignerAgent extends BaseAgent {
       '- entities[]: {name (snake_case, plural), description, columns[] {name, type, nullable (boolean), primaryKey? (boolean), unique? (boolean), references? {entity, column}}}.',
       '- relations[]: {from (entity), to (entity), type (one-to-one|one-to-many|many-to-many), description? (what the link means)}.',
       'Give every entity an "id" uuid primary key plus created_at/updated_at, and back every relation with a foreign key column.',
+      'Give every entity that moves through a lifecycle an enum "status" column; leave it off entities that never transition.',
+      'Link secondary records (lines, logs, attachments, invoices) to the transactional record they belong to, not only to a user.',
+      'If the system serves multiple organizations/branches/tenants, put the tenant FK on every table holding their data — not just on users.',
+      'Add an audit-log entity whenever the requirements restrict who may read or change records, or name a regulated data category.',
     ].join('\n');
   }
 

@@ -12,6 +12,7 @@
 
 import type { Severity } from './review';
 import type { DerivedArtifact } from './freshness';
+import type { GenerationProvenance } from './generation';
 
 export type StrideCategory =
   | 'spoofing'
@@ -60,6 +61,8 @@ export interface Threat {
 }
 
 export interface ThreatModel extends DerivedArtifact {
+  /** How this model was produced — see `generation.ts`. Absent = unknown. */
+  generation?: GenerationProvenance;
   sessionId: string;
   generatedAt: string;
   /** One-paragraph overview of the security posture. */

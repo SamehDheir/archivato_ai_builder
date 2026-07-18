@@ -193,7 +193,6 @@ export function SystemDesignView({
               <TableHead className="w-32">{t('system.col.layer')}</TableHead>
               <TableHead>{t('system.col.technology')}</TableHead>
               <TableHead>{t('system.col.why')}</TableHead>
-              <TableHead className="w-24" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -203,16 +202,30 @@ export function SystemDesignView({
                 <TableCell className="font-medium" dir="auto">
                   {tech.technology}
                 </TableCell>
+                {/* The Explain button lives INSIDE this cell rather than in a
+                    column of its own. Its label is a whole phrase carrying
+                    `whitespace-nowrap`, so as a 4th column it could not shrink:
+                    `w-24` is only a hint, the nowrap content set the real width,
+                    and it took that width out of this rationale — which then
+                    wrapped at three words a line while the button sat on one.
+                    The explanation is about the rationale, so it belongs with it.
+
+                    Both children are ELEMENTS on purpose. In the stacked mobile
+                    layout every element child is placed in the value column,
+                    but a bare text node is an anonymous grid item with no
+                    placement and auto-flows into the first free slot — which,
+                    once a sibling element occupies the value column, is the
+                    6.5rem LABEL column. Hence the wrapping span. */}
                 <TableCell className="text-sm text-muted-foreground">
-                  {tech.rationale}
-                </TableCell>
-                <TableCell className="text-end">
+                  <span dir="auto">{tech.rationale}</span>
                   {interactive && (
-                    <ExplainButton
-                      onClick={() =>
-                        setExplaining({ kind: 'tech', key: tech.layer })
-                      }
-                    />
+                    <span className="mt-1 block">
+                      <ExplainButton
+                        onClick={() =>
+                          setExplaining({ kind: 'tech', key: tech.layer })
+                        }
+                      />
+                    </span>
                   )}
                 </TableCell>
               </TableRow>
@@ -226,8 +239,12 @@ export function SystemDesignView({
           {design.services.map((s) => (
             <Card key={s.name} className="border-s-2 border-s-primary/50">
               <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                {/* The explain label is a nowrap phrase and these cards are a
+                    half-width grid column — the narrowest spot it appears in.
+                    Without flex-wrap it can neither shrink nor break, so it
+                    overflowed the card (R14). */}
+                <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                  <div className="flex min-w-0 items-center gap-2">
                     <div className="font-semibold" dir="auto">{s.name}</div>
                     {s.complexity && (
                       <ComplexityBadge
@@ -321,13 +338,19 @@ function BuildVsBuyRow({ item }: { item: BuildVsBuyItem }) {
           {t(`system.buildVsBuy.${item.recommendation}`)}
         </Badge>
       </TableCell>
+      {/* `rationale` is wrapped rather than left loose: with `suggestedService`
+          present, this cell holds an element AND bare text, and in the stacked
+          mobile layout the text — an anonymous grid item — auto-flows past the
+          occupied value column into the 6.5rem LABEL column, where a full
+          sentence wraps at two words a line. Every child here must be an
+          element. */}
       <TableCell className="text-sm text-muted-foreground" dir="auto">
         {item.suggestedService && (
           <span className="me-1 font-medium text-foreground">
             {item.suggestedService} —
           </span>
         )}
-        {item.rationale}
+        <span>{item.rationale}</span>
         {item.impact && (
           <span className="mt-1 block text-xs italic">{item.impact}</span>
         )}

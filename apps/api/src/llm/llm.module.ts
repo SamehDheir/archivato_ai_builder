@@ -9,6 +9,7 @@ import { MockLlmProvider } from './mock-llm.provider';
 import { ClaudeLlmProvider } from './claude-llm.provider';
 import { GroqLlmProvider } from './groq-llm.provider';
 import { AzureOpenAiLlmProvider } from './azure-openai-llm.provider';
+import { SiliconFlowLlmProvider } from './siliconflow-llm.provider';
 import { UsageTrackingLlmProvider } from './usage-tracking-llm.provider';
 import { LlmUsageModule } from './usage/llm-usage.module';
 import { LlmUsageService } from './usage/llm-usage.service';
@@ -25,11 +26,13 @@ function createProvider(kind: string, config: ConfigService): LlmProvider {
       return new GroqLlmProvider(config);
     case 'azure':
       return new AzureOpenAiLlmProvider(config);
+    case 'siliconflow':
+      return new SiliconFlowLlmProvider(config);
     case 'mock':
       return new MockLlmProvider();
     default:
       throw new Error(
-        `Unknown LLM provider "${kind}" (expected "mock", "claude", "groq", or "azure")`,
+        `Unknown LLM provider "${kind}" (expected "mock", "claude", "groq", "azure", or "siliconflow")`,
       );
   }
 }
@@ -37,23 +40,28 @@ function createProvider(kind: string, config: ConfigService): LlmProvider {
 /**
  * Resolve the provider kind for ALL agents (design + interview unless the
  * interview is overridden). One switch:
- *   1. an explicit `LLM_PROVIDER` (mock|claude|groq|azure) forces that provider;
+ *   1. an explicit `LLM_PROVIDER` (mock|claude|groq|azure|siliconflow) forces it;
  *   2. otherwise, when GROQ_API_KEY is set, everything uses the free Groq;
  *   3. otherwise, when AZURE_OPENAI_API_KEY is set, everything uses Azure OpenAI;
- *   4. otherwise mock (offline, deterministic).
+ *   4. otherwise, when SILICONFLOW_API_KEY is set, everything uses SiliconFlow;
+ *   5. otherwise mock (offline, deterministic).
  * Groq keeps priority over Azure so the documented "paste a free Groq key and the
- * whole pipeline goes real-AI" behaviour is unchanged; set `LLM_PROVIDER=azure`
- * to force Azure when both keys are present.
+ * whole pipeline goes real-AI" behaviour is unchanged; SiliconFlow sits last for
+ * the same reason — adding a key must never silently move an existing install off
+ * the provider it has been running on. Set `LLM_PROVIDER=siliconflow` (or
+ * `=azure`) to force one when several keys are present.
  * Empty strings count as unset (env files often leave `KEY=` blank).
  */
 export function selectProviderKind(
   forced: string | undefined,
   groqApiKey: string | undefined,
   azureApiKey?: string | undefined,
+  siliconflowApiKey?: string | undefined,
 ): string {
   if (forced && forced.trim()) return forced.trim();
   if (groqApiKey && groqApiKey.trim()) return 'groq';
   if (azureApiKey && azureApiKey.trim()) return 'azure';
+  if (siliconflowApiKey && siliconflowApiKey.trim()) return 'siliconflow';
   return 'mock';
 }
 
@@ -62,6 +70,7 @@ const REAL_PROVIDER_KEYS = [
   'GROQ_API_KEY',
   'ANTHROPIC_API_KEY',
   'AZURE_OPENAI_API_KEY',
+  'SILICONFLOW_API_KEY',
 ] as const;
 
 /**
@@ -96,9 +105,10 @@ export function selectInterviewKind(
   forced: string | undefined,
   groqApiKey: string | undefined,
   azureApiKey?: string | undefined,
+  siliconflowApiKey?: string | undefined,
 ): string {
   if (interview && interview.trim()) return interview.trim();
-  return selectProviderKind(forced, groqApiKey, azureApiKey);
+  return selectProviderKind(forced, groqApiKey, azureApiKey, siliconflowApiKey);
 }
 
 /**
@@ -123,9 +133,9 @@ function announce(kind: string, name: string, label: string, config: ConfigServi
 /**
  * Wires the active providers from env. Setting GROQ_API_KEY flips the WHOLE
  * pipeline (every design agent + the interview) to real AI on the free Groq;
- * AZURE_OPENAI_API_KEY does the same at a lower priority;
- * `LLM_PROVIDER=mock|claude|groq|azure` forces a specific provider for
- * everything; `INTERVIEW_LLM_PROVIDER` can still pin just the interview.
+ * AZURE_OPENAI_API_KEY then SILICONFLOW_API_KEY do the same at lower priority;
+ * `LLM_PROVIDER=mock|claude|groq|azure|siliconflow` forces a specific provider
+ * for everything; `INTERVIEW_LLM_PROVIDER` can still pin just the interview.
  *
  * Global so any module can inject either token without re-importing.
  */
@@ -144,6 +154,7 @@ function announce(kind: string, name: string, label: string, config: ConfigServi
           config.get<string>('LLM_PROVIDER'),
           config.get<string>('GROQ_API_KEY'),
           config.get<string>('AZURE_OPENAI_API_KEY'),
+          config.get<string>('SILICONFLOW_API_KEY'),
         );
         const provider = createProvider(kind, config);
         announce(kind, provider.name, 'Agent', config);
@@ -163,6 +174,7 @@ function announce(kind: string, name: string, label: string, config: ConfigServi
           config.get<string>('LLM_PROVIDER'),
           config.get<string>('GROQ_API_KEY'),
           config.get<string>('AZURE_OPENAI_API_KEY'),
+          config.get<string>('SILICONFLOW_API_KEY'),
         );
         const provider = createProvider(kind, config);
         announce(kind, provider.name, 'Interview', config);

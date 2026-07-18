@@ -125,13 +125,32 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return <main>{children}</main>;
   }
 
-  if (checking) {
-    return <LoadingScreen label={t('loading.workspace')} />;
+  // Guest-only routes render their form IMMEDIATELY — before the auth check
+  // settles — and this ordering (ahead of the `checking` gate below) is the
+  // whole point.
+  //
+  // A signed-out visitor opening /login was being shown "Loading your
+  // workspace…" until `authApi.me()` answered. That call is guaranteed to 401
+  // for them, and a 401 costs *two* sequential round-trips (me → refresh →
+  // fail) against an API whose free instance sleeps and takes ~50s to wake. So
+  // the one screen they came for sat behind a minute of spinner, and the copy
+  // promised a workspace they don't have yet.
+  //
+  // Rendering early is safe on both counts that made the gate exist: the `auth`
+  // namespace is in the EAGER i18n tier (resources.ts), not the app tier
+  // AuthGate awaits, so there are no raw keys to flash; and nothing here is
+  // privileged — it's a sign-in form. If the check later reports a signed-in
+  // user, the effect above redirects them to /dashboard, which is the same
+  // outcome, just no longer blocking everyone else to get there.
+  if (isGuestOnly) {
+    if (!checking && user) {
+      return <LoadingScreen label={t('loading.redirecting')} />;
+    }
+    return <main>{children}</main>;
   }
 
-  if (isGuestOnly) {
-    if (user) return <LoadingScreen label={t('loading.redirecting')} />;
-    return <main>{children}</main>;
+  if (checking) {
+    return <LoadingScreen label={t('loading.workspace')} />;
   }
 
   if (!user) {

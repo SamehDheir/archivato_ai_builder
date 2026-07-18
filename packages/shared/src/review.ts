@@ -7,9 +7,12 @@
  */
 
 import type { DerivedArtifact } from './freshness';
+import type { GenerationProvenance } from './generation';
 import { hasTimelineConflict, parseTimelineWeeks, type EffortEstimate } from './effort';
 import type { BuildVsBuyItem, ConstraintCompliance } from './system-design';
 import type { ServiceCostLine } from './cost-estimate';
+import type { OutOfScopeItem } from './requirements';
+import { significantTokens } from './text';
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -136,6 +139,8 @@ export interface ConsistencyFinding extends ReviewFinding {
 }
 
 export interface ReviewReport extends DerivedArtifact {
+  /** How this report was produced — see `generation.ts`. Absent = unknown. */
+  generation?: GenerationProvenance;
   sessionId: string;
   generatedAt: string;
   /** Holistic 0–100 assessment across the engineering dimensions. */
@@ -194,6 +199,170 @@ export interface ConsistencyCheckInput {
    * signal that a "buy" has no cost line.
    */
   serviceSubscriptions?: ServiceCostLine[];
+  /** What the requirement document declares NOT included. */
+  outOfScope?: OutOfScopeItem[];
+  /**
+   * Everything the rest of the package promises to build, as `{label, artifact}`
+   * — functional requirements, services, API groups. Compared against
+   * `outOfScope` to catch a capability that is excluded and delivered at once.
+   */
+  promisedCapabilities?: PromisedCapability[];
+}
+
+/** One thing the package says it will deliver, and which artifact says so. */
+export interface PromisedCapability {
+  /** Short name, shown in the finding. */
+  label: string;
+  /**
+   * The full text to match against — title *and* description. Kept separate
+   * from `label` so widening what we search doesn't drag a paragraph into the
+   * finding the owner reads. Falls back to `label` when absent.
+   */
+  text?: string;
+  artifact: string;
+}
+
+/**
+ * Words that carry no distinguishing meaning in a scoping document, so a match
+ * on one of them says nothing. Without this, "Advanced analytics **and custom
+ * reports**" matches any requirement containing the word "custom".
+ */
+const SCOPE_STOP_WORDS = new Set([
+  'user',
+  'users',
+  'system',
+  'systems',
+  'data',
+  'support',
+  'supports',
+  'manage',
+  'management',
+  'custom',
+  'advanced',
+  'basic',
+  'simple',
+  'automatic',
+  'automated',
+  'native',
+  'access',
+  'view',
+  'with',
+  'from',
+  'that',
+  'this',
+  'their',
+  'they',
+  'them',
+  'when',
+  'each',
+  'into',
+  'over',
+  'able',
+  'only',
+  'other',
+  'more',
+  'full',
+  'real',
+  'time',
+  'time',
+  'app',
+  'apps',
+  'application',
+  'applications',
+  'feature',
+  'features',
+  'functionality',
+  'client',
+  'clients',
+  'project',
+  'service',
+  'services',
+  'platform',
+  'software',
+]);
+
+/**
+ * How many distinctive words two phrases must share before we call it the same
+ * capability.
+ *
+ * Two, not one, and this is the whole difference between a check people read and
+ * a check people mute. One shared word ("payments") fires on any project that
+ * excludes payouts while taking payments — a distinction the document draws
+ * deliberately. Two co-occurring distinctive words ("live" + "tracking",
+ * "mobile" + "android") is a much stronger claim that the same capability is
+ * being described twice.
+ */
+const SCOPE_MATCH_MIN_TOKENS = 2;
+
+/**
+ * Does this promised capability describe the same thing as an out-of-scope item?
+ *
+ * Deliberately conservative: a missed contradiction leaves the reviewer's LLM
+ * pass to catch it, whereas a false one tells an owner their own document
+ * contradicts itself when it doesn't — and the second failure is the one that
+ * makes the whole consistency panel worth ignoring.
+ */
+export function describesSameCapability(
+  excluded: string,
+  promised: string,
+): boolean {
+  const a = significantTokens(excluded, SCOPE_STOP_WORDS);
+  if (a.length === 0) return false;
+  const b = new Set(significantTokens(promised, SCOPE_STOP_WORDS));
+  const shared = a.filter((t) => b.has(t));
+  if (shared.length >= SCOPE_MATCH_MIN_TOKENS) return true;
+  // A single-token exclusion ("Telemedicine") can only match on that one word,
+  // so it needs the whole phrase to carry it rather than a partial overlap.
+  return a.length === 1 && shared.length === 1;
+}
+
+/**
+ * Does this short feature name refer to an already-excluded capability?
+ *
+ * A different question from `describesSameCapability`, and it needs a different
+ * test. There we compare two full phrases; here one side is a bare label the
+ * reviewer coined ("Telemedicine functionality") against the document's own
+ * fuller wording ("Telemedicine / live video consultations"). They overlap on a
+ * single word, which the two-token bar rejects — correctly for phrase-vs-phrase,
+ * wrongly for label-vs-phrase.
+ *
+ * So the test is **containment**: every distinctive word of the feature name
+ * appears in the exclusion. That is a strong claim (the label adds nothing the
+ * exclusion doesn't already say) and it cannot fire on a partial overlap.
+ */
+export function namesExcludedCapability(
+  excluded: string,
+  feature: string,
+): boolean {
+  const featureTokens = significantTokens(feature, SCOPE_STOP_WORDS);
+  if (featureTokens.length === 0) return false;
+  const excludedTokens = new Set(significantTokens(excluded, SCOPE_STOP_WORDS));
+  if (excludedTokens.size === 0) return false;
+  return featureTokens.every((t) => excludedTokens.has(t));
+}
+
+/**
+ * Is this constraint addressed by this compliance entry?
+ *
+ * Substring containment alone — the original test — is far too brittle to
+ * compare a requirement's prose against a design's label, and it failed on real
+ * output: the constraint *"The platform must integrate with existing payment
+ * gateways and accounting software"* was reported as unaddressed while the
+ * design's compliance table carried *"integration with payment gateways and
+ * accounting software"*. `integrate with existing` is not a substring of
+ * `integration with`, so a perfectly covered constraint was flagged — twice, on
+ * a two-constraint project, which is a check nobody would trust again.
+ *
+ * Token overlap is the fix; containment is kept as an OR because exact
+ * containment is genuine evidence and it still covers constraints too short to
+ * produce tokens at all (`PCI DSS`).
+ */
+function constraintIsAddressed(constraint: string, entry: string): boolean {
+  return (
+    entry.includes(constraint) ||
+    constraint.includes(entry) ||
+    describesSameCapability(constraint, entry)
+  );
 }
 
 /** Severity from how far the effort overruns the timeline. */
@@ -240,7 +409,7 @@ export function buildConsistencyFindings(
   for (const c of input.constraints ?? []) {
     const key = c.trim().toLowerCase();
     if (!key) continue;
-    const covered = coverage.some((cc) => cc.includes(key) || key.includes(cc));
+    const covered = coverage.some((cc) => constraintIsAddressed(key, cc));
     if (!covered) {
       findings.push({
         source: 'automated',
@@ -272,6 +441,28 @@ export function buildConsistencyFindings(
           severity: 'low',
         });
       }
+    }
+  }
+
+  // 4. Scope integrity: a capability the document excludes that the rest of the
+  //    package promises anyway. This is the contradiction a client finds first —
+  //    "you said mobile apps weren't included, but the plan lists them" — and it
+  //    is the one that costs the dev shop the argument, because the exclusion is
+  //    the only thing standing between them and building it for free.
+  for (const excluded of input.outOfScope ?? []) {
+    const item = excluded.item?.trim();
+    if (!item) continue;
+    const conflict = (input.promisedCapabilities ?? []).find((p) =>
+      describesSameCapability(item, p.text ?? p.label),
+    );
+    if (conflict) {
+      findings.push({
+        source: 'automated',
+        artifacts: ['outOfScope', conflict.artifact],
+        title: 'Excluded capability appears elsewhere in the package',
+        detail: `“${item}” is listed as out of scope, but ${conflict.artifact} promises “${conflict.label}”. Either remove the exclusion or drop the capability — a client who spots both will read the exclusion as a way out of work they think they are paying for.`,
+        severity: 'medium',
+      });
     }
   }
 

@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { ThreatModelView } from '@/components/security/ThreatModelView';
 import { StaleNotice } from '@/components/project/StaleNotice';
 import { useToast } from '@/components/shared/toast';
+import { GenerationNotice } from '@/components/project/GenerationNotice';
 
 /**
  * The Threat Modeler tab. Standalone: fetches its own artifact and can
@@ -91,6 +92,7 @@ export function ThreatModelPanel({
         busy={busy}
         onRegenerate={generate}
       />
+      <GenerationNotice generation={model.generation} busy={busy} onRegenerate={generate} />
       <ThreatModelView model={model} />
       <Button variant="secondary" onClick={generate} disabled={busy}>
         {busy ? t('threat.working') : t('threat.regenerate')}

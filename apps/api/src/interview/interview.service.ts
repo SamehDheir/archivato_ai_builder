@@ -28,10 +28,12 @@ import {
   type SlotMap,
 } from '@archivato/shared';
 import {
+  hasFilledSlots,
   isSlotKey,
   mergeSlots,
   notesHistoryEntry,
   reconcileOpenQuestions,
+  summaryFromSlots,
   SLOT_CATALOG,
 } from './slots';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
@@ -602,30 +604,59 @@ export class InterviewService {
   /**
    * Deterministic requirements preview from the collected answers. The formal
    * Requirement Document is produced by the Requirement Engineer downstream.
+   *
+   * Two sources, and which one is authoritative depends on how the interview ran:
+   *
+   * - **Adaptive (a real model):** the questions are chosen to fill slots, and
+   *   `question.phase` is a free-text label the model attaches after the fact. It
+   *   is NOT a reliable bucket — several unrelated answers land under one phase
+   *   and whole phases are never used at all. So the slot snapshot wins, and the
+   *   positional fallbacks are deliberately NOT applied: reading "every
+   *   Understanding answer after the first" as the user roles is what turned the
+   *   data-entity, integrations and market answers into roles.
+   * - **Plan mode (offline / no model):** there are no slots, but the phase
+   *   labels are exact, because `QUESTION_PLAN` hard-codes them per question.
+   *   The positional reads are correct there and are kept.
    */
   private buildSummary(session: InterviewSession): RequirementsSummary {
     const understanding = this.answersForPhase(
       session,
       InterviewPhase.Understanding,
     );
+    const fromSlots = summaryFromSlots(session.slots);
+    const adaptive = hasFilledSlots(session.slots);
+
     return {
-      goal: understanding[0] ?? session.intent?.summary ?? session.input.idea,
-      users: dedupe([
-        ...(session.intent?.primaryUsers ?? []),
-        ...understanding.slice(1),
-      ]),
-      features: this.answersForPhase(session, InterviewPhase.Features),
+      // In plan mode the first Understanding answer IS the goal question; in an
+      // adaptive run it is whatever the model opened with, so the intent summary
+      // (a written sentence about the concept) is the better source.
+      goal:
+        (adaptive ? session.intent?.summary?.trim() : understanding[0]?.trim()) ||
+        understanding[0]?.trim() ||
+        session.intent?.summary?.trim() ||
+        session.input.idea,
+      users:
+        fromSlots.users ??
+        dedupe([
+          ...(session.intent?.primaryUsers ?? []),
+          ...(adaptive ? [] : understanding.slice(1)),
+        ]),
+      features:
+        fromSlots.features ??
+        (adaptive ? [] : this.answersForPhase(session, InterviewPhase.Features)),
       businessRules: this.answersForPhase(
         session,
         InterviewPhase.BusinessLogic,
       ),
-      constraints: [
-        ...this.answersForPhase(session, InterviewPhase.Technical),
-        ...this.answersForPhase(session, InterviewPhase.Scale),
-        // Budget + timeline (the Commercial phase) are hard constraints on the
-        // design as much as any technical limit is.
-        ...this.answersForPhase(session, InterviewPhase.Commercial),
-      ],
+      // The Commercial phase (budget + timeline) is deliberately absent. Those are
+      // real design constraints, but they reach the design through the slots that
+      // now carry them — and this list flows into the Requirement Document, which
+      // must never state a budget or a date.
+      constraints:
+        fromSlots.constraints ?? [
+          ...this.answersForPhase(session, InterviewPhase.Technical),
+          ...this.answersForPhase(session, InterviewPhase.Scale),
+        ],
       assumptions: [
         'Derived from a structured interview; pending formal requirement engineering in the next stage.',
       ],

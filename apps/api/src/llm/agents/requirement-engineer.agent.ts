@@ -1,7 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   SLOT_KEYS,
+  regulationsForMarket,
   type BusinessRule,
   type FunctionalRequirement,
   type IntentAnalysis,
@@ -55,8 +56,6 @@ export interface RequirementContext {
 export class RequirementEngineerAgent extends BaseAgent {
   readonly role = AgentRole.RequirementEngineer;
 
-  private readonly logger = new Logger(RequirementEngineerAgent.name);
-
   protected readonly systemPrompt = [
     'You are a meticulous Requirement Engineer who turns a confirmed discovery',
     'interview into a formal Requirement Document that is a CLIENT-FACING scoping',
@@ -83,6 +82,12 @@ export class RequirementEngineerAgent extends BaseAgent {
     'core features are "must". Roles carry concrete, least-privilege permissions.',
     'Never mention budget or timeline anywhere in the document — those belong to',
     'the roadmap and cost deliverables, not here.',
+    'Data-protection requirements follow the project\'s stated target market, never',
+    'habit. Cite only the regime named in the scoping facts below; if no market was',
+    'stated, write the compliance requirement generically (protect personal data,',
+    'confirm the hosting region) and record the applicable regime as an assumption',
+    'for the client to confirm. Never cite GDPR, HIPAA, CCPA or any other law that',
+    'the stated market does not actually invoke — a wrong law is worse than none.',
     'Output standard: every requirement is specific and verifiable, traceable to',
     'the interview, and non-redundant. Never invent scope the interview did not',
     'establish; surface genuine gaps as assumptions.',
@@ -102,18 +107,14 @@ export class RequirementEngineerAgent extends BaseAgent {
     // the model — so they're folded into the assumptions on BOTH paths, and the
     // raw client-question list is attached verbatim too.
     const openQuestions = ctx.openQuestions ?? [];
-    try {
-      const raw = await this.thinkJson<Partial<RequirementDocument>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        return this.normalize(sessionId, generatedAt, raw, ctx, openQuestions);
-      }
-      this.logger.debug('Requirement doc malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`Requirement generation failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<RequirementDocument>({
+      label: 'Requirement doc',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) =>
+        this.normalize(sessionId, generatedAt, raw, ctx, openQuestions),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   /**
@@ -171,6 +172,36 @@ export class RequirementEngineerAgent extends BaseAgent {
     };
   }
 
+  /**
+   * The data-protection regime to cite, resolved from the target-market slot in
+   * code rather than recalled by the model.
+   *
+   * With no stated market this returns an instruction to leave the question open
+   * — which is the whole point. The model's untutored default is GDPR/HIPAA
+   * regardless of who the client is, and for this product's market that is both
+   * wrong and expensive to be wrong about.
+   */
+  private complianceHint(ctx: RequirementContext): string {
+    const slot = ctx.slots?.target_market;
+    const market = slot && !slot.na ? slot.value.trim() : '';
+    const regime = regulationsForMarket(market);
+    if (!regime) {
+      return [
+        '\nCOMPLIANCE — no target market has been confirmed for this project.',
+        'Do NOT name any specific data-protection law. Write the compliance requirement generically',
+        '(protect personal data, agree the hosting region) and add an assumption asking the client to',
+        'confirm the country/region so the applicable regime can be named.',
+      ].join('\n');
+    }
+    return [
+      `\nCOMPLIANCE — the stated target market is "${market}". The regimes that apply:`,
+      ...regime.laws.map((l) => `- ${l}`),
+      `Data residency: ${regime.dataResidency}`,
+      regime.note,
+      'Cite these and only these. Do not add a law this market does not invoke.',
+    ].join('\n');
+  }
+
   private buildPrompt(ctx: RequirementContext): string {
     const qa = ctx.history
       .map((h) => `Q: ${h.question.prompt}\nA: ${h.answer}`)
@@ -212,6 +243,7 @@ export class RequirementEngineerAgent extends BaseAgent {
         : '',
       oqLines,
       `\nCapabilities buyers typically expect in this kind of product — list any NOT being built under outOfScope: ${commonScope.join(', ')}.`,
+      this.complianceHint(ctx),
       '',
       'Produce the Requirement Document as JSON with these keys:',
       '- executiveSummary: 3–4 plain sentences for a NON-TECHNICAL client — who the system serves, what it lets them do, and the business outcome. No technical jargon.',
@@ -273,11 +305,35 @@ export class RequirementEngineerAgent extends BaseAgent {
       },
     ];
 
-    const roles: UserRole[] = summary.users.map((name) => ({
-      name,
-      description: `${name} role identified during the requirements interview.`,
-      permissions: [],
-    }));
+    // Offline, the applicable regime is still knowable when the client stated a
+    // market — it's a table lookup, not a judgement call. With no market stated
+    // the fallback names no law at all, which is the honest answer.
+    const marketSlot = ctx.slots?.target_market;
+    const regime = regulationsForMarket(
+      marketSlot && !marketSlot.na ? marketSlot.value : undefined,
+    );
+    if (regime) {
+      nonFunctional.push({
+        id: `NFR-${nonFunctional.length + 1}`,
+        category: 'security',
+        description: `Personal data handling follows ${regime.laws.join(', ')}. ${regime.dataResidency}`,
+      });
+    }
+
+    // A role entry may arrive as a full phrase ("Shipping staff who pack and
+    // dispatch orders"), so the short lead becomes the name and the client's own
+    // wording is preserved as the description rather than being thrown away.
+    const roles: UserRole[] = summary.users.map((entry) => {
+      const name = shortPhrase(entry, 40) || entry;
+      return {
+        name,
+        description:
+          name === entry.trim()
+            ? `${name} role identified during the requirements interview.`
+            : entry.trim(),
+        permissions: [],
+      };
+    });
 
     const businessRules: BusinessRule[] = summary.businessRules.map(
       (description, i) => ({ id: `BR-${i + 1}`, description }),
@@ -302,9 +358,29 @@ export class RequirementEngineerAgent extends BaseAgent {
 
 // ── pure helpers (shared by the LLM-normalize and deterministic paths) ───────
 
+/**
+ * A short requirement title.
+ *
+ * A workflow line usually leads with its own label ("Order placement: Customer
+ * browses the catalog, adds items…"), so the label is the title and the rest
+ * stays in the description. Only when there is no such lead does this fall back
+ * to a hard truncation, which is what every title used to be.
+ */
 function truncateTitle(text: string): string {
   const trimmed = text.trim();
-  return trimmed.length <= 60 ? trimmed : `${trimmed.slice(0, 57)}…`;
+  // Prefer a real clause boundary — the label before a colon, else the first
+  // comma clause. Cutting at a fixed character count instead produced titles like
+  // "Inventory decrement on order confirmation, preventing ove…", which stops
+  // mid-word in the one line a client actually scans.
+  for (const separator of [/[:—–]|\s-\s/, /,/]) {
+    const lead = trimmed.split(separator)[0]?.trim() ?? '';
+    if (lead && lead !== trimmed && lead.length <= 60 && wordCount(lead) >= 2) {
+      return lead;
+    }
+  }
+  const single = trimmed.replace(/\.$/, '');
+  if (single.length <= 80) return single;
+  return `${single.slice(0, 57)}…`;
 }
 
 function inferCategory(text: string): string {
@@ -327,9 +403,70 @@ function joinList(items: string[]): string {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
-function lowerFirst(text: string): string {
+function capitalizeFirst(text: string): string {
   const t = text.trim();
-  return t ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+}
+
+/**
+ * Reduce a raw answer to a short phrase safe to drop into a list or a clause.
+ *
+ * Slot and summary text is the client's own words — often a labelled multi-clause
+ * answer ("Fashion — women's clothing, DTC brand selling through a web
+ * storefront…"). Splicing that whole string into a sentence frame is what made the
+ * executive summary ungrammatical, so anything used *inside* a sentence is cut to
+ * its leading clause first.
+ */
+function shortPhrase(text: string, maxChars = 60): string {
+  const lead = text
+    .split(/[:.;—–]|\s-\s/)[0]
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!lead) return '';
+  if (lead.length <= maxChars) return lead;
+  const cut = lead.slice(0, maxChars);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > 20 ? cut.slice(0, lastSpace) : cut).trim()}…`;
+}
+
+/**
+ * One capability, named for the middle of a sentence ("Core capabilities include
+ * X, Y and Z").
+ *
+ * Unlike `shortPhrase` this never emits a trailing ellipsis: a clipped clause in
+ * a prose sentence produced "…lifecycle from pending through packed to…." — an
+ * ellipsis immediately followed by the sentence's own full stop. A capability is
+ * better named by its own leading clause than by the first 60 characters of its
+ * description, so the text is cut at a clause boundary and, failing that, the
+ * whole capability is dropped rather than shown mangled.
+ */
+function capabilityPhrase(text: string): string {
+  const lead = (text.split(/[:;—–]|\s-\s/)[0] ?? '').replace(/\s+/g, ' ').trim();
+  const clause = (lead.split(',')[0] ?? '').trim();
+  const best = clause.length >= 8 ? clause : lead;
+  const cleaned = best.replace(/[.,\s]+$/, '');
+  return cleaned.length <= 70 && wordCount(cleaned) >= 2 ? cleaned : '';
+}
+
+/**
+ * Render the project goal as a STANDALONE sentence.
+ *
+ * The previous frame — `It lets them ${goal}` — assumed the goal was a verb
+ * phrase ("book appointments online"). A goal that is a noun phrase, which is what
+ * an industry or domain answer always is, produced "It lets them fashion —
+ * Fashion e-commerce — women's clothing…". Emitting the goal as its own sentence
+ * is grammatical for both shapes, so the frame is gone rather than patched.
+ */
+function goalSentence(goal: string): string {
+  const first = goal.split(/(?<=[.!?])\s+/)[0]?.trim() ?? '';
+  if (wordCount(first) < 3) return '';
+  const trimmed = first.length > 200 ? `${shortPhrase(first, 200)}` : first;
+  const sentence = capitalizeFirst(trimmed.replace(/[.\s]+$/, ''));
+  return sentence ? `${sentence}.` : '';
+}
+
+function wordCount(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
 /**
@@ -340,11 +477,20 @@ function lowerFirst(text: string): string {
 function buildExecutiveSummary(ctx: RequirementContext): string {
   const { summary, idea } = ctx;
   const slots = ctx.slots ?? {};
-  const domain = (ctx.intent?.domain || slotText(slots.business_domain)).trim();
+  const domain = shortPhrase(
+    (ctx.intent?.domain || slotText(slots.business_domain)).trim(),
+    40,
+  );
+  // The split role list is preferred over the raw slot text: the slot holds one
+  // sentence about who uses the system, which reads badly mid-clause.
   const users =
-    slotText(slots.target_users_roles) || joinList(summary.users) || 'its users';
-  const goal = (summary.goal || idea).trim();
-  const features = summary.features.slice(0, 3);
+    joinList(summary.users.map((u) => shortPhrase(u, 40))) ||
+    shortPhrase(slotText(slots.target_users_roles), 60) ||
+    'its users';
+  const features = summary.features
+    .slice(0, 3)
+    .map(capabilityPhrase)
+    .filter(Boolean);
 
   const parts: string[] = [];
   parts.push(
@@ -352,7 +498,8 @@ function buildExecutiveSummary(ctx: RequirementContext): string {
       ? `This is a ${domain} solution built for ${users}.`
       : `This solution is built for ${users}.`,
   );
-  if (goal) parts.push(`It lets them ${lowerFirst(goal)}.`);
+  const goal = goalSentence((summary.goal || idea).trim());
+  if (goal) parts.push(goal);
   if (features.length) parts.push(`Core capabilities include ${joinList(features)}.`);
   parts.push(
     'The result is a system that supports their day-to-day work and is ready to grow with the business.',

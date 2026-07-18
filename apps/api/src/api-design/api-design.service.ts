@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   ensureEntityCoverage,
+  preserveGeneration,
   withResolvedCoverage,
   type ApiDesign,
 } from '@archivato/shared';
@@ -123,15 +124,18 @@ export class ApiDesignService {
       throw new ConflictException('Generate the API design before editing it.');
     }
     const databaseDesign = await this.databaseDesigns.findBySessionId(sessionId);
-    const design: ApiDesign = {
-      ...edited,
-      // `?? existing` rather than a spread order: the DTO leaves the key present
-      // and undefined when the editor omits it, which would spread right over the
-      // stored exclusions.
-      excludedEntities: edited.excludedEntities ?? existing.excludedEntities,
-      sessionId,
-      generatedAt: new Date().toISOString(),
-    };
+    const design: ApiDesign = preserveGeneration(
+      {
+        ...edited,
+        // `?? existing` rather than a spread order: the DTO leaves the key present
+        // and undefined when the editor omits it, which would spread right over the
+        // stored exclusions.
+        excludedEntities: edited.excludedEntities ?? existing.excludedEntities,
+        sessionId,
+        generatedAt: new Date().toISOString(),
+      },
+      existing,
+    );
     return this.apiDesigns.upsert(
       databaseDesign
         ? withResolvedCoverage(

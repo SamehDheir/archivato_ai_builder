@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   buildRestApi,
@@ -10,13 +10,14 @@ import {
   type ApiDesign,
   type ApiModule,
   type DatabaseDesign,
+  type DegradedReason,
   type Entity,
   type ExcludedEntity,
   type IntentAnalysis,
   type RequirementDocument,
   type SystemDesign,
 } from '@archivato/shared';
-import { BaseAgent } from '../agent.base';
+import { BaseAgent, degradedReasonFor } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
 
 /** What the API Designer needs from upstream stages. */
@@ -40,8 +41,14 @@ export interface ApiDesignContext {
  * tail entities silently have no API.
  *
  * So a big design is generated in chunks and merged by code, rather than betting
- * a bigger `maxTokens` will hold. Four entities ≈ 20 endpoints, which fits every
- * provider's default with room to spare.
+ * a bigger `maxTokens` will hold. Four entities ≈ 20 endpoints, which fits the
+ * explicit `CHUNK_MAX_TOKENS` below.
+ *
+ * The margin narrowed when list endpoints gained real query parameters (search /
+ * lifecycle / date range / FK filters) — roughly +5 schema fields per entity. It
+ * still fits, and a chunk that doesn't costs precision rather than coverage: it
+ * contributes nothing, and its entities fall through repair to the deterministic
+ * builder. Lower this before raising `CHUNK_MAX_TOKENS` if that starts happening.
  */
 export const MAX_ENTITIES_PER_CALL = 4;
 
@@ -62,16 +69,17 @@ const CHUNK_MAX_TOKENS = 4096;
 export class ApiDesignerAgent extends BaseAgent {
   readonly role = AgentRole.ApiDesigner;
 
-  private readonly logger = new Logger(ApiDesignerAgent.name);
-
   protected readonly systemPrompt = [
     'You are a precise API Designer who turns a data model and service breakdown',
     'into a clean, RESTful HTTP contract a frontend and backend team can build',
     'against without further clarification.',
     'Method: group endpoints by resource/module; use noun-based, pluralized,',
     'lowercase paths (/api/orders, /api/orders/:id) and the correct HTTP verb',
-    '(GET read, POST create, PUT/PATCH update, DELETE remove). List endpoints',
-    'expose page/limit pagination. Request schemas exclude server-managed fields',
+    '(GET read, POST create, PUT/PATCH update, DELETE remove). List endpoints are',
+    'queryable, not merely paginated: alongside page/limit they expose free-text',
+    'search, a filter for the resource\'s lifecycle state, a date range, and a',
+    'filter per relevant foreign key. Update endpoints can move a resource through',
+    'its lifecycle, not just edit its attributes. Request schemas exclude',
     '(id, timestamps, password_hash); response schemas reflect what is actually',
     'returned. Every endpoint declares realistic status codes including its error',
     'cases (400 validation, 401/403 auth, 404 not found, 409 conflict).',
@@ -91,6 +99,7 @@ export class ApiDesignerAgent extends BaseAgent {
     const generatedAt = new Date().toISOString();
     const entities = ctx.databaseDesign.entities ?? [];
     const names = entities.map((e) => e.name);
+    let degraded: DegradedReason = 'invalid_output';
 
     try {
       const generated = await this.generateModules(ctx, entities);
@@ -106,7 +115,11 @@ export class ApiDesignerAgent extends BaseAgent {
         );
 
         const coverage = validateEntityCoverage(design, names);
-        if (!coverage.missing.length) return design;
+        // `llm` even when a later repair runs: the chunked design is model-authored,
+        // and per-module attribution already lives on `ApiModule.source`.
+        if (!coverage.missing.length) {
+          return { ...design, generation: this.provenance('llm') };
+        }
 
         // One repair round-trip, scoped to the gap. It doubles as the truncation
         // escape hatch: the second call carries a handful of entities, so it fits
@@ -119,13 +132,21 @@ export class ApiDesignerAgent extends BaseAgent {
 
         // Whatever is still uncovered is the service's to fill deterministically
         // before it persists anything — never the user's to discover.
-        return design;
+        return { ...design, generation: this.provenance('llm') };
       }
+      // No modules at all. If the chunks reported a transport cause, that is the
+      // honest reason — "the answer was incomplete" would blame the model for
+      // what was actually an outage.
+      if (generated.failure) degraded = generated.failure;
       this.logger.debug('API design malformed; using deterministic build.');
     } catch (err) {
-      this.logger.warn(`API design failed; using fallback: ${err}`);
+      degraded = degradedReasonFor(err);
+      this.logger.warn(`API design failed (${degraded}); using fallback: ${err}`);
     }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return {
+      ...this.buildDeterministic(sessionId, generatedAt, ctx),
+      generation: this.provenance('fallback', degraded),
+    };
   }
 
   /**
@@ -139,11 +160,17 @@ export class ApiDesignerAgent extends BaseAgent {
   private async generateModules(
     ctx: ApiDesignContext,
     entities: Entity[],
-  ): Promise<{ modules: ApiModule[]; excludedEntities: ExcludedEntity[] }> {
+  ): Promise<{
+    modules: ApiModule[];
+    excludedEntities: ExcludedEntity[];
+    /** Why the last chunk failed, when one did — see the catch below. */
+    failure?: DegradedReason;
+  }> {
     const chunks = chunk(entities, MAX_ENTITIES_PER_CALL);
     const modules: ApiModule[] = [];
     const excludedEntities: ExcludedEntity[] = [];
     const usedNames = new Set<string>();
+    let failure: DegradedReason | undefined;
 
     for (const [index, part] of chunks.entries()) {
       const others = entities
@@ -188,11 +215,17 @@ export class ApiDesignerAgent extends BaseAgent {
         );
       } catch (err) {
         if (chunks.length === 1) throw err;
-        this.logger.warn(`API design chunk ${index + 1} failed: ${err}`);
+        // Remember WHY, not just that it failed. A multi-chunk run swallows its
+        // own errors so a partial outage still yields a design — which means a
+        // TOTAL outage reaches the caller as an empty module list with no
+        // exception, and the artifact would be stamped "the AI answer was
+        // incomplete" for what was actually a network failure.
+        failure = degradedReasonFor(err);
+        this.logger.warn(`API design chunk ${index + 1} failed (${failure}): ${err}`);
       }
     }
 
-    return { modules, excludedEntities };
+    return { modules, excludedEntities, failure };
   }
 
   /**
@@ -288,9 +321,16 @@ export class ApiDesignerAgent extends BaseAgent {
       '- One group per resource: never two groups for the same entity.',
       '',
       opts.includeAuth
-        ? 'Include an Auth module (register/login/refresh) alongside the resource groups; it covers no checklist entity, so give it coveredEntities: [].'
+        ? 'Include an Auth module (register/login/refresh) alongside the resource groups; it covers no checklist entity, so give it coveredEntities: [].\nA public registration endpoint must NOT accept role, permission, or tenant/organization ids in its request body — a caller who can name their own role can register as an administrator. Those are assigned by an authenticated admin endpoint.'
         : 'Do not include an Auth module — another part of this design already has it.',
-      'Add page/limit to list endpoints; omit server-managed fields (id, created_at, updated_at, password_hash) from request bodies.',
+      'LIST ENDPOINTS — a GET collection\'s requestSchema is its query string. Beyond page/limit, include (where the entity\'s columns support it):',
+      '- search: free-text over the entity\'s own text columns, when it has any.',
+      '- the lifecycle column itself (status/state), when the entity has one.',
+      '- a date range as <date_column_without_at>_from / _to (e.g. created_from, created_to).',
+      '- one filter per relevant foreign-key column, named exactly as the column (e.g. customer_id).',
+      'Use the data model\'s own column names, all optional (required: false). Never expose a password, hash, token, or secret column as a filter.',
+      'Updates must be able to change the lifecycle state too, not only descriptive fields.',
+      'Omit server-managed fields (id, created_at, updated_at, password_hash) from request BODIES (POST/PUT/PATCH).',
     );
 
     return lines.join('\n');

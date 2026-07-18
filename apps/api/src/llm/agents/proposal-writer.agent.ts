@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   buildFallbackProposal,
@@ -70,8 +70,6 @@ const ANGLES: readonly string[] = [
 @Injectable()
 export class ProposalWriterAgent extends BaseAgent {
   readonly role = AgentRole.ProposalWriter;
-
-  private readonly logger = new Logger(ProposalWriterAgent.name);
 
   /**
    * Stable across every call (channel/locale specifics ride in the user prompt),

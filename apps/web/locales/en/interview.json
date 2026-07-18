@@ -57,6 +57,7 @@
   "slot": {
     "business_domain": "Business domain",
     "target_users_roles": "Users & roles",
+    "target_market": "Target market",
     "core_workflows": "Core workflows",
     "data_entities": "Key data",
     "integrations": "Integrations",

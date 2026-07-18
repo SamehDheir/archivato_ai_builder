@@ -22,6 +22,7 @@ import type {
 } from '@archivato/shared';
 import {
   redactReviewForShare,
+  withoutGeneration,
   resolveExtendedArtifacts,
   shouldWatermarkShare,
 } from '@archivato/shared';
@@ -228,23 +229,27 @@ export class ShareService {
       title: session.title ?? session.input.idea,
       sharedAt: link.createdAt.toISOString(),
       idea: session.input,
-      vision: design.vision ? { ...design.vision, sessionId: token } : null,
-      requirements: { ...design.requirements, sessionId: token },
+      vision: design.vision
+        ? withoutGeneration({ ...design.vision, sessionId: token })
+        : null,
+      requirements: withoutGeneration({ ...design.requirements, sessionId: token }),
       costEstimate: design.costEstimate
         ? // `budgetWarning` is OWNER-ONLY (a deal risk, not for the client's
           // eyes): strip it server-side so it can never reach the public page.
           { ...design.costEstimate, sessionId: token, budgetWarning: null }
         : null,
-      roadmap: design.roadmap ? { ...design.roadmap, sessionId: token } : null,
-      systemDesign: { ...design.systemDesign, sessionId: token },
-      databaseDesign: { ...design.databaseDesign, sessionId: token },
+      roadmap: design.roadmap
+        ? withoutGeneration({ ...design.roadmap, sessionId: token })
+        : null,
+      systemDesign: withoutGeneration({ ...design.systemDesign, sessionId: token }),
+      databaseDesign: withoutGeneration({ ...design.databaseDesign, sessionId: token }),
       apiDesign: design.apiDesign
-        ? { ...design.apiDesign, sessionId: token }
+        ? withoutGeneration({ ...design.apiDesign, sessionId: token })
         : null,
       review: design.review
         ? // Strip the OWNER-ONLY client-readiness / consistency (deal-risk)
           // findings server-side — same enforcement as the budget warning above.
-          { ...redactReviewForShare(design.review), sessionId: token }
+          withoutGeneration({ ...redactReviewForShare(design.review), sessionId: token })
         : null,
       // R12 — a project with the extended artifacts switched off shows neither,
       // even if it generated them before the owner turned them off. Enforced here
@@ -253,11 +258,11 @@ export class ShareService {
       // artifact that already exists.
       threatModel:
         extended && design.threatModel
-          ? { ...design.threatModel, sessionId: token }
+          ? withoutGeneration({ ...design.threatModel, sessionId: token })
           : null,
       qaPlan:
         extended && design.qaPlan
-          ? { ...design.qaPlan, sessionId: token }
+          ? withoutGeneration({ ...design.qaPlan, sessionId: token })
           : null,
       watermark: shouldWatermarkShare(plan),
     };
