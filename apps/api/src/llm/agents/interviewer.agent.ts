@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   SLOT_KEYS,
+  untrusted,
+  untrustedField,
   type InterviewExchange,
   type IntentAnalysis,
   type OpenQuestion,
@@ -139,7 +141,7 @@ export class InterviewerAgent extends BaseAgent {
 
     return [
       arabic,
-      `Concept: ${ctx.idea}`,
+      untrustedField('Concept', ctx.idea),
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',
       ctx.intent && ctx.intent.openQuestions.length
         ? `Known open questions to resolve: ${ctx.intent.openQuestions.join('; ')}`
@@ -187,12 +189,21 @@ export class InterviewerAgent extends BaseAgent {
       .join('\n');
   }
 
-  /** Render one transcript turn — call notes are labelled, not shown as a Q/A. */
+  /**
+   * Render one transcript turn — call notes are labelled, not shown as a Q/A.
+   *
+   * The notes block was already quoted with `"""`, which is the right instinct;
+   * it is now the shared fence instead, because `"""` is only a convention to the
+   * model, carries no standing instruction, and is trivially closed by pasted
+   * text that happens to contain it. Pasted call notes are the single largest
+   * untrusted input in the product — a page of text from a source neither we nor
+   * the owner wrote.
+   */
   private renderExchange(h: InterviewExchange, i: number): string {
     if (h.question.id === NOTES_ENTRY_ID) {
-      return `Call notes provided by the user:\n"""\n${h.answer}\n"""`;
+      return `Call notes provided by the user:\n${untrusted(h.answer)}`;
     }
-    return `${i + 1}. Q: ${h.question.prompt}\n   A: ${h.answer}`;
+    return `${i + 1}. Q: ${h.question.prompt}\n   A: ${untrusted(h.answer)}`;
   }
 
   private renderCatalog(): string {
@@ -205,8 +216,8 @@ export class InterviewerAgent extends BaseAgent {
     return SLOT_KEYS.map((key) => {
       const slot = slots[key];
       if (!slot) return `  - ${key}: (missing)`;
-      if (slot.na) return `  - ${key}: n/a (${slot.naReason ?? 'not applicable'})`;
-      return `  - ${key}: ${slot.value} [${slot.source}/${slot.confidence}]`;
+      if (slot.na) return `  - ${key}: n/a (${untrusted(slot.naReason ?? 'not applicable')})`;
+      return `  - ${key}: ${untrusted(slot.value)} [${slot.source}/${slot.confidence}]`;
     }).join('\n');
   }
 }

@@ -7,6 +7,8 @@ import {
   type ProjectScale,
   type RequirementsSummary,
   type SuccessMetric,
+  untrustedField,
+  screenProductVision,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -55,18 +57,28 @@ export class ProductManagerAgent extends BaseAgent {
     ctx: ProductVisionContext,
   ): Promise<ProductVision> {
     const generatedAt = new Date().toISOString();
-    return this.generateArtifact<ProductVision>({
+    const generated = await this.generateArtifact<ProductVision>({
       label: 'Product vision',
       prompt: this.buildPrompt(ctx),
       isValid: (raw) => this.isValid(raw),
       accept: (raw) => ({ ...(raw as ProductVision), sessionId, generatedAt }),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
     });
+
+    // The vision leads the share page, so it is screened like the requirement
+    // document — same untrusted source text, more prominent placement.
+    const { vision, removed } = screenProductVision(generated);
+    if (removed.length > 0) {
+      this.logger.warn(
+        `Product vision: stripped ${removed.length} link(s) — possible prompt injection: ${removed.join(', ')}`,
+      );
+    }
+    return vision;
   }
 
   private buildPrompt(ctx: ProductVisionContext): string {
     return [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       ctx.industry ? `Industry: ${ctx.industry}` : '',
       ctx.scale ? `Scale: ${ctx.scale}` : '',
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',

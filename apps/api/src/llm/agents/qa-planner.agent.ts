@@ -12,6 +12,7 @@ import {
   type TestSuite,
   type TestType,
   type SystemDesign,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -75,7 +76,7 @@ export class QaPlannerAgent extends BaseAgent {
 
   private buildPrompt(ctx: QaPlanContext): string {
     return [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       `Architecture: ${ctx.systemDesign.architecture}`,
       // Without this the model cannot possibly match tooling to the stack, and
       // it doesn't fail loudly — it recommends the ecosystem it has seen most.

@@ -254,6 +254,13 @@ readiness, 503 when degraded).
 - **Shared, pure domain logic:** deterministic builders (cost estimation,
   scaffold, SQL/YAML/Postman/diagram generation) live in `@archivato/shared`
   as runtime-free, unit-tested functions.
+- **Untrusted input, screened output:** the idea, interview answers and pasted
+  call notes are text the owner did not write, and the generated document is
+  rendered on a public share page. So client text is **fenced** in every prompt
+  under a standing instruction applied by one chokepoint (`BaseAgent`), and the
+  two artifacts that reach a third party — the requirement document and the
+  proposal message — are screened on the way out so no injected link can ride
+  along. Pure helpers in `@archivato/shared/prompt-safety.ts`.
 - **i18n by default:** all UI chrome is English + Arabic with RTL-safe logical
   styling; AI artifacts stay server-side English by convention.
 - **Design tokens only:** every colour, type step, radius, shadow and duration is

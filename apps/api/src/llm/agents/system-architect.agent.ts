@@ -18,6 +18,7 @@ import {
   type SlotMap,
   type SystemDesign,
   type TechChoice,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -94,7 +95,7 @@ export class SystemArchitectAgent extends BaseAgent {
       .join('\n');
     const s = ctx.slots;
     return [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',
       'Functional requirements:',
       fr,

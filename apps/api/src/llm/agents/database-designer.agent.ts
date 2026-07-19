@@ -8,6 +8,7 @@ import {
   type Relation,
   type RequirementDocument,
   type SystemDesign,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -91,7 +92,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
       .map((f) => `- ${f.title}`)
       .join('\n');
     return [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       `Database engine: ${this.databaseType(ctx.systemDesign)}`,
       `Services (each typically owns one or more tables): ${services}`,
       `Roles (may need profile/permission tables): ${roles || 'none'}`,

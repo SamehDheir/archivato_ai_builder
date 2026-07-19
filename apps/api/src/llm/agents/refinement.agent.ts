@@ -8,6 +8,8 @@ import {
   type NonFunctionalRequirement,
   type OutOfScopeItem,
   type RequirementDocument,
+  untrustedField,
+  screenRequirementDocument,
 } from '@archivato/shared';
 import { BaseAgent, degradedReasonFor } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -63,7 +65,31 @@ export class RefinementAgent extends BaseAgent {
     super(llm);
   }
 
+  /**
+   * Amend the requirement document from a chat instruction.
+   *
+   * The result is screened exactly as a fresh generation is. This is a **second
+   * write path to the same artifact**, and the artifact lands on the public share
+   * page — so screening only at `RequirementEngineerAgent` would leave a refine
+   * as the way around it: ask the model to "add the payment link back" (or let an
+   * injection still sitting in the transcript do it) and the document is rewritten
+   * unscreened.
+   */
   async refine(
+    sessionId: string,
+    ctx: RefinementContext,
+  ): Promise<RefinementOutput> {
+    const output = await this.amend(sessionId, ctx);
+    const { document, removed } = screenRequirementDocument(output.document);
+    if (removed.length > 0) {
+      this.logger.warn(
+        `Refined requirement doc: stripped ${removed.length} link(s) — possible prompt injection: ${removed.join(', ')}`,
+      );
+    }
+    return { ...output, document };
+  }
+
+  private async amend(
     sessionId: string,
     ctx: RefinementContext,
   ): Promise<RefinementOutput> {
@@ -115,7 +141,7 @@ export class RefinementAgent extends BaseAgent {
 
   private buildPrompt(ctx: RefinementContext): string {
     return [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',
       '',
       'Current requirement document (JSON):',

@@ -4,6 +4,7 @@ import type {
   DegradedReason,
   GenerationProvenance,
 } from '@archivato/shared';
+import { UNTRUSTED_INPUT_RULES } from '@archivato/shared';
 import type {
   LlmProvider,
   LlmMessage,
@@ -37,7 +38,7 @@ export abstract class BaseAgent {
     options?: LlmCompleteOptions,
   ): Promise<string> {
     return this.llm.complete(this.buildMessages(userPrompt), {
-      system: this.systemPrompt,
+      system: this.hardenedSystemPrompt,
       ...options,
       agent: this.role,
     });
@@ -49,11 +50,31 @@ export abstract class BaseAgent {
     options?: LlmCompleteOptions,
   ): Promise<T> {
     return this.llm.completeJson<T>(this.buildMessages(userPrompt), {
-      system: this.systemPrompt,
+      system: this.hardenedSystemPrompt,
       ...options,
       agent: this.role,
     });
   }
+
+  /**
+   * The agent's persona with `UNTRUSTED_INPUT_RULES` appended — the instruction
+   * hierarchy that gives `untrusted()`'s fence its meaning.
+   *
+   * It is applied **here** rather than written into each agent's `systemPrompt`
+   * for the reason `generateArtifact` exists: fourteen agents interpolate client
+   * text, and a rule each one states by hand is a rule the fifteenth agent
+   * forgets. This way a new agent is defended before it is written.
+   *
+   * Cached because the string must be *stable* across calls, not merely equal:
+   * `ClaudeLlmProvider` marks the system prompt with `cache_control`, and a
+   * freshly built prompt per call would defeat prompt caching on every request.
+   */
+  private get hardenedSystemPrompt(): string {
+    this.cachedSystemPrompt ??= [this.systemPrompt, ...UNTRUSTED_INPUT_RULES].join(' ');
+    return this.cachedSystemPrompt;
+  }
+
+  private cachedSystemPrompt?: string;
 
   private buildMessages(userPrompt: string): LlmMessage[] {
     return [{ role: 'user', content: userPrompt }];

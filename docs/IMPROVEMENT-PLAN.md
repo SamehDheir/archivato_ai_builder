@@ -203,7 +203,47 @@ share card shows a last-viewed time.
 
 ---
 
-### C5 — Prompt-injection defense + output screening
+### C5 — Prompt-injection defense + output screening ✅ **DONE** (`fix/prompt-injection-defense`)
+
+> **Shipped:** `packages/shared/src/prompt-safety.ts` (pure, runtime-free) +
+> `screenRequirementDocument` in `requirements.ts`. Three layers: the standing
+> instruction (`UNTRUSTED_INPUT_RULES`) applied by **one chokepoint**,
+> `BaseAgent.hardenedSystemPrompt`, so a future agent is defended before it is
+> written; `untrusted()` fencing at all 14 agents' call sites (idea, transcript,
+> **call notes**, slot values, open questions, `clientName`, `customHook`); and
+> outbound `stripUrls` on every writer of an artifact that reaches a third party.
+> 25 new tests. Full suite 917 API + 60 web green, lint + typecheck clean on both.
+>
+> **The security review of this slice found two bypasses in the slice itself**,
+> both now fixed and pinned: the **chat refine** is a *second* writer of the
+> requirement document and skipped the screen entirely, and the **product vision**
+> — which the share page **leads with** — was never screened. The lesson is in
+> CLAUDE.md: screen every *writer* of a shared artifact, not every artifact once.
+>
+> **Three decisions worth knowing.** Screening is an **allowlist, not "was it in
+> the input"** — the original plan's rule (below) fails against the actual
+> attacker, who *controls* the input and can simply put the link in the notes so
+> it passes; the requirement document has no legitimate URL and the proposal has
+> exactly one, so the safe set is enumerable. Sanitization is **structural only**
+> — no regexing "ignore previous instructions" out of prose, because the phrase is
+> unbounded while a false positive silently deletes a sentence from a real client
+> brief. And a test corrected the scope: screening the "client-facing sections"
+> was **wrong**, because R7 put `nonFunctional`/`businessRules`/`constraints` in
+> the share page's technical appendix — the whole document is public, so the whole
+> document is screened.
+>
+> **Not covered, deliberately:** injected *prose* still appears as document
+> content (requirements derive from the client's words; it carries no link and has
+> no power there), and `SharedProject.idea` is echoed unscreened as a quote of the
+> owner's own typed input. Both are pinned by tests so neither is "fixed" by
+> accident.
+>
+> **Still open** (small, unowned): the remaining share-page artifacts — system
+> design, database design, API design, roadmap, threat model, QA plan — are not
+> screened. They are far less likely to carry an injected link (they are
+> structured, largely name/enum fields rather than prose) and they sit in the
+> collapsed technical appendix, but the `stripUrls` helper is generic and applying
+> it there is cheap. Do it if any of them ever grows a free-prose section.
 
 **Problem.** User-controlled text — the idea, every interview answer, pasted call
 notes, `clientName`, support messages — is interpolated directly into prompts
@@ -442,8 +482,8 @@ a **deleted project stops counting** and a Starter user can delete-and-retry.
 
 | Issue | Severity | Owner |
 |---|---|---|
-| No LLM timeout | 🟠 High | **C1** |
-| No prompt-injection defense | 🟠 High | **C5** |
+| No LLM timeout | 🟠 High | **C1** ✅ done |
+| No prompt-injection defense | 🟠 High | **C5** ✅ done |
 | Share token: no expiry, no rotation-without-revoke | 🟡 Med | H5 window |
 | No **per-account** login lockout (throttle is IP-keyed) | 🟡 Med | ~2 h, unowned |
 | No CSP headers — relevant precisely because `/s/[token]` renders LLM-influenced text publicly | 🟡 Med | ~2 h, unowned |
@@ -455,7 +495,7 @@ a **deleted project stops counting** and a Starter user can delete-and-retry.
 
 ## Sequencing — the actual instruction
 
-1. **Week 1, days 1–3:** C1 + C2 + C5.
+1. **Week 1, days 1–3:** C1 + C2 + C5. — ✅ **all three shipped.**
 2. **Week 1, days 4–5 and week 2:** **stop coding.** Do the five discovery calls
    from POSITIONING §6. Nothing below moves until they are done.
 3. **After the calls:** C4 (measure) → C3 (the buyer's data model) → H1 (measure

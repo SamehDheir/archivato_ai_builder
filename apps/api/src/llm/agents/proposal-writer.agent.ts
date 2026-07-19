@@ -6,6 +6,9 @@ import {
   isOverLength,
   proposalCharCount,
   PROPOSAL_CEILINGS,
+  extractUrls,
+  stripUrls,
+  untrusted,
   type ProposalChannel,
   type ProposalInput,
   type ProposalLocale,
@@ -131,7 +134,7 @@ export class ProposalWriterAgent extends BaseAgent {
     } catch (err) {
       this.logger.warn(`Proposal failed; using fallback: ${err}`);
     }
-    return { message: buildFallbackProposal(input), source: 'fallback' };
+    return { message: this.screen(buildFallbackProposal(input), input), source: 'fallback' };
   }
 
   /** One model call. Returns null when the response carries no usable message. */
@@ -143,7 +146,35 @@ export class ProposalWriterAgent extends BaseAgent {
       this.buildPrompt(input, tooLong),
     );
     const message = typeof raw?.message === 'string' ? raw.message.trim() : '';
-    return message.length > 0 ? message : null;
+    return message.length > 0 ? this.screen(message, input) : null;
+  }
+
+  /**
+   * Remove every link except the scoping link we minted.
+   *
+   * This message is pasted into a bid and sent under the owner's name, to a buyer
+   * who has no way to tell which parts a model wrote. It carries exactly one URL
+   * by design — the share link — so anything else in it is either a model
+   * hallucination or an injection that rode in on the client's own brief. Either
+   * way the owner would be the one vouching for it.
+   *
+   * Screening happens here, before the length check, so the ceiling is measured
+   * on the message that will actually be sent.
+   */
+  private screen(message: string, input: ProposalInput): string {
+    // The scoping link, plus anything the OWNER put in their own opening note —
+    // their contact address or portfolio link is deliberate, and deleting it from
+    // the message they are about to send would be a silent, invisible error.
+    // Nothing is allowlisted from `facts.idea` / `facts.executiveSummary`: those
+    // derive from the client's brief, which is the injection's own vehicle.
+    const allowed = [input.facts.shareUrl, ...extractUrls(input.customHook)];
+    const { text, removed } = stripUrls(message, allowed);
+    if (removed.length > 0) {
+      this.logger.warn(
+        `Proposal: stripped ${removed.length} link(s) that were not the scoping link — possible prompt injection: ${removed.join(', ')}`,
+      );
+    }
+    return text;
   }
 
   private buildPrompt(input: ProposalInput, tooLong?: string): string {
@@ -156,15 +187,15 @@ export class ProposalWriterAgent extends BaseAgent {
       `Hard length ceiling: ${ceiling} characters, including spaces. Going over means the message cannot be sent.`,
       '',
       '--- Scoping facts (the ONLY material you may draw on) ---',
-      `Project: ${facts.title}`,
-      `The client's idea, in their words: ${facts.idea}`,
+      `Project: ${untrusted(facts.title)}`,
+      `The client's idea, in their words: ${untrusted(facts.idea)}`,
     ];
 
-    if (input.clientName) lines.push(`Client: ${input.clientName}`);
+    if (input.clientName) lines.push(`Client: ${untrusted(input.clientName)}`);
     const sender = [input.senderName, input.companyName].filter(Boolean).join(', ');
-    if (sender) lines.push(`Sender (sign off as this): ${sender}`);
+    if (sender) lines.push(`Sender (sign off as this): ${untrusted(sender)}`);
     if (facts.executiveSummary) {
-      lines.push(`What we understood: ${facts.executiveSummary}`);
+      lines.push(`What we understood: ${untrusted(facts.executiveSummary)}`);
     }
     if (facts.capabilities.length > 0) {
       lines.push(`Capabilities in scope: ${facts.capabilities.join('; ')}`);
@@ -174,8 +205,8 @@ export class ProposalWriterAgent extends BaseAgent {
         `Estimated effort: ${facts.effortWeeksMin}–${facts.effortWeeksMax} person-weeks (state it as a range; do not sharpen it into a single figure).`,
       );
     }
-    if (facts.mvpStatement) lines.push(`What the first release delivers: ${facts.mvpStatement}`);
-    if (facts.timeline) lines.push(`Timeline the client stated: ${facts.timeline}`);
+    if (facts.mvpStatement) lines.push(`What the first release delivers: ${untrusted(facts.mvpStatement)}`);
+    if (facts.timeline) lines.push(`Timeline the client stated: ${untrusted(facts.timeline)}`);
     lines.push(`Scoping link: ${facts.shareUrl}`);
 
     // Present ONLY when the owner opted in. There is no "includePrice: false" line
@@ -186,7 +217,9 @@ export class ProposalWriterAgent extends BaseAgent {
       );
     }
     if (input.customHook) {
-      lines.push(`The owner's own opening note, to weave in naturally: ${input.customHook}`);
+      lines.push(
+        `The owner's own opening note, to weave in naturally: ${untrusted(input.customHook)}`,
+      );
     }
 
     lines.push(

@@ -7,6 +7,7 @@ import {
   type PatchSectionKey,
   type ReviewFinding,
   type SlotMap,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -94,7 +95,7 @@ export class PatchAgent extends BaseAgent {
   private buildPrompt(ctx: PatchContext): string {
     const vocabulary = this.vocabulary(ctx.slots);
     return [
-      `Project: ${ctx.idea}`,
+      untrustedField('Project', ctx.idea),
       ...(vocabulary ? [`Project vocabulary: ${vocabulary}`] : []),
       '',
       '# Findings to fix',

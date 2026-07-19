@@ -3,6 +3,7 @@ import {
   AgentRole,
   type IntentAnalysis,
   type ProjectIdeaInput,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -38,7 +39,7 @@ export class ProductAnalystAgent extends BaseAgent {
 
   async analyze(input: ProjectIdeaInput): Promise<IntentAnalysis> {
     const prompt = [
-      `Business idea: ${input.idea}`,
+      untrustedField('Business idea', input.idea),
       input.industry ? `Stated industry: ${input.industry}` : '',
       input.scale ? `Target scale: ${input.scale}` : '',
       input.preferredStack ? `Preferred stack: ${input.preferredStack}` : '',

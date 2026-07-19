@@ -11,6 +11,7 @@ import {
   type SystemDesign,
   type Threat,
   type ThreatModel,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -78,7 +79,7 @@ export class ThreatModelerAgent extends BaseAgent {
 
   private buildPrompt(ctx: ThreatModelContext): string {
     return [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       `Architecture: ${ctx.systemDesign.architecture}`,
       `Services: ${ctx.systemDesign.services.map((s) => s.name).join(', ')}`,
       `Entities: ${ctx.databaseDesign.entities.map((e) => e.name).join(', ')}`,
