@@ -1,14 +1,15 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   significantTokens,
+  type DegradedReason,
   type FunctionalRequirement,
   type IntentAnalysis,
   type NonFunctionalRequirement,
   type OutOfScopeItem,
   type RequirementDocument,
 } from '@archivato/shared';
-import { BaseAgent } from '../agent.base';
+import { BaseAgent, degradedReasonFor } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
 
 /** What the Refiner needs to apply a chat instruction. */
@@ -37,8 +38,6 @@ export interface RefinementOutput {
 @Injectable()
 export class RefinementAgent extends BaseAgent {
   readonly role = AgentRole.Refiner;
-
-  private readonly logger = new Logger(RefinementAgent.name);
 
   protected readonly systemPrompt = [
     'You are the Solution Architect refining an existing software design.',
@@ -69,6 +68,7 @@ export class RefinementAgent extends BaseAgent {
     ctx: RefinementContext,
   ): Promise<RefinementOutput> {
     const generatedAt = new Date().toISOString();
+    let degraded: DegradedReason = 'invalid_output';
     try {
       const raw = await this.thinkJson<{
         document?: Partial<RequirementDocument>;
@@ -85,6 +85,11 @@ export class RefinementAgent extends BaseAgent {
               ...(raw!.document as RequirementDocument),
               sessionId,
               generatedAt,
+              // …but NOT the old provenance. Spreading `ctx.current` carries it,
+              // and a refine rewrites the content, so an inherited stamp would
+              // claim this text came from a run that never saw it — a doc refined
+              // during an outage would still read "AI-generated".
+              generation: this.provenance('llm'),
             },
             ctx.current,
           ),
@@ -95,9 +100,17 @@ export class RefinementAgent extends BaseAgent {
       }
       this.logger.debug('Refinement malformed; using deterministic amend.');
     } catch (err) {
-      this.logger.warn(`Refinement failed; using fallback: ${err}`);
+      degraded = degradedReasonFor(err);
+      this.logger.warn(`Refinement failed (${degraded}); using fallback: ${err}`);
     }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    const fallback = this.buildDeterministic(sessionId, generatedAt, ctx);
+    return {
+      ...fallback,
+      document: {
+        ...fallback.document,
+        generation: this.provenance('fallback', degraded),
+      },
+    };
   }
 
   private buildPrompt(ctx: RefinementContext): string {

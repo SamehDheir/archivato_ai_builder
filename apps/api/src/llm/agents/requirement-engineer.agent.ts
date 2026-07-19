@@ -1,8 +1,9 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   SLOT_KEYS,
   regulationsForMarket,
+  type BusinessAnalysis,
   type BusinessRule,
   type FunctionalRequirement,
   type IntentAnalysis,
@@ -40,6 +41,17 @@ export interface RequirementContext {
    * questions" (each phrased as an assumed default with its impact-if-wrong).
    */
   openQuestions?: OpenQuestion[];
+  /**
+   * The Business Analysis, when one has been generated. It grounds the document
+   * in the business case rather than jumping straight from raw answers to
+   * requirements: the problem statement drives the executive summary, the
+   * segments inform the roles, and the MVP assessment shapes priorities.
+   *
+   * **Optional on purpose.** The analysis feeds this stage but does not gate it
+   * (`BusinessAnalysisService` is a standalone stage), so every existing project
+   * and every plan-mode run must still produce a document without one.
+   */
+  businessAnalysis?: BusinessAnalysis;
 }
 
 /**
@@ -55,8 +67,6 @@ export interface RequirementContext {
 @Injectable()
 export class RequirementEngineerAgent extends BaseAgent {
   readonly role = AgentRole.RequirementEngineer;
-
-  private readonly logger = new Logger(RequirementEngineerAgent.name);
 
   protected readonly systemPrompt = [
     'You are a meticulous Requirement Engineer who turns a confirmed discovery',
@@ -109,18 +119,14 @@ export class RequirementEngineerAgent extends BaseAgent {
     // the model — so they're folded into the assumptions on BOTH paths, and the
     // raw client-question list is attached verbatim too.
     const openQuestions = ctx.openQuestions ?? [];
-    try {
-      const raw = await this.thinkJson<Partial<RequirementDocument>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        return this.normalize(sessionId, generatedAt, raw, ctx, openQuestions);
-      }
-      this.logger.debug('Requirement doc malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`Requirement generation failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<RequirementDocument>({
+      label: 'Requirement doc',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) =>
+        this.normalize(sessionId, generatedAt, raw, ctx, openQuestions),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   /**
@@ -234,6 +240,7 @@ export class RequirementEngineerAgent extends BaseAgent {
     const commonScope = domainCommonScope(domain);
 
     return [
+      businessAnalysisBrief(ctx.businessAnalysis),
       `Idea: ${ctx.idea}`,
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',
       ctx.intent && ctx.intent.coreCapabilities.length
@@ -372,6 +379,46 @@ export class RequirementEngineerAgent extends BaseAgent {
  * stays in the description. Only when there is no such lead does this fall back
  * to a hard truncation, which is what every title used to be.
  */
+/**
+ * The business-case brief that leads the prompt, when a Business Analysis
+ * exists.
+ *
+ * It goes FIRST deliberately: the point of the stage is that the model reasons
+ * about the business before it starts specifying software, and a brief buried
+ * under the raw transcript would just be more context rather than a frame.
+ *
+ * Only the grounded sections cross. The competitor list and market read are
+ * explicitly excluded — they are the analyst's unverified recollection, they
+ * have no bearing on what the system must do, and letting them reach a document
+ * the client reads would launder a guess into a requirement.
+ */
+function businessAnalysisBrief(analysis: BusinessAnalysis | undefined): string {
+  if (!analysis) return '';
+  const mvp = analysis.mvp;
+  return [
+    'BUSINESS CASE (established before requirements — ground the document in this):',
+    `- Problem: ${analysis.problem.problem}`,
+    `- Who has it: ${analysis.problem.whoHasIt}`,
+    `- What they do today: ${analysis.problem.currentAlternative}`,
+    `- Why choose this: ${analysis.usp.statement}`,
+    analysis.segments.length
+      ? `- User segments: ${analysis.segments
+          .map((s) => `${s.name} (needs: ${s.jobToBeDone})`)
+          .join('; ')}`
+      : '',
+    `- MVP assessment: ${mvp.verdict}${mvp.reasoning ? ` — ${mvp.reasoning}` : ''}`,
+    mvp.recommendedCore.length
+      ? `- Belongs in release one (prioritize as "must"): ${mvp.recommendedCore.join('; ')}`
+      : '',
+    mvp.deferSuggestions.length
+      ? `- Can wait (prioritize as "should"/"could", or list as out-of-scope): ${mvp.deferSuggestions.join('; ')}`
+      : '',
+    '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 function truncateTitle(text: string): string {
   const trimmed = text.trim();
   // Prefer a real clause boundary — the label before a colon, else the first

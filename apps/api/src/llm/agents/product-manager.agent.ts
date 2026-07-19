@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   type IntentAnalysis,
@@ -30,8 +30,6 @@ export interface ProductVisionContext {
 export class ProductManagerAgent extends BaseAgent {
   readonly role = AgentRole.ProductManager;
 
-  private readonly logger = new Logger(ProductManagerAgent.name);
-
   protected readonly systemPrompt = [
     'You are a seasoned Product Manager shaping a new product from a confirmed',
     'discovery interview. You articulate a crisp product vision, strategic goals, a',
@@ -57,18 +55,13 @@ export class ProductManagerAgent extends BaseAgent {
     ctx: ProductVisionContext,
   ): Promise<ProductVision> {
     const generatedAt = new Date().toISOString();
-    try {
-      const raw = await this.thinkJson<Partial<ProductVision>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        return { ...(raw as ProductVision), sessionId, generatedAt };
-      }
-      this.logger.debug('Product vision malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`Product vision failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<ProductVision>({
+      label: 'Product vision',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) => ({ ...(raw as ProductVision), sessionId, generatedAt }),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   private buildPrompt(ctx: ProductVisionContext): string {

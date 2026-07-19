@@ -6,6 +6,12 @@ export enum AgentRole {
   ProductAnalyst = 'product_analyst',
   /** Drives the adaptive interview — picks the next question from the concept. */
   Interviewer = 'interviewer',
+  /**
+   * Reads the confirmed interview as a business case before anything is
+   * specified: problem, users, competition, USP, and whether the MVP cut holds.
+   * Runs ahead of the Requirement Engineer and feeds it.
+   */
+  BusinessAnalyst = 'business_analyst',
   RequirementEngineer = 'requirement_engineer',
   SystemArchitect = 'system_architect',
   DatabaseDesigner = 'database_designer',

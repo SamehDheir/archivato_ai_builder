@@ -7,6 +7,7 @@
  */
 
 import type { DerivedArtifact } from './freshness';
+import type { GenerationProvenance } from './generation';
 import { hasTimelineConflict, parseTimelineWeeks, type EffortEstimate } from './effort';
 import type { BuildVsBuyItem, ConstraintCompliance } from './system-design';
 import type { ServiceCostLine } from './cost-estimate';
@@ -138,6 +139,8 @@ export interface ConsistencyFinding extends ReviewFinding {
 }
 
 export interface ReviewReport extends DerivedArtifact {
+  /** How this report was produced — see `generation.ts`. Absent = unknown. */
+  generation?: GenerationProvenance;
   sessionId: string;
   generatedAt: string;
   /** Holistic 0–100 assessment across the engineering dimensions. */

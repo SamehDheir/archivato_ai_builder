@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   type DatabaseDesign,
@@ -28,8 +28,6 @@ export interface DatabaseDesignContext {
 @Injectable()
 export class DatabaseDesignerAgent extends BaseAgent {
   readonly role = AgentRole.DatabaseDesigner;
-
-  private readonly logger = new Logger(DatabaseDesignerAgent.name);
 
   protected readonly systemPrompt = [
     'You are a careful Database Designer who turns a system design into a clean,',
@@ -76,18 +74,13 @@ export class DatabaseDesignerAgent extends BaseAgent {
     ctx: DatabaseDesignContext,
   ): Promise<DatabaseDesign> {
     const generatedAt = new Date().toISOString();
-    try {
-      const raw = await this.thinkJson<Partial<DatabaseDesign>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        return { ...(raw as DatabaseDesign), sessionId, generatedAt };
-      }
-      this.logger.debug('Database design malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`Database design failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<DatabaseDesign>({
+      label: 'Database design',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) => ({ ...(raw as DatabaseDesign), sessionId, generatedAt }),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   private buildPrompt(ctx: DatabaseDesignContext): string {

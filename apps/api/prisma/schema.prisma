@@ -286,6 +286,7 @@ model InterviewSession {
   apiDesign           ApiDesign?
   reviewReport        ReviewReport?
   productVision       ProductVision?
+  businessAnalysis    BusinessAnalysis?
   roadmap             ProjectRoadmap?
   costEstimate        CostEstimate?
   threatModel         ThreatModel?
@@ -404,6 +405,20 @@ model ProductVision {
   updatedAt DateTime         @updatedAt
 
   @@map("product_visions")
+}
+
+// Business Analysis (Business Analyst stage). The discovery pass that runs
+// between the confirmed interview and the Requirement Document: problem,
+// segments, competitors, market read, USP, MVP cut, and a research checklist.
+// Feeds the Requirement Engineer as context but does not gate it.
+model BusinessAnalysis {
+  sessionId String           @id
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("business_analyses")
 }
 
 // Project Roadmap (Roadmap Planner stage). Standalone artifact — a phased

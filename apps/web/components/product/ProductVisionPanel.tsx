@@ -10,6 +10,7 @@ import { ArtifactSkeleton } from '@/components/shared/ArtifactSkeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ProductVisionView } from '@/components/product/ProductVisionView';
 import { useToast } from '@/components/shared/toast';
+import { GenerationNotice } from '@/components/project/GenerationNotice';
 
 /**
  * The Product Manager stage tab. Standalone: fetches its own artifact and can
@@ -80,6 +81,7 @@ export function ProductVisionPanel({
 
   return (
     <div className="space-y-3">
+      <GenerationNotice generation={vision.generation} busy={busy} onRegenerate={generate} />
       <ProductVisionView vision={vision} />
       <Button variant="secondary" onClick={generate} disabled={busy}>
         {busy ? t('vision.working') : t('vision.regenerate')}

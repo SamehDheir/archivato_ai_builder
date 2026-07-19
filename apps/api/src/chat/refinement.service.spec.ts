@@ -18,6 +18,7 @@ import { InMemoryCostEstimateRepository } from '../cost-estimate/in-memory-cost-
 import { VersionsService } from '../versions/versions.service';
 import { InMemoryProjectVersionRepository } from '../versions/in-memory-project-version.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
+import { InMemoryBusinessAnalysisRepository } from '../business-analysis/in-memory-business-analysis.repository';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
 import { DatabaseDesignerAgent } from '../llm/agents/database-designer.agent';
@@ -62,6 +63,7 @@ function makeHarness(): Harness {
   const requirements = new RequirementsService(
     sessionRepo,
     docRepo,
+    new InMemoryBusinessAnalysisRepository(),
     new RequirementEngineerAgent(mock),
   );
   const systemDesign = new SystemDesignService(

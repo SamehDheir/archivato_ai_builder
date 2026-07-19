@@ -8,6 +8,8 @@
  * it as a product-strategy view of the same session.
  */
 
+import type { GenerationProvenance } from './generation';
+
 /** A user persona: who they are, what they want, what frustrates them. */
 export interface Persona {
   name: string;
@@ -31,6 +33,8 @@ export interface SuccessMetric {
 export interface ProductVision {
   sessionId: string;
   generatedAt: string;
+  /** How this vision was produced — see `generation.ts`. Absent = unknown. */
+  generation?: GenerationProvenance;
   /** One-paragraph north-star statement. */
   vision: string;
   /** Strategic goals the product is driving toward. */

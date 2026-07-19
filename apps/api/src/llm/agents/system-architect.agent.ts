@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   isBuildVsBuyCapability,
@@ -47,8 +47,6 @@ export interface SystemDesignContext {
 export class SystemArchitectAgent extends BaseAgent {
   readonly role = AgentRole.SystemArchitect;
 
-  private readonly logger = new Logger(SystemArchitectAgent.name);
-
   protected readonly systemPrompt = [
     'You are a pragmatic Staff System Architect scoping a build for a small',
     'software house bidding on client work. From a requirement document and the',
@@ -78,18 +76,13 @@ export class SystemArchitectAgent extends BaseAgent {
     ctx: SystemDesignContext,
   ): Promise<SystemDesign> {
     const generatedAt = new Date().toISOString();
-    try {
-      const raw = await this.thinkJson<Partial<SystemDesign>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        return this.normalize(sessionId, generatedAt, raw, ctx);
-      }
-      this.logger.debug('System design malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`System design failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<SystemDesign>({
+      label: 'System design',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      accept: (raw) => this.normalize(sessionId, generatedAt, raw, ctx),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   private buildPrompt(ctx: SystemDesignContext): string {

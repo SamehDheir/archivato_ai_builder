@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   isSuggestedResolution,
@@ -56,8 +56,6 @@ export interface ReviewContext {
 export class ReviewerAgent extends BaseAgent {
   readonly role = AgentRole.Reviewer;
 
-  private readonly logger = new Logger(ReviewerAgent.name);
-
   protected readonly systemPrompt = [
     'You are a rigorous Principal Engineer running a design review before build,',
     'who also protects the deal: this design is a scoping proposal a software shop',
@@ -107,20 +105,15 @@ export class ReviewerAgent extends BaseAgent {
     ctx: ReviewContext,
   ): Promise<ReviewReport> {
     const generatedAt = new Date().toISOString();
-    try {
-      const raw = await this.thinkJson<Partial<ReviewReport>>(
-        this.buildPrompt(ctx),
-      );
-      if (this.isValid(raw)) {
-        // Trust the model's content but backfill any dimension it omitted so the
-        // report shape is always complete (scores, cost, scalability findings).
-        return this.normalize({ ...raw, sessionId, generatedAt }, ctx);
-      }
-      this.logger.debug('Review malformed; using deterministic build.');
-    } catch (err) {
-      this.logger.warn(`Review failed; using fallback: ${err}`);
-    }
-    return this.buildDeterministic(sessionId, generatedAt, ctx);
+    return this.generateArtifact<ReviewReport>({
+      label: 'Review',
+      prompt: this.buildPrompt(ctx),
+      isValid: (raw) => this.isValid(raw),
+      // Trust the model's content but backfill any dimension it omitted so the
+      // report shape is always complete (scores, cost, scalability findings).
+      accept: (raw) => this.normalize({ ...raw, sessionId, generatedAt }, ctx),
+      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+    });
   }
 
   private buildPrompt(ctx: ReviewContext): string {

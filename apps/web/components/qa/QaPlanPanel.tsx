@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { QaPlanView } from '@/components/qa/QaPlanView';
 import { StaleNotice } from '@/components/project/StaleNotice';
 import { useToast } from '@/components/shared/toast';
+import { GenerationNotice } from '@/components/project/GenerationNotice';
 
 /**
  * The QA Planner tab. Standalone: fetches its own artifact and can
@@ -91,6 +92,7 @@ export function QaPlanPanel({
         busy={busy}
         onRegenerate={generate}
       />
+      <GenerationNotice generation={plan.generation} busy={busy} onRegenerate={generate} />
       <QaPlanView plan={plan} />
       <Button variant="secondary" onClick={generate} disabled={busy}>
         {busy ? t('qa.working') : t('qa.regenerate')}

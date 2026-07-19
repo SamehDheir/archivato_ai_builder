@@ -10,6 +10,7 @@
  */
 
 import type { DerivedArtifact } from './freshness';
+import type { GenerationProvenance } from './generation';
 
 export type TestType =
   | 'unit'
@@ -50,6 +51,8 @@ export interface TestSuite {
 }
 
 export interface QaPlan extends DerivedArtifact {
+  /** How this plan was produced — see `generation.ts`. Absent = unknown. */
+  generation?: GenerationProvenance;
   sessionId: string;
   generatedAt: string;
   /** One-paragraph overview of the testing approach. */

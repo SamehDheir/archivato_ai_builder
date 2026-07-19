@@ -173,6 +173,77 @@ tsconfig and never needs shared's `dist`.
   `billing`, `analytics`, `admin`, `support`, `notifications`, `roles`,
   `waitlist`).
   Modules export their repository token + service for downstream use.
+- **Business Analysis (`business-analysis`) — the discovery layer, and the one
+  stage built around what the model CANNOT know.** Runs off the confirmed
+  interview, ahead of Requirements: problem statement, user segments,
+  competitors, market read, USP, MVP-cut assessment, viability verdict. Free
+  tier, owner-guarded, `THROTTLE_AI`, own `business_analyses` table (migration
+  `20260719120000_add_business_analysis`). Nine things not to undo:
+  1. **It FEEDS requirements; it does not gate them.** `RequirementsService`
+     reads the analysis if one exists and passes it as context — the point of the
+     stage is that the model reasons about the business before specifying
+     software. But every project created before this existed has no analysis, and
+     a hard gate would also make a BA failure block the whole chain. Pinned by a
+     test that generates a document with no analysis at all.
+  2. **Only the GROUNDED sections cross into the requirements prompt.** The
+     brief carries problem / USP / segments / MVP assessment. The competitor list
+     and market read are **excluded on purpose**: they are the analyst's
+     unverified recollection, they say nothing about what the system must do, and
+     the requirement document is what the *client* reads — letting them cross
+     would launder a guess into a requirement. Pinned by a test.
+  3. **`MARKET_HONESTY_RULES` is embedded verbatim in the system prompt** (the
+     R13 `HONESTY_RULES` precedent, pinned by a test). There is no web access
+     here, so competitors and market size are pure recollection. The rules ban the
+     *specifics* — funding, valuation, revenue, user/customer counts, headcount,
+     founding dates, market size in dollars — because those turn a plausible
+     recollection into an authoritative-sounding fabrication, and they are exactly
+     what a client checks first. Naming a product is allowed; claiming it raised
+     $4M is not.
+  4. **There is no market-size field to fabricate a number into.**
+     `MarketAssessment` has `demandSignals` / `headwinds` / a qualitative
+     `sizeNote` — deliberately no TAM. A dollar figure would be invented, would be
+     the single most quotable line in the document, and would be wrong.
+  5. **Every outside claim carries a `ClaimConfidence`**, and `toClaimConfidence`
+     resolves anything unrecognized to **`unverified`**, never dropping it — the
+     cautious direction (`parseBudget`'s "null, never a guess", applied to
+     provenance of knowledge rather than of numbers).
+  6. **`researchChecklist` is the counterweight that makes the rest shippable**,
+     and `withResearchChecklist()` guarantees it covers every unverified claim —
+     including the empty-competitor-list case, which is reported as *"this needs
+     research"* rather than allowed to read as "there is no competition". It is
+     folded into **`normalizeBusinessAnalysis()`**, which lives in
+     `@archivato/shared` and runs at **both boundaries** (the agent on write,
+     **both** repositories on read — Prisma *and* in-memory, so a unit test can't
+     pass on a shape production repairs) — the `normalizeApiDesign` convention.
+     That normalizer is also what stops `isValid` from being mistaken for a shape
+     check: it only tests `problem.problem`, `segments` and `usp.statement`, so a
+     conforming-but-partial response reached the view with `segments[].painPoints`
+     and `usp.differentiators` undefined and took the whole tab out on `.join()`.
+     **A required array must read as empty whether it is missing OR mistyped** —
+     `?? []` is not enough, because a model answering `demandSignals: "strong
+     demand"` passes the nullish check and dies on `.map`.
+  7. **The deterministic fallback emits NO competitors and no market judgment.**
+     Every other agent's fallback approximates the model; this one must not,
+     because offline the code knows the interview and nothing else. It states the
+     problem and segments (which it can), and says out loud that the market was
+     not assessed. An install with no LLM key ships this for every project.
+  8. **`stripMetrics()` is the backstop for when the prompt doesn't hold** —
+     it removes money figures, user/customer counts and founding years from
+     model-supplied competitor prose. The prompt is the primary defence; this
+     costs a little fluency and removes a claim we cannot stand behind. Note the
+     trap it shipped with: the replacement read `'a number of $2'` against a
+     pattern with **one** capture group, so JS emitted the literal `$2` into a
+     sentence the owner may forward to a client. The original test only asserted
+     the *figure* was gone, never that the replacement read correctly — assert
+     the output, not just the absence.
+  9. **OWNER-ONLY, and there is no share-page counterpart.** The verdict is a
+     judgement on the client's own business, delivered by the vendor they are
+     paying to build it — a client must never read it. Nothing is added to
+     `SharedProject`, which is stronger than redaction: there is no field to
+     strip. **The verdict space deliberately has no `do-not-build`** (`proceed` /
+     `proceed-with-changes` / `needs-validation` / `high-risk`), because this
+     product's user is a dev shop scoping a project the client already decided to
+     build — see [docs/POSITIONING.md](docs/POSITIONING.md) §2.
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
   controller and is not in version snapshots. `product-vision` needs only the
@@ -1160,6 +1231,114 @@ tsconfig and never needs shared's `dist`.
   json_object`** for guaranteed JSON (the structured-output path for the default
   real-AI provider). The deterministic fallbacks are a **resilience layer, not
   mock data** — they only run when no LLM is configured or the model fails.
+- **LLM transport: timeouts + retries (`llm-http.ts`).** One shared
+  `postLlmJson()` behind the three OpenAI-shaped providers (Groq / Azure /
+  SiliconFlow), which all POST and read the same shape. It exists because
+  **Node's `fetch` has no default timeout**: a hung upstream held a BullMQ worker
+  or an open SSE connection *indefinitely*, and on a 512 MB instance a handful of
+  those is an outage. Every attempt now carries its own `AbortSignal.timeout`
+  (fresh per attempt — a signal only fires once). Five things not to undo:
+  1. **The retry is at the PROVIDER layer, never on the BullMQ job.** Every agent
+     catches its own LLM failure and returns its deterministic fallback, so
+     `service.generate()` **resolves** and the job **completes** — `attempts` on
+     the queue would be dead config that never fires. And if it ever did fire,
+     `PipelineProcessor` writes a version snapshot per run, so a retry would
+     re-persist the artifact and cut a second snapshot. This layer is the only one
+     where a transient 503 is still visible *as* a transient 503.
+  2. **Why retry at all:** the fallback makes a blip invisible. Before this, one
+     503 from Groq meant a **Pro user paid for an LLM-generated artifact and
+     silently received the templated one**, with nothing in the document saying so.
+     (Making that visible is a separate, still-open item — see the C2 provenance
+     stamp in [docs/IMPROVEMENT-PLAN.md](docs/IMPROVEMENT-PLAN.md).)
+  3. **Only transient failures retry.** `isRetryableStatus` = 408 / 429 / 5xx,
+     plus timeouts and undici's `TypeError('fetch failed')`. A 400/401/403/404
+     fails identically on every attempt, so retrying only delays the fallback and
+     burns latency. **`LlmJsonParseError` is never retried here** — it happens
+     *after* the HTTP call, in `parseJsonFromLlm`, and is not a transport fault.
+  4. **Claude is CONFIGURED, not wrapped.** The Anthropic SDK already retries with
+     backoff and already has a timeout — but its default ceiling is **ten
+     minutes**. It gets the same budget via `timeout` + `maxRetries`; wrapping it
+     in `postLlmJson` would nest two retry loops and multiply the worst case.
+  5. **A reasoning model gets `REASONING_TIMEOUT_FACTOR` (2x).** R1 spends real
+     wall-clock thinking before it writes (which is also why it gets
+     `REASONING_HEADROOM_TOKENS`); holding it to the standard ceiling would abort
+     calls that were about to succeed — turning a slow answer into no answer.
+  6. **`LlmHttpError.kind` (`http | timeout | network`) is how callers classify a
+     failure — never a regex over `err.message`.** `degradedReasonFor` needs the
+     timeout/outage distinction (it becomes the artifact's `degradedReason`), and
+     deriving it from prose built in `llm-http.ts` meant a reworded string would
+     silently reclassify every timeout. Two more traps closed with it: only
+     undici-shaped `TypeError`s (`'fetch failed'` or carrying a `cause`) count as
+     network faults — treating *every* TypeError as one retried genuine code bugs
+     three times and reported them as outages; and `timeoutMs` is clamped to
+     `MAX_LLM_TIMEOUT_MS`, because past 2^31-1 ms a Node timer overflows and fires
+     **immediately**, so an over-large value aborted every call at once.
+  Config is `LLM_TIMEOUT_MS` (default 90s, **per attempt**) + `LLM_MAX_ATTEMPTS`
+  (default 3 = one call plus two retries), read through `readLlmHttpConfig()`,
+  which **coerces explicitly** — `config.get<number>()` does not, and a string
+  handed to `AbortSignal.timeout` misbehaves silently. Metering note: a timed-out
+  attempt may still have been billed upstream but reports no usage (usage is read
+  off a response we never received), so retries **under**-report spend rather than
+  over-report it — the honest direction for a margin meter.
+- **Generation provenance (`generation.ts`) — degradation has to be VISIBLE.**
+  Every agent falls back deterministically, which is what makes the pipeline
+  resilient; the cost is that a degraded artifact is indistinguishable from a
+  real one. A Pro user paid for an LLM-generated API design, one transient
+  failure handed them the template, and **nothing in the document said so** —
+  they then forwarded it to a client. Additive/optional `generation?:
+  GenerationProvenance` (`{mode, provider, model, degradedReason?}`) on the nine
+  LLM artifacts (requirements · system · database · api · review · vision ·
+  roadmap · threat · qa), JSON-blob convention, migration-free. Seven things not
+  to undo:
+  1. **The stamp is applied by ONE template method, `BaseAgent.generateArtifact`.**
+     Eight agents had byte-for-byte the same try/validate/catch/fallback shape,
+     so they were refactored onto it rather than hand-stamped — provenance each
+     agent sets by hand is provenance the ninth agent forgets. A new agent gets an
+     accurate stamp for free. The API designer keeps its own flow (it **chunks**,
+     so it has several success paths) and stamps via the exposed
+     `this.provenance()`; per-module attribution already lives on `ApiModule.source`.
+  2. **`mode` records what the agent DID WITH the output, not whether HTTP
+     succeeded.** A 200 carrying JSON that fails `isValid` is `fallback`, because
+     the artifact the user receives was built by the code.
+  3. **The mock provider is degraded even on the `llm` path.** `MockLlmProvider`
+     returns parseable JSON, so a scripted response can pass `isValid` and be
+     stamped `llm` — it is still not AI output. `isDegradedGeneration()` ORs
+     `mode === 'fallback'` with `provider === 'mock'`, so that judgment lives in
+     one pure function instead of in every agent.
+  4. **An unstamped artifact is NOT degraded.** Rows written before this existed
+     carry no stamp and we cannot know how they were built; warning on a guess
+     would nag every old project into re-running a **billed, Pro, LLM** stage.
+     Same rule as an unstamped `sourceStamp` never being stale.
+  5. **`parse_error` is deliberately distinct from `call_failed`.** It is the
+     expensive one — the model call **succeeded and was billed**, and only the
+     JSON was unusable — so it points at the prompt or the model, not the network.
+  6. **A (re)generation REPLACES the stamp; a human edit PRESERVES it.** That
+     one rule covers every write path, and each half was wrong once: the chat
+     **refine** spread `...ctx.current` and inherited the old stamp (so a doc
+     refined during an outage still read "AI-generated"), while `save()` dropped
+     it entirely (the global `ValidationPipe` runs `whitelist: true`, so the
+     client's payload never carries it) — meaning one edit silently erased the
+     warning. The refine now re-stamps with its own outcome; every `save()` calls
+     **`preserveGeneration(edited, existing)`**, which also closes the forgery
+     path by taking the stamp from the *server's* row rather than the request.
+     Editing one sentence of a document the model never wrote does not make it
+     AI-written.
+  7. **Provenance is OWNER-ONLY.** `withoutGeneration()` runs in
+     `ShareService.view` on every artifact — same enforcement as R9's
+     `budgetWarning` and R10/R11's deal-risk fields (**the payload IS the
+     boundary**). It tells a client their vendor's proposal was machine-templated
+     and names our provider and model; neither is theirs. A security test asserts
+     no `generation` and no `degradedReason` reaches the public page.
+  8. **The cost estimate is NOT stamped, on purpose.** It is 100% deterministic
+     (`estimateCosts`, zero LLM calls), so a "generation mode" on it would be
+     meaningless at best and would imply LLM involvement at worst. Same for the
+     scaffold. `DerivedArtifact` was therefore *not* the home for the field —
+     `CostEstimate` extends it.
+  **Web:** `GenerationNotice` (mirrors `StaleNotice` — renders **nothing** when
+  healthy, missing, or unstamped, so callers mount it unconditionally above the
+  artifact) on all nine tabs, with a one-click regenerate. The regenerate action
+  is optional, so the share page and example project render read-only. i18n
+  `stages.generation.*` incl. a per-reason message (EN+AR).
 - **LLM usage metering (`llm/usage`) — margin protection.** Every model call made
   through the `LlmProvider` seam is recorded: provider, model, **agent**, stage,
   user, session, tokens, cost, ok/failed, duration. One `llm_usage` row per call

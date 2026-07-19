@@ -20,6 +20,8 @@ import {
   PenLine,
   Shapes,
   ShieldAlert,
+  Compass,
+
   Sparkles,
   Webhook,
   Workflow,
@@ -60,6 +62,7 @@ import { CostEstimatePanel } from '@/components/cost/CostEstimatePanel';
 import { ThreatModelPanel } from '@/components/security/ThreatModelPanel';
 import { QaPlanPanel } from '@/components/qa/QaPlanPanel';
 import { StaleNotice } from '@/components/project/StaleNotice';
+import { GenerationNotice } from '@/components/project/GenerationNotice';
 import { ShareLinkCard } from '@/components/project/ShareLinkCard';
 import { ExportView } from '@/components/project/ExportView';
 import { ProposalModal } from '@/components/project/ProposalModal';
@@ -71,6 +74,7 @@ import { DesignCanvas } from '@/components/design/DesignCanvas';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SummaryView } from '@/components/interview/SummaryView';
 import { ProductVisionPanel } from '@/components/product/ProductVisionPanel';
+import { BusinessAnalysisPanel } from '@/components/product/BusinessAnalysisPanel';
 import { useConfirm } from '@/components/shared/confirm-dialog';
 import { useUpgrade } from '@/components/billing/upgrade-dialog';
 import { useFormat } from '@/lib/i18n/format';
@@ -121,6 +125,7 @@ function useIsDesktop(): boolean {
  */
 const TABS: { value: TabKey; icon: LucideIcon }[] = [
   // The deal: what the client reads and decides on.
+  { value: 'business', icon: Compass },
   { value: 'vision', icon: Sparkles },
   { value: 'requirements', icon: FileText },
   { value: 'cost', icon: Coins },
@@ -177,6 +182,7 @@ const REQUIRES: Partial<Record<TabKey, TabKey>> = {
 };
 
 export type TabKey =
+  | 'business'
   | 'vision'
   | 'requirements'
   | 'system'
@@ -401,6 +407,7 @@ export function ProjectStages({
   );
 
   const available: Record<TabKey, boolean> = {
+    business: true,
     vision: true,
     requirements: true,
     system: !!doc,
@@ -536,6 +543,13 @@ export function ProjectStages({
           )}
 
           {/* Product Vision (standalone) */}
+          <TabsContent value="business" className="mt-4">
+            <BusinessAnalysisPanel
+              sessionId={sessionId}
+              reloadKey={versionsReload}
+            />
+          </TabsContent>
+
           <TabsContent value="vision" className="mt-4">
             <ProductVisionPanel
               sessionId={sessionId}
@@ -589,6 +603,11 @@ export function ProjectStages({
               />
             ) : (
               <>
+                <GenerationNotice
+                  generation={doc.generation}
+                  busy={busy}
+                  onRegenerate={onGenerateRequirements}
+                />
                 <RequirementDocumentView doc={doc} />
                 <StageActions
                   busy={busy}
@@ -636,6 +655,11 @@ export function ProjectStages({
               />
             ) : (
               <>
+                <GenerationNotice
+                  generation={design.generation}
+                  busy={busy}
+                  onRegenerate={onGenerateSystem}
+                />
                 <SystemDesignView design={design} />
                 <StageActions
                   busy={busy}
@@ -683,6 +707,11 @@ export function ProjectStages({
               />
             ) : (
               <>
+                <GenerationNotice
+                  generation={dbDesign.generation}
+                  busy={busy}
+                  onRegenerate={onGenerateDatabase}
+                />
                 <DatabaseDesignView design={dbDesign} />
                 <StageActions
                   busy={busy}
@@ -734,6 +763,11 @@ export function ProjectStages({
               />
             ) : (
               <>
+                <GenerationNotice
+                  generation={apiDesign.generation}
+                  busy={busy}
+                  onRegenerate={onGenerateApi}
+                />
                 <ApiDesignView design={apiDesign} />
                 <StageActions
                   busy={busy}
@@ -783,6 +817,11 @@ export function ProjectStages({
                   stage="review"
                   artifact={review}
                   revisions={revisions}
+                  busy={busy}
+                  onRegenerate={onGenerateReview}
+                />
+                <GenerationNotice
+                  generation={review.generation}
                   busy={busy}
                   onRegenerate={onGenerateReview}
                 />

@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { DatabaseDesign } from '@archivato/shared';
+import { preserveGeneration, type DatabaseDesign } from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -96,10 +96,11 @@ export class DatabaseDesignService {
         'Generate the database design before editing it.',
       );
     }
-    return this.databaseDesigns.upsert({
-      ...edited,
-      sessionId,
-      generatedAt: new Date().toISOString(),
-    });
+    return this.databaseDesigns.upsert(
+      preserveGeneration(
+        { ...edited, sessionId, generatedAt: new Date().toISOString() },
+        existing,
+      ),
+    );
   }
 }

@@ -15,7 +15,8 @@ architecture, database schema, REST API, review, and a runnable code scaffold.
 ![i18n](https://img.shields.io/badge/i18n-EN%20%2B%20AR%20(RTL)-6366f1)
 
 ```
-Idea → AI Interview → Requirements → System Design → Database Design →
+Idea → AI Interview → Business Analysis → Requirements → System Design →
+Database Design →
 API Design → AI Review → Roadmap · Cost · Threat Model · QA Plan →
 Proposal message · Export / Scaffold
 ```
@@ -49,6 +50,7 @@ chain of structured artifacts — each one grounded in the previous:
 | Artifact | Description |
 | --- | --- |
 | **Requirement Document** | A client-facing scoping artifact: plain-language executive summary, user-outcome functional requirements, roles, out-of-scope (scope-creep guard), assumptions & open questions — plus the technical non-functional requirements, business rules, and constraints |
+| **Business Analysis** | The discovery pass that runs *before* requirements: the problem and who has it, user segments, competitive landscape, USP, a market read, and whether the MVP is the right cut. Outside-knowledge claims (competitors, market) carry a confidence and a research checklist — the tool has no web access and never presents recollection as fact. Owner-only; never shown to your client |
 | **Product Vision** | PM-style vision derived from the interview |
 | **System Design** | Constraint-aware architecture + tech stack + service modules (with build-effort complexity), a build-vs-buy plan, a phased MVP→growth path when scale outruns the budget/timeline, and a constraint-compliance table — with per-decision "Explain this" rationale |
 | **Database Design** | Entities, columns, keys, relationships + ER diagram (Mermaid, exportable to Draw.io/SVG/PNG/PDF) |
@@ -84,7 +86,7 @@ RTL-safe**).
 | | Starter (free) | Team ($79/mo or $758/yr) |
 | --- | --- | --- |
 | Client scopings | 1 per month | Unlimited |
-| Interview → Requirements → System → Database design | ✅ | ✅ |
+| Interview → Business Analysis → Requirements → System → Database design | ✅ | ✅ |
 | Product Vision | ✅ | ✅ |
 | Client-facing share link (read-only proposal page) | ✅ with watermark | ✅ no watermark |
 | API design, AI review, roadmap, cost, threat model, QA plan | — | ✅ |
@@ -195,6 +197,7 @@ switches:
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude provider (`claude-sonnet-4-6` default) |
 | `AZURE_OPENAI_API_KEY` / `_ENDPOINT` / `_DEPLOYMENT` | Azure OpenAI provider (deployment-name routing) |
 | `SILICONFLOW_API_KEY` / `SILICONFLOW_MODEL` | SiliconFlow provider (`deepseek-ai/DeepSeek-R1` default — a reasoning model) |
+| `LLM_TIMEOUT_MS` / `LLM_MAX_ATTEMPTS` | Per-**attempt** timeout (default 90s) and total attempts (default 3). Applies to every provider; only transient failures (408/429/5xx, timeouts, network) are retried |
 | `BILLING_PROVIDER` / `PADDLE_*` | Paddle checkout + HMAC-verified webhook; offline mock otherwise |
 | `MAIL_PROVIDER` / `RESEND_API_KEY` / `SMTP_*` | Transactional email; logs to console otherwise |
 | `DATABASE_URL` / `DIRECT_URL` / `REDIS_URL` | Postgres (pooled + direct for migrations) and Redis (`rediss://` supported) |
@@ -203,6 +206,14 @@ switches:
 
 The API logs the resolved providers on startup
 (`Agent LLM provider: …`, `Billing provider: …`, `Mail provider: …`).
+
+**Every agent has a deterministic fallback**, so a missing key or a failed model
+call still yields a valid artifact rather than an error. Because that makes
+degradation invisible, each generated artifact records **how it was produced**
+(`generation`: mode, provider, model, and why it degraded). Anything not written
+by a model — including everything produced in mock mode — is flagged in the UI
+with a one-click regenerate, so a template is never mistaken for AI output. The
+stamp is owner-only and is stripped from the public share page.
 
 ## Testing & CI
 

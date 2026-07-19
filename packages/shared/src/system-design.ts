@@ -3,6 +3,8 @@
  * Produced from a confirmed interview + its Requirement Document.
  */
 
+import type { GenerationProvenance } from './generation';
+
 export type ArchitectureType =
   | 'monolith'
   | 'modular_monolith'
@@ -105,6 +107,8 @@ export interface ConstraintCompliance {
 export interface SystemDesign {
   sessionId: string;
   generatedAt: string;
+  /** How this design was produced — see `generation.ts`. Absent = unknown. */
+  generation?: GenerationProvenance;
   architecture: ArchitectureType;
   architectureRationale: string;
   techStack: TechChoice[];
