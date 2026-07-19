@@ -15,6 +15,7 @@ import { InMemorySystemDesignRepository } from '../system-design/in-memory-syste
 import { DatabaseDesignService } from '../database-design/database-design.service';
 import { InMemoryDatabaseDesignRepository } from '../database-design/in-memory-database-design.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
+import { InMemoryBusinessAnalysisRepository } from '../business-analysis/in-memory-business-analysis.repository';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
 import { DatabaseDesignerAgent } from '../llm/agents/database-designer.agent';
@@ -53,6 +54,7 @@ function makeHarness(): Harness {
   const requirements = new RequirementsService(
     sessionRepo,
     docRepo,
+    new InMemoryBusinessAnalysisRepository(),
     new RequirementEngineerAgent(mock),
   );
   const systemDesign = new SystemDesignService(

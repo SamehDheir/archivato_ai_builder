@@ -737,5 +737,72 @@
       "priced": "with price",
       "over": "over limit"
     }
+  },
+  "business": {
+    "generate": "Run business analysis",
+    "regenerate": "Re-run analysis",
+    "working": "Analyzing…",
+    "generatedToast": "Business analysis ready",
+    "failed": "Could not run the business analysis",
+    "emptyTitle": "Understand the business first",
+    "emptyDescription": "Before requirements are written, work out the problem, who has it, why a buyer would choose this, and whether the first release is the right cut.",
+    "verdict": {
+      "title": "Assessment",
+      "ownerOnly": "Internal — never shown to your client.",
+      "proceed": "Proceed",
+      "proceed-with-changes": "Proceed with changes",
+      "needs-validation": "Needs validation",
+      "high-risk": "High risk"
+    },
+    "checklist": {
+      "title": "Verify before you send this",
+      "description": "These claims came from the model's general knowledge, not from research or from your client. Check them before any of this reaches a proposal."
+    },
+    "problem": {
+      "title": "The problem",
+      "problem": "Problem",
+      "whoHasIt": "Who has it",
+      "currentAlternative": "What they do today",
+      "costOfInaction": "Cost of doing nothing"
+    },
+    "usp": {
+      "title": "Why choose this",
+      "defensibility": "How defensible"
+    },
+    "segments": {
+      "title": "User segments",
+      "name": "Segment",
+      "job": "What they need it for",
+      "pains": "Pain points"
+    },
+    "competitors": {
+      "title": "Competitive landscape",
+      "name": "Product",
+      "positioning": "Positioning",
+      "weaknesses": "Gaps",
+      "confidence": "Confidence",
+      "none": "No competitors were identified. That is not evidence there are none — it means this needs research."
+    },
+    "market": {
+      "title": "Market read",
+      "size": "Shape of the market",
+      "demand": "Demand signals",
+      "headwinds": "Headwinds"
+    },
+    "mvp": {
+      "title": "MVP assessment",
+      "core": "Belongs in release one",
+      "defer": "Can wait",
+      "verdict": {
+        "well-scoped": "Well scoped",
+        "too-large": "Too large",
+        "too-thin": "Too thin"
+      }
+    },
+    "confidence": {
+      "stated": "Client stated",
+      "inferred": "Inferred",
+      "unverified": "Unverified"
+    }
   }
 }
