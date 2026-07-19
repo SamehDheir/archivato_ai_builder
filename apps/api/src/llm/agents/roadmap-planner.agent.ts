@@ -14,6 +14,7 @@ import {
   type RoadmapPhase,
   type SlotMap,
   type SystemDesign,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -96,7 +97,7 @@ export class RoadmapPlannerAgent extends BaseAgent {
     const workflow = this.slotText(ctx, 'core_workflows');
     const timeline = this.slotText(ctx, 'timeline');
     const lines = [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       `Architecture: ${ctx.systemDesign.architecture}`,
       `Services (modules): ${ctx.systemDesign.services
         .map((s) => `${s.name}${s.complexity ? `[${s.complexity}]` : ''}`)

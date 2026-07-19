@@ -12,6 +12,7 @@ import {
   type SlotKey,
   type SlotMap,
   type UserSegment,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -90,7 +91,7 @@ export class BusinessAnalystAgent extends BaseAgent {
   private buildPrompt(ctx: BusinessAnalysisContext): string {
     const s = ctx.slots;
     return [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       ctx.industry ? `Industry: ${ctx.industry}` : '',
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',
       ctx.intent ? `Primary users: ${ctx.intent.primaryUsers.join(', ')}` : '',

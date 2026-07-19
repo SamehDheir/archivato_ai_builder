@@ -6,6 +6,7 @@ import {
   type DecisionExplanation,
   type DecisionRef,
   type SystemDesign,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -69,7 +70,7 @@ export class ArchitectExplainerAgent extends BaseAgent {
       .join('; ');
 
     return [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       `Architecture: ${design.architecture}`,
       `Tech stack: ${stack || '(none)'}`,
       `Services: ${services || '(none)'}`,

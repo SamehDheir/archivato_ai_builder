@@ -3,6 +3,9 @@ import {
   AgentRole,
   SLOT_KEYS,
   regulationsForMarket,
+  screenRequirementDocument,
+  untrusted,
+  untrustedField,
   type BusinessAnalysis,
   type BusinessRule,
   type FunctionalRequirement,
@@ -119,7 +122,7 @@ export class RequirementEngineerAgent extends BaseAgent {
     // the model — so they're folded into the assumptions on BOTH paths, and the
     // raw client-question list is attached verbatim too.
     const openQuestions = ctx.openQuestions ?? [];
-    return this.generateArtifact<RequirementDocument>({
+    const doc = await this.generateArtifact<RequirementDocument>({
       label: 'Requirement doc',
       prompt: this.buildPrompt(ctx),
       isValid: (raw) => this.isValid(raw),
@@ -127,6 +130,18 @@ export class RequirementEngineerAgent extends BaseAgent {
         this.normalize(sessionId, generatedAt, raw, ctx, openQuestions),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
     });
+
+    // Screen the client-facing prose on the way out. This runs on BOTH paths: the
+    // deterministic build composes its summary from the client's own words, so a
+    // link pasted into the interview reaches the share page with no model involved
+    // at all.
+    const { document, removed } = screenRequirementDocument(doc);
+    if (removed.length > 0) {
+      this.logger.warn(
+        `Requirement doc: stripped ${removed.length} link(s) from client-facing sections — possible prompt injection: ${removed.join(', ')}`,
+      );
+    }
+    return document;
   }
 
   /**
@@ -206,7 +221,7 @@ export class RequirementEngineerAgent extends BaseAgent {
       ].join('\n');
     }
     return [
-      `\nCOMPLIANCE — the stated target market is "${market}". The regimes that apply:`,
+      `\nCOMPLIANCE — the stated target market is ${untrusted(market)}. The regimes that apply:`,
       ...regime.laws.map((l) => `- ${l}`),
       `Data residency: ${regime.dataResidency}`,
       regime.note,
@@ -215,9 +230,12 @@ export class RequirementEngineerAgent extends BaseAgent {
   }
 
   private buildPrompt(ctx: RequirementContext): string {
-    const qa = ctx.history
-      .map((h) => `Q: ${h.question.prompt}\nA: ${h.answer}`)
-      .join('\n');
+    // The transcript is fenced as one block rather than per answer: every line of
+    // it is either our question or the client's words, and a single fence is
+    // harder to get wrong than one per turn.
+    const qa = untrusted(
+      ctx.history.map((h) => `Q: ${h.question.prompt}\nA: ${h.answer}`).join('\n'),
+    );
 
     // Scoping facts from the slot pass, minus the commercial ones (budget /
     // timeline) — those must not appear in this document at all.
@@ -227,13 +245,13 @@ export class RequirementEngineerAgent extends BaseAgent {
       .map((k) => {
         const s = ctx.slots?.[k];
         if (!s || s.na || !s.value.trim()) return '';
-        return `- ${k}: ${s.value.trim()}${s.source === 'inferred' ? ' (inferred)' : ''}`;
+        return `- ${k}: ${untrusted(s.value)}${s.source === 'inferred' ? ' (inferred)' : ''}`;
       })
       .filter(Boolean)
       .join('\n');
 
     const oqLines = (ctx.openQuestions ?? [])
-      .map((q) => `- ${q.questionForClient}`)
+      .map((q) => `- ${untrusted(q.questionForClient)}`)
       .join('\n');
 
     const domain = ctx.intent?.domain ?? slotText(ctx.slots?.business_domain);
@@ -241,7 +259,7 @@ export class RequirementEngineerAgent extends BaseAgent {
 
     return [
       businessAnalysisBrief(ctx.businessAnalysis),
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       ctx.intent ? `Domain: ${ctx.intent.domain}` : '',
       ctx.intent && ctx.intent.coreCapabilities.length
         ? `Core capabilities identified: ${ctx.intent.coreCapabilities.join(', ')}`

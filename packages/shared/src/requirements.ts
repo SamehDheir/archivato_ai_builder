@@ -5,6 +5,7 @@
 
 import type { OpenQuestion } from './interview';
 import type { GenerationProvenance } from './generation';
+import { stripUrls } from './prompt-safety';
 
 export type RequirementPriority = 'must' | 'should' | 'could';
 
@@ -110,4 +111,88 @@ export interface RequirementDocument {
    * its absence.
    */
   openQuestions?: OpenQuestion[];
+}
+
+/**
+ * Strip links from every prose field of a requirement document, and report what
+ * was removed.
+ *
+ * This is the outbound half of the prompt-injection defense. The document is
+ * generated from text the owner did not write and is then rendered on a public,
+ * unauthenticated share page, so a link injected through the interview would be
+ * delivered to the client by their own vendor. No layer above this can promise
+ * the model ignored the injection; this one does not have to ask.
+ *
+ * **It screens the whole document, including the technical sections.** The first
+ * cut deliberately spared `nonFunctional` / `businessRules` / `constraints` on
+ * the grounds that they are for the dev team, who can judge a link to a payment
+ * provider's spec. That was wrong, and a test caught it: R7 moved exactly those
+ * three sections into the share page's *technical appendix*, so they are as
+ * public as the executive summary. There is no section of this artifact that
+ * only the dev team sees, so there is no section that can be left unscreened.
+ * A genuinely useful reference link can still be added in the structured editor,
+ * which is authored by the owner rather than by the client's brief.
+ */
+export function screenRequirementDocument(doc: RequirementDocument): {
+  document: RequirementDocument;
+  removed: string[];
+} {
+  const removed: string[] = [];
+  const clean = (text: string): string => {
+    const result = stripUrls(text);
+    removed.push(...result.removed);
+    return result.text;
+  };
+
+  // Every array is read through `?? []`. The type says they are required, but this
+  // runs over **stored** rows too (a chat refine screens the document it loaded),
+  // and a JSON row written before a field existed still violates the type it is
+  // cast to — the `normalizeApiDesign` lesson, where a missing required array
+  // took out the OpenAPI export. A screen that throws would fail the generation
+  // it was meant to protect.
+  const document: RequirementDocument = {
+    ...doc,
+    executiveSummary: doc.executiveSummary ? clean(doc.executiveSummary) : doc.executiveSummary,
+    functional: (doc.functional ?? []).map((fr) => ({
+      ...fr,
+      title: clean(fr.title ?? ''),
+      description: clean(fr.description ?? ''),
+    })),
+    roles: (doc.roles ?? []).map((role) => ({
+      ...role,
+      name: clean(role.name ?? ''),
+      description: clean(role.description ?? ''),
+      permissions: (role.permissions ?? []).map((p) => clean(p ?? '')),
+    })),
+    nonFunctional: (doc.nonFunctional ?? []).map((nfr) => ({
+      ...nfr,
+      description: clean(nfr.description ?? ''),
+    })),
+    businessRules: (doc.businessRules ?? []).map((br) => ({
+      ...br,
+      description: clean(br.description ?? ''),
+    })),
+    constraints: (doc.constraints ?? []).map((c) => clean(c ?? '')),
+    assumptions: (doc.assumptions ?? []).map((a) => clean(a ?? '')),
+    ...(doc.outOfScope
+      ? {
+          outOfScope: doc.outOfScope.map((item) => ({
+            ...item,
+            item: clean(item.item ?? ''),
+            ...(item.reason ? { reason: clean(item.reason) } : {}),
+          })),
+        }
+      : {}),
+    ...(doc.assumptionsAndOpenQuestions
+      ? {
+          assumptionsAndOpenQuestions: doc.assumptionsAndOpenQuestions.map((a) => ({
+            ...a,
+            assumption: clean(a.assumption ?? ''),
+            impactIfWrong: clean(a.impactIfWrong ?? ''),
+          })),
+        }
+      : {}),
+  };
+
+  return { document, removed };
 }

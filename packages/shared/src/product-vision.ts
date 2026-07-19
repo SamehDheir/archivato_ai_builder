@@ -9,6 +9,7 @@
  */
 
 import type { GenerationProvenance } from './generation';
+import { stripUrls } from './prompt-safety';
 
 /** A user persona: who they are, what they want, what frustrates them. */
 export interface Persona {
@@ -45,4 +46,56 @@ export interface ProductVision {
   futureFeatures: string[];
   successMetrics: SuccessMetric[];
   personas: Persona[];
+}
+
+/**
+ * Strip links from the product vision, and report what was removed.
+ *
+ * The vision is generated from the same untrusted interview text as the
+ * requirement document, and it is **the section the share page leads with** — the
+ * first thing a client reads. It is a strategy narrative (a north-star sentence,
+ * goals, personas), so like the requirement document it has no legitimate URL,
+ * and an injected link would sit at the very top of the page the owner sent.
+ *
+ * Mirrors `screenRequirementDocument`; see `prompt-safety.ts` for why the rule is
+ * an allowlist rather than "was it in the input".
+ */
+export function screenProductVision(vision: ProductVision): {
+  vision: ProductVision;
+  removed: string[];
+} {
+  const removed: string[] = [];
+  const clean = (text: string): string => {
+    const result = stripUrls(text);
+    removed.push(...result.removed);
+    return result.text;
+  };
+
+  // `?? []` throughout, for the reason given in `screenRequirementDocument`: this
+  // may run over a stored row that predates a field.
+  const text = (value: string | undefined): string => clean(value ?? '');
+
+  return {
+    vision: {
+      ...vision,
+      vision: text(vision.vision),
+      goals: (vision.goals ?? []).map(text),
+      mvp: (vision.mvp ?? []).map(text),
+      futureFeatures: (vision.futureFeatures ?? []).map(text),
+      successMetrics: (vision.successMetrics ?? []).map((m) => ({
+        ...m,
+        name: text(m.name),
+        target: text(m.target),
+        rationale: text(m.rationale),
+      })),
+      personas: (vision.personas ?? []).map((p) => ({
+        ...p,
+        name: text(p.name),
+        description: text(p.description),
+        goals: (p.goals ?? []).map(text),
+        painPoints: (p.painPoints ?? []).map(text),
+      })),
+    },
+    removed,
+  };
 }

@@ -16,6 +16,7 @@ import {
   type IntentAnalysis,
   type RequirementDocument,
   type SystemDesign,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent, degradedReasonFor } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -277,7 +278,7 @@ export class ApiDesignerAgent extends BaseAgent {
     },
   ): string {
     const lines = [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       `Services: ${ctx.systemDesign.services.map((s) => s.name).join(', ')}`,
       '',
     ];
@@ -342,7 +343,7 @@ export class ApiDesignerAgent extends BaseAgent {
     missing: Entity[],
   ): string {
     return [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       '',
       'An API design already exists with these endpoint groups:',
       ...design.modules.map(

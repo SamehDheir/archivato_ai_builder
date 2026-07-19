@@ -20,6 +20,7 @@ import {
   type SlotMap,
   type SuggestedResolution,
   type SystemDesign,
+  untrustedField,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -132,7 +133,7 @@ export class ReviewerAgent extends BaseAgent {
       .map((b) => `${b.capability}${b.suggestedService ? `→${b.suggestedService}` : ''}`)
       .join(', ');
     return [
-      `Idea: ${ctx.idea}`,
+      untrustedField('Idea', ctx.idea),
       `Architecture: ${ctx.systemDesign.architecture}`,
       `Tech stack: ${techStack}`,
       `Services: ${ctx.systemDesign.services.map((s) => s.name).join(', ')}`,
