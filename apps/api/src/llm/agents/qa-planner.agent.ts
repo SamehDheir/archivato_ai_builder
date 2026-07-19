@@ -13,6 +13,7 @@ import {
   type TestType,
   type SystemDesign,
   untrustedField,
+  normalizeQaPlan,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -69,7 +70,8 @@ export class QaPlannerAgent extends BaseAgent {
       label: 'QA plan',
       prompt: this.buildPrompt(ctx),
       isValid: (raw) => this.isValid(raw),
-      accept: (raw) => this.normalize({ ...raw, sessionId, generatedAt }, ctx),
+      accept: (raw) =>
+        normalizeQaPlan(this.normalize({ ...raw, sessionId, generatedAt }, ctx)),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
     });
   }

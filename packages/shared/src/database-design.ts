@@ -83,3 +83,50 @@ export interface DatabaseDesign {
   entities: Entity[];
   relations: Relation[];
 }
+
+/**
+ * Coerce a database design to a complete shape.
+ *
+ * Applied at **both** boundaries an untrusted design enters through — the agent's
+ * LLM output (write) and the JSON store's read — because the store hands back
+ * `row.data as unknown as DatabaseDesign`, and **that cast is a claim, not a
+ * check**: a row written before a rule existed still violates the type it is cast
+ * to, and only the read side can heal it.
+ *
+ * This is not hypothetical. The agent's `isValid` gates on `entities` and never
+ * looked at `relations`, so a model reply that simply omitted the key was
+ * accepted and stored — and `DatabaseDesignView` then died on
+ * `design.relations.length`. `buildSqlDdl`, the ERD builder and the scaffold all
+ * trust the same field, so the crash site was the first of four, not the bug.
+ * **A missing array must read as empty, never as undefined.**
+ */
+export function normalizeDatabaseDesign(design: DatabaseDesign): DatabaseDesign {
+  return {
+    ...design,
+    databaseType:
+      typeof design?.databaseType === 'string' && design.databaseType.trim()
+        ? design.databaseType
+        : 'PostgreSQL',
+    entities: Array.isArray(design?.entities)
+      ? design.entities
+          .filter((e): e is Entity => !!e && typeof e.name === 'string')
+          .map((e) => ({
+            ...e,
+            description: typeof e.description === 'string' ? e.description : '',
+            columns: Array.isArray(e.columns)
+              ? e.columns.filter(
+                  (c): c is EntityColumn => !!c && typeof c.name === 'string',
+                )
+              : [],
+          }))
+      : [],
+    // The field that crashed. A relation naming an endpoint that isn't a string
+    // is dropped rather than rendered as "undefined → undefined".
+    relations: Array.isArray(design?.relations)
+      ? design.relations.filter(
+          (r): r is Relation =>
+            !!r && typeof r.from === 'string' && typeof r.to === 'string',
+        )
+      : [],
+  };
+}

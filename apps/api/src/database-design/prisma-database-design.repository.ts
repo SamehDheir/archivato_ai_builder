@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { DatabaseDesign } from '@archivato/shared';
+import { normalizeDatabaseDesign } from '@archivato/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { DatabaseDesignRepository } from './database-design.repository';
 
@@ -25,7 +26,7 @@ export class PrismaDatabaseDesignRepository
     const row = await this.prisma.databaseDesign.findUnique({
       where: { sessionId },
     });
-    return row ? (row.data as unknown as DatabaseDesign) : null;
+    return row ? normalizeDatabaseDesign(row.data as unknown as DatabaseDesign) : null;
   }
 
   async deleteBySessionId(sessionId: string): Promise<void> {

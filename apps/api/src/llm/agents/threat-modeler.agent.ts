@@ -12,6 +12,7 @@ import {
   type Threat,
   type ThreatModel,
   untrustedField,
+  normalizeThreatModel,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
@@ -72,7 +73,8 @@ export class ThreatModelerAgent extends BaseAgent {
       label: 'Threat model',
       prompt: this.buildPrompt(ctx),
       isValid: (raw) => this.isValid(raw),
-      accept: (raw) => this.normalize({ ...raw, sessionId, generatedAt }, ctx),
+      accept: (raw) =>
+        normalizeThreatModel(this.normalize({ ...raw, sessionId, generatedAt }, ctx)),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
     });
   }

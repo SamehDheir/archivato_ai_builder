@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  AlertTriangle,
   Boxes,
   GitBranch,
   Layers,
@@ -17,6 +18,7 @@ import type {
   SystemDesign,
 } from '@archivato/shared';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -93,6 +95,8 @@ export function SystemDesignView({
 
   const buildVsBuy = design.buildVsBuy ?? [];
   const compliance = design.constraintCompliance ?? [];
+  // Owner-only: the share payload never carries it (stripped in ShareService).
+  const uncovered = design.uncoveredRequirements ?? [];
 
   const buildVsBuySection = buildVsBuy.length > 0 && (
     <Section
@@ -281,6 +285,16 @@ export function SystemDesignView({
       </Section>
 
       {!buildVsBuyFirst && buildVsBuySection}
+
+      {uncovered.length > 0 && (
+        <Alert variant="warning">
+          <AlertTriangle aria-hidden />
+          <AlertTitle>{t('system.uncovered.title')}</AlertTitle>
+          <AlertDescription>
+            {t('system.uncovered.body', { ids: uncovered.join(', ') })}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {compliance.length > 0 && (
         <Section

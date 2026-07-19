@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { ThreatModel } from '@archivato/shared';
+import { normalizeThreatModel } from '@archivato/shared';
 import type { ThreatModelRepository } from './threat-model.repository';
 
 /** Process-local store used by unit tests. */
@@ -13,7 +14,8 @@ export class InMemoryThreatModelRepository implements ThreatModelRepository {
   }
 
   async findBySessionId(sessionId: string): Promise<ThreatModel | null> {
-    return this.models.get(sessionId) ?? null;
+    const found = this.models.get(sessionId);
+    return found ? normalizeThreatModel(found) : null;
   }
 
   async deleteBySessionId(sessionId: string): Promise<void> {

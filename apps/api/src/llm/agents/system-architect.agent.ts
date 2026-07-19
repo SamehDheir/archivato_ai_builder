@@ -1,8 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
+  enforcePaymentAvailability,
+  findUncoveredRequirements,
   isBuildVsBuyCapability,
   isModuleComplexity,
+  missingAuthService,
+  paymentAvailabilityFor,
+  paymentProvidersFor,
   regulationsForMarket,
   significantTokens,
   type ArchitectureType,
@@ -110,7 +115,15 @@ export class SystemArchitectAgent extends BaseAgent {
       `- Hard constraints: ${slotText(s, 'constraints') || 'none stated'}`,
       `- Existing assets to build on: ${slotText(s, 'existing_assets') || 'none stated'}`,
       `- Target market: ${slotText(s, 'target_market') || 'not stated'}`,
+      // The integrations slot was NOT printed here, and it is where the client
+      // states which external systems they can and cannot use ("Stripe and PayPal
+      // are not available to merchants in Palestine"). The agent that picks the
+      // payment provider could not see the one sentence that constrained it —
+      // repeating it in the interview could not help, because the field never
+      // reached the prompt.
+      `- External systems / integrations named by the client: ${slotText(s, 'integrations') || 'none stated'}`,
       residencyLine(slotText(s, 'target_market')),
+      paymentGuidanceLine(slotText(s, 'target_market')),
       '',
       'Rules:',
       '- Pick the simplest architecture that meets the requirements. Under a tight',
@@ -123,6 +136,13 @@ export class SystemArchitectAgent extends BaseAgent {
       '  {mvp, growthPath, migrationNotes}. Otherwise OMIT phasedArchitecture.',
       '- Budget and timeline are context for your reasoning only; do not print the',
       '  exact figure or date in any field.',
+      '- COVERAGE: every functional requirement above must be owned by at least one',
+      '  service. Before returning, walk the FR list and check each id is covered by',
+      "  a service's responsibility — a requirement no service implements is a",
+      '  feature that will not get built.',
+      '- If the requirements define two or more roles with different permissions,',
+      '  include a service that owns authentication and role-based access. Without',
+      '  one, nothing in the design enforces the permissions the requirements state.',
       '',
       'Return JSON with these keys:',
       '- architecture: one of monolith | modular_monolith | microservices.',
@@ -164,8 +184,8 @@ export class SystemArchitectAgent extends BaseAgent {
     ctx: SystemDesignContext,
   ): SystemDesign {
     const haystack = this.haystack(ctx);
-    const services = this.ensureComplexity(
-      raw.services as ServiceModule[],
+    const services = this.withAuthService(
+      this.ensureComplexity(raw.services as ServiceModule[], ctx),
       ctx,
     );
     const buildVsBuy = sanitizeBuildVsBuy(raw.buildVsBuy);
@@ -177,14 +197,62 @@ export class SystemArchitectAgent extends BaseAgent {
       sessionId,
       generatedAt,
       services,
-      buildVsBuy: buildVsBuy.length ? buildVsBuy : this.buildVsBuy(haystack),
+      buildVsBuy: this.withAvailablePayments(
+        buildVsBuy.length ? buildVsBuy : this.buildVsBuy(haystack),
+        ctx,
+      ),
       constraintCompliance: compliance.length
         ? compliance
         : this.constraintCompliance(ctx),
       phasedArchitecture: conflict
         ? validPhased(raw.phasedArchitecture) ?? this.phasedArchitecture(ctx)
         : undefined,
+      uncoveredRequirements: this.uncovered(services, ctx),
     };
+  }
+
+  /**
+   * The three R8 guarantees that must hold on **both** paths — so they live in
+   * methods both `normalize` and `buildDeterministic` call, rather than in one of
+   * them. Each exists because the LLM path silently produced a design the
+   * fallback would have got right.
+   */
+  private withAuthService(
+    services: ServiceModule[],
+    ctx: SystemDesignContext,
+  ): ServiceModule[] {
+    const auth = missingAuthService(services, ctx.requirements.roles);
+    if (!auth) return services;
+    this.logger.debug(
+      `${ctx.requirements.roles.length} roles defined but no identity service; adding one.`,
+    );
+    // First: it is the component everything else authenticates against, and the
+    // services list is read top-down by the client.
+    return [auth, ...services];
+  }
+
+  private withAvailablePayments(
+    items: BuildVsBuyItem[],
+    ctx: SystemDesignContext,
+  ): BuildVsBuyItem[] {
+    const market = slotText(ctx.slots, 'target_market');
+    const { items: next, corrected } = enforcePaymentAvailability(items, market);
+    if (corrected) {
+      this.logger.warn(
+        `Payment recommendation named a processor unavailable in "${market}"; replaced with regionally viable options.`,
+      );
+    }
+    return next;
+  }
+
+  private uncovered(
+    services: ServiceModule[],
+    ctx: SystemDesignContext,
+  ): string[] | undefined {
+    const gaps = findUncoveredRequirements(ctx.requirements.functional, services);
+    if (gaps.length === 0) return undefined;
+    this.logger.debug(`Requirements with no owning service: ${gaps.join(', ')}.`);
+    return gaps;
   }
 
   private ensureComplexity(
@@ -219,16 +287,19 @@ export class SystemArchitectAgent extends BaseAgent {
     });
     const conflict = this.hasScaleConflict(ctx, haystack);
 
+    const withAuth = this.withAuthService(services, ctx);
+
     return {
       sessionId,
       generatedAt,
       architecture,
       architectureRationale: this.architectureRationale(architecture, ctx, conflict),
       techStack: this.inferTechStack(haystack),
-      services,
-      buildVsBuy: this.buildVsBuy(haystack),
+      services: withAuth,
+      buildVsBuy: this.withAvailablePayments(this.buildVsBuy(haystack), ctx),
       constraintCompliance: this.constraintCompliance(ctx),
       phasedArchitecture: conflict ? this.phasedArchitecture(ctx) : undefined,
+      uncoveredRequirements: this.uncovered(withAuth, ctx),
     };
   }
 
@@ -531,6 +602,35 @@ function residencyLine(market: string): string {
   return regime
     ? `- Data residency: ${regime.dataResidency} Name the hosting region in the rationale.`
     : '- Data residency: no target market stated — do not assume a jurisdiction or a default hosting region.';
+}
+
+/**
+ * What the model is allowed to assume about payment processors in this market.
+ *
+ * With no stated market it gets an instruction to verify rather than a default,
+ * for the same reason `residencyLine` refuses to guess a jurisdiction: the
+ * untutored default is Stripe regardless of who the merchant is.
+ */
+function paymentGuidanceLine(market: string): string {
+  if (!market) {
+    return '- Payments: no target market stated — do not name a specific processor as if its availability were known; say the processor must be confirmed once the market is.';
+  }
+  const availability = paymentAvailabilityFor(market);
+  const viable = paymentProvidersFor(market);
+  const lines = [
+    viable.length
+      ? `- Payments: processors that serve this market include ${viable.join(', ')}.`
+      : '- Payments: no processor list is known for this market — treat the choice as an open question.',
+  ];
+  if (availability) {
+    lines.push(
+      `- Payments (HARD CONSTRAINT): ${availability.unavailable.join(' and ')} do NOT onboard merchants based in this market. Do not recommend them. ${availability.note}`,
+    );
+  }
+  lines.push(
+    '- Before naming any third-party service, check it actually operates in the stated market and honours anything the client said about what they can use.',
+  );
+  return lines.join('\n');
 }
 
 const LARGE_SCALE =

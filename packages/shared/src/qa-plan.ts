@@ -67,3 +67,36 @@ export interface QaPlan extends DerivedArtifact {
   /** Explicitly out-of-scope for this plan. */
   outOfScope: string[];
 }
+
+/**
+ * Coerce a QA plan to a complete shape — the `normalizeDatabaseDesign` rule,
+ * applied at both boundaries (agent on write, both stores on read).
+ *
+ * Like the threat model this renders on the **public share page**, and it has
+ * the widest exposure of any artifact here: five required arrays, of which the
+ * agent's `isValid` checked exactly one (`suites`).
+ */
+export function normalizeQaPlan(plan: QaPlan): QaPlan {
+  const strings = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+
+  return {
+    ...plan,
+    summary: typeof plan?.summary === 'string' ? plan.summary : '',
+    strategy: strings(plan?.strategy),
+    coverageGoals: strings(plan?.coverageGoals),
+    tooling: strings(plan?.tooling),
+    outOfScope: strings(plan?.outOfScope),
+    suites: Array.isArray(plan?.suites)
+      ? plan.suites
+          .filter((s): s is TestSuite => !!s && typeof s.name === 'string')
+          .map((s) => ({
+            ...s,
+            objective: typeof s.objective === 'string' ? s.objective : '',
+            cases: Array.isArray(s.cases)
+              ? s.cases.filter((c): c is TestCase => !!c && typeof c.title === 'string')
+              : [],
+          }))
+      : [],
+  };
+}

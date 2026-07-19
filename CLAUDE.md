@@ -1129,6 +1129,37 @@ tsconfig and never needs shared's `dist`.
     on read) so the two can't drift. **A missing array must read as empty, never as
     undefined.** When a required field on a JSON-stored artifact starts arriving
     absent, fix the read — not the crash site.
+    - **It recurred, because each agent's `isValid` gates on ONE field.** A terser
+      model omitted `relations` and `DatabaseDesignView` died on
+      `design.relations.length`. There are now `normalizeDatabaseDesign` /
+      `normalizeThreatModel` / `normalizeQaPlan` beside `normalizeApiDesign` /
+      `normalizeReviewReport`, each applied at the agent **and both repos**
+      (Prisma *and* in-memory, so a unit test can't pass on a shape production
+      repairs). The threat model and QA plan matter most — they render on the
+      **public share page**, where a partial reply breaks a page a client is
+      reading with no owner present to see it.
+    - **The upstream cause was an output budget, and it is bounded from BOTH
+      sides.** The database designer used the provider default of 2048, which a
+      seven-entity schema overruns — and relations are emitted *last*, so they are
+      what gets cut. But raising it to 8192 then produced a **413**: providers
+      reserve `max_tokens` against tokens-per-minute, so a big budget on a small
+      prompt breaches an 8K TPM free tier and is refused *before the model runs*.
+      `SCHEMA_MAX_TOKENS` is 5120 — enough for a real schema, inside an 8K tier.
+      **Check the target model's TPM before raising any `maxTokens`.**
+    - **`BaseAgent.askWithinBudget` halves the budget once on a size refusal.**
+      A 413 is not retryable *as sent* (waiting cannot help — the request breaches
+      the ceiling on its own), so it is deliberately outside `isRetryableStatus`;
+      asking for less is the only move that can succeed, and a shorter artifact
+      beats the template. One retry, not a loop: if half still doesn't fit, the
+      tier is wrong for the artifact and the honest answer is the fallback plus a
+      warning naming the limit.
+    - **A provider rejecting its own model's malformed JSON is a `parse_error`,
+      not a `call_failed`.** Groq's native JSON mode validates server-side and
+      answers a truncated completion with **400 `json_validate_failed`** — a
+      permanent status, but one that means the call **succeeded and was billed**.
+      `isGenerationFailure()` detects it off `LlmHttpError.detail` so
+      `degradedReasonFor` reports the expensive reason and points at the prompt
+      and budget rather than the network.
 - **Repository pattern everywhere.** Every store has an interface + in-memory
   impl (used by unit tests, DB-free) + Prisma impl. Feature modules provide the
   Prisma repo.
@@ -1488,14 +1519,20 @@ tsconfig and never needs shared's `dist`.
     most likely to need a SQL rollup first — it goes behind the repository
     interface when it does.
 - **Provider selection** (`llm.module.ts`):
-  `LLM_PROVIDER=mock|claude|groq|azure|siliconflow` forces it for all agents;
-  else `GROQ_API_KEY` present → groq for everything; else
-  `AZURE_OPENAI_API_KEY` present → azure; else `SILICONFLOW_API_KEY` present →
-  siliconflow; else mock. **Groq keeps priority over Azure** so the documented
-  "paste a free Groq key" behaviour is unchanged, and **SiliconFlow sits last**
-  for the same reason — adding a key must never silently move an existing install
-  off the provider it has been running on. Force with `LLM_PROVIDER=<kind>` when
-  several keys exist.
+  `LLM_PROVIDER=mock|claude|groq|azure|siliconflow|cerebras` forces it for all
+  agents; otherwise the first key present in **`PROVIDER_PRIORITY`** wins
+  (`groq → azure → siliconflow → cerebras`), else mock. That list is
+  **append-only**: adding a key must never silently move an existing install off
+  the provider it has been running on, so Groq stays first (the documented "paste
+  a free Groq key" behaviour) and each new provider goes on the end — Cerebras
+  last **even though its free tier is the most generous**, because arriving later
+  is what decides the order, not how good the tier is. Force with
+  `LLM_PROVIDER=<kind>` when several keys exist.
+  - **The keys are passed as a NAMED object (`ProviderKeys`), not positionally.**
+    With five providers, `selectProviderKind` had grown to four optional strings
+    in a row, where transposing two arguments reads fine, compiles fine, and
+    silently selects the wrong provider. The priority now lives in one list
+    instead of being implied by parameter position.
   `INTERVIEW_LLM_PROVIDER` overrides only the interview. Model via
   `ANTHROPIC_MODEL` (default `claude-sonnet-4-6`; `claude-opus-4-8` available).
 - **Azure OpenAI (`AzureOpenAiLlmProvider`).** OpenAI-shape chat completions, so it
@@ -1509,6 +1546,48 @@ tsconfig and never needs shared's `dist`.
   version with JSON mode). Native `fetch`, no SDK. Targets chat deployments
   (gpt-4o/4.1/35-turbo) — the o-series reasoning models reject `temperature` and
   want `max_completion_tokens`.
+- **Cerebras (`CerebrasLlmProvider`) — fast, but PAID.** Another OpenAI-shaped
+  provider mirroring `GroqLlmProvider` (native `fetch`, Bearer auth, native
+  `response_format: json_object`). It was added for its free tier and that turned
+  out **not to exist for new accounts** — a fresh key returns **HTTP 402
+  `payment_required`** on the first call (verified against a real account, not
+  inferred). The much-quoted "1M tokens/day, no card" tier is legacy, closed to
+  new signups, and ends for existing accounts on **17 Aug 2026**. Keep the
+  provider (it works, and it is the fastest option if ever paid for), but **Groq
+  remains the only permanently-free provider here** — see `GROQ_MODEL` below,
+  where the model choice is worth 2–5× the daily token budget. Env:
+  `CEREBRAS_API_KEY` (required), `CEREBRAS_MODEL` (default **`gpt-oss-120b`**),
+  `CEREBRAS_BASE_URL` (default `https://api.cerebras.ai/v1`). Four things to know:
+  1. **`max_completion_tokens`, NOT `max_tokens`.** Cerebras dropped the legacy
+     field, so copying the Groq/SiliconFlow payload verbatim silently caps or
+     rejects every call. This is the single most likely way to break this provider
+     while every other OpenAI-shaped one keeps working — pinned by a test that
+     asserts `max_tokens` is absent from the body.
+  2. **The default model REASONS**, so it gets `REASONING_HEADROOM_TOKENS` and a
+     2x timeout (the SiliconFlow rules). Headroom is **4096, half SiliconFlow's**,
+     because the binding free-tier limit here is tokens-per-minute (30K), and
+     headroom counts against it whether the model uses it or not.
+  3. **The free tier limits REQUESTS, not tokens** — 5 RPM against 1M tokens/day.
+     A pipeline run is ~10–12 calls plus API-design chunking, so a run spans a
+     couple of minutes and a burst can 429. Survivable only because generation is
+     already async (BullMQ/SSE) and `postLlmJson` honours `Retry-After`. It is
+     therefore a strong pick for **`INTERVIEW_LLM_PROVIDER`** (few short calls,
+     latency is user-visible) and the slower pick for the design agents.
+     (Moot on a free account, which cannot call it at all — see the 402 above.)
+  5. **`GROQ_MODEL` is a QUOTA decision, not just a quality one.** Groq's free
+     tokens-per-day limit is **per model**, and this pipeline is token-hungry
+     because every stage feeds the next its output: `llama-3.3-70b-versatile`
+     gives 100K TPD, **`openai/gpt-oss-120b` 200K**, `llama-3.1-8b-instant` 500K.
+     The default is `openai/gpt-oss-120b` — double the budget *and* a stronger
+     model than the 70B it replaced. Running out mid-pipeline is **silent**: the
+     agent falls back to its deterministic template and the user receives a
+     real-looking degraded artifact, which is exactly what the `generation`
+     provenance stamp exists to surface.
+  4. **The default is the PRODUCTION model on purpose.** `zai-glm-4.7` is preview
+     *and* carries a published deprecation date; `gemma-4-31b` is preview. A
+     default that stops existing on a known date is not a default. Only
+     `gpt-oss-120b` is priced in `MODEL_PRICING` — the preview models stay
+     unlisted and report as `unpricedCalls`, the honest unknown.
 - **SiliconFlow (`SiliconFlowLlmProvider`) — the REASONING-model seam.** Another
   OpenAI-shape provider mirroring `GroqLlmProvider` (native `fetch`, Bearer auth),
   aimed at the hosted DeepSeek catalog. Env: `SILICONFLOW_API_KEY` (required),
@@ -1578,6 +1657,16 @@ tsconfig and never needs shared's `dist`.
     short-circuit skips extraction on the *final* answer, and the appended
     `budget`/`timeline` plan questions (`InterviewPhase.Commercial`) sit past the
     9-cap so a pure-plan run never reaches them.
+  - **`history[]` holds more than questions — never count it to number them.**
+    Pasted call notes are `history[0]` and a slot edit **appends a correction
+    turn**, both deliberately (the transcript is the source of truth). The web
+    counter was `history.length + 1`, so a notes-first session opened at
+    "Question 2 of 9" and editing a slot mid-interview made the number **jump**
+    (5 → 7) and could exceed the cap — it reads as the interview losing track of
+    itself at the moment the user is deciding whether to trust it. Use
+    **`askedQuestionCount()`** (shared, with `isAskedQuestion`/`NOTES_ENTRY_ID`/
+    `CORRECTION_ENTRY_PREFIX`, which moved to `@archivato/shared` so the web can
+    recognise a non-question turn too).
   - **Notes-first mode** (`start` `notes?`, `NOTES_ENTRY_ID`): pasted call notes
     become `history[0]` (labelled to the prompt as call notes), then the **same**
     `advance()` loop runs — no parallel path. The first adaptive turn extracts many
@@ -1656,6 +1745,22 @@ tsconfig and never needs shared's `dist`.
      path appends a real compliance NFR; with no market it appends nothing. The
      architect gets the residency line for the same reason — where data may legally
      live constrains the provider and the region, so it's an architecture input.
+  5. **A country missing from the classifier silently switches off THREE stages.**
+     The MENA regex listed most Arab states but not **Palestine** (nor Syria,
+     Sudan, Mauritania, Djibouti, Somalia), so a Gaza/West Bank project resolved to
+     `null` — and null is "ask the client". The requirement document therefore
+     asked the owner to confirm the market **they had just stated**, the cost
+     estimate carried no regional payment-fee note, and the architect got no
+     residency line. Nothing errored. Adding a country here is not cosmetic; it is
+     what turns those three back on. Pinned by tests.
+  6. **Payment-provider availability is COUNTRY-level, deliberately not keyed by
+     `RegionKey`.** Stripe onboards merchants in the UAE and Saudi Arabia but not
+     in Palestine, so a `mena`-keyed table would be wrong in both directions —
+     clearing Stripe for a Gaza merchant or banning it for a Dubai one. The bucket
+     is the right grain for *law* and *fee bands*; it is too coarse for *"can this
+     client actually sign up"*. `PAYMENT_AVAILABILITY` is a short, conservative
+     country table, and an unmatched market yields `null` — never an assurance that
+     a provider **is** available (the `parseBudget` rule applied to availability).
   **What this actually looked like before the fix**, on a generated clinic platform
   for *"providers across Jordan and Saudi Arabia"*: HIPAA and GDPR appeared in
   **six** places — a business rule, a constraint, an assumption, the out-of-scope
@@ -1755,6 +1860,39 @@ tsconfig and never needs shared's `dist`.
     is accepted before its child; and the count is capped at
     `MAX_DOMAIN_SERVICES`. Note this is the **fallback**, which is what an install
     with no LLM key ships for every project — see the mock-provider gotcha.
+  - **Three guarantees the LLM path did not make, each from a real shipped design
+    (the "Nour Boutique" run).** All are pure functions in `system-design.ts`
+    applied on **both** paths, because in every case the deterministic fallback was
+    already more correct than the model — the same inversion as the HIPAA bug:
+    1. **`enforcePaymentAvailability`** — the architect recommended **Stripe** to a
+       merchant in Palestine, who cannot open a Stripe account, after the client
+       said so *three times* in the interview. Two causes, both fixed: the
+       **`integrations` slot was never printed in the architect's prompt**, so the
+       sentence stating the limitation never reached the agent that made the call
+       (no amount of repeating it could have helped — the field wasn't in the
+       prompt); and nothing checked the result. The correction **names the blocked
+       provider rather than deleting it** ("Stripe and PayPal do not onboard
+       merchants based in Palestine"), because an owner who is only handed a
+       different name has to rediscover the problem themselves. Note the fallback's
+       table already hedged `'Stripe (or a regional payment processor)'`.
+    2. **`missingAuthService`** — a design defining 2+ roles with different
+       permissions, plus an NFR about unauthorized access, shipped with **no
+       component that authenticates anyone**. Every downstream stage inherits it:
+       the API design has nothing to guard, and the threat model reports "broken
+       access control" only in the abstract because it is reading an artifact that
+       structurally contains no access control.
+    3. **`findUncoveredRequirements`** — a "Coupon/Discount System" requirement
+       appeared in **no** service, note, or design line, and nothing noticed. It is
+       **surfaced, never auto-repaired**: inventing a service to close the gap moves
+       complexity → effort → **the price**, which is not a correction to make on the
+       owner's behalf. Matching is **generous (one shared distinctive token)** —
+       the opposite calibration to the review's scope-integrity check, and for the
+       opposite reason: there a false positive tells an owner their document
+       contradicts itself; here it tells them a requirement is unbuilt when it is
+       merely worded differently. `uncoveredRequirements` is **OWNER-ONLY** —
+       `ShareService.view` strips it, since showing a client that their own scoping
+       has gaps, in the document being used to win the work, is the opposite of
+       what it is for.
   - **Constraint-grounded rationale + simplicity bias.** The prompt makes every major
     decision cite the relevant constraint and NAME the rejected alternative and why it
     loses; under a tight budget/timeline the architect prefers the **simplest**

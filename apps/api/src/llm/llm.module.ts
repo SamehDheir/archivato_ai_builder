@@ -10,6 +10,7 @@ import { ClaudeLlmProvider } from './claude-llm.provider';
 import { GroqLlmProvider } from './groq-llm.provider';
 import { AzureOpenAiLlmProvider } from './azure-openai-llm.provider';
 import { SiliconFlowLlmProvider } from './siliconflow-llm.provider';
+import { CerebrasLlmProvider } from './cerebras-llm.provider';
 import { UsageTrackingLlmProvider } from './usage-tracking-llm.provider';
 import { LlmUsageModule } from './usage/llm-usage.module';
 import { LlmUsageService } from './usage/llm-usage.service';
@@ -28,41 +29,64 @@ function createProvider(kind: string, config: ConfigService): LlmProvider {
       return new AzureOpenAiLlmProvider(config);
     case 'siliconflow':
       return new SiliconFlowLlmProvider(config);
+    case 'cerebras':
+      return new CerebrasLlmProvider(config);
     case 'mock':
       return new MockLlmProvider();
     default:
       throw new Error(
-        `Unknown LLM provider "${kind}" (expected "mock", "claude", "groq", "azure", or "siliconflow")`,
+        `Unknown LLM provider "${kind}" (expected "mock", "claude", "groq", "azure", "siliconflow", or "cerebras")`,
       );
   }
 }
 
 /**
+ * The API keys that can auto-select a provider, **in priority order**.
+ *
+ * A named object rather than positional arguments: with five providers the old
+ * signature was four optional strings in a row, where transposing two reads
+ * fine, compiles fine, and silently selects the wrong provider. The order that
+ * matters now lives in `PROVIDER_PRIORITY` — one list, stated once.
+ */
+export interface ProviderKeys {
+  groq?: string;
+  azure?: string;
+  siliconflow?: string;
+  cerebras?: string;
+}
+
+/**
+ * Auto-selection order. **Append only.**
+ *
+ * A new key must never silently move an existing install off the provider it has
+ * been running on, so every addition goes on the END — Groq stays first so the
+ * documented "paste a free Groq key and the whole pipeline goes real-AI"
+ * behaviour is unchanged, and Cerebras sits last despite also being free. Force
+ * one with `LLM_PROVIDER=<kind>` when several keys are present.
+ */
+const PROVIDER_PRIORITY: readonly (keyof ProviderKeys)[] = [
+  'groq',
+  'azure',
+  'siliconflow',
+  'cerebras',
+];
+
+/**
  * Resolve the provider kind for ALL agents (design + interview unless the
- * interview is overridden). One switch:
- *   1. an explicit `LLM_PROVIDER` (mock|claude|groq|azure|siliconflow) forces it;
- *   2. otherwise, when GROQ_API_KEY is set, everything uses the free Groq;
- *   3. otherwise, when AZURE_OPENAI_API_KEY is set, everything uses Azure OpenAI;
- *   4. otherwise, when SILICONFLOW_API_KEY is set, everything uses SiliconFlow;
- *   5. otherwise mock (offline, deterministic).
- * Groq keeps priority over Azure so the documented "paste a free Groq key and the
- * whole pipeline goes real-AI" behaviour is unchanged; SiliconFlow sits last for
- * the same reason — adding a key must never silently move an existing install off
- * the provider it has been running on. Set `LLM_PROVIDER=siliconflow` (or
- * `=azure`) to force one when several keys are present.
+ * interview is overridden). One switch: an explicit `LLM_PROVIDER`
+ * (mock|claude|groq|azure|siliconflow|cerebras) forces it; otherwise the first
+ * key present in `PROVIDER_PRIORITY` wins; otherwise mock (offline,
+ * deterministic).
+ *
  * Empty strings count as unset (env files often leave `KEY=` blank).
  */
 export function selectProviderKind(
   forced: string | undefined,
-  groqApiKey: string | undefined,
-  azureApiKey?: string | undefined,
-  siliconflowApiKey?: string | undefined,
+  keys: ProviderKeys = {},
 ): string {
   if (forced && forced.trim()) return forced.trim();
-  if (groqApiKey && groqApiKey.trim()) return 'groq';
-  if (azureApiKey && azureApiKey.trim()) return 'azure';
-  if (siliconflowApiKey && siliconflowApiKey.trim()) return 'siliconflow';
-  return 'mock';
+  const found = PROVIDER_PRIORITY.find((kind) => keys[kind]?.trim());
+  return found ?? 'mock';
 }
 
 /** Env vars that mean a real provider is available and paid for. */
@@ -71,6 +95,7 @@ const REAL_PROVIDER_KEYS = [
   'ANTHROPIC_API_KEY',
   'AZURE_OPENAI_API_KEY',
   'SILICONFLOW_API_KEY',
+  'CEREBRAS_API_KEY',
 ] as const;
 
 /**
@@ -103,12 +128,20 @@ export function mockOverriddenKeys(
 export function selectInterviewKind(
   interview: string | undefined,
   forced: string | undefined,
-  groqApiKey: string | undefined,
-  azureApiKey?: string | undefined,
-  siliconflowApiKey?: string | undefined,
+  keys: ProviderKeys = {},
 ): string {
   if (interview && interview.trim()) return interview.trim();
-  return selectProviderKind(forced, groqApiKey, azureApiKey, siliconflowApiKey);
+  return selectProviderKind(forced, keys);
+}
+
+/** Read every auto-selecting provider key out of config, in one place. */
+function providerKeys(config: ConfigService): ProviderKeys {
+  return {
+    groq: config.get<string>('GROQ_API_KEY'),
+    azure: config.get<string>('AZURE_OPENAI_API_KEY'),
+    siliconflow: config.get<string>('SILICONFLOW_API_KEY'),
+    cerebras: config.get<string>('CEREBRAS_API_KEY'),
+  };
 }
 
 /**
@@ -133,9 +166,11 @@ function announce(kind: string, name: string, label: string, config: ConfigServi
 /**
  * Wires the active providers from env. Setting GROQ_API_KEY flips the WHOLE
  * pipeline (every design agent + the interview) to real AI on the free Groq;
- * AZURE_OPENAI_API_KEY then SILICONFLOW_API_KEY do the same at lower priority;
- * `LLM_PROVIDER=mock|claude|groq|azure|siliconflow` forces a specific provider
- * for everything; `INTERVIEW_LLM_PROVIDER` can still pin just the interview.
+ * AZURE_OPENAI_API_KEY, SILICONFLOW_API_KEY then CEREBRAS_API_KEY do the same at
+ * lower priority (see `PROVIDER_PRIORITY`);
+ * `LLM_PROVIDER=mock|claude|groq|azure|siliconflow|cerebras` forces a specific
+ * provider for everything; `INTERVIEW_LLM_PROVIDER` can still pin just the
+ * interview.
  *
  * Global so any module can inject either token without re-importing.
  */
@@ -152,9 +187,7 @@ function announce(kind: string, name: string, label: string, config: ConfigServi
       ): LlmProvider => {
         const kind = selectProviderKind(
           config.get<string>('LLM_PROVIDER'),
-          config.get<string>('GROQ_API_KEY'),
-          config.get<string>('AZURE_OPENAI_API_KEY'),
-          config.get<string>('SILICONFLOW_API_KEY'),
+          providerKeys(config),
         );
         const provider = createProvider(kind, config);
         announce(kind, provider.name, 'Agent', config);
@@ -172,9 +205,7 @@ function announce(kind: string, name: string, label: string, config: ConfigServi
         const kind = selectInterviewKind(
           config.get<string>('INTERVIEW_LLM_PROVIDER'),
           config.get<string>('LLM_PROVIDER'),
-          config.get<string>('GROQ_API_KEY'),
-          config.get<string>('AZURE_OPENAI_API_KEY'),
-          config.get<string>('SILICONFLOW_API_KEY'),
+          providerKeys(config),
         );
         const provider = createProvider(kind, config);
         announce(kind, provider.name, 'Interview', config);

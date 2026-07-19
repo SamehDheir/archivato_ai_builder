@@ -192,11 +192,13 @@ switches:
 
 | Variable | Effect |
 | --- | --- |
-| `GROQ_API_KEY` | One free key flips the **entire pipeline** to real AI (leave `LLM_PROVIDER` unset) |
-| `LLM_PROVIDER` | Force `mock` · `claude` · `groq` · `azure` · `siliconflow` for all agents |
+| `GROQ_API_KEY` | One free key flips the **entire pipeline** to real AI (leave `LLM_PROVIDER` unset). The only permanently-free provider: no card, no credits |
+| `GROQ_MODEL` | A **quota** decision — the free tokens/day cap is per model. `openai/gpt-oss-120b` (default) 200K/day · `llama-3.1-8b-instant` 500K · `llama-3.3-70b-versatile` 100K |
+| `LLM_PROVIDER` | Force `mock` · `claude` · `groq` · `azure` · `siliconflow` · `cerebras` for all agents |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude provider (`claude-sonnet-4-6` default) |
 | `AZURE_OPENAI_API_KEY` / `_ENDPOINT` / `_DEPLOYMENT` | Azure OpenAI provider (deployment-name routing) |
 | `SILICONFLOW_API_KEY` / `SILICONFLOW_MODEL` | SiliconFlow provider (`deepseek-ai/DeepSeek-R1` default — a reasoning model) |
+| `CEREBRAS_API_KEY` / `CEREBRAS_MODEL` | Cerebras provider (`gpt-oss-120b` default). **Paid — a new account 402s on the first call**; the no-card tier is legacy and ends 17 Aug 2026 |
 | `LLM_TIMEOUT_MS` / `LLM_MAX_ATTEMPTS` | Per-**attempt** timeout (default 90s) and total attempts (default 3). Applies to every provider; only transient failures (408/429/5xx, timeouts, network) are retried |
 | `BILLING_PROVIDER` / `PADDLE_*` | Paddle checkout + HMAC-verified webhook; offline mock otherwise |
 | `MAIL_PROVIDER` / `RESEND_API_KEY` / `SMTP_*` | Transactional email; logs to console otherwise |

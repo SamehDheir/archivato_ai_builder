@@ -6,54 +6,63 @@ import {
 
 describe('selectProviderKind (one-switch resolution)', () => {
   it('defaults to mock with no key and no override', () => {
-    expect(selectProviderKind(undefined, undefined)).toBe('mock');
-    expect(selectProviderKind('', '')).toBe('mock');
+    expect(selectProviderKind(undefined)).toBe('mock');
+    expect(selectProviderKind('', {})).toBe('mock');
+    expect(selectProviderKind('', { groq: '' })).toBe('mock');
   });
 
   it('flips every agent to groq when GROQ_API_KEY is set', () => {
-    expect(selectProviderKind(undefined, 'gsk_real_key')).toBe('groq');
+    expect(selectProviderKind(undefined, { groq: 'gsk_real_key' })).toBe('groq');
   });
 
   it('lets LLM_PROVIDER force a specific provider over the key', () => {
-    expect(selectProviderKind('mock', 'gsk_real_key')).toBe('mock');
-    expect(selectProviderKind('claude', 'gsk_real_key')).toBe('claude');
+    expect(selectProviderKind('mock', { groq: 'gsk_real_key' })).toBe('mock');
+    expect(selectProviderKind('claude', { groq: 'gsk_real_key' })).toBe('claude');
   });
 
   it('treats a blank LLM_PROVIDER as unset', () => {
-    expect(selectProviderKind('  ', 'gsk_real_key')).toBe('groq');
+    expect(selectProviderKind('  ', { groq: 'gsk_real_key' })).toBe('groq');
   });
 
   it('falls back to azure when only AZURE_OPENAI_API_KEY is set', () => {
-    expect(selectProviderKind(undefined, undefined, 'az_key')).toBe('azure');
-    expect(selectProviderKind(undefined, '', 'az_key')).toBe('azure');
-  });
-
-  it('keeps groq ahead of azure when both keys are present', () => {
-    expect(selectProviderKind(undefined, 'gsk_real_key', 'az_key')).toBe('groq');
-  });
-
-  it('lets LLM_PROVIDER=azure force azure over a groq key', () => {
-    expect(selectProviderKind('azure', 'gsk_real_key', 'az_key')).toBe('azure');
+    expect(selectProviderKind(undefined, { azure: 'az_key' })).toBe('azure');
+    expect(selectProviderKind(undefined, { groq: '', azure: 'az_key' })).toBe('azure');
   });
 
   it('falls back to siliconflow when only SILICONFLOW_API_KEY is set', () => {
-    expect(selectProviderKind(undefined, undefined, undefined, 'sf_key')).toBe(
-      'siliconflow',
-    );
+    expect(selectProviderKind(undefined, { siliconflow: 'sf_key' })).toBe('siliconflow');
   });
 
-  // Adding a key must never move an existing install off its current provider.
-  it('keeps groq and azure ahead of siliconflow', () => {
-    expect(selectProviderKind(undefined, 'gsk_real_key', undefined, 'sf_key')).toBe(
-      'groq',
-    );
-    expect(selectProviderKind(undefined, undefined, 'az_key', 'sf_key')).toBe('azure');
+  it('falls back to cerebras when only CEREBRAS_API_KEY is set', () => {
+    expect(selectProviderKind(undefined, { cerebras: 'csk_key' })).toBe('cerebras');
   });
 
-  it('lets LLM_PROVIDER=siliconflow force it over the other keys', () => {
+  /**
+   * The invariant behind `PROVIDER_PRIORITY`: adding a key must never move an
+   * existing install off the provider it has been running on. Cerebras is free
+   * like Groq, and still goes last — arriving later is what decides the order,
+   * not how good the free tier is.
+   */
+  it('holds the priority order groq > azure > siliconflow > cerebras', () => {
+    const all = {
+      groq: 'gsk',
+      azure: 'az',
+      siliconflow: 'sf',
+      cerebras: 'csk',
+    };
+    expect(selectProviderKind(undefined, all)).toBe('groq');
+    expect(selectProviderKind(undefined, { ...all, groq: undefined })).toBe('azure');
     expect(
-      selectProviderKind('siliconflow', 'gsk_real_key', 'az_key', 'sf_key'),
+      selectProviderKind(undefined, { ...all, groq: undefined, azure: undefined }),
     ).toBe('siliconflow');
+    expect(selectProviderKind(undefined, { cerebras: 'csk' })).toBe('cerebras');
+  });
+
+  it('lets LLM_PROVIDER force any provider over every key', () => {
+    const all = { groq: 'gsk', azure: 'az', siliconflow: 'sf', cerebras: 'csk' };
+    for (const kind of ['siliconflow', 'cerebras', 'azure', 'mock', 'claude']) {
+      expect(selectProviderKind(kind, all)).toBe(kind);
+    }
   });
 });
 
@@ -72,6 +81,12 @@ describe('mockOverriddenKeys (silent-mock guard)', () => {
     ).toEqual(['GROQ_API_KEY', 'AZURE_OPENAI_API_KEY']);
   });
 
+  it('covers the cerebras key too', () => {
+    expect(mockOverriddenKeys('mock', env({ CEREBRAS_API_KEY: 'csk' }))).toEqual([
+      'CEREBRAS_API_KEY',
+    ]);
+  });
+
   it('stays quiet when mock is the honest resolution (no key anywhere)', () => {
     expect(mockOverriddenKeys('mock', env({}))).toEqual([]);
     // A blank `KEY=` line is unset, not a configured provider.
@@ -85,28 +100,27 @@ describe('mockOverriddenKeys (silent-mock guard)', () => {
 
 describe('selectInterviewKind', () => {
   it('follows the one-switch resolution by default', () => {
-    expect(selectInterviewKind(undefined, undefined, undefined)).toBe('mock');
-    expect(selectInterviewKind(undefined, undefined, 'gsk')).toBe('groq');
+    expect(selectInterviewKind(undefined, undefined)).toBe('mock');
+    expect(selectInterviewKind(undefined, undefined, { groq: 'gsk' })).toBe('groq');
     // One switch: an LLM_PROVIDER force applies to the interview too.
-    expect(selectInterviewKind(undefined, 'claude', 'gsk')).toBe('claude');
+    expect(selectInterviewKind(undefined, 'claude', { groq: 'gsk' })).toBe('claude');
   });
 
   it('can be pinned independently via INTERVIEW_LLM_PROVIDER', () => {
-    expect(selectInterviewKind('groq', 'mock', undefined)).toBe('groq');
-    expect(selectInterviewKind('mock', undefined, 'gsk')).toBe('mock');
-    // The interview can stay on mock while the design agents run on Azure.
-    expect(selectInterviewKind('mock', undefined, undefined, 'az_key')).toBe('mock');
+    expect(selectInterviewKind('groq', 'mock')).toBe('groq');
+    expect(selectInterviewKind('mock', undefined, { groq: 'gsk' })).toBe('mock');
+    // The interview can stay on mock while the design agents run elsewhere.
+    expect(selectInterviewKind('mock', undefined, { azure: 'az_key' })).toBe('mock');
+    expect(selectInterviewKind('mock', undefined, { cerebras: 'csk' })).toBe('mock');
   });
 
-  it('threads the azure fallback through to the interview', () => {
-    expect(selectInterviewKind(undefined, undefined, undefined, 'az_key')).toBe(
-      'azure',
+  it('threads every auto-selected fallback through to the interview', () => {
+    expect(selectInterviewKind(undefined, undefined, { azure: 'az_key' })).toBe('azure');
+    expect(selectInterviewKind(undefined, undefined, { siliconflow: 'sf' })).toBe(
+      'siliconflow',
     );
-  });
-
-  it('threads the siliconflow fallback through to the interview', () => {
-    expect(
-      selectInterviewKind(undefined, undefined, undefined, undefined, 'sf_key'),
-    ).toBe('siliconflow');
+    expect(selectInterviewKind(undefined, undefined, { cerebras: 'csk' })).toBe(
+      'cerebras',
+    );
   });
 });

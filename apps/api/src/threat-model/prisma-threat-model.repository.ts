@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { ThreatModel } from '@archivato/shared';
+import { normalizeThreatModel } from '@archivato/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ThreatModelRepository } from './threat-model.repository';
 
@@ -23,7 +24,7 @@ export class PrismaThreatModelRepository implements ThreatModelRepository {
     const row = await this.prisma.threatModel.findUnique({
       where: { sessionId },
     });
-    return row ? (row.data as unknown as ThreatModel) : null;
+    return row ? normalizeThreatModel(row.data as unknown as ThreatModel) : null;
   }
 
   async deleteBySessionId(sessionId: string): Promise<void> {

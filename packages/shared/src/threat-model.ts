@@ -73,3 +73,29 @@ export interface ThreatModel extends DerivedArtifact {
   assumptions: string[];
   threats: Threat[];
 }
+
+/**
+ * Coerce a threat model to a complete shape — the `normalizeDatabaseDesign`
+ * rule, applied at both boundaries (agent on write, both stores on read).
+ *
+ * It matters more here than on an owner-only artifact: the threat model is in
+ * the share payload, so a model reply that omitted `trustBoundaries` would take
+ * down the **public page a client is reading**, with no owner present to see it.
+ * The agent's `isValid` only ever gated on `threats`.
+ */
+export function normalizeThreatModel(model: ThreatModel): ThreatModel {
+  const strings = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+
+  return {
+    ...model,
+    summary: typeof model?.summary === 'string' ? model.summary : '',
+    trustBoundaries: strings(model?.trustBoundaries),
+    assumptions: strings(model?.assumptions),
+    threats: Array.isArray(model?.threats)
+      ? model.threats.filter(
+          (t): t is Threat => !!t && typeof t.threat === 'string',
+        )
+      : [],
+  };
+}

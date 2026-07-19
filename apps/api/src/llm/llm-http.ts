@@ -64,10 +64,57 @@ export class LlmHttpError extends Error {
     readonly status: number | null,
     readonly retryable: boolean,
     readonly kind: LlmHttpErrorKind = 'http',
+    /**
+     * The provider's raw error body, when there was one.
+     *
+     * Carried so a caller can tell a *generation* failure from a transport one
+     * without re-parsing a log line: a provider running native JSON mode
+     * validates server-side and rejects its own model's malformed output as a
+     * 400, which looks like a bad request but means the call **succeeded and was
+     * billed**. See `isGenerationFailure`.
+     */
+    readonly detail?: string,
   ) {
     super(message);
     this.name = 'LlmHttpError';
   }
+}
+
+/**
+ * Did the provider accept the request and fail to *generate* valid JSON?
+ *
+ * Groq answers a truncated or malformed JSON-mode completion with **400
+ * `json_validate_failed`**, which `isRetryableStatus` correctly treats as
+ * permanent — but "permanent" is the only thing it has in common with a bad API
+ * key. The tokens were spent, and the fix is a bigger output budget or a tighter
+ * prompt, not a look at the network. Reporting it as `call_failed` pointed every
+ * future reader at the wrong layer.
+ */
+export function isGenerationFailure(err: unknown): boolean {
+  return (
+    err instanceof LlmHttpError &&
+    err.status === 400 &&
+    /json_validate_failed|failed to generate json/i.test(err.detail ?? '')
+  );
+}
+
+/**
+ * Was the request refused for being too big to fit the caller's rate tier?
+ *
+ * Providers count `max_tokens` against tokens-per-minute — it is capacity they
+ * reserve — so a generous output budget can push a modest prompt over the limit
+ * and be rejected **before the model runs**. Waiting does not help: the request
+ * exceeds the per-minute ceiling on its own, so it fails identically forever.
+ * The only thing that helps is asking for less, which is why this is separate
+ * from `isRetryableStatus` (it is not retryable *as sent*) and why the caller
+ * retries it with a smaller budget rather than the transport retrying it as-is.
+ */
+export function isRequestTooLarge(err: unknown): boolean {
+  if (!(err instanceof LlmHttpError)) return false;
+  if (err.status === 413) return true;
+  return (
+    err.status === 400 && /request too large|reduce your message size/i.test(err.detail ?? '')
+  );
 }
 
 /**
@@ -217,6 +264,8 @@ export async function postLlmJson<T>(
         `${label} request failed with status ${res.status}`,
         res.status,
         retryable,
+        'http',
+        detail,
       );
       // A permanent status is terminal — leave the loop rather than burn latency
       // on attempts that would fail identically.

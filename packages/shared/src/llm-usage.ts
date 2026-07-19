@@ -166,6 +166,20 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = {
   // echoes back. Reasoning tokens bill as OUTPUT, so an R1 call costs several
   // times what its visible answer suggests.
   'deepseek-ai/deepseek-r1': { inputPerMTok: 0.25, outputPerMTok: 0.8 },
+
+  // Cerebras (cerebras.ai/pricing) — the paid Developer-tier rate. Most Cerebras
+  // traffic here will be on the FREE tier (1M tokens/day), where the true cost is
+  // $0 — but the meter must price what the call would cost, not what this account
+  // happens to be billed, or an upgrade would silently change the margin report.
+  //
+  // Only the production model is listed. `zai-glm-4.7` is preview and scheduled
+  // for deprecation, so it stays unlisted and reports as an `unpricedCall` — the
+  // honest unknown rather than a number for a model that is going away.
+  //
+  // Note the table is keyed by model id alone, so the same open-weight model on
+  // two providers would collide. It does not here: Groq serves this one as
+  // `openai/gpt-oss-120b`, Cerebras as the bare id below.
+  'gpt-oss-120b': { inputPerMTok: 0.35, outputPerMTok: 0.75 },
 };
 
 /** A dated snapshot of a base model: `-20250101` or `-2025-01-01`. */
