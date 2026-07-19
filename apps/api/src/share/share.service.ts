@@ -241,7 +241,15 @@ export class ShareService {
       roadmap: design.roadmap
         ? withoutGeneration({ ...design.roadmap, sessionId: token })
         : null,
-      systemDesign: withoutGeneration({ ...design.systemDesign, sessionId: token }),
+      systemDesign: withoutGeneration({
+        ...design.systemDesign,
+        sessionId: token,
+        // OWNER-ONLY: "these requirements have no owning service" is an internal
+        // quality signal for the person still editing the design. Showing a client
+        // that their own scoping has gaps — in the document being used to win the
+        // work — is the opposite of what it is for.
+        uncoveredRequirements: undefined,
+      }),
       databaseDesign: withoutGeneration({ ...design.databaseDesign, sessionId: token }),
       apiDesign: design.apiDesign
         ? withoutGeneration({ ...design.apiDesign, sessionId: token })

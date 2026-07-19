@@ -1,5 +1,6 @@
 import {
   InterviewPhase,
+  NOTES_ENTRY_ID,
   SLOT_KEYS,
   type InterviewExchange,
   type OpenQuestion,
@@ -12,8 +13,11 @@ import {
  * mode). The interviewer prompt renders an entry with this id as labelled call
  * notes rather than a Q/A pair, and the service uses it to inject the notes as
  * `history[0]` before the normal adaptive loop runs — no parallel code path.
+ *
+ * Re-exported from `@archivato/shared`, where it now lives so the **web** can
+ * recognise a non-question turn too — the question counter has to exclude it.
  */
-export const NOTES_ENTRY_ID = 'call-notes';
+export { NOTES_ENTRY_ID } from '@archivato/shared';
 
 /** Build the `history[0]` entry that carries the user's pasted call notes. */
 export function notesHistoryEntry(notes: string): InterviewExchange {

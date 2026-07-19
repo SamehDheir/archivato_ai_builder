@@ -4,6 +4,9 @@
  */
 
 import type { GenerationProvenance } from './generation';
+import type { FunctionalRequirement, UserRole } from './requirements';
+import { paymentAvailabilityFor, paymentProvidersFor } from './region';
+import { significantTokens } from './text';
 
 export type ArchitectureType =
   | 'monolith'
@@ -129,4 +132,170 @@ export interface SystemDesign {
    * exist.
    */
   constraintCompliance?: ConstraintCompliance[];
+  /**
+   * Functional requirement ids that no service in this design covers.
+   *
+   * Optional and usually absent. It exists because a requirement can be dropped
+   * on the floor silently: a "Coupon/Discount System" requirement survived into
+   * the document and then appeared in **no** service, data note, or design line,
+   * and nothing in the pipeline noticed. The gap is surfaced rather than repaired
+   * — inventing a service to close it would move complexity → effort → **the
+   * price**, which is not a correction to make on the owner's behalf.
+   */
+  uncoveredRequirements?: string[];
+}
+
+// ── deterministic design checks (pure) ───────────────────────────────────────
+
+/** Words too generic to prove a service covers a requirement. */
+const COVERAGE_STOP_WORDS = new Set([
+  'system', 'user', 'users', 'data', 'service', 'services',
+  'manage', 'management', 'support', 'provide', 'basic', 'general',
+  'information', 'application', 'platform', 'feature', 'module',
+]);
+
+/** How many alternative processors to name in a single recommendation line. */
+const MAX_SUGGESTED_PROVIDERS = 3;
+
+/** Names that mark a service as the identity/access component. */
+const AUTH_SERVICE_PATTERN =
+  /\b(auth|authentication|authorization|identity|iam|account|accounts|user|users|rbac|access|login|session|member|permission)/i;
+
+/**
+ * Functional requirements that no service appears to cover.
+ *
+ * Matching is intentionally generous — a requirement counts as covered when a
+ * service's name or responsibility shares **one** distinctive word with it. This
+ * is the opposite calibration to the review's scope-integrity check (which
+ * demands two), and for the opposite reason: there, a false positive tells an
+ * owner their own document contradicts itself; here, a false positive tells them
+ * a requirement is unbuilt when it is merely worded differently. A missed gap
+ * falls through to the reviewer's LLM pass, so generosity is the cheap direction.
+ */
+export function findUncoveredRequirements(
+  functional: FunctionalRequirement[] | undefined,
+  services: ServiceModule[] | undefined,
+): string[] {
+  const haystacks = (services ?? []).map((svc) =>
+    significantTokens(`${svc.name} ${svc.responsibility}`, COVERAGE_STOP_WORDS),
+  );
+
+  return (functional ?? [])
+    .filter((fr) => {
+      const tokens = significantTokens(
+        `${fr.title} ${fr.description}`,
+        COVERAGE_STOP_WORDS,
+      );
+      // A requirement with no distinctive words of its own cannot be judged —
+      // treat it as covered rather than report an unprovable gap.
+      if (tokens.length === 0) return false;
+      return !haystacks.some((service) => service.some((w) => tokens.includes(w)));
+    })
+    .map((fr) => fr.id);
+}
+
+/** True when the design already has a service that owns identity/access. */
+export function hasAuthService(services: ServiceModule[] | undefined): boolean {
+  return (services ?? []).some(
+    (svc) =>
+      AUTH_SERVICE_PATTERN.test(svc.name) ||
+      AUTH_SERVICE_PATTERN.test(svc.responsibility),
+  );
+}
+
+/**
+ * The identity service a multi-role project always needs, or `null` when the
+ * requirements imply no access control or the design already has one.
+ *
+ * A design that defines several roles with different permissions — and an NFR
+ * about preventing unauthorized access — but ships no component that
+ * authenticates anyone is incomplete in a way every downstream stage inherits:
+ * the API design has nothing to guard, and the threat model reports "broken
+ * access control" in the abstract because it is reading an artifact with no
+ * access control in it.
+ */
+export function missingAuthService(
+  services: ServiceModule[] | undefined,
+  roles: UserRole[] | undefined,
+): ServiceModule | null {
+  if ((roles?.length ?? 0) < 2) return null;
+  if (hasAuthService(services)) return null;
+
+  const names = (roles ?? []).map((r) => r.name).filter(Boolean);
+  return {
+    name: 'Auth Service',
+    responsibility: `Authenticates users and enforces role-based permissions across ${
+      names.length ? names.join(', ') : 'the defined roles'
+    }.`,
+    dependencies: [],
+    complexity: 'M',
+    complexityRationale: `${names.length} distinct roles with different permissions.`,
+  };
+}
+
+/**
+ * Correct a payments recommendation that names a processor the client cannot
+ * actually use, and report whether anything changed.
+ *
+ * The model reaches for Stripe regardless of who the merchant is — it dominates
+ * the training data — and a scoping document that recommends a processor which
+ * will refuse the client's signup is wrong in the way that costs the dev shop the
+ * meeting. The correction is a **table lookup, not a judgement** (the
+ * `regulationsForMarket` precedent), and it never invents availability: an
+ * unrecognized market leaves the recommendation exactly as it was.
+ */
+export function enforcePaymentAvailability(
+  items: BuildVsBuyItem[] | undefined,
+  targetMarket: string | undefined | null,
+): { items: BuildVsBuyItem[]; corrected: boolean } {
+  const availability = paymentAvailabilityFor(targetMarket);
+  const list = items ?? [];
+  if (!availability) return { items: list, corrected: false };
+
+  let corrected = false;
+  const next = list.map((item) => {
+    if (item.capability !== 'payments' || item.recommendation !== 'buy') return item;
+
+    const named = availability.unavailable.filter((provider) =>
+      new RegExp(`\\b${escapeRegExp(provider)}\\b`, 'i').test(
+        `${item.suggestedService ?? ''} ${item.rationale}`,
+      ),
+    );
+    if (named.length === 0) return item;
+
+    corrected = true;
+    // Capped: the full list is prompt material, but a `suggestedService` reading
+    // "A or B or C or D or E or F or G" is not a recommendation, it is a menu —
+    // and this field is rendered as one line in a document a client reads.
+    const viable = paymentProvidersFor(targetMarket).slice(0, MAX_SUGGESTED_PROVIDERS);
+    return {
+      ...item,
+      suggestedService: viable.join(' or '),
+      rationale: `${stripProviders(item.rationale, named)} ${availability.note}`.trim(),
+    };
+  });
+
+  return { items: next, corrected };
+}
+
+/**
+ * Remove a now-wrong provider name from model prose.
+ *
+ * The sentence is kept — it usually carries a real argument ("buying is cheaper
+ * than building a processor") that survives the substitution; only the name that
+ * would mislead the client is dropped.
+ */
+function stripProviders(text: string, providers: string[]): string {
+  let out = text;
+  for (const provider of providers) {
+    out = out.replace(
+      new RegExp(`\\s*\\b(?:like|such as|e\\.g\\.?)?\\s*${escapeRegExp(provider)}\\b`, 'gi'),
+      '',
+    );
+  }
+  return out.replace(/\s{2,}/g, ' ').replace(/\s+([.,])/g, '$1').trim();
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

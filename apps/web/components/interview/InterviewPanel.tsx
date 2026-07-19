@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
-import { INTERVIEW_MAX_QUESTIONS, type InterviewState } from "@archivato/shared";
+import {
+  askedQuestionCount,
+  INTERVIEW_MAX_QUESTIONS,
+  type InterviewState,
+} from "@archivato/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -147,7 +151,11 @@ export function InterviewPanel({
                 </Badge>
                 <span className="text-xs text-muted-foreground">
                   {t("questionN", {
-                    n: state.history.length + 1,
+                    // Not `history.length` — the transcript also holds pasted call
+                    // notes and slot-edit corrections, which are turns but not
+                    // questions. Counting them made the number skip (5 → 7) and a
+                    // notes-first session open at "Question 2".
+                    n: askedQuestionCount(state.history) + 1,
                     max: INTERVIEW_MAX_QUESTIONS,
                   })}
                 </span>

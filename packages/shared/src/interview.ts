@@ -72,6 +72,38 @@ export interface InterviewExchange {
   answer: string;
 }
 
+/** The transcript id for pasted call notes (notes-first mode). */
+export const NOTES_ENTRY_ID = 'call-notes';
+
+/** Prefix for the correction turn appended when the owner edits a slot. */
+export const CORRECTION_ENTRY_PREFIX = 'correction:';
+
+/**
+ * True when this turn is a question the interviewer actually asked.
+ *
+ * `history[]` is the transcript, and it holds more than questions: pasted call
+ * notes land in it as entry 0, and editing a slot appends a correction turn (both
+ * deliberately — the transcript is the source of truth, so anything that informs
+ * the slots has to be in it).
+ */
+export function isAskedQuestion(entry: InterviewExchange): boolean {
+  const id = entry.question.id;
+  return id !== NOTES_ENTRY_ID && !id.startsWith(CORRECTION_ENTRY_PREFIX);
+}
+
+/**
+ * How many questions have actually been asked — the number to show the user.
+ *
+ * The counter used to be `history.length + 1`, which counted notes and slot
+ * corrections as questions: a notes-first session opened at "Question 2 of 9",
+ * and editing a slot mid-interview made the number jump (5 → 7), so the count
+ * could even exceed the cap. It reads as the interview losing track of itself, at
+ * the exact moment the user is deciding whether to trust it.
+ */
+export function askedQuestionCount(history: InterviewExchange[]): number {
+  return history.filter(isAskedQuestion).length;
+}
+
 // ── Slot-filling model (R6) ──────────────────────────────────────────────────
 //
 // The interview is a **slot-filling scoping session**, not a blind question

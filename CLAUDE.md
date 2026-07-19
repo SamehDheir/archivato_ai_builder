@@ -1578,6 +1578,16 @@ tsconfig and never needs shared's `dist`.
     short-circuit skips extraction on the *final* answer, and the appended
     `budget`/`timeline` plan questions (`InterviewPhase.Commercial`) sit past the
     9-cap so a pure-plan run never reaches them.
+  - **`history[]` holds more than questions — never count it to number them.**
+    Pasted call notes are `history[0]` and a slot edit **appends a correction
+    turn**, both deliberately (the transcript is the source of truth). The web
+    counter was `history.length + 1`, so a notes-first session opened at
+    "Question 2 of 9" and editing a slot mid-interview made the number **jump**
+    (5 → 7) and could exceed the cap — it reads as the interview losing track of
+    itself at the moment the user is deciding whether to trust it. Use
+    **`askedQuestionCount()`** (shared, with `isAskedQuestion`/`NOTES_ENTRY_ID`/
+    `CORRECTION_ENTRY_PREFIX`, which moved to `@archivato/shared` so the web can
+    recognise a non-question turn too).
   - **Notes-first mode** (`start` `notes?`, `NOTES_ENTRY_ID`): pasted call notes
     become `history[0]` (labelled to the prompt as call notes), then the **same**
     `advance()` loop runs — no parallel path. The first adaptive turn extracts many
@@ -1656,6 +1666,22 @@ tsconfig and never needs shared's `dist`.
      path appends a real compliance NFR; with no market it appends nothing. The
      architect gets the residency line for the same reason — where data may legally
      live constrains the provider and the region, so it's an architecture input.
+  5. **A country missing from the classifier silently switches off THREE stages.**
+     The MENA regex listed most Arab states but not **Palestine** (nor Syria,
+     Sudan, Mauritania, Djibouti, Somalia), so a Gaza/West Bank project resolved to
+     `null` — and null is "ask the client". The requirement document therefore
+     asked the owner to confirm the market **they had just stated**, the cost
+     estimate carried no regional payment-fee note, and the architect got no
+     residency line. Nothing errored. Adding a country here is not cosmetic; it is
+     what turns those three back on. Pinned by tests.
+  6. **Payment-provider availability is COUNTRY-level, deliberately not keyed by
+     `RegionKey`.** Stripe onboards merchants in the UAE and Saudi Arabia but not
+     in Palestine, so a `mena`-keyed table would be wrong in both directions —
+     clearing Stripe for a Gaza merchant or banning it for a Dubai one. The bucket
+     is the right grain for *law* and *fee bands*; it is too coarse for *"can this
+     client actually sign up"*. `PAYMENT_AVAILABILITY` is a short, conservative
+     country table, and an unmatched market yields `null` — never an assurance that
+     a provider **is** available (the `parseBudget` rule applied to availability).
   **What this actually looked like before the fix**, on a generated clinic platform
   for *"providers across Jordan and Saudi Arabia"*: HIPAA and GDPR appeared in
   **six** places — a business rule, a constraint, an assumption, the out-of-scope
@@ -1755,6 +1781,39 @@ tsconfig and never needs shared's `dist`.
     is accepted before its child; and the count is capped at
     `MAX_DOMAIN_SERVICES`. Note this is the **fallback**, which is what an install
     with no LLM key ships for every project — see the mock-provider gotcha.
+  - **Three guarantees the LLM path did not make, each from a real shipped design
+    (the "Nour Boutique" run).** All are pure functions in `system-design.ts`
+    applied on **both** paths, because in every case the deterministic fallback was
+    already more correct than the model — the same inversion as the HIPAA bug:
+    1. **`enforcePaymentAvailability`** — the architect recommended **Stripe** to a
+       merchant in Palestine, who cannot open a Stripe account, after the client
+       said so *three times* in the interview. Two causes, both fixed: the
+       **`integrations` slot was never printed in the architect's prompt**, so the
+       sentence stating the limitation never reached the agent that made the call
+       (no amount of repeating it could have helped — the field wasn't in the
+       prompt); and nothing checked the result. The correction **names the blocked
+       provider rather than deleting it** ("Stripe and PayPal do not onboard
+       merchants based in Palestine"), because an owner who is only handed a
+       different name has to rediscover the problem themselves. Note the fallback's
+       table already hedged `'Stripe (or a regional payment processor)'`.
+    2. **`missingAuthService`** — a design defining 2+ roles with different
+       permissions, plus an NFR about unauthorized access, shipped with **no
+       component that authenticates anyone**. Every downstream stage inherits it:
+       the API design has nothing to guard, and the threat model reports "broken
+       access control" only in the abstract because it is reading an artifact that
+       structurally contains no access control.
+    3. **`findUncoveredRequirements`** — a "Coupon/Discount System" requirement
+       appeared in **no** service, note, or design line, and nothing noticed. It is
+       **surfaced, never auto-repaired**: inventing a service to close the gap moves
+       complexity → effort → **the price**, which is not a correction to make on the
+       owner's behalf. Matching is **generous (one shared distinctive token)** —
+       the opposite calibration to the review's scope-integrity check, and for the
+       opposite reason: there a false positive tells an owner their document
+       contradicts itself; here it tells them a requirement is unbuilt when it is
+       merely worded differently. `uncoveredRequirements` is **OWNER-ONLY** —
+       `ShareService.view` strips it, since showing a client that their own scoping
+       has gaps, in the document being used to win the work, is the opposite of
+       what it is for.
   - **Constraint-grounded rationale + simplicity bias.** The prompt makes every major
     decision cite the relevant constraint and NAME the rejected alternative and why it
     loses; under a tight budget/timeline the architect prefers the **simplest**

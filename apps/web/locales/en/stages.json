@@ -79,6 +79,10 @@
       "alternatives": "Alternatives considered",
       "risks": "Risks to watch",
       "disclaimer": "AI-generated rationale — a starting point for your answer, not a verdict."
+    },
+    "uncovered": {
+      "title": "Requirements with no owning service",
+      "body": "No service in this design covers {{ids}}. Add or extend a service, or move the requirement out of scope — this is only shown to you, never to your client."
     }
   },
   "database": {
