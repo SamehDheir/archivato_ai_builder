@@ -1129,6 +1129,37 @@ tsconfig and never needs shared's `dist`.
     on read) so the two can't drift. **A missing array must read as empty, never as
     undefined.** When a required field on a JSON-stored artifact starts arriving
     absent, fix the read — not the crash site.
+    - **It recurred, because each agent's `isValid` gates on ONE field.** A terser
+      model omitted `relations` and `DatabaseDesignView` died on
+      `design.relations.length`. There are now `normalizeDatabaseDesign` /
+      `normalizeThreatModel` / `normalizeQaPlan` beside `normalizeApiDesign` /
+      `normalizeReviewReport`, each applied at the agent **and both repos**
+      (Prisma *and* in-memory, so a unit test can't pass on a shape production
+      repairs). The threat model and QA plan matter most — they render on the
+      **public share page**, where a partial reply breaks a page a client is
+      reading with no owner present to see it.
+    - **The upstream cause was an output budget, and it is bounded from BOTH
+      sides.** The database designer used the provider default of 2048, which a
+      seven-entity schema overruns — and relations are emitted *last*, so they are
+      what gets cut. But raising it to 8192 then produced a **413**: providers
+      reserve `max_tokens` against tokens-per-minute, so a big budget on a small
+      prompt breaches an 8K TPM free tier and is refused *before the model runs*.
+      `SCHEMA_MAX_TOKENS` is 5120 — enough for a real schema, inside an 8K tier.
+      **Check the target model's TPM before raising any `maxTokens`.**
+    - **`BaseAgent.askWithinBudget` halves the budget once on a size refusal.**
+      A 413 is not retryable *as sent* (waiting cannot help — the request breaches
+      the ceiling on its own), so it is deliberately outside `isRetryableStatus`;
+      asking for less is the only move that can succeed, and a shorter artifact
+      beats the template. One retry, not a loop: if half still doesn't fit, the
+      tier is wrong for the artifact and the honest answer is the fallback plus a
+      warning naming the limit.
+    - **A provider rejecting its own model's malformed JSON is a `parse_error`,
+      not a `call_failed`.** Groq's native JSON mode validates server-side and
+      answers a truncated completion with **400 `json_validate_failed`** — a
+      permanent status, but one that means the call **succeeded and was billed**.
+      `isGenerationFailure()` detects it off `LlmHttpError.detail` so
+      `degradedReasonFor` reports the expensive reason and points at the prompt
+      and budget rather than the network.
 - **Repository pattern everywhere.** Every store has an interface + in-memory
   impl (used by unit tests, DB-free) + Prisma impl. Feature modules provide the
   Prisma repo.
@@ -1488,14 +1519,20 @@ tsconfig and never needs shared's `dist`.
     most likely to need a SQL rollup first — it goes behind the repository
     interface when it does.
 - **Provider selection** (`llm.module.ts`):
-  `LLM_PROVIDER=mock|claude|groq|azure|siliconflow` forces it for all agents;
-  else `GROQ_API_KEY` present → groq for everything; else
-  `AZURE_OPENAI_API_KEY` present → azure; else `SILICONFLOW_API_KEY` present →
-  siliconflow; else mock. **Groq keeps priority over Azure** so the documented
-  "paste a free Groq key" behaviour is unchanged, and **SiliconFlow sits last**
-  for the same reason — adding a key must never silently move an existing install
-  off the provider it has been running on. Force with `LLM_PROVIDER=<kind>` when
-  several keys exist.
+  `LLM_PROVIDER=mock|claude|groq|azure|siliconflow|cerebras` forces it for all
+  agents; otherwise the first key present in **`PROVIDER_PRIORITY`** wins
+  (`groq → azure → siliconflow → cerebras`), else mock. That list is
+  **append-only**: adding a key must never silently move an existing install off
+  the provider it has been running on, so Groq stays first (the documented "paste
+  a free Groq key" behaviour) and each new provider goes on the end — Cerebras
+  last **even though its free tier is the most generous**, because arriving later
+  is what decides the order, not how good the tier is. Force with
+  `LLM_PROVIDER=<kind>` when several keys exist.
+  - **The keys are passed as a NAMED object (`ProviderKeys`), not positionally.**
+    With five providers, `selectProviderKind` had grown to four optional strings
+    in a row, where transposing two arguments reads fine, compiles fine, and
+    silently selects the wrong provider. The priority now lives in one list
+    instead of being implied by parameter position.
   `INTERVIEW_LLM_PROVIDER` overrides only the interview. Model via
   `ANTHROPIC_MODEL` (default `claude-sonnet-4-6`; `claude-opus-4-8` available).
 - **Azure OpenAI (`AzureOpenAiLlmProvider`).** OpenAI-shape chat completions, so it
@@ -1509,6 +1546,48 @@ tsconfig and never needs shared's `dist`.
   version with JSON mode). Native `fetch`, no SDK. Targets chat deployments
   (gpt-4o/4.1/35-turbo) — the o-series reasoning models reject `temperature` and
   want `max_completion_tokens`.
+- **Cerebras (`CerebrasLlmProvider`) — fast, but PAID.** Another OpenAI-shaped
+  provider mirroring `GroqLlmProvider` (native `fetch`, Bearer auth, native
+  `response_format: json_object`). It was added for its free tier and that turned
+  out **not to exist for new accounts** — a fresh key returns **HTTP 402
+  `payment_required`** on the first call (verified against a real account, not
+  inferred). The much-quoted "1M tokens/day, no card" tier is legacy, closed to
+  new signups, and ends for existing accounts on **17 Aug 2026**. Keep the
+  provider (it works, and it is the fastest option if ever paid for), but **Groq
+  remains the only permanently-free provider here** — see `GROQ_MODEL` below,
+  where the model choice is worth 2–5× the daily token budget. Env:
+  `CEREBRAS_API_KEY` (required), `CEREBRAS_MODEL` (default **`gpt-oss-120b`**),
+  `CEREBRAS_BASE_URL` (default `https://api.cerebras.ai/v1`). Four things to know:
+  1. **`max_completion_tokens`, NOT `max_tokens`.** Cerebras dropped the legacy
+     field, so copying the Groq/SiliconFlow payload verbatim silently caps or
+     rejects every call. This is the single most likely way to break this provider
+     while every other OpenAI-shaped one keeps working — pinned by a test that
+     asserts `max_tokens` is absent from the body.
+  2. **The default model REASONS**, so it gets `REASONING_HEADROOM_TOKENS` and a
+     2x timeout (the SiliconFlow rules). Headroom is **4096, half SiliconFlow's**,
+     because the binding free-tier limit here is tokens-per-minute (30K), and
+     headroom counts against it whether the model uses it or not.
+  3. **The free tier limits REQUESTS, not tokens** — 5 RPM against 1M tokens/day.
+     A pipeline run is ~10–12 calls plus API-design chunking, so a run spans a
+     couple of minutes and a burst can 429. Survivable only because generation is
+     already async (BullMQ/SSE) and `postLlmJson` honours `Retry-After`. It is
+     therefore a strong pick for **`INTERVIEW_LLM_PROVIDER`** (few short calls,
+     latency is user-visible) and the slower pick for the design agents.
+     (Moot on a free account, which cannot call it at all — see the 402 above.)
+  5. **`GROQ_MODEL` is a QUOTA decision, not just a quality one.** Groq's free
+     tokens-per-day limit is **per model**, and this pipeline is token-hungry
+     because every stage feeds the next its output: `llama-3.3-70b-versatile`
+     gives 100K TPD, **`openai/gpt-oss-120b` 200K**, `llama-3.1-8b-instant` 500K.
+     The default is `openai/gpt-oss-120b` — double the budget *and* a stronger
+     model than the 70B it replaced. Running out mid-pipeline is **silent**: the
+     agent falls back to its deterministic template and the user receives a
+     real-looking degraded artifact, which is exactly what the `generation`
+     provenance stamp exists to surface.
+  4. **The default is the PRODUCTION model on purpose.** `zai-glm-4.7` is preview
+     *and* carries a published deprecation date; `gemma-4-31b` is preview. A
+     default that stops existing on a known date is not a default. Only
+     `gpt-oss-120b` is priced in `MODEL_PRICING` — the preview models stay
+     unlisted and report as `unpricedCalls`, the honest unknown.
 - **SiliconFlow (`SiliconFlowLlmProvider`) — the REASONING-model seam.** Another
   OpenAI-shape provider mirroring `GroqLlmProvider` (native `fetch`, Bearer auth),
   aimed at the hosted DeepSeek catalog. Env: `SILICONFLOW_API_KEY` (required),

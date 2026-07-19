@@ -9,9 +9,38 @@ import {
   type RequirementDocument,
   type SystemDesign,
   untrustedField,
+  normalizeDatabaseDesign,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
+
+/**
+ * Output budget for a whole schema — **bounded from BOTH sides.**
+ *
+ * Too small and the schema truncates: the provider default of 2048 cut a
+ * seven-entity multi-tenant design off mid-array, and because Groq's native JSON
+ * mode validates server-side that arrived as a hard **400 `json_validate_failed`**
+ * rather than as short-but-parseable output, so the whole LLM design was thrown
+ * away for the template. Relations are emitted *last*, which is exactly why
+ * `relations` was the field that went missing.
+ *
+ * Too large and the request is rejected before the model ever runs: **providers
+ * count `max_tokens` against the tokens-per-minute limit**, because it is
+ * capacity they must reserve. Groq's free tier gives `openai/gpt-oss-120b` a
+ * **TPM of 8,000**, so an 8192 budget on a ~1,300-token prompt asked for 9,496
+ * and came back **413 "Request too large"** — a bigger number bought a worse
+ * outcome.
+ *
+ * 5120 threads it: ~6.5K total on a typical prompt, inside an 8K TPM tier with
+ * headroom for the prompt to grow, and 2.5x the room the truncation needed.
+ * **Raising this is not free** — check the target model's TPM first.
+ *
+ * A budget rather than the API designer's chunking because a schema is one
+ * coherent document: entities reference each other and 3NF decisions do not
+ * split the way independent endpoint groups do. If schemas outgrow this, chunk
+ * by entity group rather than raising it into the TPM wall again.
+ */
+const SCHEMA_MAX_TOKENS = 5120;
 
 /** What the Database Designer needs from upstream stages. */
 export interface DatabaseDesignContext {
@@ -79,8 +108,16 @@ export class DatabaseDesignerAgent extends BaseAgent {
       label: 'Database design',
       prompt: this.buildPrompt(ctx),
       isValid: (raw) => this.isValid(raw),
-      accept: (raw) => ({ ...(raw as DatabaseDesign), sessionId, generatedAt }),
+      // `isValid` gates on entities, so a reply that simply omits `relations`
+      // gets here — normalize rather than spread it through unchecked.
+      accept: (raw) =>
+        normalizeDatabaseDesign({
+          ...(raw as DatabaseDesign),
+          sessionId,
+          generatedAt,
+        }),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      options: { maxTokens: SCHEMA_MAX_TOKENS },
     });
   }
 

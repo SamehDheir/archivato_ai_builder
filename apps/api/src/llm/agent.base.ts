@@ -11,7 +11,7 @@ import type {
   LlmCompleteOptions,
 } from './llm-provider.interface';
 import { LlmJsonParseError } from './llm-provider.interface';
-import { LlmHttpError } from './llm-http';
+import { LlmHttpError, isGenerationFailure, isRequestTooLarge } from './llm-http';
 
 /**
  * Base class for every specialized agent (Product Analyst, System Architect,
@@ -113,7 +113,7 @@ export abstract class BaseAgent {
     let reason: DegradedReason = 'invalid_output';
 
     try {
-      const raw = await this.thinkJson<Partial<T>>(spec.prompt, spec.options);
+      const raw = await this.askWithinBudget<T>(spec.prompt, spec.options);
       if (spec.isValid(raw)) {
         return this.stamp(spec.accept(raw), { mode: 'llm' });
       }
@@ -123,6 +123,41 @@ export abstract class BaseAgent {
       logger.warn(`${spec.label} failed (${reason}); using fallback: ${err}`);
     }
     return this.stamp(spec.fallback(), { mode: 'fallback', degradedReason: reason });
+  }
+
+  /**
+   * Ask the model, and if the request is refused for exceeding the caller's rate
+   * tier, ask again for less.
+   *
+   * A provider counts `max_tokens` toward tokens-per-minute, so an output budget
+   * sized for the artifact can be rejected **before the model runs** on a small
+   * free tier — and no amount of waiting fixes it, because the request breaches
+   * the ceiling on its own. Halving the budget is the only move that turns a
+   * guaranteed failure into a possible success, and a slightly shorter artifact
+   * beats the deterministic template the agent would otherwise fall back to.
+   *
+   * One retry, not a loop: if half the budget still doesn't fit, the tier is too
+   * small for this artifact and the honest outcome is the fallback plus a warning
+   * naming the real limit — not four more billed attempts walking the number down.
+   */
+  private async askWithinBudget<T>(
+    prompt: string,
+    options?: LlmCompleteOptions,
+  ): Promise<Partial<T>> {
+    try {
+      return await this.thinkJson<Partial<T>>(prompt, options);
+    } catch (err) {
+      const budget = options?.maxTokens;
+      if (!budget || !isRequestTooLarge(err)) throw err;
+
+      const reduced = Math.floor(budget / 2);
+      this.logger.warn(
+        `Request exceeded the provider's per-minute limit at maxTokens=${budget}; ` +
+          `retrying once at ${reduced}. If this recurs, the model's TPM is too low ` +
+          `for this artifact — switch model or tier rather than raising the budget.`,
+      );
+      return this.thinkJson<Partial<T>>(prompt, { ...options, maxTokens: reduced });
+    }
   }
 
   /**
@@ -187,6 +222,12 @@ export abstract class BaseAgent {
  */
 export function degradedReasonFor(err: unknown): DegradedReason {
   if (err instanceof LlmJsonParseError) return 'parse_error';
+  // A provider rejecting its OWN model's malformed JSON (Groq's 400
+  // `json_validate_failed`) is the same event as a local parse failure: the call
+  // was made and billed, and only the output was unusable. It arrives as an HTTP
+  // error, so without this it would read as `call_failed` and send the reader
+  // looking at the network instead of at the token budget.
+  if (isGenerationFailure(err)) return 'parse_error';
   // `kind` rather than a regex over `err.message`: that message is prose built in
   // llm-http.ts, and rewording it would silently reclassify every timeout.
   if (err instanceof LlmHttpError) {

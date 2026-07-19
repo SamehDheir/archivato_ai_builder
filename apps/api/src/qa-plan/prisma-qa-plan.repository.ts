@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { QaPlan } from '@archivato/shared';
+import { normalizeQaPlan } from '@archivato/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { QaPlanRepository } from './qa-plan.repository';
 
@@ -21,7 +22,7 @@ export class PrismaQaPlanRepository implements QaPlanRepository {
 
   async findBySessionId(sessionId: string): Promise<QaPlan | null> {
     const row = await this.prisma.qaPlan.findUnique({ where: { sessionId } });
-    return row ? (row.data as unknown as QaPlan) : null;
+    return row ? normalizeQaPlan(row.data as unknown as QaPlan) : null;
   }
 
   async deleteBySessionId(sessionId: string): Promise<void> {

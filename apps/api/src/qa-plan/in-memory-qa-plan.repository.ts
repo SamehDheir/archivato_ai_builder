@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { QaPlan } from '@archivato/shared';
+import { normalizeQaPlan } from '@archivato/shared';
 import type { QaPlanRepository } from './qa-plan.repository';
 
 /** Process-local store used by unit tests. */
@@ -13,7 +14,8 @@ export class InMemoryQaPlanRepository implements QaPlanRepository {
   }
 
   async findBySessionId(sessionId: string): Promise<QaPlan | null> {
-    return this.plans.get(sessionId) ?? null;
+    const found = this.plans.get(sessionId);
+    return found ? normalizeQaPlan(found) : null;
   }
 
   async deleteBySessionId(sessionId: string): Promise<void> {
