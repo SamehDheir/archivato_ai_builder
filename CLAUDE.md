@@ -173,6 +173,77 @@ tsconfig and never needs shared's `dist`.
   `billing`, `analytics`, `admin`, `support`, `notifications`, `roles`,
   `waitlist`).
   Modules export their repository token + service for downstream use.
+- **Business Analysis (`business-analysis`) — the discovery layer, and the one
+  stage built around what the model CANNOT know.** Runs off the confirmed
+  interview, ahead of Requirements: problem statement, user segments,
+  competitors, market read, USP, MVP-cut assessment, viability verdict. Free
+  tier, owner-guarded, `THROTTLE_AI`, own `business_analyses` table (migration
+  `20260719120000_add_business_analysis`). Nine things not to undo:
+  1. **It FEEDS requirements; it does not gate them.** `RequirementsService`
+     reads the analysis if one exists and passes it as context — the point of the
+     stage is that the model reasons about the business before specifying
+     software. But every project created before this existed has no analysis, and
+     a hard gate would also make a BA failure block the whole chain. Pinned by a
+     test that generates a document with no analysis at all.
+  2. **Only the GROUNDED sections cross into the requirements prompt.** The
+     brief carries problem / USP / segments / MVP assessment. The competitor list
+     and market read are **excluded on purpose**: they are the analyst's
+     unverified recollection, they say nothing about what the system must do, and
+     the requirement document is what the *client* reads — letting them cross
+     would launder a guess into a requirement. Pinned by a test.
+  3. **`MARKET_HONESTY_RULES` is embedded verbatim in the system prompt** (the
+     R13 `HONESTY_RULES` precedent, pinned by a test). There is no web access
+     here, so competitors and market size are pure recollection. The rules ban the
+     *specifics* — funding, valuation, revenue, user/customer counts, headcount,
+     founding dates, market size in dollars — because those turn a plausible
+     recollection into an authoritative-sounding fabrication, and they are exactly
+     what a client checks first. Naming a product is allowed; claiming it raised
+     $4M is not.
+  4. **There is no market-size field to fabricate a number into.**
+     `MarketAssessment` has `demandSignals` / `headwinds` / a qualitative
+     `sizeNote` — deliberately no TAM. A dollar figure would be invented, would be
+     the single most quotable line in the document, and would be wrong.
+  5. **Every outside claim carries a `ClaimConfidence`**, and `toClaimConfidence`
+     resolves anything unrecognized to **`unverified`**, never dropping it — the
+     cautious direction (`parseBudget`'s "null, never a guess", applied to
+     provenance of knowledge rather than of numbers).
+  6. **`researchChecklist` is the counterweight that makes the rest shippable**,
+     and `withResearchChecklist()` guarantees it covers every unverified claim —
+     including the empty-competitor-list case, which is reported as *"this needs
+     research"* rather than allowed to read as "there is no competition". It is
+     folded into **`normalizeBusinessAnalysis()`**, which lives in
+     `@archivato/shared` and runs at **both boundaries** (the agent on write,
+     **both** repositories on read — Prisma *and* in-memory, so a unit test can't
+     pass on a shape production repairs) — the `normalizeApiDesign` convention.
+     That normalizer is also what stops `isValid` from being mistaken for a shape
+     check: it only tests `problem.problem`, `segments` and `usp.statement`, so a
+     conforming-but-partial response reached the view with `segments[].painPoints`
+     and `usp.differentiators` undefined and took the whole tab out on `.join()`.
+     **A required array must read as empty whether it is missing OR mistyped** —
+     `?? []` is not enough, because a model answering `demandSignals: "strong
+     demand"` passes the nullish check and dies on `.map`.
+  7. **The deterministic fallback emits NO competitors and no market judgment.**
+     Every other agent's fallback approximates the model; this one must not,
+     because offline the code knows the interview and nothing else. It states the
+     problem and segments (which it can), and says out loud that the market was
+     not assessed. An install with no LLM key ships this for every project.
+  8. **`stripMetrics()` is the backstop for when the prompt doesn't hold** —
+     it removes money figures, user/customer counts and founding years from
+     model-supplied competitor prose. The prompt is the primary defence; this
+     costs a little fluency and removes a claim we cannot stand behind. Note the
+     trap it shipped with: the replacement read `'a number of $2'` against a
+     pattern with **one** capture group, so JS emitted the literal `$2` into a
+     sentence the owner may forward to a client. The original test only asserted
+     the *figure* was gone, never that the replacement read correctly — assert
+     the output, not just the absence.
+  9. **OWNER-ONLY, and there is no share-page counterpart.** The verdict is a
+     judgement on the client's own business, delivered by the vendor they are
+     paying to build it — a client must never read it. Nothing is added to
+     `SharedProject`, which is stronger than redaction: there is no field to
+     strip. **The verdict space deliberately has no `do-not-build`** (`proceed` /
+     `proceed-with-changes` / `needs-validation` / `high-risk`), because this
+     product's user is a dev shop scoping a project the client already decided to
+     build — see [docs/POSITIONING.md](docs/POSITIONING.md) §2.
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
   controller and is not in version snapshots. `product-vision` needs only the

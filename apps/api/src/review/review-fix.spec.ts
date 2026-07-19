@@ -15,6 +15,7 @@ import { InMemorySystemDesignRepository } from '../system-design/in-memory-syste
 import { RequirementsService } from '../requirements/requirements.service';
 import { SystemDesignService } from '../system-design/system-design.service';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
+import { InMemoryBusinessAnalysisRepository } from '../business-analysis/in-memory-business-analysis.repository';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
 import { PatchAgent } from '../llm/agents/patch.agent';
@@ -153,7 +154,7 @@ async function makeHarness(): Promise<Harness> {
     reports,
     docs,
     designs,
-    new RequirementsService(sessions, docs, new RequirementEngineerAgent(mock)),
+    new RequirementsService(sessions, docs, new InMemoryBusinessAnalysisRepository(), new RequirementEngineerAgent(mock)),
     new SystemDesignService(
       sessions,
       docs,

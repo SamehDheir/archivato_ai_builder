@@ -19,6 +19,7 @@ import { InMemoryApiDesignRepository } from '../api-design/in-memory-api-design.
 import { InMemoryReviewReportRepository } from '../review/in-memory-review-report.repository';
 import { InMemoryShareLinkRepository } from '../share/in-memory-share-link.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
+import { InMemoryBusinessAnalysisRepository } from '../business-analysis/in-memory-business-analysis.repository';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
 import { DatabaseDesignerAgent } from '../llm/agents/database-designer.agent';
@@ -51,6 +52,7 @@ function makeHarness() {
   const requirements = new RequirementsService(
     sessions,
     docs,
+    new InMemoryBusinessAnalysisRepository(),
     new RequirementEngineerAgent(mock),
   );
   const systemDesign = new SystemDesignService(

@@ -758,6 +758,7 @@ export default function Home() {
   // ⌘K command palette: quick actions, jump to a project, or (in a confirmed
   // project) jump to any reachable stage.
   const stageAvailable: Record<TabKey, boolean> = {
+    business: true,
     vision: true,
     requirements: true,
     system: !!doc,

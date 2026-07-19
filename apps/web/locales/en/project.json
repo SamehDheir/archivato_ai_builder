@@ -28,7 +28,8 @@
     "export": "Export",
     "apidocs": "API Docs",
     "refine": "Refine",
-    "history": "History"
+    "history": "History",
+    "business": "Business"
   },
   "pro": "Pro",
   "working": "Working…",

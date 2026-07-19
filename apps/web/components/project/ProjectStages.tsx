@@ -20,6 +20,8 @@ import {
   PenLine,
   Shapes,
   ShieldAlert,
+  Compass,
+
   Sparkles,
   Webhook,
   Workflow,
@@ -72,6 +74,7 @@ import { DesignCanvas } from '@/components/design/DesignCanvas';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SummaryView } from '@/components/interview/SummaryView';
 import { ProductVisionPanel } from '@/components/product/ProductVisionPanel';
+import { BusinessAnalysisPanel } from '@/components/product/BusinessAnalysisPanel';
 import { useConfirm } from '@/components/shared/confirm-dialog';
 import { useUpgrade } from '@/components/billing/upgrade-dialog';
 import { useFormat } from '@/lib/i18n/format';
@@ -122,6 +125,7 @@ function useIsDesktop(): boolean {
  */
 const TABS: { value: TabKey; icon: LucideIcon }[] = [
   // The deal: what the client reads and decides on.
+  { value: 'business', icon: Compass },
   { value: 'vision', icon: Sparkles },
   { value: 'requirements', icon: FileText },
   { value: 'cost', icon: Coins },
@@ -178,6 +182,7 @@ const REQUIRES: Partial<Record<TabKey, TabKey>> = {
 };
 
 export type TabKey =
+  | 'business'
   | 'vision'
   | 'requirements'
   | 'system'
@@ -402,6 +407,7 @@ export function ProjectStages({
   );
 
   const available: Record<TabKey, boolean> = {
+    business: true,
     vision: true,
     requirements: true,
     system: !!doc,
@@ -537,6 +543,13 @@ export function ProjectStages({
           )}
 
           {/* Product Vision (standalone) */}
+          <TabsContent value="business" className="mt-4">
+            <BusinessAnalysisPanel
+              sessionId={sessionId}
+              reloadKey={versionsReload}
+            />
+          </TabsContent>
+
           <TabsContent value="vision" className="mt-4">
             <ProductVisionPanel
               sessionId={sessionId}

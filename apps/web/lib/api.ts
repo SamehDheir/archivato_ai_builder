@@ -28,6 +28,7 @@ import type {
   CostProviderId,
   GithubPushResult,
   GithubConnectionStatus,
+  BusinessAnalysis,
   ProductVision,
   ProjectRoadmap,
   ProposalControls,
@@ -380,6 +381,15 @@ export const reviewApi = {
 
   fixLog: (sessionId: string) =>
     request<FixLogEntry[]>(`/review/${sessionId}/fix-log`),
+};
+
+export const businessAnalysisApi = {
+  generate: (sessionId: string) =>
+    request<BusinessAnalysis>(`/business-analysis/${sessionId}/generate`, {
+      method: 'POST',
+    }),
+
+  get: (sessionId: string) => request<BusinessAnalysis>(`/business-analysis/${sessionId}`),
 };
 
 export const productVisionApi = {

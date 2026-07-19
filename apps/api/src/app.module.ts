@@ -17,6 +17,7 @@ import { DatabaseDesignModule } from './database-design/database-design.module';
 import { ApiDesignModule } from './api-design/api-design.module';
 import { ReviewModule } from './review/review.module';
 import { ProductVisionModule } from './product-vision/product-vision.module';
+import { BusinessAnalysisModule } from './business-analysis/business-analysis.module';
 import { RoadmapModule } from './roadmap/roadmap.module';
 import { CostEstimateModule } from './cost-estimate/cost-estimate.module';
 import { ThreatModelModule } from './threat-model/threat-model.module';
@@ -73,6 +74,8 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     ReviewModule,
     // Product Manager stage: standalone Product Vision (vision/goals/MVP/roadmap).
     ProductVisionModule,
+
+    BusinessAnalysisModule,
     // Roadmap Planner stage: standalone phased implementation roadmap.
     RoadmapModule,
     // Cost Estimator stage: standalone deterministic per-provider monthly cost.

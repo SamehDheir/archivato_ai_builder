@@ -23,6 +23,7 @@ import { InMemoryBillingEventRepository } from '../billing/in-memory-billing-eve
 import { MockBillingProvider } from '../billing/mock-billing.provider';
 import { InMemoryUserRepository } from '../auth/in-memory-user.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
+import { InMemoryBusinessAnalysisRepository } from '../business-analysis/in-memory-business-analysis.repository';
 import { SystemArchitectAgent } from '../llm/agents/system-architect.agent';
 import { ArchitectExplainerAgent } from '../llm/agents/architect-explainer.agent';
 import { DatabaseDesignerAgent } from '../llm/agents/database-designer.agent';
@@ -74,6 +75,7 @@ function makeHarness(): Harness {
   const requirements = new RequirementsService(
     sessionRepo,
     docRepo,
+    new InMemoryBusinessAnalysisRepository(),
     new RequirementEngineerAgent(mock),
   );
   const systemDesign = new SystemDesignService(

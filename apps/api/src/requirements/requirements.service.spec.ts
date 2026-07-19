@@ -3,6 +3,7 @@ import type { RequirementDocument } from '@archivato/shared';
 import { RequirementsService } from './requirements.service';
 import { InMemoryRequirementDocumentRepository } from './in-memory-requirement-document.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
+import { InMemoryBusinessAnalysisRepository } from '../business-analysis/in-memory-business-analysis.repository';
 import { InterviewService } from '../interview/interview.service';
 import { InMemoryInterviewSessionRepository } from '../interview/in-memory-interview-session.repository';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
@@ -53,6 +54,7 @@ describe('RequirementsService', () => {
     service = new RequirementsService(
       sessionRepo,
       docRepo,
+      new InMemoryBusinessAnalysisRepository(),
       new RequirementEngineerAgent(mock),
     );
   });

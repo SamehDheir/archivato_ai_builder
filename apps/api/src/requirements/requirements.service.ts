@@ -17,6 +17,10 @@ import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
 } from '../interview/interview-session.repository';
+import {
+  BUSINESS_ANALYSIS_REPOSITORY,
+  type BusinessAnalysisRepository,
+} from '../business-analysis/business-analysis.repository';
 import { RequirementEngineerAgent } from '../llm/agents/requirement-engineer.agent';
 import {
   REQUIREMENT_DOCUMENT_REPOSITORY,
@@ -30,6 +34,8 @@ export class RequirementsService {
     private readonly sessions: InterviewSessionRepository,
     @Inject(REQUIREMENT_DOCUMENT_REPOSITORY)
     private readonly docs: RequirementDocumentRepository,
+    @Inject(BUSINESS_ANALYSIS_REPOSITORY)
+    private readonly businessAnalyses: BusinessAnalysisRepository,
     private readonly engineer: RequirementEngineerAgent,
   ) {}
 
@@ -51,11 +57,18 @@ export class RequirementsService {
       throw new ConflictException('Session has no requirements summary.');
     }
 
+    // The business analysis FEEDS this stage but does not gate it: it is a
+    // standalone stage, so a project that never ran it (every project created
+    // before it existed) must still generate requirements exactly as before.
+    const businessAnalysis =
+      (await this.businessAnalyses.findBySessionId(sessionId)) ?? undefined;
+
     const doc = await this.engineer.generate(sessionId, {
       idea: session.input.idea,
       intent: session.intent,
       history: session.history,
       summary: session.summary,
+      businessAnalysis,
       // Carry the interview's slot snapshot + open questions onto the agent so it
       // can seed the executive summary / out-of-scope and fold the gaps into the
       // assumptions (R6/R7). Both tolerate absence (plan-mode fills neither).
