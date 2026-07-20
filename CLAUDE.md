@@ -2013,12 +2013,81 @@ tsconfig and never needs shared's `dist`.
   `@UseGuards(JwtAuthGuard, AdminGuard)` — `GET /admin/{stats,traffic,users}`,
   `PATCH /admin/users/:id/role`, `DELETE /admin/users/:id` (can't target self).
   Web: `/admin` dashboard (KPIs, 30-day trend SVG charts, top pages/referrers,
+  activation funnel,
   user table with role/delete) — self-guards (bounces non-admins); a `ShieldCheck`
   header link shows only for admins; `PageviewTracker` in the layout fires the
   beacon on every route (excludes `/admin`). **Admins are stats-only**: `POST
   /interview` 403s for them (`InterviewController.start`) and the dashboard shows
   an admin notice (link to `/admin`) instead of the project creator — so an admin
   account never owns or generates projects.
+- **Activation funnel (C4) — the one number this business runs on.** *"Of 100
+  signups, how many sent a client link?"* was unanswerable: `AnalyticsEvent`
+  recorded pageview/signup/login/generate with **no stage boundaries**, and
+  `ShareLink` carried a bare `viewCount`. Five new event types
+  (`interview_started`, `interview_confirmed`, `share_created`, `share_viewed`,
+  `export` — `generate` already marked the artifact step), the pure
+  `buildFunnel()` in `@archivato/shared` (`funnel.ts`), `GET /admin/funnel`
+  (`admin:analytics`), and a `FunnelPanel` on `/admin`. Eight things not to undo:
+  1. **No `ShareLinkView` table.** The original plan proposed one; it would have
+     been a **third** store of "was it viewed", because `lastViewedAt` +
+     `viewCount` already existed on the row (written by `recordView()`, just never
+     surfaced) and `AnalyticsEvent` already carries createdAt/referrer/userId/meta
+     plus the share-token redaction rule. The funnel rides on the event stream;
+     the customer-facing "client opened it 2h ago" surfaces the column that was
+     always there.
+  2. **Every step is read from TWO sources and unioned.** Events are append-only
+     and exactly timed but only exist from the day they shipped — an events-only
+     funnel reads **0% for every user who already exists**, which is the least
+     useful version of the number. Current state (a session row, a `ShareLink`) is
+     fully retroactive but a delete erases it. So `AdminService.getFunnel` flattens
+     both into `FunnelReach[]` and the pure builder dedupes by user. The input is a
+     **flat list, not per-step sets**, precisely so "reached it either way" is an
+     append that cannot be got wrong.
+  3. **`export` is the one step with no state to fall back on** — it streams a file
+     and leaves nothing behind (`EVENT_ONLY_STEPS`). So it is marked
+     `retroactive: false` and the panel prints `measurableFrom` (the earliest funnel
+     event held) rather than letting the gap read as a drop-off — the `unpricedCalls`
+     rule applied to a conversion rate.
+  4. **The activation cohort is only signups whose window has CLOSED.** An account
+     created yesterday has not failed to activate, it has six days left; counting it
+     would drag the rate down and make the rate move with **signup volume** instead
+     of with activation. Same reason staff are excluded from the cohort entirely —
+     they are barred from creating projects (`InterviewController.start` 403s them),
+     so leaving them in would understate activation by the size of our own team.
+     "Staff" is holding a role granting **any** permission (the seeded `user` role
+     grants none and is not it).
+  5. **`share_created` is recorded on the MINT path only.** `create` is idempotent
+     and the web calls it on every "Copy client link" click, so recording
+     unconditionally would count clicks instead of deals.
+  6. **`share_viewed` is recorded on the FIRST view only** (`viewCount === 0`).
+     That is the fact worth measuring, and it is what keeps the public read safe to
+     leave `@SkipThrottle()` — a link going viral must not write an analytics row
+     per reader. Every later view still lands on `viewCount`/`lastViewedAt`.
+  7. **A share view is attributed to the OWNER, and nothing about the reader is
+     captured.** It is the one funnel step whose actor is a stranger, and the
+     stranger is not the subject. `visitorId` stays null so the anonymous browsing
+     cookie is never joined to somebody's project — and **no country**, because the
+     share page is server-rendered: that request arrives from our own Next.js
+     server, so a country resolved there would be our hosting region wearing the
+     reader's name. That trap is why the plan's per-view country field was dropped.
+  8. **Steps are not forced to be monotonic.** Deleting a project erases the session
+     that proved the interview started while the `share_created` event survives, so a
+     later step can outnumber an earlier one and `percentOfPrevious` can pass 100.
+     Clamping it would invent a drop-off that never happened.
+  The `export` step is recorded by **`ExportAnalyticsInterceptor`**, one chokepoint
+  for all nine formats (the `UsageTrackingLlmProvider` decorator precedent) — it
+  excludes the `@All(':sessionId/mock/*')` API-docs mock server, and `tap` means a
+  402 from `ProGuard` records nothing. `getFunnel` reads only **aggregates**
+  (`groupBy` over (type, user), one row per session/link) because the funnel is
+  all-time and `analytics_events` is the one table that grows with traffic.
+  **Web:** `useFormat()` gained **`relative`** (the locale-aware "2 hours ago",
+  including the Arabic Latin-numeral rule) — it was already hand-rolled twice, and a
+  third copy in new code would have been the wrong direction. The dashboard's
+  `SentBadge` now distinguishes **sent** (`secondary`) from **opened**
+  (`default`/success): a proposal sent four days ago and never opened is exactly the
+  card that needs a follow-up, so it is the one that does *not* get the success tone
+  (R14 — colour marks the outcome, not the action). i18n `admin.funnel.*`,
+  `dashboard.card.opened`, `stages.share.{lastViewed,neverViewed}` (EN+AR).
 - **RBAC (`roles`) — dynamic roles + a static permission catalog.** Authorization
   has **three independent axes**, kept separate: **ownership** (`SessionOwnerGuard`
   / owner-or-permission checks), **entitlement** (`ProGuard`, plan/billing), and

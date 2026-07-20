@@ -8,6 +8,7 @@ import {
   Check,
   Compass,
   Download,
+  Eye,
   FileText,
   LayoutGrid,
   Link2,
@@ -30,6 +31,7 @@ import {
   type ProjectScale,
 } from '@archivato/shared';
 import { STARTER_IDEAS } from '@/lib/starter-ideas';
+import { useFormat } from '@/lib/i18n/format';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -868,14 +870,33 @@ function PipelineRail({ project }: { project: ProjectOverview }) {
   );
 }
 
-/** "Sent to client" — the card's headline fact once a link exists. */
-function SentBadge() {
+/**
+ * The card's headline fact once a link exists — and it is two facts, not one.
+ *
+ * "Sent" and "the client actually read it" are different positions in a deal,
+ * and only the second is good news: a proposal sent four days ago and never
+ * opened is precisely the card that needs a follow-up, which is why it is the
+ * one that does NOT get the success tone. The colour marks the outcome, not the
+ * action (R14 — a semantic state, not decoration).
+ */
+function SentBadge({ lastViewedAt }: { lastViewedAt: string | null }) {
   const { t } = useTranslation('dashboard');
+  const fmt = useFormat();
+
+  if (!lastViewedAt) {
+    return (
+      <Badge variant="secondary" className="gap-1">
+        <Send className="h-3 w-3" />
+        {t('card.sent')}
+      </Badge>
+    );
+  }
+
   return (
     // `default` is the success-toned pill in this Badge (green surface).
-    <Badge variant="default" className="gap-1">
-      <Send className="h-3 w-3" />
-      {t('card.sent')}
+    <Badge variant="default" className="gap-1" title={fmt.dateTime(lastViewedAt)}>
+      <Eye className="h-3 w-3" />
+      {t('card.opened', { time: fmt.relative(lastViewedAt) })}
     </Badge>
   );
 }
@@ -1010,7 +1031,7 @@ function ProjectCard({
           <Badge variant={STATUS_VARIANT[project.status]}>
             {t(`status.${project.status}`)}
           </Badge>
-          {project.shared && <SentBadge />}
+          {project.shared && <SentBadge lastViewedAt={project.lastViewedAt} />}
         </div>
         {/* Client first, then the project name. See ClientLine: this is a deal
             board, and the owner scans it by client. */}
@@ -1092,7 +1113,7 @@ function ProjectRow({
         </span>
         {project.shared && (
           <span className="hidden shrink-0 sm:block">
-            <SentBadge />
+            <SentBadge lastViewedAt={project.lastViewedAt} />
           </span>
         )}
         <span className="hidden shrink-0 items-center gap-2 sm:flex">

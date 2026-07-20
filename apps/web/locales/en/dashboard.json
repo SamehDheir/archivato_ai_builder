@@ -98,6 +98,7 @@
   },
   "card": {
     "sent": "Sent to client",
+    "opened": "Opened {{time}}",
     "copyLink": "Copy client link",
     "copied": "Copied",
     "copyLocked": "Finish the design (through the database) to share a link with your client."

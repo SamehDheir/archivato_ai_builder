@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Check, Copy, Eye, Globe, Link2, Trash2 } from 'lucide-react';
 import { sharePath, type ShareLink } from '@archivato/shared';
 import { shareApi } from '@/lib/api';
+import { useFormat } from '@/lib/i18n/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/shared/toast';
@@ -27,6 +28,7 @@ import { useConfirm } from '@/components/shared/confirm-dialog';
  */
 export function ShareLinkCard({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation('stages');
+  const fmt = useFormat();
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -133,9 +135,20 @@ export function ShareLinkCard({ sessionId }: { sessionId: string }) {
               {t('share.revoke')}
             </Button>
           </div>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
             <Eye className="h-3.5 w-3.5" />
             {t('share.views', { n: link.viewCount })}
+            {/* "Never opened" is a different conversation from "read an hour
+                ago", so the two states are worth distinguishing explicitly
+                rather than just omitting the line. */}
+            <span aria-hidden>·</span>
+            {link.lastViewedAt ? (
+              <span className="text-foreground">
+                {t('share.lastViewed', { time: fmt.relative(link.lastViewedAt) })}
+              </span>
+            ) : (
+              <span>{t('share.neverViewed')}</span>
+            )}
           </p>
         </div>
       )}

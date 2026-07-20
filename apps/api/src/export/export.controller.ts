@@ -7,6 +7,7 @@ import {
   Req,
   Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { ExportBundle, ProjectStructure } from '@archivato/shared';
@@ -14,9 +15,13 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SessionOwnerGuard } from '../interview/session-owner.guard';
 import { ProGuard } from '../billing/pro.guard';
 import { ExportService } from './export.service';
+import { ExportAnalyticsInterceptor } from './export-analytics.interceptor';
 
 // Export is the Pro deliverable — every format is gated behind an active plan.
 @UseGuards(JwtAuthGuard, SessionOwnerGuard, ProGuard)
+// One chokepoint for the funnel's `export` step — see the interceptor for why
+// it is not nine `recordSafe` calls (and why the mock route is excluded).
+@UseInterceptors(ExportAnalyticsInterceptor)
 @Controller('export')
 export class ExportController {
   constructor(private readonly exporter: ExportService) {}

@@ -290,5 +290,23 @@
       "next": "Next",
       "of": "Page {{page}} of {{pages}}"
     }
+  },
+  "funnel": {
+    "title": "Activation funnel",
+    "activation": "Sent a client link within {{days}} days",
+    "activationDetail": "{{activated}} of {{cohort}} accounts sent their client a link within {{days}} days of signing up.",
+    "cohortNote": "Counts only accounts old enough for the window to have closed, and excludes staff.",
+    "eventOnly": "(from events only)",
+    "measurableFrom": "Steps marked \"from events only\" have no stored equivalent, so they are measured from {{date}} and undercount anything earlier.",
+    "noEvents": "Steps marked \"from events only\" have no stored equivalent and no events recorded yet.",
+    "step": {
+      "signup": "Signed up",
+      "interview_started": "Started an interview",
+      "interview_confirmed": "Confirmed the scope",
+      "first_artifact": "Generated an artifact",
+      "share_created": "Sent a client link",
+      "share_viewed": "Client opened the link",
+      "export": "Exported the handoff"
+    }
   }
 }

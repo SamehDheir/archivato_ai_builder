@@ -95,6 +95,11 @@ export class ProjectsService {
           // owner can fetch it from `/share/:id` on demand (minting is idempotent),
           // so there is no reason to ship every one of them on every list load.
           shared: !!link,
+          // When the client last opened it — the fact that turns "sent" into
+          // "read", and the one thing an owner scanning the board actually wants
+          // from a card. A timestamp is not a credential, so unlike the token it
+          // can ride along on the list.
+          lastViewedAt: link?.lastViewedAt?.toISOString() ?? null,
         };
       }),
     );

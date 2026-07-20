@@ -1,10 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  FUNNEL_EVENT_TYPES,
   PLANS,
   SUPER_ADMIN_ROLE_KEY,
+  buildFunnel,
   type AccountRole,
+  type AdminFunnel,
   type AdminLlmUsage,
   type AdminStats,
+  type AnalyticsEventType,
+  type FunnelReach,
+  type FunnelStep,
   type AdminTraffic,
   type AdminUserRow,
   type AdminUsersPage,
@@ -29,6 +35,23 @@ const EMPTY_AI_SPEND: UserAiSpend = {
   costUsd: 0,
   unpricedCalls: 0,
 };
+/**
+ * Which funnel step each recorded event marks.
+ *
+ * `generate` maps to `first_artifact` rather than getting a step of its own: it
+ * fires once per stage per project, so counting it directly would measure
+ * clicks, while what the funnel asks is whether the user ever got an artifact out
+ * of the machine. The builder dedupes by user, so the many-to-one is free.
+ */
+const EVENT_STEP: Partial<Record<AnalyticsEventType, FunnelStep>> = {
+  interview_started: 'interview_started',
+  interview_confirmed: 'interview_confirmed',
+  generate: 'first_artifact',
+  share_created: 'share_created',
+  share_viewed: 'share_viewed',
+  export: 'export',
+};
+
 const INTERVIEW_STATUSES: InterviewStatus[] = [
   'collecting',
   'awaiting_confirmation',
@@ -184,6 +207,119 @@ export class AdminService {
         now,
       ),
     };
+  }
+
+  /**
+   * The activation funnel — signup → interview → artifact → client link → export.
+   *
+   * **Every step is read from two sources and unioned** (see `funnel.ts`): the
+   * append-only analytics event, and the state row that proves the same thing.
+   * Events are exact and survive a delete but only exist from the day they
+   * shipped; state is fully retroactive but is erased when a project is. Neither
+   * alone answers the question honestly, so both are flattened into `reaches[]`
+   * and the pure builder dedupes.
+   *
+   * Every read here is an **aggregate** — `groupBy` over (type, user) and one
+   * row per session/link, never the event stream. That matters because the
+   * funnel is all-time, and `analytics_events` is the one table that grows with
+   * traffic rather than with paid work.
+   */
+  async getFunnel(): Promise<AdminFunnel> {
+    const now = new Date();
+
+    const [signupRows, eventGroups, sessions, links, earliestEvent] =
+      await Promise.all([
+        // Staff are excluded from the cohort, not filtered out later: they are
+        // barred from creating projects at all (`InterviewController.start`
+        // 403s them), so leaving them in would permanently understate activation
+        // by exactly the size of our own team. "Staff" is holding a role that
+        // grants anything — the seeded `user` role grants nothing and is not it.
+        this.prisma.user.findMany({
+          where: {
+            userRoles: { none: { role: { permissions: { isEmpty: false } } } },
+          },
+          select: { id: true, createdAt: true },
+        }),
+        this.prisma.analyticsEvent.groupBy({
+          by: ['type', 'userId'],
+          where: {
+            type: { in: [...FUNNEL_EVENT_TYPES] },
+            userId: { not: null },
+          },
+          _min: { createdAt: true },
+        }),
+        // One row per session carries all three of its steps, so the interview
+        // and first-artifact fallbacks cost a single read between them.
+        this.prisma.interviewSession.findMany({
+          where: { userId: { not: null } },
+          select: {
+            userId: true,
+            status: true,
+            createdAt: true,
+            requirementDocument: { select: { sessionId: true } },
+          },
+        }),
+        this.prisma.shareLink.findMany({
+          select: {
+            createdAt: true,
+            viewCount: true,
+            lastViewedAt: true,
+            session: { select: { userId: true } },
+          },
+        }),
+        this.prisma.analyticsEvent.findFirst({
+          where: { type: { in: [...FUNNEL_EVENT_TYPES] } },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        }),
+      ]);
+
+    const reaches: FunnelReach[] = [];
+
+    for (const g of eventGroups) {
+      // `type` is a string column (the project's enum-as-union convention), so
+      // an unrecognised value is possible and simply maps to no step — never an
+      // undefined key pushed into the reaches.
+      const step = EVENT_STEP[g.type as AnalyticsEventType];
+      if (!step || !g.userId || !g._min.createdAt) continue;
+      reaches.push({ userId: g.userId, step, at: g._min.createdAt });
+    }
+
+    for (const s of sessions) {
+      if (!s.userId) continue;
+      // The session's own creation date is exact for "started". The other two
+      // steps have no stored timestamp of their own — and nothing reads theirs,
+      // since only `share_created` timing decides anything (see `FunnelReach.at`).
+      reaches.push({ userId: s.userId, step: 'interview_started', at: s.createdAt });
+      if (s.status === 'confirmed') {
+        reaches.push({ userId: s.userId, step: 'interview_confirmed', at: s.createdAt });
+      }
+      if (s.requirementDocument) {
+        reaches.push({ userId: s.userId, step: 'first_artifact', at: s.createdAt });
+      }
+    }
+
+    for (const l of links) {
+      const userId = l.session?.userId;
+      if (!userId) continue;
+      // Exact, and the reason activation works retroactively at all: this is a
+      // real "when the link was minted", not an approximation.
+      reaches.push({ userId, step: 'share_created', at: l.createdAt });
+      if (l.viewCount > 0) {
+        reaches.push({
+          userId,
+          step: 'share_viewed',
+          at: l.lastViewedAt ?? l.createdAt,
+        });
+      }
+    }
+
+    return buildFunnel({
+      signups: signupRows.map((u) => ({ userId: u.id, signedUpAt: u.createdAt })),
+      reaches,
+      now,
+      measurableFrom: earliestEvent?.createdAt ?? null,
+    });
   }
 
   /** Traffic detail: daily series + top pages/referrers over the last 30 days. */

@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import {
   hasPermission,
+  type AdminFunnel,
   type AdminLlmUsage,
   type AdminStats,
   type AdminTraffic,
@@ -46,6 +47,16 @@ export class AdminController {
   @Get('traffic')
   traffic(): Promise<AdminTraffic> {
     return this.admin.getTraffic();
+  }
+
+  /**
+   * The activation funnel + the one activation metric ("sent a client link
+   * within 7 days of signup"). Aggregate counts only — no user is named, so this
+   * needs `admin:analytics` and nothing from the user directory.
+   */
+  @Get('funnel')
+  funnel(): Promise<AdminFunnel> {
+    return this.admin.getFunnel();
   }
 
   /**

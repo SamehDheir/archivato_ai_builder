@@ -12,8 +12,39 @@ import type { InterviewStatus } from './interview';
 import type { UserAiSpend } from './llm-usage';
 import type { Permission } from './permissions';
 
-/** The kinds of analytics events we record. */
-export type AnalyticsEventType = 'pageview' | 'signup' | 'login' | 'generate';
+/**
+ * The kinds of analytics events we record.
+ *
+ * The first four are traffic/product events. The rest are **funnel boundaries**
+ * (see `funnel.ts`): the append-only record of a user crossing a step, which is
+ * what makes the activation rate measurable going forward even after the project
+ * or its share link is deleted. `generate` already marks the artifact step, so it
+ * is not duplicated here.
+ */
+export type AnalyticsEventType =
+  | 'pageview'
+  | 'signup'
+  | 'login'
+  | 'generate'
+  | 'interview_started'
+  | 'interview_confirmed'
+  | 'share_created'
+  | 'share_viewed'
+  | 'export';
+
+/**
+ * The subset that marks a funnel boundary. `AdminService` reads the earliest of
+ * these to report `measurableFrom` — the point before which the event-only steps
+ * genuinely have no data.
+ */
+export const FUNNEL_EVENT_TYPES: readonly AnalyticsEventType[] = [
+  'interview_started',
+  'interview_confirmed',
+  'generate',
+  'share_created',
+  'share_viewed',
+  'export',
+];
 
 /**
  * Payload for the public `POST /analytics/track` beacon. Clients may only report

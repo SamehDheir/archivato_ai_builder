@@ -11,6 +11,7 @@ import { RoadmapModule } from '../roadmap/roadmap.module';
 import { ThreatModelModule } from '../threat-model/threat-model.module';
 import { QaPlanModule } from '../qa-plan/qa-plan.module';
 import { BillingModule } from '../billing/billing.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { ShareController } from './share.controller';
 import { SharePublicController } from './share-public.controller';
 import { ShareService } from './share.service';
@@ -44,6 +45,9 @@ import { PrismaShareLinkRepository } from './prisma-share-link.repository';
     // never to gate the route (there is no `ProGuard` on sharing, deliberately;
     // see ShareController). A read, not a wall.
     BillingModule,
+    // The two funnel boundaries that decide activation ("link created", "client
+    // opened it"). Write-only instrumentation; it gates nothing.
+    AnalyticsModule,
   ],
   controllers: [ShareController, SharePublicController],
   providers: [
