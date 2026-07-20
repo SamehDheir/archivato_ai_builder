@@ -2083,6 +2083,40 @@ tsconfig and never needs shared's `dist`.
        `ShareService.view` strips it, since showing a client that their own scoping
        has gaps, in the document being used to win the work, is the opposite of
        what it is for.
+       - **The token match is a FIRST pass, verified by the model — because
+         literal matching false-positived.** Exact-token equality flagged
+         requirements that were plainly covered in different words: "Simple
+         **payment** **processing**" shares no token with "**Processes**
+         **payments**…", "Role-based access control" none with "…RBAC for all
+         **roles**" (`payment`≠`payments`, `role`≠`roles`), and a concern met by
+         the tech stack (data encryption via Aurora/TLS) was never considered at
+         all. Three changes, in order of how conservative they are:
+         1. **Light `stem()`** folds plurals and -ing/-ed so morphological variants
+            match — the safe fix (it only ever unifies the *same* word), and it
+            alone clears the FR-4/FR-5 class **offline**.
+         2. **Coverage is no longer services-only.** `coverageSourcesFromDesign`
+            adds tech-stack and build-vs-buy lines to the haystack, so a
+            requirement owned by an infrastructure choice rather than a named
+            service (encryption) is recognised. `COVERAGE_STOP_WORDS` gained the
+            quality adjectives those rationales are written in ("fast", "reliable",
+            "secure") — otherwise a marketing adjective in a rationale could
+            *clear* an unrelated requirement, a false **negative**, and losing a
+            real gap is the one outcome this check must never produce.
+         3. **An LLM verification pass** (`SystemArchitectAgent.verifyCoverage`,
+            `COVERAGE_MAX_TOKENS`, metered) re-checks whatever still looks
+            uncovered against the WHOLE design — services, tech stack, build-vs-buy,
+            NFRs — and catches genuine synonymy the token match can't ("login" ↔
+            "authentication"). It runs only when there are candidates (a clean
+            design costs no call), and it is **strictly conservative: it clears a
+            flag only on an explicit `covered:true` with a stated location.** An
+            unparseable reply, a failed call, a missing verdict, or the offline
+            mock all keep the candidate flagged — so the pass can only ever remove
+            false positives, never a real gap (recall preserved). Because it now
+            reasons over the tech stack/NFRs too, the web warning was reworded from
+            "no owning service" to **"not addressed by the design"** (EN+AR), which
+            is what a surviving flag now means. Pinned by `coverage-check.spec.ts`
+            (the FR-4/5/7 clears, a real gap still flagged, a synonym cleared by
+            the LLM, and an unusable verdict keeping every candidate).
   - **Constraint-grounded rationale + simplicity bias.** The prompt makes every major
     decision cite the relevant constraint and NAME the rejected alternative and why it
     loses; under a tight budget/timeline the architect prefers the **simplest**

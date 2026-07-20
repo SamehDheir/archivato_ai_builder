@@ -147,11 +147,28 @@ export interface SystemDesign {
 
 // ── deterministic design checks (pure) ───────────────────────────────────────
 
-/** Words too generic to prove a service covers a requirement. */
+/**
+ * Words too generic to prove a design covers a requirement.
+ *
+ * Two groups. The originals are generic *nouns* ("system", "data", "module").
+ * The second group is quality *adjectives* and filler verbs ("fast", "reliable",
+ * "handles", "provides"): these earn their place because coverage now also reads
+ * tech-stack and build-vs-buy rationales, which are written in exactly that
+ * marketing register ("Typed and fast", "reliable and scalable"). Letting "fast"
+ * count as coverage would let a tech rationale silently clear an unrelated
+ * requirement that merely used the word — a false negative, and losing a real gap
+ * is the failure this check must avoid above all. A capability is proved by its
+ * nouns (payment, encryption, inventory), never by an adjective.
+ */
 const COVERAGE_STOP_WORDS = new Set([
   'system', 'user', 'users', 'data', 'service', 'services',
-  'manage', 'management', 'support', 'provide', 'basic', 'general',
+  'manage', 'management', 'support', 'provide', 'provides', 'basic', 'general',
   'information', 'application', 'platform', 'feature', 'module',
+  // quality adjectives / filler that denote no capability
+  'fast', 'simple', 'reliable', 'scalable', 'secure', 'robust', 'modern',
+  'flexible', 'seamless', 'efficient', 'easy', 'quick', 'powerful',
+  'lightweight', 'standard', 'popular', 'handle', 'handles', 'using',
+  'built', 'enable', 'enables', 'allow', 'allows', 'solution', 'stack',
 ]);
 
 /** How many alternative processors to name in a single recommendation line. */
@@ -162,36 +179,101 @@ const AUTH_SERVICE_PATTERN =
   /\b(auth|authentication|authorization|identity|iam|account|accounts|user|users|rbac|access|login|session|member|permission)/i;
 
 /**
- * Functional requirements that no service appears to cover.
+ * Reduce a word to a crude stem so morphological variants match.
+ *
+ * The coverage check compares exact tokens, and that alone produced the reported
+ * false positives: "Simple **payment** **processing**" shares no exact token with
+ * "**Processes** **payments**…", and "Role-based access control" shares none with
+ * "…RBAC enforcement for all **roles**" — `payment` ≠ `payments`, `processing` ≠
+ * `processes`, `role` ≠ `roles`. Both are obviously the same capability worded
+ * differently, which is precisely what this feature must not flag.
+ *
+ * Deliberately conservative: it only folds plurals and the common verb endings
+ * (-ing/-ed), leaves short words (≤4) alone, and keeps a sibilant "-es" (so
+ * "processes" → "process", not "process" → "proces"). It is NOT a full stemmer;
+ * over-stemming would collapse unrelated words and manufacture *coverage*, which
+ * is the recall-losing direction this check must avoid.
+ */
+function stem(token: string): string {
+  if (token.length <= 4) return token;
+  if (/(?:ss|sh|ch|x|z)es$/.test(token)) return token.slice(0, -2);
+  if (token.endsWith('ing') && token.length > 5) return token.slice(0, -3);
+  if (token.endsWith('ed') && token.length > 4) return token.slice(0, -2);
+  if (token.endsWith('s') && !token.endsWith('ss')) return token.slice(0, -1);
+  return token;
+}
+
+/** Distinctive, stemmed tokens for coverage comparison. */
+function coverageTokens(text: string): string[] {
+  return significantTokens(text, COVERAGE_STOP_WORDS).map(stem);
+}
+
+/**
+ * Functional requirements that no part of the design appears to cover.
  *
  * Matching is intentionally generous — a requirement counts as covered when a
- * service's name or responsibility shares **one** distinctive word with it. This
- * is the opposite calibration to the review's scope-integrity check (which
- * demands two), and for the opposite reason: there, a false positive tells an
- * owner their own document contradicts itself; here, a false positive tells them
- * a requirement is unbuilt when it is merely worded differently. A missed gap
- * falls through to the reviewer's LLM pass, so generosity is the cheap direction.
+ * coverage source shares **one** distinctive (stemmed) word with it. This is the
+ * opposite calibration to the review's scope-integrity check (which demands two),
+ * and for the opposite reason: there, a false positive tells an owner their own
+ * document contradicts itself; here, a false positive tells them a requirement is
+ * unbuilt when it is merely worded differently. A missed gap falls through to the
+ * LLM verification pass in the agent, so generosity is the cheap direction.
+ *
+ * Coverage is NOT services-only. A requirement can be satisfied by a technology
+ * choice or a build-vs-buy decision rather than a named service — "data
+ * encryption" is owned by "Aurora encryption at rest / TLS 1.3", not by a
+ * service — so the caller passes those lines in `extraCoverage`. This is the
+ * deterministic FIRST pass; genuine synonymy the token match still misses (e.g.
+ * "login" vs "authentication") is caught by the agent's LLM verification of
+ * whatever survives here.
  */
 export function findUncoveredRequirements(
   functional: FunctionalRequirement[] | undefined,
   services: ServiceModule[] | undefined,
+  extraCoverage: string[] = [],
 ): string[] {
-  const haystacks = (services ?? []).map((svc) =>
-    significantTokens(`${svc.name} ${svc.responsibility}`, COVERAGE_STOP_WORDS),
-  );
+  const haystacks = [
+    ...(services ?? []).map((svc) =>
+      coverageTokens(`${svc.name} ${svc.responsibility}`),
+    ),
+    ...extraCoverage.map((line) => coverageTokens(line)),
+  ];
 
   return (functional ?? [])
     .filter((fr) => {
-      const tokens = significantTokens(
-        `${fr.title} ${fr.description}`,
-        COVERAGE_STOP_WORDS,
-      );
+      const tokens = coverageTokens(`${fr.title} ${fr.description}`);
       // A requirement with no distinctive words of its own cannot be judged —
       // treat it as covered rather than report an unprovable gap.
       if (tokens.length === 0) return false;
-      return !haystacks.some((service) => service.some((w) => tokens.includes(w)));
+      return !haystacks.some((source) => source.some((w) => tokens.includes(w)));
     })
     .map((fr) => fr.id);
+}
+
+/**
+ * Non-service coverage sources: the technology choices and build-vs-buy
+ * decisions that can address a requirement without a dedicated service owning it.
+ *
+ * Passed to `findUncoveredRequirements` as `extraCoverage` so a concern satisfied
+ * at the infrastructure level — "data encryption" by "Aurora encryption at rest /
+ * TLS 1.3", say — is recognised rather than flagged as if nothing addressed it.
+ * NFRs are deliberately excluded here: they are requirement text, not design
+ * decisions, and matching a functional requirement to an unrelated NFR on a
+ * shared generic word would manufacture coverage. The LLM verification pass reads
+ * the NFRs semantically instead.
+ */
+export function coverageSourcesFromDesign(design: {
+  techStack?: TechChoice[];
+  buildVsBuy?: BuildVsBuyItem[];
+}): string[] {
+  return [
+    ...(design.techStack ?? []).map(
+      (t) => `${t.layer} ${t.technology} ${t.rationale}`,
+    ),
+    ...(design.buildVsBuy ?? []).map(
+      (b) => `${b.capability} ${b.suggestedService ?? ''} ${b.rationale} ${b.impact}`,
+    ),
+  ];
 }
 
 /** True when the design already has a service that owns identity/access. */
