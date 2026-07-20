@@ -43,6 +43,25 @@ export interface SystemDesignContext {
 }
 
 /**
+ * Output budget for one system design — the `SCHEMA_MAX_TOKENS` rule.
+ *
+ * This agent also shipped with no budget, and its truncation is the **quieter**
+ * of the two this constant fixes. `isValid` here only requires `architecture`,
+ * a non-empty `techStack` and a non-empty `services` — all of which appear
+ * *early* in the JSON. So a cut-off response does not fall back the way the
+ * review does; it passes validation and **persists a short design**. A real
+ * project measured `completionTokens: 2048` (the cap) on two runs and stored
+ * **three services for twelve entities** — a plausible-looking artifact that
+ * simply stops partway, which then propagates into effort, cost and the price.
+ *
+ * R8 is why it outgrew the default: services each carry `complexity` +
+ * `complexityRationale`, plus `buildVsBuy`, `phasedArchitecture` and
+ * `constraintCompliance`. Sized like the database designer; the same TPM warning
+ * applies.
+ */
+const DESIGN_MAX_TOKENS = 5120;
+
+/**
  * Owns the System Design stage: recommends an architecture type, a tech stack,
  * a service breakdown, a build-vs-buy analysis, per-module complexity, and (when
  * scale conflicts with budget/timeline) a phased plan. LLM-driven with a
@@ -88,6 +107,7 @@ export class SystemArchitectAgent extends BaseAgent {
       isValid: (raw) => this.isValid(raw),
       accept: (raw) => this.normalize(sessionId, generatedAt, raw, ctx),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      options: { maxTokens: DESIGN_MAX_TOKENS },
     });
   }
 

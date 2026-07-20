@@ -48,6 +48,31 @@ export interface ReviewContext {
 }
 
 /**
+ * Output budget for one review — the `SCHEMA_MAX_TOKENS` rule, third recurrence.
+ *
+ * This agent shipped with **no budget at all**, so it inherited the provider
+ * default (Groq: 2048) while quietly growing into one of the largest artifacts
+ * here: five scores, six finding arrays, and — since R11 — an `actionType` and
+ * `patchTarget` on every single finding. A real 12-entity project measured
+ * `promptTokens: 2128, completionTokens: 2048` — the cap, exactly, on two
+ * consecutive runs.
+ *
+ * Two things made that invisible rather than loud. `parseJsonFromLlm` falls back
+ * to "the widest balanced slice" on unbalanced input, so a truncated response
+ * **parses cleanly** into a partial object instead of throwing; and `isValid`
+ * gates on `recommendations`, which the prompt asks for **last** and is
+ * therefore the first casualty. Result: a billed model call, silently replaced
+ * by the deterministic template.
+ *
+ * 5120 matches the database designer: ~2x the measured need, inside an 8K TPM
+ * tier alongside this stage's ~2.1K prompt. **Raising it is not free** — check
+ * the target model's TPM first. Note the default `GROQ_MODEL`
+ * (`openai/gpt-oss-120b`) is a *reasoning* model that spends 400-600 tokens
+ * thinking out of this same budget, and Groq applies no headroom for it.
+ */
+const REVIEW_MAX_TOKENS = 5120;
+
+/**
  * Owns the Review stage: critiques the generated system for scalability,
  * security, performance, gaps, and improvements. LLM-driven with a deterministic
  * heuristic fallback that inspects the artifacts, so the stage always yields a
@@ -114,6 +139,7 @@ export class ReviewerAgent extends BaseAgent {
       // report shape is always complete (scores, cost, scalability findings).
       accept: (raw) => this.normalize({ ...raw, sessionId, generatedAt }, ctx),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      options: { maxTokens: REVIEW_MAX_TOKENS },
     });
   }
 
