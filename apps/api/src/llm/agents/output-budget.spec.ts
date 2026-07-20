@@ -7,6 +7,8 @@ import type {
 import { ReviewerAgent } from './reviewer.agent';
 import { SystemArchitectAgent } from './system-architect.agent';
 import { DatabaseDesignerAgent } from './database-designer.agent';
+import { RequirementEngineerAgent } from './requirement-engineer.agent';
+import { DEFAULT_MAX_TOKENS } from '../output-budget';
 import { describeShape } from '../agent.base';
 import type { LlmCompleteOptions, LlmProvider } from '../llm-provider.interface';
 
@@ -91,8 +93,8 @@ const apiDesign: ApiDesign = {
   modules: [],
 };
 
-/** The floor: anything above the Groq default, which is what truncated. */
-const PROVIDER_DEFAULT = 2048;
+/** What every artifact gets when its agent names no budget. */
+const TRUNCATING_DEFAULT = 2048;
 
 describe('agent output budgets', () => {
   it('the reviewer asks for room — it inherited the default and was truncated', async () => {
@@ -106,7 +108,7 @@ describe('agent output budgets', () => {
       apiDesign,
     });
 
-    expect(lastOptions()?.maxTokens).toBeGreaterThan(PROVIDER_DEFAULT);
+    expect(lastOptions()?.maxTokens).toBeGreaterThan(TRUNCATING_DEFAULT);
   });
 
   it('the system architect asks for room — its truncation persisted a short design', async () => {
@@ -117,7 +119,7 @@ describe('agent output budgets', () => {
       requirements,
     });
 
-    expect(lastOptions()?.maxTokens).toBeGreaterThan(PROVIDER_DEFAULT);
+    expect(lastOptions()?.maxTokens).toBeGreaterThan(TRUNCATING_DEFAULT);
   });
 
   it('the database designer still asks for room (the original fix, kept)', async () => {
@@ -129,7 +131,53 @@ describe('agent output budgets', () => {
       systemDesign,
     });
 
-    expect(lastOptions()?.maxTokens).toBeGreaterThan(PROVIDER_DEFAULT);
+    expect(lastOptions()?.maxTokens).toBeGreaterThan(TRUNCATING_DEFAULT);
+  });
+
+  /**
+   * The fourth recurrence, and the one the `describeShape` log line caught within
+   * an hour of being added: a real run returned `{ executiveSummary, functional }`
+   * — nine sections asked for, two delivered. This artifact is FIRST in the
+   * chain, so every later stage reads whatever it produced.
+   */
+  it('the requirement engineer asks for room — it returned 2 of 9 sections', async () => {
+    const { llm, lastOptions } = recordingLlm();
+    await new RequirementEngineerAgent(llm).generate('s1', {
+      idea: 'A clinic platform',
+      intent: null,
+      history: [],
+      summary: {
+        goal: 'Let clinics manage appointments',
+        users: ['Patient', 'Doctor'],
+        features: ['Book an appointment'],
+        businessRules: [],
+        constraints: [],
+        assumptions: [],
+      },
+    });
+
+    expect(lastOptions()?.maxTokens).toBeGreaterThan(TRUNCATING_DEFAULT);
+  });
+});
+
+/**
+ * The floor itself. Four agents were truncated because "no budget" silently
+ * meant 2048, so the default is now the thing under test: an agent that names
+ * no budget must still get room for a structured document. 4096 is what the
+ * Claude provider always used — the one provider that never produced this bug.
+ *
+ * The four providers each held their own copy of this number and could drift;
+ * they now import this one.
+ */
+describe('DEFAULT_MAX_TOKENS', () => {
+  it('is above the value that truncated four artifacts', () => {
+    expect(DEFAULT_MAX_TOKENS).toBeGreaterThan(TRUNCATING_DEFAULT);
+  });
+
+  it('stays a floor, not a ceiling — the large artifacts still exceed it', () => {
+    // If a per-agent constant ever drops below the default it has become dead
+    // config, and the artifact it protects is back on an unstated budget.
+    expect(DEFAULT_MAX_TOKENS).toBeLessThanOrEqual(5120);
   });
 });
 

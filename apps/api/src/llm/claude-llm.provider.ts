@@ -8,9 +8,11 @@ import type {
 } from './llm-provider.interface';
 import { parseJsonFromLlm } from './json.util';
 import { readLlmHttpConfig } from './llm-http';
+// Claude already used 4096 and is the one provider that never truncated an
+// artifact — which is why that number became the shared default.
+import { DEFAULT_MAX_TOKENS } from './output-budget';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
-const DEFAULT_MAX_TOKENS = 4096;
 
 /**
  * Real Claude provider via the Anthropic SDK. Activated when

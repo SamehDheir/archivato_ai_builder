@@ -8,11 +8,10 @@ import type {
 import { parseJsonFromLlm } from './json.util';
 import { readOpenAiUsage, type OpenAiStyleUsage } from './openai-usage';
 import { postLlmJson, readLlmHttpConfig } from './llm-http';
+import { DEFAULT_MAX_TOKENS } from './output-budget';
 
 /** GA api-version that supports `response_format: json_object`. */
 const DEFAULT_API_VERSION = '2024-10-21';
-const DEFAULT_MAX_TOKENS = 2048;
-
 /**
  * Azure OpenAI provider via its chat-completions API. Shape-compatible with
  * OpenAI (so this mirrors `GroqLlmProvider`), with three Azure specifics:

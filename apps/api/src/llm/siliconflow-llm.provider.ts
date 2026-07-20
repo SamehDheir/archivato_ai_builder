@@ -8,11 +8,10 @@ import type {
 import { parseJsonFromLlm } from './json.util';
 import { readOpenAiUsage, type OpenAiStyleUsage } from './openai-usage';
 import { postLlmJson, readLlmHttpConfig } from './llm-http';
+import { DEFAULT_MAX_TOKENS } from './output-budget';
 
 const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-R1';
 const DEFAULT_BASE_URL = 'https://api.siliconflow.com/v1';
-const DEFAULT_MAX_TOKENS = 2048;
-
 /**
  * Extra output budget granted to a reasoning model on top of what the caller
  * asked for.

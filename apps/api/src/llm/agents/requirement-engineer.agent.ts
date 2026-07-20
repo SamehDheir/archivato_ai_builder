@@ -58,6 +58,26 @@ export interface RequirementContext {
 }
 
 /**
+ * Output budget for one requirement document.
+ *
+ * Caught by the `describeShape` diagnostic the hour it was added: a real run
+ * logged `Model returned: { executiveSummary, functional }` — nine sections
+ * requested, two delivered, cut off right after the `functional` array. R7 is
+ * what pushed it over the old 2048: the document gained an executive summary,
+ * an out-of-scope list and an assumptions/open-questions list, on top of
+ * functional + non-functional + roles + business rules + constraints.
+ *
+ * Note this artifact is **first in the chain** — every later stage reads it — so
+ * its truncation is the most expensive of the four. `isValid` gates on
+ * `nonFunctional` and `roles`, both of which follow `functional` in the schema,
+ * so the whole document was discarded for the template.
+ *
+ * 5120 matches the other large artifacts; the TPM warning on
+ * `DEFAULT_MAX_TOKENS` applies.
+ */
+const REQUIREMENTS_MAX_TOKENS = 5120;
+
+/**
  * Owns the Requirements stage: turns a confirmed interview into a formal,
  * structured Requirement Document — a **two-audience** artifact (R7). The
  * client-facing sections (executive summary, functional requirements, roles,
@@ -129,6 +149,7 @@ export class RequirementEngineerAgent extends BaseAgent {
       accept: (raw) =>
         this.normalize(sessionId, generatedAt, raw, ctx, openQuestions),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      options: { maxTokens: REQUIREMENTS_MAX_TOKENS },
     });
 
     // Screen the client-facing prose on the way out. This runs on BOTH paths: the
