@@ -1779,6 +1779,46 @@ tsconfig and never needs shared's `dist`.
     interview**, so it will often go unfilled — which is fine, because an unfilled
     slot becomes an open question for the client, and every consumer treats
     "unknown" as a first-class answer rather than a cue to guess.
+  - **The slots ARE the pipeline, so an unextracted slot silently deletes an
+    answer — `bindAnswerToSlot` is the backstop.** Everything downstream reads the
+    snapshot, never the transcript: `summaryFromSlots` fills features from
+    `core_workflows` and constraints from `constraints`+`scale_expectations`, and
+    every regional guard (`enforcePaymentAvailability`, `residencyLine`,
+    `REGIONAL_REGULATIONS`) keys off `target_market`. Extraction is a **model
+    behaviour that fails non-deterministically**, and nothing checked it — the
+    interviewer's own validity test is `typeof done === 'boolean'`. So a real run
+    asked about region, workflows and SLAs, got detailed answers to all three,
+    extracted none, and produced a confirmation gate with an empty **Features**
+    and empty **Constraints** section plus an architect told "no target market
+    stated" immediately after the client stated three. A missing slot is
+    indistinguishable from an unanswered one, which is why it was invisible.
+    The fix is structural: the interviewer picks its question by choosing an
+    unfilled slot, so it now **declares** that slot (`InterviewQuestion.targetSlot`)
+    and the service binds the answer in code when extraction skips it. Four rules:
+    the model's own extraction **always wins** (a parsed value beats raw prose);
+    the binding is `confidence:'low'` + `source:'explicit'` (they did state it, we
+    just didn't parse it — and `mergeSlots`/`reconcileOpenQuestions` both key off
+    `explicit`); markup is stripped on the way in (`stripMarkupArtifacts` — a
+    literal `$\rightarrow$` reached a real gate); and a **non-answer binds
+    nothing**, so "not sure yet" stays an open question for the client instead of
+    becoming a stated fact. Verified against the live model: `targetSlot` comes
+    back reliably, so the backstop is reachable.
+  - **`businessRules` was the ONE field the slot migration missed**, and it stayed
+    on the raw positional path *unguarded* — so every adaptive run dumped the
+    entire verbatim answer to whatever question the model labelled `business_logic`
+    into a structured, client-facing field. Outside plan mode it is now **empty on
+    purpose**: there is no `business_rules` slot to read (a rule is a policy; the
+    interview extracts what the system *does*), and the Requirement Engineer
+    derives real rules from the full transcript downstream. Empty and honest beats
+    populated and wrong in a document a client reads.
+  - **`hasFilledSlots()` was the wrong plan-mode discriminator.** It asked "did any
+    slot get filled" as a proxy for "is this plan mode", and was wrong in exactly
+    the case that matters: an **adaptive run whose extraction failed also has no
+    slots**, so it was read as plan mode and `question.phase` became a data bucket
+    again — which is how raw answers about data entities and integrations rendered
+    as the project's *user roles*. `isPlanModeTranscript()` reads the question ids
+    instead (adaptive questions are minted `q<n>`, plan questions carry their
+    catalog ids): identity, not a downstream symptom.
 - **Region-aware compliance (`region.ts`) — never a blind GDPR/HIPAA.** An LLM
   writing a requirement document reaches for GDPR and HIPAA regardless of who the
   client is; they dominate its training data. For a MENA dev shop that is not a
