@@ -29,6 +29,20 @@ export interface ShareLink {
   createdAt: string;
   /** How many times the public page has been read. */
   viewCount: number;
+  /**
+   * When the page was last opened, or null if the client has never opened it.
+   *
+   * This is the single most useful fact the owner can learn about a sent
+   * proposal — "they read it two hours ago" is when you follow up, and "never
+   * opened" is a different conversation entirely. It was already being written
+   * by `recordView()` and simply never surfaced.
+   *
+   * It says **when**, never **who**: the viewer is a stranger to us, the public
+   * read is unauthenticated, and nothing about their identity, address or
+   * country is recorded (see `redactSharePath` for the same posture on the
+   * token itself).
+   */
+  lastViewedAt: string | null;
 }
 
 /**

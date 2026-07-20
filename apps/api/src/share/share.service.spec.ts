@@ -1,4 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { AnalyticsService } from '../analytics/analytics.service';
+import { InMemoryAnalyticsEventRepository } from '../analytics/in-memory-analytics-event.repository';
 import { ShareService } from './share.service';
 import { InMemoryShareLinkRepository } from './in-memory-share-link.repository';
 import { InterviewService } from '../interview/interview.service';
@@ -55,6 +57,7 @@ interface Harness {
   users: InMemoryUserRepository;
   billing: BillingService;
   share: ShareService;
+  events: InMemoryAnalyticsEventRepository;
 }
 
 function makeHarness(): Harness {
@@ -114,6 +117,8 @@ function makeHarness(): Harness {
   const threatRepo = new InMemoryThreatModelRepository();
   const qaRepo = new InMemoryQaPlanRepository();
 
+  const events = new InMemoryAnalyticsEventRepository();
+
   const share = new ShareService(
     new InMemoryShareLinkRepository(),
     sessionRepo,
@@ -128,8 +133,10 @@ function makeHarness(): Harness {
     threatRepo,
     qaRepo,
     billing,
+    new AnalyticsService(events),
   );
   return {
+    events,
     interview,
     requirements,
     systemDesign,
@@ -502,6 +509,83 @@ describe('ShareService', () => {
     const a = await h.share.create(await fullPipeline(h));
     const b = await h.share.create(await fullPipeline(h));
     expect(a.token).not.toBe(b.token);
+  });
+
+  /**
+   * The funnel boundaries. These are what make the activation rate measurable
+   * after a project is deleted, so the counting rules matter as much as the
+   * recording — see the comments in `ShareService.create` / `.view`.
+   */
+  describe('funnel events', () => {
+    const since = new Date(0);
+
+    it('records share_created once, on the mint — not on every copy click', async () => {
+      const h = makeHarness();
+      const sessionId = await fullPipeline(h);
+      const owner = await ownedBy(h, sessionId, 'free');
+
+      await h.share.create(sessionId);
+      await h.share.create(sessionId); // the owner clicking "Copy client link" again
+      await h.share.create(sessionId);
+
+      const created = (await h.events.findSince(since)).filter(
+        (e) => e.type === 'share_created',
+      );
+      expect(created).toHaveLength(1);
+      expect(created[0].userId).toBe(owner);
+      expect(created[0].meta).toEqual({ sessionId });
+    });
+
+    it('records share_viewed on the first read only, however viral the link goes', async () => {
+      const h = makeHarness();
+      const sessionId = await fullPipeline(h);
+      const owner = await ownedBy(h, sessionId, 'free');
+      const { token } = await h.share.create(sessionId);
+
+      await h.share.view(token);
+      await h.share.view(token);
+      await h.share.view(token);
+
+      const viewed = (await h.events.findSince(since)).filter(
+        (e) => e.type === 'share_viewed',
+      );
+      expect(viewed).toHaveLength(1);
+      // Attributed to the OWNER — the reader is a stranger and is not the subject.
+      expect(viewed[0].userId).toBe(owner);
+      // …and nothing about the reader is captured. The public read arrives from
+      // our own server, so a country here would be our hosting region.
+      expect(viewed[0].visitorId).toBeNull();
+      expect(viewed[0].country).toBeNull();
+
+      // The owner's own counter still tracks every read.
+      expect((await h.share.get(sessionId))?.viewCount).toBe(3);
+    });
+
+    it('records nothing for an owner-less session', async () => {
+      const h = makeHarness();
+      const sessionId = await fullPipeline(h); // never handed to a user
+      const { token } = await h.share.create(sessionId);
+      await h.share.view(token);
+
+      const events = await h.events.findSince(since);
+      expect(events.filter((e) => e.type === 'share_created')).toHaveLength(0);
+      expect(events.filter((e) => e.type === 'share_viewed')).toHaveLength(0);
+    });
+
+    it('records a fresh share_created when a revoked link is re-minted', async () => {
+      const h = makeHarness();
+      const sessionId = await fullPipeline(h);
+      await ownedBy(h, sessionId, 'free');
+
+      await h.share.create(sessionId);
+      await h.share.revoke(sessionId);
+      await h.share.create(sessionId);
+
+      const created = (await h.events.findSince(since)).filter(
+        (e) => e.type === 'share_created',
+      );
+      expect(created).toHaveLength(2);
+    });
   });
 
   it('serves the design by token and counts the view', async () => {

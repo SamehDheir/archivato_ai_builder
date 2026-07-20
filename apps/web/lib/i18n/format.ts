@@ -29,6 +29,14 @@ export interface Formatters {
   usd: (value: number) => string;
   /** ISO-3166-1 alpha-2 country code → localized name (falls back to the code). */
   country: (code: string) => string;
+  /**
+   * Compact relative time ("2 hours ago"), coarsening from seconds to years.
+   *
+   * Lives here rather than beside its caller because it is the same locale
+   * question `date` answers — including the Arabic Latin-numeral rule above,
+   * which a private copy would have to remember and eventually wouldn't.
+   */
+  relative: (value: string | number | Date) => string;
 }
 
 /** Locale-aware `Intl` formatters bound to the active UI locale. */
@@ -55,6 +63,7 @@ export function useFormat(): Formatters {
     const regions = new Intl.DisplayNames(locale === 'ar' ? 'ar' : 'en', {
       type: 'region',
     });
+    const rtf = new Intl.RelativeTimeFormat(tag, { numeric: 'auto' });
     return {
       date: (v) => d.format(new Date(v)),
       dateTime: (v) => dt.format(new Date(v)),
@@ -66,6 +75,19 @@ export function useFormat(): Formatters {
         } catch {
           return code;
         }
+      },
+      relative: (v) => {
+        const sec = Math.round((Date.now() - new Date(v).getTime()) / 1000);
+        const min = Math.round(sec / 60);
+        const hr = Math.round(min / 60);
+        const day = Math.round(hr / 24);
+        const mon = Math.round(day / 30);
+        if (Math.abs(sec) < 60) return rtf.format(-sec, 'second');
+        if (Math.abs(min) < 60) return rtf.format(-min, 'minute');
+        if (Math.abs(hr) < 24) return rtf.format(-hr, 'hour');
+        if (Math.abs(day) < 30) return rtf.format(-day, 'day');
+        if (Math.abs(mon) < 12) return rtf.format(-mon, 'month');
+        return rtf.format(-Math.round(mon / 12), 'year');
       },
     };
   }, [locale]);

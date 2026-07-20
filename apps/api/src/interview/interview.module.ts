@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BillingModule } from '../billing/billing.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { ProductAnalystAgent } from '../llm/agents/product-analyst.agent';
 import { InterviewerAgent } from '../llm/agents/interviewer.agent';
 import { InterviewController } from './interview.controller';
@@ -9,7 +10,10 @@ import { PrismaInterviewSessionRepository } from './prisma-interview-session.rep
 import { SessionOwnerGuard } from './session-owner.guard';
 
 @Module({
-  imports: [BillingModule], // quota enforcement at the confirm gate
+  imports: [
+    BillingModule, // quota enforcement at the confirm gate
+    AnalyticsModule, // funnel boundaries (started / confirmed) — read-only
+  ],
   controllers: [InterviewController],
   providers: [
     InterviewService,

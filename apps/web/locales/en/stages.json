@@ -690,6 +690,8 @@
     "revokeDesc": "The link stops working immediately for everyone you sent it to. Sharing again creates a new link — the old one stays dead.",
     "revokeConfirm": "Revoke link",
     "views": "{{n}} views",
+    "lastViewed": "Client opened it {{time}}",
+    "neverViewed": "Not opened yet",
     "failed": "Something went wrong. Try again."
   },
   "proposal": {

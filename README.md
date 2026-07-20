@@ -120,6 +120,14 @@ activates with a key.
   (what each user costs us, next to what they pay us). Only counts are stored,
   never prompt or completion content; a model with no catalog price records tokens
   with an *unknown* cost rather than a misleading $0.
+- **Activation funnel:** signup → interview → artifact → **client link sent** →
+  **client opened it** → export, with the activation rate ("sent a client link
+  within 7 days of signing up") on `/admin`. Each step is resolved from the
+  append-only analytics event *and* from current state, so the funnel is accurate
+  for accounts that predate the instrumentation and survives a project being
+  deleted. A share view is attributed to the link's **owner** and records nothing
+  about the reader. Owners see the customer-facing half of the same data — *"client
+  opened it 2 hours ago"* on the project and dashboard cards.
 - **Three independent authorization axes:** ownership (`SessionOwnerGuard`),
   entitlement (`ProGuard` / plan), and RBAC (`PermissionGuard` over a
   code-defined permission catalog with DB-managed roles).

@@ -27,6 +27,7 @@ import {
   shouldWatermarkShare,
 } from '@archivato/shared';
 import { BillingService } from '../billing/billing.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
@@ -132,6 +133,10 @@ export class ShareService {
     // (see the controller) — the day this import becomes a `ProGuard` again is
     // the day the growth loop dies.
     private readonly billing: BillingService,
+    // Read-only instrumentation: the two share boundaries are where the activation
+    // funnel is actually decided, so they are recorded at the service (the mint
+    // path is the only place that can tell a first share from a repeat click).
+    private readonly analytics: AnalyticsService,
   ) {}
 
   /** The owner's current link for a session, or null when nothing is shared. */
@@ -167,6 +172,13 @@ export class ShareService {
       lastViewedAt: null,
       createdAt: new Date(),
     });
+
+    // The funnel's decisive step, recorded on the **mint** path only. Minting is
+    // idempotent and the web calls it on every "Copy client link" click, so
+    // recording unconditionally would count clicks instead of deals. The session
+    // read is the price of attribution — it happens once per project, ever.
+    void this.recordShareEvent('share_created', sessionId);
+
     return toShareLink(created);
   }
 
@@ -219,6 +231,20 @@ export class ShareService {
     this.links.recordView(token).catch((e: unknown) => {
       this.logger.warn(`Failed to record a share view: ${String(e)}`);
     });
+
+    // The funnel step is "the client opened it", so only the FIRST view is
+    // recorded. That is the fact worth measuring, and it is also what keeps this
+    // route safe to leave `@SkipThrottle()`: a link going viral must not write an
+    // analytics row per reader. Every subsequent view still lands on the counter
+    // and `lastViewedAt`, which is where the owner reads it.
+    //
+    // Note what is deliberately NOT captured: no country, no visitor id, nothing
+    // about the reader. The page is server-rendered, so this request arrives from
+    // our own Next.js server — a country resolved here would be our hosting
+    // region wearing the reader's name, which is worse than no answer.
+    if (link.viewCount === 0) {
+      void this.recordShareEvent('share_viewed', link.sessionId, session.userId);
+    }
 
     // Every artifact is stamped with the internal session id — the same id that
     // addresses the owner-scoped routes. It grants a stranger nothing (those
@@ -274,6 +300,35 @@ export class ShareService {
           : null,
       watermark: shouldWatermarkShare(plan),
     };
+  }
+
+  /**
+   * Record a funnel boundary against the link's **owner**, never its reader.
+   *
+   * A share view is the one funnel step whose actor is a stranger, and the
+   * stranger is not the subject: the question the funnel answers is "did this
+   * owner's scoping reach a client", so the row belongs to the owner. Nothing
+   * identifying the reader is recorded — `visitorId` stays null on purpose, so
+   * the anonymous browsing cookie is never joined to somebody's project.
+   *
+   * Best-effort throughout: this is instrumentation hanging off a page that has
+   * already been served.
+   */
+  private async recordShareEvent(
+    type: 'share_created' | 'share_viewed',
+    sessionId: string,
+    knownOwnerId?: string | null,
+  ): Promise<void> {
+    try {
+      const userId =
+        knownOwnerId !== undefined
+          ? knownOwnerId
+          : ((await this.sessions.findById(sessionId))?.userId ?? null);
+      if (!userId) return; // an owner-less session has no funnel to belong to
+      await this.analytics.recordSafe({ type, userId, meta: { sessionId } });
+    } catch (e: unknown) {
+      this.logger.warn(`Failed to record ${type}: ${String(e)}`);
+    }
   }
 
   /**
@@ -351,10 +406,12 @@ function toShareLink(link: {
   token: string;
   createdAt: Date;
   viewCount: number;
+  lastViewedAt: Date | null;
 }): ShareLink {
   return {
     token: link.token,
     createdAt: link.createdAt.toISOString(),
     viewCount: link.viewCount,
+    lastViewedAt: link.lastViewedAt?.toISOString() ?? null,
   };
 }

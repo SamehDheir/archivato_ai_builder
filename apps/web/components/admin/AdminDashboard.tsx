@@ -27,6 +27,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AdminUsersTable } from '@/components/admin/AdminUsersTable';
 import { LlmUsagePanel } from '@/components/admin/LlmUsagePanel';
+import { FunnelPanel } from '@/components/admin/FunnelPanel';
 
 /**
  * SuperAdmin dashboard: real product KPIs (users, projects, subscriptions),
@@ -248,6 +249,9 @@ export function AdminDashboard() {
           </Card>
         </div>
       )}
+
+      {/* Activation funnel — signup → client link. The number the business runs on. */}
+      <FunnelPanel />
 
       {/* AI spend — what the model providers cost us */}
       <LlmUsagePanel />

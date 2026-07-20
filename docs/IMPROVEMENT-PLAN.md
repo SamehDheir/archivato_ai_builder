@@ -177,7 +177,51 @@ quota is enforced per org; no route resolves ownership by `userId` alone.
 
 ---
 
-### C4 — Activation funnel + share-link view tracking
+### C4 — Activation funnel + share-link view tracking ✅ **DONE** (`feat/activation-funnel`)
+
+> **Correction, recorded because the original plan was wrong on two counts.**
+>
+> **(1) The `ShareLinkView` table was not built, deliberately.** `ShareLink`
+> already carried `lastViewedAt` *and* `viewCount` — written by `recordView()` on
+> every read since the share slice shipped, and simply never surfaced in the
+> `ShareLink` type. `AnalyticsEvent` already carries createdAt / referrer / userId
+> / meta and already has the share-token redaction rule. A third table would have
+> been a third store of "was it viewed". The funnel rides on the event stream; the
+> customer-facing *"client opened it 2h ago"* surfaces the column that was always
+> there. What that costs us is a per-link view **timeline** ("opened 3 times, last
+> Tuesday") — cheap to add later on the same data if anyone asks for it.
+>
+> **(2) The planned per-view `country` is not obtainable and was dropped.** The
+> share page is **server-rendered**, so `GET /shared/:token` arrives from our own
+> Next.js server — `resolveCountryFromRequest` there returns our *hosting region*
+> wearing the reader's name. A confidently wrong country is worse than none, so a
+> share view records no country, no referrer and no `visitorId` at all.
+>
+> **Shipped:** five event types + the pure `buildFunnel()` in
+> `@archivato/shared/funnel.ts`, `GET /admin/funnel` (`admin:analytics`), a
+> `FunnelPanel` on `/admin`, and last-viewed on both the project header's
+> `ShareLinkCard` and the dashboard card's badge. 993 API + 66 web tests green,
+> lint + typecheck + both production builds clean.
+>
+> **The design decision worth keeping.** Every step is resolved from **two
+> sources, unioned**: the append-only event, and the state row that proves the
+> same thing. Events are exact and survive a project delete but only exist from
+> the day they shipped — an events-only funnel would have read **0% for every
+> existing user**, i.e. it would have shipped the measurement and not the number.
+> State is retroactive but a delete erases it. `export` is the one step with no
+> state to fall back on, so it is flagged and dated (`measurableFrom`) rather than
+> letting the gap read as a drop-off.
+>
+> **Two counting rules that decide whether the number means anything.** The
+> activation cohort is **only signups whose 7-day window has closed** (an account
+> created yesterday has not failed, it has six days left — including it would make
+> the rate move with signup volume instead of activation); and **staff are excluded
+> from the cohort**, since they are barred from creating projects at all, so leaving
+> them in would understate activation by the size of our own team.
+>
+> **Still open** (small, unowned): the funnel is all-time with no trend series —
+> deliberate, since a 30-day cohort on a pre-revenue product is mostly empty. Add
+> a rolling window when there is enough volume for one to be legible.
 
 **Problem.** We cannot answer: *"of 100 signups, how many sent a client link?"*
 That is **the** number for this business. `AnalyticsEvent` records pageview /
@@ -498,8 +542,8 @@ a **deleted project stops counting** and a Starter user can delete-and-retry.
 1. **Week 1, days 1–3:** C1 + C2 + C5. — ✅ **all three shipped.**
 2. **Week 1, days 4–5 and week 2:** **stop coding.** Do the five discovery calls
    from POSITIONING §6. Nothing below moves until they are done.
-3. **After the calls:** C4 (measure) → C3 (the buyer's data model) → H1 (measure
-   quality) → H2/H3 (the deliverable) → H4/H5/H6.
+3. **After the calls:** ~~C4 (measure)~~ ✅ → C3 (the buyer's data model) → H1
+   (measure quality) → H2/H3 (the deliverable) → H4/H5/H6.
 4. Re-read this file after the calls and **delete whatever they invalidate.**
    Discovery data outranks this document.
 

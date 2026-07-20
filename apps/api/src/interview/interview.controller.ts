@@ -18,6 +18,7 @@ import {
 } from '@archivato/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { InterviewService } from './interview.service';
 import { SessionOwnerGuard } from './session-owner.guard';
 import { StartInterviewDto } from './dto/start-interview.dto';
@@ -29,7 +30,14 @@ import { EditSlotDto } from './dto/edit-slot.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('interview')
 export class InterviewController {
-  constructor(private readonly interview: InterviewService) {}
+  constructor(
+    private readonly interview: InterviewService,
+    // The funnel's first two boundaries are recorded here rather than in the
+    // service: `InterviewService` is the state machine, and reporting has no
+    // business inside it (the same split that put the dashboard's read model in
+    // `ProjectsService`).
+    private readonly analytics: AnalyticsService,
+  ) {}
 
   /** List the signed-in user's projects ("my projects"). */
   @Get()
@@ -43,7 +51,7 @@ export class InterviewController {
    * console-only and cannot create projects.
    */
   @Post()
-  start(
+  async start(
     @CurrentUser() user: AuthUser,
     @Body() dto: StartInterviewDto,
   ): Promise<InterviewState> {
@@ -57,12 +65,20 @@ export class InterviewController {
     // neither the client's name nor the raw notes belongs there, so both travel as
     // separate arguments rather than riding along inside `ProjectIdeaInput`.
     const { clientName, notes, ...input } = dto;
-    return this.interview.start(
+    const state = await this.interview.start(
       input,
       user.id,
       clientName ?? null,
       notes ?? null,
     );
+    // Recorded only once `start` resolves, so a 402 from the project quota is not
+    // counted as an interview the user began.
+    void this.analytics.recordSafe({
+      type: 'interview_started',
+      userId: user.id,
+      meta: { sessionId: state.sessionId },
+    });
+    return state;
   }
 
   /** Fetch current session state (owner only). */
@@ -85,8 +101,17 @@ export class InterviewController {
   /** Confirm the summarized requirements — the gate (owner only). */
   @UseGuards(SessionOwnerGuard)
   @Post(':id/confirm')
-  confirm(@Param('id') id: string): Promise<InterviewState> {
-    return this.interview.confirm(id);
+  async confirm(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<InterviewState> {
+    const state = await this.interview.confirm(id);
+    void this.analytics.recordSafe({
+      type: 'interview_confirmed',
+      userId: user.id,
+      meta: { sessionId: id },
+    });
+    return state;
   }
 
   /**

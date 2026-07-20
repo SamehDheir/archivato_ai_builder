@@ -27,6 +27,16 @@ export interface ProjectOverview extends ProjectSummary {
   artifacts: ProjectArtifacts;
   /** A public share link exists — i.e. this scoping was sent to the client. */
   shared: boolean;
+  /**
+   * When the client last opened the link, or null (never opened / never sent).
+   *
+   * Deliberately **not** folded into `ClientLinkState`: the button does exactly
+   * the same thing whether or not the client has read the page (minting is
+   * idempotent, so it copies either way). This is a separate fact the badge
+   * renders, and collapsing it into the action's state would make a display
+   * concern drive a behavioural enum.
+   */
+  lastViewedAt: string | null;
 }
 
 /** The pipeline steps a scoping moves through, in order. */

@@ -201,6 +201,7 @@ const overview = (
   updatedAt: new Date().toISOString(),
   artifacts: { ...NOTHING, ...artifacts },
   shared,
+  lastViewedAt: null,
 });
 
 describe('projectProgress', () => {

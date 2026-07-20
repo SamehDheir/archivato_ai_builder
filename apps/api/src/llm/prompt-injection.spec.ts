@@ -4,6 +4,8 @@ import {
   containsUrl,
   type RequirementDocument,
 } from '@archivato/shared';
+import { AnalyticsService } from '../analytics/analytics.service';
+import { InMemoryAnalyticsEventRepository } from '../analytics/in-memory-analytics-event.repository';
 import { ShareService } from '../share/share.service';
 import { InMemoryShareLinkRepository } from '../share/in-memory-share-link.repository';
 import { InterviewService } from '../interview/interview.service';
@@ -220,6 +222,7 @@ function makeHarness(llm: LlmProvider) {
       new MockBillingProvider(),
       new InMemoryBillingEventRepository(),
     ),
+    new AnalyticsService(new InMemoryAnalyticsEventRepository()),
   );
 
   return { interview, requirements, systemDesign, databaseDesign, docRepo, share };
