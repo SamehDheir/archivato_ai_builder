@@ -1,7 +1,9 @@
 import {
   InterviewPhase,
+  isAskedQuestion,
   NOTES_ENTRY_ID,
   SLOT_KEYS,
+  stripMarkupArtifacts,
   type InterviewExchange,
   type OpenQuestion,
   type SlotKey,
@@ -280,6 +282,81 @@ function sharesToken(a: string, b: string): boolean {
   const tokens = (s: string) => s.split(/[^a-z]+/).filter((t) => t.length >= 4);
   const bt = new Set(tokens(b));
   return tokens(a).some((t) => bt.has(t));
+}
+
+/**
+ * Bind the latest answer to the slot its question was asked to fill, when the
+ * model's own extraction skipped that slot.
+ *
+ * **This is the fix for the pipeline's most damaging silent failure.** The whole
+ * scoping chain reads the slot snapshot, not the transcript: `summaryFromSlots`
+ * fills features from `core_workflows` and constraints from `constraints` +
+ * `scale_expectations`, and every regional guard (`enforcePaymentAvailability`,
+ * `residencyLine`, `REGIONAL_REGULATIONS`) keys off `target_market`. Extraction
+ * is a model behaviour, and it fails non-deterministically — so the interviewer
+ * would ask precisely the right question, receive a detailed answer, and drop it.
+ * The observable result was a confirmation gate showing an empty **Features** and
+ * an empty **Constraints** section on a transcript that plainly contained both,
+ * and an architect told "no target market stated" immediately after the client
+ * had stated three of them.
+ *
+ * Nothing detected it because a missing slot is indistinguishable from a
+ * genuinely unanswered one, and the interviewer's own validity check only tests
+ * `typeof done === 'boolean'`.
+ *
+ * The backstop is possible because the interviewer chooses its question by
+ * picking an unfilled slot, so the destination is known *before* the answer
+ * arrives (`InterviewQuestion.targetSlot`). Four rules:
+ *
+ *  1. **The model's own extraction always wins.** This only fills a slot the
+ *     incoming snapshot left alone — a parsed value is better than raw prose,
+ *     and overwriting it would make the backstop a downgrade.
+ *  2. **`confidence: 'low'`, because this is a crude binding**, not a reading:
+ *     the whole answer becomes the value, and `splitSlotList` does the rest.
+ *     `source` is `'explicit'` — the user *did* state it, in answer to that exact
+ *     question — which matters, since `mergeSlots` lets an explicit value
+ *     supersede an earlier inference and `reconcileOpenQuestions` only retires a
+ *     question on an explicit answer.
+ *  3. **Markup is stripped on the way in** (`stripMarkupArtifacts`). This text is
+ *     pasted from documents and lands in a client-facing artifact; a literal
+ *     `$\rightarrow$` reached a real confirmation gate.
+ *  4. **A skipped or empty answer binds nothing** — an unanswered question must
+ *     stay unanswered so it can become an open question for the client.
+ *
+ * Pure and total; returns a new snapshot (or the input when there is nothing to
+ * add, so the caller's "did anything change" check still works).
+ */
+export function bindAnswerToSlot(
+  history: InterviewExchange[],
+  extracted: SlotMap | undefined,
+): SlotMap | undefined {
+  const last = [...history].reverse().find(isAskedQuestion);
+  const key = last?.question.targetSlot;
+  if (!last || !key || !isSlotKey(key)) return extracted;
+  if (extracted?.[key]) return extracted; // the model answered it properly
+
+  const value = stripMarkupArtifacts(last.answer).trim();
+  if (!value || isNonAnswer(value)) return extracted;
+
+  return {
+    ...extracted,
+    [key]: { value, confidence: 'low', source: 'explicit' },
+  };
+}
+
+/**
+ * Answers that mean "I don't know", which must NOT be bound as a slot value.
+ *
+ * Binding "not sure yet" to `target_market` would be worse than leaving it
+ * empty: an empty slot becomes an open question the owner forwards to their
+ * client, while a filled one is treated downstream as a stated fact — and
+ * `resolveRegionKey` would then read this string, fail to match, and return the
+ * same `null` it would have anyway, having consumed the question.
+ */
+function isNonAnswer(value: string): boolean {
+  return /^(?:n\/?a|none|no|nope|idk|unknown|not sure|not yet|don'?t know|tbd|skip)\b/i.test(
+    value,
+  );
 }
 
 /**

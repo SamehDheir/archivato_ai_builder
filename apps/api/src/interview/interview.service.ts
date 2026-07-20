@@ -15,6 +15,7 @@ import {
   INTERVIEW_MAX_QUESTIONS,
   INTERVIEW_PHASE_ORDER,
   InterviewPhase,
+  isPlanModeTranscript,
   isUnlimitedQuota,
   startOfQuotaPeriod,
   type InterviewExchange,
@@ -28,7 +29,7 @@ import {
   type SlotMap,
 } from '@archivato/shared';
 import {
-  hasFilledSlots,
+  bindAnswerToSlot,
   isSlotKey,
   mergeSlots,
   notesHistoryEntry,
@@ -410,8 +411,12 @@ export class InterviewService {
     // reverse); reconciliation drops an open question once its slot is answered.
     // Plan-mode turns carry no slots, so this is a no-op there — slots simply stay
     // empty, which every consumer tolerates.
-    if (next.slots || next.openQuestions) {
-      const slots = mergeSlots(session.slots ?? {}, next.slots);
+    // The backstop: bind the last answer to the slot its question was asked to
+    // fill, whenever the model's own extraction skipped it. See `bindAnswerToSlot`.
+    const extracted = bindAnswerToSlot(session.history, next.slots);
+
+    if (extracted || next.openQuestions) {
+      const slots = mergeSlots(session.slots ?? {}, extracted);
       session.slots = slots;
       session.openQuestions = reconcileOpenQuestions(
         session.openQuestions ?? [],
@@ -493,6 +498,11 @@ export class InterviewService {
             prompt: d.question.trim(),
             ...(options.length ? { options } : {}),
             ...(typeof d.multiple === 'boolean' ? { multiple: d.multiple } : {}),
+            // Untrusted model output — an unrecognized key is simply dropped
+            // (the `sanitizeSlots` allowlist rule), never written through.
+            ...(d.targetSlot && isSlotKey(d.targetSlot)
+              ? { targetSlot: d.targetSlot }
+              : {}),
           },
         };
       }
@@ -624,14 +634,19 @@ export class InterviewService {
       InterviewPhase.Understanding,
     );
     const fromSlots = summaryFromSlots(session.slots);
-    const adaptive = hasFilledSlots(session.slots);
+    // Identity, not a symptom. This was `hasFilledSlots(session.slots)` — "did
+    // any slot get filled" standing in for "is this plan mode" — which reads an
+    // adaptive run whose extraction failed as a plan run, and then buckets its
+    // transcript by `question.phase`, a label the model invented. That is how raw
+    // answers about data entities ended up rendered as the project's user roles.
+    const planMode = isPlanModeTranscript(session.history as InterviewExchange[]);
 
     return {
       // In plan mode the first Understanding answer IS the goal question; in an
       // adaptive run it is whatever the model opened with, so the intent summary
       // (a written sentence about the concept) is the better source.
       goal:
-        (adaptive ? session.intent?.summary?.trim() : understanding[0]?.trim()) ||
+        (planMode ? understanding[0]?.trim() : session.intent?.summary?.trim()) ||
         understanding[0]?.trim() ||
         session.intent?.summary?.trim() ||
         session.input.idea,
@@ -639,24 +654,39 @@ export class InterviewService {
         fromSlots.users ??
         dedupe([
           ...(session.intent?.primaryUsers ?? []),
-          ...(adaptive ? [] : understanding.slice(1)),
+          ...(planMode ? understanding.slice(1) : []),
         ]),
       features:
         fromSlots.features ??
-        (adaptive ? [] : this.answersForPhase(session, InterviewPhase.Features)),
-      businessRules: this.answersForPhase(
-        session,
-        InterviewPhase.BusinessLogic,
-      ),
+        (planMode ? this.answersForPhase(session, InterviewPhase.Features) : []),
+      // Was the ONE field the slot migration missed, and it stayed on the raw
+      // positional path unguarded — so on every adaptive run it dumped the entire
+      // verbatim answer to whatever question the model happened to label
+      // `business_logic` straight into a structured, client-facing field. A real
+      // gate rendered a five-workflow essay, `$\rightarrow$` artifacts included,
+      // as this project's business rules.
+      //
+      // There is deliberately no `business_rules` slot to read instead: a rule is
+      // a policy, and the interview extracts *what the system does*, not the
+      // policies governing it. So outside plan mode this is empty on purpose —
+      // the Requirement Engineer derives real business rules from the full
+      // transcript downstream, which is the stage equipped to do it. Empty and
+      // honest beats populated and wrong in a document a client reads.
+      businessRules: planMode
+        ? this.answersForPhase(session, InterviewPhase.BusinessLogic)
+        : [],
       // The Commercial phase (budget + timeline) is deliberately absent. Those are
       // real design constraints, but they reach the design through the slots that
       // now carry them — and this list flows into the Requirement Document, which
       // must never state a budget or a date.
       constraints:
-        fromSlots.constraints ?? [
-          ...this.answersForPhase(session, InterviewPhase.Technical),
-          ...this.answersForPhase(session, InterviewPhase.Scale),
-        ],
+        fromSlots.constraints ??
+        (planMode
+          ? [
+              ...this.answersForPhase(session, InterviewPhase.Technical),
+              ...this.answersForPhase(session, InterviewPhase.Scale),
+            ]
+          : []),
       assumptions: [
         'Derived from a structured interview; pending formal requirement engineering in the next stage.',
       ],

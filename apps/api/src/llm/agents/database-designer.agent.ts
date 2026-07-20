@@ -9,6 +9,7 @@ import {
   type RequirementDocument,
   type SystemDesign,
   untrustedField,
+  enforceTenancy,
   normalizeDatabaseDesign,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
@@ -86,6 +87,20 @@ export class DatabaseDesignerAgent extends BaseAgent {
     'table. A tenant column on users alone is not isolation: it leaves every',
     'record queryable across tenants, which is the single most damaging flaw a',
     'multi-tenant schema can ship with.',
+    'The converse is equally binding: when the software serves ONE business, do',
+    'NOT invent a tenants/organizations table and do NOT put a tenant foreign key',
+    'on anything. Tenancy is modelled only when the requirements describe several',
+    'organizations, branches, or companies as CUSTOMERS OF THE PLATFORM. Many',
+    'products, many customers, or several staff roles are not tenancy. Unrequested',
+    'tenancy costs a join on every query and scoping on every endpoint, and it is',
+    'billed to a client who never asked for it.',
+    'Model the people the business SERVES separately from the people who LOG IN.',
+    'Customers/patients/clients are domain records and must not be forced into',
+    'the staff account table, and must not carry credentials (password_hash,',
+    'role) unless the requirements explicitly describe customer accounts or a',
+    'customer login. A guest checkout with no account is the common case, and a',
+    'customer row that demands a password contradicts it. When customers do get',
+    'accounts, link the customer record to a user row rather than merging them.',
     'Do not put a unique constraint on a contact field that real people share',
     '(a household phone number, a shared family email); uniqueness belongs on',
     'identifiers such as a national ID or an account number.',
@@ -111,14 +126,40 @@ export class DatabaseDesignerAgent extends BaseAgent {
       // `isValid` gates on entities, so a reply that simply omits `relations`
       // gets here — normalize rather than spread it through unchecked.
       accept: (raw) =>
-        normalizeDatabaseDesign({
-          ...(raw as DatabaseDesign),
-          sessionId,
-          generatedAt,
-        }),
+        this.withoutUnrequestedTenancy(
+          normalizeDatabaseDesign({
+            ...(raw as DatabaseDesign),
+            sessionId,
+            generatedAt,
+          }),
+          ctx,
+        ),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
       options: { maxTokens: SCHEMA_MAX_TOKENS },
     });
+  }
+
+  /**
+   * Drop a tenancy layer the requirements never asked for.
+   *
+   * Applied on the LLM path only — the deterministic fallback derives its
+   * entities from the requirements and has no way to invent a tenant table. See
+   * `enforceTenancy` for why this is code rather than more prompt: the tenancy
+   * rule in the system prompt has to stay emphatic (a partial tenant scope is a
+   * cross-tenant leak), and an emphatic rule with no stated negative case reads
+   * as a default.
+   */
+  private withoutUnrequestedTenancy(
+    design: DatabaseDesign,
+    ctx: DatabaseDesignContext,
+  ): DatabaseDesign {
+    const { design: next, removed } = enforceTenancy(
+      design,
+      ctx.requirements,
+      ctx.systemDesign,
+    );
+    if (removed) this.logger.debug(`Tenancy stripped: ${removed}`);
+    return next;
   }
 
   private buildPrompt(ctx: DatabaseDesignContext): string {

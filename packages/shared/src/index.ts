@@ -20,6 +20,7 @@ export * from './requirements';
 export * from './system-design';
 export * from './decision-explanation';
 export * from './database-design';
+export * from './database-design.tenancy';
 export * from './api-design';
 export * from './api-design.coverage';
 export * from './api-design.rest';
