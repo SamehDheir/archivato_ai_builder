@@ -1146,6 +1146,43 @@ tsconfig and never needs shared's `dist`.
       prompt breaches an 8K TPM free tier and is refused *before the model runs*.
       `SCHEMA_MAX_TOKENS` is 5120 — enough for a real schema, inside an 8K tier.
       **Check the target model's TPM before raising any `maxTokens`.**
+    - **A schema too big for 5120 is CHUNKED, never given a bigger budget.** This
+      is the escape hatch the `SCHEMA_MAX_TOKENS` comment always reserved ("if
+      schemas outgrow this, chunk by entity group rather than raising it into the
+      TPM wall again"), and it's the tier-safe answer to large-scale generation:
+      chunking never raises the per-call reservation, so it works on a free tier
+      where a bigger `maxTokens` is a **413**. Above `SINGLE_CALL_ENTITY_BUDGET`
+      (9, estimated as `services + roles` — a deliberate *under*-count, since
+      over-chunking a medium schema only costs one small call while under-chunking
+      merely risks the truncation 5120 already tolerated up to a dozen tables) the
+      database designer runs `generateChunked`: **enumerate → design in batches →
+      merge**. Five things not to undo:
+      1. **Enumeration is a SEPARATE first call, because a schema invents its own
+         tables.** The API designer can chunk directly — its entity list already
+         exists from the database stage — but the schema has nothing to partition
+         until a tiny names-and-purposes-only call (`ENUMERATE_MAX_TOKENS` 1024)
+         produces the list. That call is why chunking is gated behind the size
+         estimate rather than always-on: a small schema must not pay for it.
+      2. **A relation is owned by the chunk that owns its `from` table**
+         (`inBatch.has(relation.from)`), so every relationship is emitted exactly
+         once and none is duplicated across the boundary — the mirror of the API
+         designer's "a chunk may only speak for its own entities". The `to` side
+         and FK columns reference other chunks' tables **by name**, handed across
+         as `others` context.
+      3. **A failed chunk contributes nothing** (its tables just don't appear),
+         and an empty enumerate / zero surviving tables / total outage returns
+         **`null`**, which routes the caller back to the single pass and then the
+         deterministic build — a partial outage costs precision, never a crash.
+      4. **Tenancy + normalization run on the MERGED whole**, via the shared
+         `acceptDesign` — so `enforceTenancy` sees the complete schema, not a
+         fragment that looks single-tenant because its tenant table is in another
+         chunk. The chunked path stamps `provenance('llm')` itself (the API-designer
+         precedent); the single-call path still lets `generateArtifact` stamp it.
+      5. **The single-call path is BYTE-unchanged for schemas at/under the budget**
+         — the common case takes no enumerate call, no extra latency, no new
+         failure point. Pinned by `schema-chunking.spec.ts` (a 13-table schema
+         chunks + merges with the cross-chunk edge kept once; a small one never
+         enumerates; all-chunks-fail lands on the deterministic build).
     - **It happened FOUR times, so the default was the bug.** `DEFAULT_MAX_TOKENS`
       was **2048, copied independently into four providers** (Groq, Azure,
       Cerebras, SiliconFlow; only Claude used 4096 — and Claude is the one
@@ -1819,6 +1856,57 @@ tsconfig and never needs shared's `dist`.
     as the project's *user roles*. `isPlanModeTranscript()` reads the question ids
     instead (adaptive questions are minted `q<n>`, plan questions carry their
     catalog ids): identity, not a downstream symptom.
+  - **Scale is its own summary field — it must NOT be concatenated onto
+    `constraints`.** `summaryFromSlots` read `constraints` = constraints slot +
+    `scale_expectations` slot, so the Scale answer (branch counts, user counts,
+    record volumes) rendered **verbatim inside Constraints**, duplicating word for
+    word the Scale field one section above it — the copy-paste-looking bleed
+    reported against a document a client signs. `RequirementsSummary.scale` is now
+    its own optional field: constraints reads the constraints slot **and nothing
+    else**, scale reads `scale_expectations`, and the deterministic requirement
+    build turns scale into its own **`scalability` NFR** (its own unit) instead of
+    a merged line. Plan mode keeps its exact per-phase reads (Technical →
+    constraints, Scale → scale). The web `SummaryView` gained a Scale section
+    (i18n `summary.scale`, EN+AR) so the gate doesn't silently drop it.
+  - **Field-provenance integrity (`scoping-integrity.ts`, shared) — the root-cause
+    layer.** Across repeated runs of two unrelated projects, every structured
+    summary field failed one of three ways at random: **verbatim bleed** (one
+    answer pasted into another field), **silently empty** (a bare "—" while the
+    transcript plainly had material), and **invented content** (a role the client
+    never named, asserted as fact). One cause — *nothing checked that a field's
+    content came from that field's source* — fixed by three mechanisms, because
+    they aren't equally decidable:
+    1. **Bleed is structural**, fixed at the source (`summaryFromSlots` reads one
+       slot per field; scale above). `sharesVerbatimSpan` is the *detector* the
+       regression suite uses to keep it fixed — deliberately **not** a runtime
+       regenerate trigger, since a fuzzy string signal firing on a paid LLM call is
+       the expensive false positive this codebase refuses elsewhere.
+    2. **Invented roles** are surfaced, not deleted. `unsourcedRoleNames` flags a
+       role whose distinctive words don't all appear in what the client said about
+       *who uses the system* — **containment, not token-overlap**, and the split is
+       the whole point: a fabricated "Customer Service" shares *customer* with a
+       stated "Customer" role, so an overlap matcher waves it through; containment
+       asks for *service* too and finds it absent (the `namesExcludedCapability`
+       precedent). The haystack is the **roles source only, never the transcript**
+       — a client who said "customer service is *not* a separate role" must not have
+       that role laundered into "sourced" by the negative sentence. The role is
+       **kept** (it may be a correct workflow inference) and added to
+       `assumptionsAndOpenQuestions` as an inference with its impact — the same
+       honesty the pipeline already applies to an unstated hosting region.
+    3. **Silently-empty business rules** get an extraction-gap note **only when the
+       transcript actually carries policy language** (`transcriptSuggestsBusinessRules`
+       — "must", "cannot", thresholds, "automatically", "triggers"), so the note
+       reads as the tool reporting on itself, never a speculative claim. No source
+       language ⇒ no note (the `parseBudget` "null, never a guess" rule).
+    Wired at ONE chokepoint — `RequirementEngineerAgent.withProvenanceNotes`, run
+    on **both** paths beside `screenRequirementDocument`, appending only (it never
+    edits or deletes document content). The prompt also gained
+    synthesize-not-transcribe / per-field-provenance / flag-inferred-roles clauses,
+    but those are the primary defence and this is the backstop — the same split as
+    every other guard here. Pinned by `scoping-integrity.spec.ts`, which runs a
+    **new domain the reports never covered** (field-services scheduling) end-to-end
+    on the deterministic path (the one that shipped the bugs) and asserts all three
+    modes absent.
 - **Region-aware compliance (`region.ts`) — never a blind GDPR/HIPAA.** An LLM
   writing a requirement document reaches for GDPR and HIPAA regardless of who the
   client is; they dominate its training data. For a MENA dev shop that is not a
@@ -2858,9 +2946,27 @@ tsconfig and never needs shared's `dist`.
   counter shows **"Question N of up to M"** (`INTERVIEW_MAX_QUESTIONS` in
   `@archivato/shared`, now the single source for the API's `MAX_ADAPTIVE_QUESTIONS`);
   the quota/upsell banner is **hidden on a zero-project account** (don't sell before
-  any value is earned); and **confirming the interview auto-generates Requirements**
-  (no redundant Generate click on an empty tab). i18n `dashboard.starters.*` /
+  any value is earned); and **confirming the interview lands on Business Analysis and
+  generates it first** (see below). i18n `dashboard.starters.*` /
   `dashboard.example.*` / `interview.questionN` (EN+AR).
+- **Confirming the interview runs Business Analysis FIRST, not Requirements.**
+  Business Analysis is the discovery layer that *feeds* the Requirement Engineer —
+  `RequirementsService` reads it and the prompt leads with `businessAnalysisBrief`
+  (problem / segments / USP / MVP cut) — but for a long time `handleConfirm`
+  auto-jumped straight to Requirements and generated it, so in the default flow the
+  requirement doc was built with **`businessAnalysis: undefined`**: it never received
+  the input it was designed around. Now confirm sets the **`business`** tab and
+  auto-generates the analysis; the owner reviews it, then generates Requirements with
+  the analysis as context. Three things not to undo: (1) **it does NOT gate
+  Requirements** — Business is free-tier and a failure still leaves the chain usable
+  (the invariant pinned by `requirements.service.spec`); (2) the auto-kick lives in
+  **`BusinessAnalysisPanel`** (`autoGenerate` one-shot), not the dashboard, because
+  that panel owns its own generation (unlike the pipeline stages `generateStage`
+  drives) — it fires at most once (a ref guards re-runs) and calls `onAutoGenerated`
+  the instant it starts so a tab-switch remount can't re-trigger it, and never fires
+  when an analysis already exists; (3) Requirements is **no longer auto-generated on
+  confirm** — its tab keeps its own EmptyState + Generate button. Pinned by
+  `BusinessAnalysisPanel.test.tsx`.
 - **The artifact nav is ordered by the DEAL, not the build (R12).** `TABS` runs
   vision → requirements → **cost → roadmap** → system → database → api → apidocs →
   diagrams → canvas → review → threat → qa → export. It used to mirror the

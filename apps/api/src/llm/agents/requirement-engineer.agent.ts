@@ -1,9 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
+  EXTRACTION_GAP_ASSUMPTION,
+  EXTRACTION_GAP_IMPACT,
   SLOT_KEYS,
   regulationsForMarket,
   screenRequirementDocument,
+  transcriptSuggestsBusinessRules,
+  unsourcedRoleAssumption,
+  unsourcedRoleNames,
   untrusted,
   untrustedField,
   type BusinessAnalysis,
@@ -123,6 +128,20 @@ export class RequirementEngineerAgent extends BaseAgent {
     'confirm the hosting region) and record the applicable regime as an assumption',
     'for the client to confirm. Never cite GDPR, HIPAA, CCPA or any other law that',
     'the stated market does not actually invoke — a wrong law is worse than none.',
+    'Synthesize, never transcribe. Do NOT copy sentences verbatim out of an',
+    'answer: read the answer, then write the discrete, atomic items it contains in',
+    'your own words. A field that reproduces a paragraph of the transcript is',
+    'wrong even when the paragraph is relevant — and pasting the same text into',
+    'two different fields is the single most visible defect in this document.',
+    'Each field is derived from its own source: roles come from who the client',
+    'said uses the system, constraints from limits they stated, scale figures from',
+    'the volume they quoted. Never fill one field from another field\'s answer.',
+    'If the source text carries markup artifacts (LaTeX like $\\rightarrow$,',
+    'markdown, placeholder syntax), render what the reader was meant to see —',
+    'never pass the markup through literally.',
+    'Roles are only those the client named or that a described workflow plainly',
+    'requires. If you infer a role they did not name, it must also appear in',
+    'assumptionsAndOpenQuestions as an inference — never presented as stated fact.',
     'Output standard: every requirement is specific and verifiable, traceable to',
     'the interview, and non-redundant. Never invent scope the interview did not',
     'establish; surface genuine gaps as assumptions.',
@@ -156,13 +175,65 @@ export class RequirementEngineerAgent extends BaseAgent {
     // deterministic build composes its summary from the client's own words, so a
     // link pasted into the interview reaches the share page with no model involved
     // at all.
-    const { document, removed } = screenRequirementDocument(doc);
+    const { document, removed } = screenRequirementDocument(
+      this.withProvenanceNotes(doc, ctx),
+    );
     if (removed.length > 0) {
       this.logger.warn(
         `Requirement doc: stripped ${removed.length} link(s) from client-facing sections — possible prompt injection: ${removed.join(', ')}`,
       );
     }
     return document;
+  }
+
+  /**
+   * Add field-provenance notes to the finished document, on BOTH paths.
+   *
+   * This is the runtime backstop for two of the three reported failure modes.
+   * It never edits or deletes the document's content — it only *appends* to the
+   * assumptions list, which is the section for "here is something we could not
+   * settle". Both notes are conservative by construction: each fires only on
+   * evidence the client's own words provide.
+   *
+   *  - **Invented roles.** A role name whose distinctive words do not all appear
+   *    in what the client said about who uses the system is surfaced as an
+   *    inference, with the cost of being wrong attached — the role is kept
+   *    (it may be a correct inference from a workflow), but it is no longer
+   *    asserted as stated fact. The haystack is the roles source specifically,
+   *    NOT the transcript: a client who said "customer service is not a separate
+   *    role yet" must not have that role laundered into "sourced" because the
+   *    phrase appears in a negative sentence.
+   *  - **Silently-empty business rules.** An empty rules section is labelled as
+   *    an extraction gap *only when the transcript actually carries policy
+   *    language* — so the note reads as the tool reporting on itself, never as a
+   *    speculative claim about the client's business.
+   */
+  private withProvenanceNotes(
+    doc: RequirementDocument,
+    ctx: RequirementContext,
+  ): RequirementDocument {
+    const extra: RequirementAssumption[] = [];
+
+    const roleNames = (doc.roles ?? []).map((r) => r.name);
+    const invented = unsourcedRoleNames(roleNames, statedRolesText(ctx));
+    for (const name of invented) extra.push(unsourcedRoleAssumption(name));
+
+    const noRules = (doc.businessRules ?? []).length === 0;
+    if (noRules && transcriptSuggestsBusinessRules(transcriptText(ctx))) {
+      extra.push({
+        assumption: EXTRACTION_GAP_ASSUMPTION,
+        impactIfWrong: EXTRACTION_GAP_IMPACT,
+      });
+    }
+
+    if (extra.length === 0) return doc;
+    const base = doc.assumptionsAndOpenQuestions ?? [];
+    const seen = new Set(base.map((a) => a.assumption.trim().toLowerCase()));
+    const merged = [
+      ...base,
+      ...extra.filter((a) => !seen.has(a.assumption.trim().toLowerCase())),
+    ];
+    return { ...doc, assumptionsAndOpenQuestions: merged };
   }
 
   /**
@@ -350,19 +421,26 @@ export class RequirementEngineerAgent extends BaseAgent {
       }),
     );
 
-    const nonFunctional: NonFunctionalRequirement[] = [
-      ...summary.constraints.map((c, i) => ({
-        id: `NFR-${i + 1}`,
-        category: inferCategory(c),
-        description: c,
-      })),
-      {
-        id: `NFR-${summary.constraints.length + 1}`,
-        category: 'security',
-        description:
-          'Sensitive data must be encrypted in transit and at rest; access is role-based.',
-      },
-    ];
+    // Ids are minted through one counter rather than from array indices, so the
+    // sequence stays gapless as sections are added or skipped.
+    const nonFunctional: NonFunctionalRequirement[] = [];
+    const addNfr = (category: string, description: string): void => {
+      nonFunctional.push({
+        id: `NFR-${nonFunctional.length + 1}`,
+        category,
+        description,
+      });
+    };
+
+    for (const c of summary.constraints) addNfr(inferCategory(c), c);
+    // Scale is its own requirement, in the `scalability` category — it is no
+    // longer folded into `constraints`, so it would otherwise be dropped from
+    // the offline document entirely.
+    for (const s of summary.scale ?? []) addNfr('scalability', s);
+    addNfr(
+      'security',
+      'Sensitive data must be encrypted in transit and at rest; access is role-based.',
+    );
 
     // Offline, the applicable regime is still knowable when the client stated a
     // market — it's a table lookup, not a judgement call. With no market stated
@@ -493,6 +571,27 @@ function inferCategory(text: string): string {
 /** The value of a filled, applicable slot, or '' when absent / N/A. */
 function slotText(slot: SlotValue | undefined): string {
   return slot && !slot.na ? slot.value.trim() : '';
+}
+
+/**
+ * Everything the client said about WHO uses the system — the provenance source
+ * for role names. Deliberately scoped to the roles answer (slot + derived
+ * summary + intent), not the whole transcript, so an invented role can't be
+ * called sourced merely because its words appear elsewhere in the conversation.
+ */
+function statedRolesText(ctx: RequirementContext): string {
+  return [
+    slotText(ctx.slots?.target_users_roles),
+    ...ctx.summary.users,
+    ...(ctx.intent?.primaryUsers ?? []),
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** The full Q/A transcript as one blob — the source for extraction-gap checks. */
+function transcriptText(ctx: RequirementContext): string {
+  return ctx.history.map((h) => `${h.question.prompt}\n${h.answer}`).join('\n');
 }
 
 /** "a", "a and b", "a, b and c". */

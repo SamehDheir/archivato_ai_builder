@@ -12,6 +12,11 @@ export function SummaryView({ summary }: { summary: RequirementsSummary }) {
     ['features', summary.features],
     ['businessRules', summary.businessRules],
     ['constraints', summary.constraints],
+    // Scale is its own section — it used to be folded into Constraints, which
+    // duplicated the same paragraph in two places at the gate.
+    ...(summary.scale?.length
+      ? ([['scale', summary.scale]] as [string, string[]][])
+      : []),
     ['assumptions', summary.assumptions],
   ];
   return (

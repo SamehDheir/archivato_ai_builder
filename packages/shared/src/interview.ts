@@ -269,6 +269,28 @@ export interface RequirementsSummary {
   features: string[];
   businessRules: string[];
   constraints: string[];
+  /**
+   * Expected load / volume / growth, from the `scale_expectations` slot — its
+   * own field, and that separation is the point.
+   *
+   * These items used to be **concatenated onto `constraints`**, which is the
+   * verbatim bleed-through the user reported: the Scale answer (branch counts,
+   * user counts, record volumes) rendered whole inside Constraints, duplicating
+   * word for word what the Scale field already showed one section above. Two
+   * fields showing the same paragraph reads as a copy-paste bug in a document
+   * the client is being asked to sign.
+   *
+   * They are also genuinely different questions — a constraint is a limit the
+   * design must respect ("must run on the client's own servers"), scale is a
+   * number the design must carry — and they land in different places
+   * downstream: constraints become constraints, scale becomes a *scalability*
+   * NFR with its own unit.
+   *
+   * Optional so old stored summaries (and plan-mode runs) still satisfy the
+   * type — the JSON-artifact convention. Absent means "the interview did not
+   * cover it", and every consumer must read it through `?? []`.
+   */
+  scale?: string[];
   assumptions: string[];
 }
 

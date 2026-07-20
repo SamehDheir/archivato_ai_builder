@@ -679,14 +679,16 @@ export class InterviewService {
       // real design constraints, but they reach the design through the slots that
       // now carry them — and this list flows into the Requirement Document, which
       // must never state a budget or a date.
+      // Technical answers only. The Scale phase used to be concatenated here as
+      // well, which put the same paragraph in two fields of a document a client
+      // reads — the verbatim duplication reported against the Constraints
+      // section. Scale has its own field now, on both paths.
       constraints:
         fromSlots.constraints ??
-        (planMode
-          ? [
-              ...this.answersForPhase(session, InterviewPhase.Technical),
-              ...this.answersForPhase(session, InterviewPhase.Scale),
-            ]
-          : []),
+        (planMode ? this.answersForPhase(session, InterviewPhase.Technical) : []),
+      scale:
+        fromSlots.scale ??
+        (planMode ? this.answersForPhase(session, InterviewPhase.Scale) : []),
       assumptions: [
         'Derived from a structured interview; pending formal requirement engineering in the next stage.',
       ],
