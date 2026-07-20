@@ -1146,6 +1146,41 @@ tsconfig and never needs shared's `dist`.
       prompt breaches an 8K TPM free tier and is refused *before the model runs*.
       `SCHEMA_MAX_TOKENS` is 5120 — enough for a real schema, inside an 8K tier.
       **Check the target model's TPM before raising any `maxTokens`.**
+    - **It then happened twice more, and an agent with NO budget is the tell.**
+      The reviewer and the system architect both passed no `options`, so both
+      inherited Groq's 2048 while quietly outgrowing it (R10/R11 put an
+      `actionType` + `patchTarget` on every review finding; R8 put `complexity` +
+      `buildVsBuy` + `constraintCompliance` on every design). Measured on a real
+      12-entity project: **`completionTokens: 2048` exactly, on consecutive runs,
+      for both agents.** They now carry `REVIEW_MAX_TOKENS` / `DESIGN_MAX_TOKENS`
+      (5120, the schema precedent), pinned by `output-budget.spec.ts` — which
+      asserts on the options actually handed to the provider, since a budget is
+      only real where it is sent. Two things make this class of bug invisible:
+      1. **Truncation does not throw.** `parseJsonFromLlm` falls back to "the
+         widest balanced slice", so a cut-off response **parses cleanly** into a
+         partial object. The missing keys are whichever the schema lists *last*.
+      2. **The two failure shapes are asymmetric, and the quiet one is worse.**
+         The reviewer's `isValid` gates on `recommendations` — the last key the
+         prompt asks for — so it fell back to the template and at least said
+         "malformed". The architect's `isValid` only checks `architecture` /
+         `techStack` / `services`, all of which appear *early*, so a truncated
+         design **passed validation and was persisted**: three services for
+         twelve entities, which then flows into effort → cost → the price. When
+         adding a required field to an artifact, check whether its agent's
+         `isValid` would notice the tail going missing.
+      **Known gap, deliberately not fixed here:** the default `GROQ_MODEL`
+      (`openai/gpt-oss-120b`) is a *reasoning* model that spends 400–600 tokens
+      thinking out of the same budget, and unlike the SiliconFlow and Cerebras
+      providers, Groq applies no `REASONING_HEADROOM_TOKENS`. Adding it would
+      raise the reserve for all 14 agents on the default provider and risks the
+      413 above, so the budgets are sized to absorb the reasoning instead.
+    - **`describeShape()` is why the next one will be diagnosable.** The
+      `"malformed"` log line named no cause, so confirming the above needed a
+      `llm_usage` query to see `completionTokens` pinned to the cap. It now
+      prints the returned top-level **keys** — a truncated artifact is missing
+      the tail of its schema, a mis-shaped one has the wrong names. Keys only,
+      never values: the response is built from the client's own words, and the
+      log pipeline has a different access model than the artifact does.
     - **`BaseAgent.askWithinBudget` halves the budget once on a size refusal.**
       A 413 is not retryable *as sent* (waiting cannot help — the request breaches
       the ceiling on its own), so it is deliberately outside `isRetryableStatus`;
@@ -1997,8 +2032,22 @@ tsconfig and never needs shared's `dist`.
   reads **`SUPER_ADMIN_EMAIL` + `SUPER_ADMIN_PASSWORD`** and, on boot, creates a
   **pre-verified, ready-to-log-in** super-admin (no self-registration), always
   ensuring the `super_admin` role + legacy `role='admin'` column and keeping the
-  password in sync with the env (credentials-as-config; runs after RoleService
-  seeds the roles). The legacy **`ADMIN_EMAILS`** allowlist (`AuthService.syncRole`,
+  password in sync with the env (credentials-as-config). **It calls
+  `RoleService.ensureSystemRoles()` itself rather than trusting module init
+  order**, and that is not defensive padding — it is the fix for a real failure.
+  On a **freshly wiped database** the roles table is empty, `assignByKey` throws
+  `NotFoundException` for the missing role, and the old
+  `.catch(() => undefined)` swallowed it: the account was created with the legacy
+  `role='admin'` column set, **no row in `user_roles`**, and a cheerful "Seeded
+  super admin account" in the log. Nothing authorizes off that column — every
+  guard reads `permissions`, resolved from the grant — so the super admin signed
+  in as an ordinary customer while the users table said `admin`, which sends you
+  looking at entirely the wrong table. Three rules follow: **the grant is the
+  account's power, the column is decoration**; a failed grant is **logged as an
+  error and skips the legacy sync**, so the row never claims an authority the app
+  won't honour; and `super-admin.seeder.spec.ts` covers the **unseeded-roles**
+  case, because every test there used to call `roles.onModuleInit()` first and so
+  could never have caught it. The legacy **`ADMIN_EMAILS`** allowlist (`AuthService.syncRole`,
   promote-on-login, promote-only) still works but is now **empty by default** —
   superseded by the seeded account. `AdminGuard` (exported by AuthModule) 403s
   non-admins.

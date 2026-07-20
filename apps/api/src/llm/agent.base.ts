@@ -117,7 +117,19 @@ export abstract class BaseAgent {
       if (spec.isValid(raw)) {
         return this.stamp(spec.accept(raw), { mode: 'llm' });
       }
-      logger.debug(`${spec.label} malformed; using deterministic build.`);
+      // Name what came back. A bare "malformed" says a billed call was thrown
+      // away and nothing about why — diagnosing one real case (a review
+      // truncated at the provider's default 2048, salvaged by
+      // `parseJsonFromLlm` into a partial object missing its LAST key) needed a
+      // query against `llm_usage` to see `completionTokens` pinned to the cap.
+      // The key list alone would have said it: a truncated artifact is missing
+      // the tail of the schema, a mis-shaped one has the wrong names.
+      //
+      // Keys only, never values: this object is built from the client's own
+      // words, and the log pipeline is not where that belongs.
+      logger.debug(
+        `${spec.label} malformed; using deterministic build. Model returned: ${describeShape(raw)}`,
+      );
     } catch (err) {
       reason = degradedReasonFor(err);
       logger.warn(`${spec.label} failed (${reason}); using fallback: ${err}`);
@@ -211,6 +223,21 @@ export abstract class BaseAgent {
   }
 
   private cachedLogger?: Logger;
+}
+
+/**
+ * The top-level shape of a rejected model response, for the log line only.
+ *
+ * Keys, never values — the response is derived from the client's own words and
+ * a log pipeline has a different access model than the artifact does (the same
+ * rule that keeps prompt/completion content out of `llm_usage`).
+ */
+export function describeShape(raw: unknown): string {
+  if (raw === null || raw === undefined) return String(raw);
+  if (Array.isArray(raw)) return `array(${raw.length})`;
+  if (typeof raw !== 'object') return typeof raw;
+  const keys = Object.keys(raw as Record<string, unknown>);
+  return keys.length ? `{ ${keys.join(', ')} }` : '{} (no keys)';
 }
 
 /**

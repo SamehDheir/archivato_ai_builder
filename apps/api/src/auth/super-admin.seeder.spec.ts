@@ -5,10 +5,19 @@ import { InMemoryUserRepository } from './in-memory-user.repository';
 import { RoleService } from '../roles/role.service';
 import { InMemoryRoleRepository } from '../roles/in-memory-role.repository';
 
-async function makeSeeder(env: Record<string, unknown>) {
+/**
+ * `seedRolesFirst` mirrors module init order. It defaults to true because that
+ * is the steady state, but note that **passing true is what hid a real bug**:
+ * every test here used to pre-seed the roles, so none of them exercised a fresh
+ * database — where the roles table is empty and `assignByKey` throws.
+ */
+async function makeSeeder(
+  env: Record<string, unknown>,
+  seedRolesFirst = true,
+) {
   const users = new InMemoryUserRepository();
   const roles = new RoleService(new InMemoryRoleRepository());
-  await roles.onModuleInit(); // seed system roles (super_admin must exist)
+  if (seedRolesFirst) await roles.onModuleInit();
   const seeder = new SuperAdminSeeder(
     users,
     new PasswordService(),
@@ -38,6 +47,39 @@ describe('SuperAdminSeeder', () => {
     expect(
       await new PasswordService().compare('seed-pass-123$', user!.passwordHash!),
     ).toBe(true);
+  });
+
+  /**
+   * The fresh-database case, and the one that actually broke.
+   *
+   * On a wiped database the roles table is empty when the seeder runs. It used
+   * to call `assignByKey(...).catch(() => undefined)`, so the `NotFoundException`
+   * for the missing role vanished and the account was created with the legacy
+   * `role: 'admin'` column and **no grant in `user_roles`**. Nothing authorizes
+   * off that column — every guard reads `permissions`, resolved from the grant —
+   * so the super admin signed in as an ordinary customer, and the users table
+   * said "admin" the whole time.
+   */
+  it('grants the role even when the roles table has not been seeded yet', async () => {
+    const { users, roles, seeder } = await makeSeeder(
+      {
+        SUPER_ADMIN_EMAIL: 'root@example.com',
+        SUPER_ADMIN_PASSWORD: 'seed-pass-123$',
+      },
+      false, // no roles exist yet — a fresh database
+    );
+
+    await seeder.onModuleInit();
+
+    const user = await users.findByEmail('root@example.com');
+    expect(user).not.toBeNull();
+
+    const access = await roles.resolveAccess(user!.id);
+    expect(access.roles).toContain('super_admin');
+    // The grant is only meaningful if it carries permissions — an account with
+    // an empty permission set is exactly what "logs in as a user" looks like.
+    expect(access.permissions.length).toBeGreaterThan(0);
+    expect(access.permissions).toContain('admin:analytics');
   });
 
   it('does nothing when either variable is unset', async () => {
