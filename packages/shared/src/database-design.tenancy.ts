@@ -27,25 +27,58 @@
  * only a design with no signal at all is stripped.
  */
 
-import type { DatabaseDesign, Entity, EntityColumn } from './database-design';
+import type {
+  DatabaseDesign,
+  Entity,
+  EntityColumn,
+  Relation,
+} from './database-design';
 import type { RequirementDocument } from './requirements';
 import type { SystemDesign } from './system-design';
 
 /** Table names that ARE the tenant table. */
-const TENANT_TABLE = /^(?:tenants?|organizations?|orgs?|accounts?|workspaces?|companies|branches|clinics|stores|merchants|vendors)$/i;
+const TENANT_TABLE = /^(?:tenants?|organizations?|orgs?|accounts?|workspaces?|companies|branches|clinics|hospitals|stores|merchants|vendors|schools|campuses|warehouses|outlets|practices|franchises)$/i;
 
-/** Column names that scope a row to a tenant. */
+/**
+ * Column names that scope a row to a tenant, for the STRIP path.
+ *
+ * Kept deliberately narrow — only nouns that are almost never a plain domain FK.
+ * `enforceTenancy` strips an unreferenced column purely on this name match, so a
+ * word that could legitimately be domain data (a delivery `location_id`, a
+ * `site_id`) must NOT be here: stripping it from a single-business schema would
+ * delete real data. Detection of *existing* tenancy uses the broader set below.
+ */
 const TENANT_COLUMN = /^(?:tenant|organization|org|workspace|company|branch|store|merchant|vendor)_id$/i;
+
+/**
+ * Column names that indicate a row is ALREADY tenant-scoped, for the ADD path.
+ *
+ * Broader than `TENANT_COLUMN` because being wrong here is safe: it only stops
+ * `ensureTenancy` from adding a *second* scoping column, never strips anything.
+ */
+const SCOPING_COLUMN_BROAD = /^(?:tenant|organization|org|workspace|company|branch|store|merchant|vendor|clinic|hospital|school|campus|warehouse|outlet|practice|franchise)_id$/i;
 
 /**
  * Language that indicates the platform serves MANY businesses, not one.
  *
  * Every entry names a relationship between the platform and multiple
  * *customers of the platform* — not merely a plural noun. "Multiple products"
- * is not tenancy; "multiple clinics" is.
+ * is not tenancy; "multiple clinics" is. The set was widened after a real
+ * enterprise HealthTech run slipped through: a `TenantService` ("Provisions new
+ * tenants, enforces data-residency…"), a **must** FR ("Tenant provisioning:
+ * create new clinic or hospital branches and configure tenant settings"), and a
+ * "Branch Manager" role ("administrator for a single clinic or hospital branch")
+ * — none of which the original regex matched, so the schema shipped single-tenant
+ * in direct contradiction of the requirements and system design.
+ *
+ * The new alternatives stay disciplined about the plural-noun trap the tests pin:
+ * a bare "multiple products/orders/customers" is still not tenancy. What is added
+ * is provisioning/settings/isolation language, a role scoped to *a single* org
+ * unit (which only exists when there are several), data-residency, and the
+ * org-boundary manager titles.
  */
 const MULTI_ORG_SIGNAL =
-  /\b(?:multi[- ]?tenan\w*|multi[- ]?branch|multi[- ]?store|multi[- ]?org\w*|multi[- ]?compan\w*|multi[- ]?vendor|multi[- ]?merchant|multiple (?:tenants?|organi[sz]ations?|branches|clinics|stores|companies|businesses|vendors|merchants|locations|outlets|practices)|each (?:tenant|organi[sz]ation|branch|clinic|store|company)|per[- ](?:tenant|organi[sz]ation|branch)|tenant isolation|white[- ]?label|franchise|chain of|saas platform for|b2b saas)\b/i;
+  /\b(?:multi[- ]?tenan\w*|multi[- ]?branch|multi[- ]?store|multi[- ]?org\w*|multi[- ]?compan\w*|multi[- ]?vendor|multi[- ]?merchant|multiple (?:tenants?|organi[sz]ations?|branches|clinics|hospitals|stores|companies|businesses|vendors|merchants|locations|outlets|practices|schools|campuses|warehouses|sites)|each (?:tenant|organi[sz]ation|branch|clinic|store|company|location|school|warehouse|site)|per[- ](?:tenant|organi[sz]ation|branch|clinic|store|location|school|warehouse|region)|(?:single|one|their own|their assigned|a specific|the assigned) (?:tenant|organi[sz]ation|branch|clinic|hospital|store|location|site|school|warehouse|outlet|practice|campus)|tenant (?:provision\w*|onboard\w*|settings?|isolation|management|scoping|switching)|(?:provision|onboard|register|create)\w* (?:new )?(?:tenants?|branches|clinics|organi[sz]ations?|stores|schools|warehouses)|data[- ]residency|tenant isolation|white[- ]?label|franchis\w*|chain of|saas platform for|b2b saas)\b/i;
 
 /**
  * Does this project actually serve multiple organizations?
@@ -60,20 +93,7 @@ export function requiresMultiTenancy(
   requirements: RequirementDocument,
   systemDesign?: SystemDesign | null,
 ): boolean {
-  const haystack = [
-    requirements.executiveSummary ?? '',
-    ...requirements.functional.flatMap((f) => [f.title, f.description]),
-    ...requirements.nonFunctional.map((n) => n.description),
-    ...(requirements.businessRules ?? []).map((b) => b.description),
-    ...(requirements.constraints ?? []),
-    ...requirements.roles.flatMap((r) => [r.name, r.description ?? '']),
-    systemDesign?.architectureRationale ?? '',
-    ...(systemDesign?.services ?? []).flatMap((s) => [s.name, s.responsibility]),
-  ]
-    .filter(Boolean)
-    .join(' \n ');
-
-  return MULTI_ORG_SIGNAL.test(haystack);
+  return MULTI_ORG_SIGNAL.test(tenancyHaystack(requirements, systemDesign));
 }
 
 /** What `enforceTenancy` did, so the caller can report it. */
@@ -174,4 +194,203 @@ function isTenantScopeColumn(
 ): boolean {
   if (column.references) return isTenantTable(column.references.entity);
   return TENANT_COLUMN.test(column.name);
+}
+
+// ── positive direction: ensure tenancy the requirements DO ask for ───────────
+
+/**
+ * The tenant table + scoping-column names to use for a project, derived from the
+ * vocabulary the requirements/design actually use.
+ *
+ * A HealthTech platform's tenant is a "branch"; a logistics one's is a
+ * "warehouse"; a school platform's is a "school". Naming the synthesized table
+ * after the domain's own word makes the backstop's output read like the rest of
+ * the schema rather than a bolted-on generic `tenants`. Falls back to `tenants` /
+ * `tenant_id` when no specific noun is present.
+ */
+const TENANT_NOUNS: { pattern: RegExp; table: string; column: string }[] = [
+  { pattern: /\bbranch(?:es)?\b/i, table: 'branches', column: 'branch_id' },
+  { pattern: /\bwarehouse(?:s)?\b/i, table: 'warehouses', column: 'warehouse_id' },
+  { pattern: /\bschool(?:s)?\b/i, table: 'schools', column: 'school_id' },
+  { pattern: /\bcampus(?:es)?\b/i, table: 'campuses', column: 'campus_id' },
+  { pattern: /\bclinic(?:s)?\b/i, table: 'clinics', column: 'clinic_id' },
+  { pattern: /\bstore(?:s)?\b/i, table: 'stores', column: 'store_id' },
+  { pattern: /\boutlet(?:s)?\b/i, table: 'outlets', column: 'outlet_id' },
+  { pattern: /\bfranchise(?:s)?\b/i, table: 'franchises', column: 'franchise_id' },
+  { pattern: /\bworkspace(?:s)?\b/i, table: 'workspaces', column: 'workspace_id' },
+  { pattern: /\borgani[sz]ation(?:s)?\b/i, table: 'organizations', column: 'organization_id' },
+];
+
+export function tenantEntityFor(
+  requirements: RequirementDocument,
+  systemDesign?: SystemDesign | null,
+): { table: string; column: string } {
+  const haystack = tenancyHaystack(requirements, systemDesign);
+  for (const noun of TENANT_NOUNS) {
+    if (noun.pattern.test(haystack)) return { table: noun.table, column: noun.column };
+  }
+  return { table: 'tenants', column: 'tenant_id' };
+}
+
+/** The requirement + design text tenancy signals are read from. */
+function tenancyHaystack(
+  requirements: RequirementDocument,
+  systemDesign?: SystemDesign | null,
+): string {
+  return [
+    requirements.executiveSummary ?? '',
+    ...requirements.functional.flatMap((f) => [f.title, f.description]),
+    ...requirements.nonFunctional.map((n) => n.description),
+    ...(requirements.businessRules ?? []).map((b) => b.description),
+    ...(requirements.constraints ?? []),
+    ...requirements.roles.flatMap((r) => [r.name, r.description ?? '']),
+    systemDesign?.architectureRationale ?? '',
+    ...(systemDesign?.services ?? []).flatMap((s) => [s.name, s.responsibility]),
+  ]
+    .filter(Boolean)
+    .join(' \n ');
+}
+
+/** Does this table already carry tenant scoping (so we must not double-add)? */
+function alreadyScoped(entity: Entity): boolean {
+  return entity.columns.some(
+    (c) =>
+      SCOPING_COLUMN_BROAD.test(c.name) ||
+      (!!c.references && TENANT_TABLE.test(c.references.entity.trim())),
+  );
+}
+
+/** A pure join table (≥2 FKs, no domain columns of its own) — scoped via parents. */
+function isPureJunction(entity: Entity): boolean {
+  const fks = entity.columns.filter((c) => c.references);
+  if (fks.length < 2) return false;
+  const domain = entity.columns.filter(
+    (c) =>
+      !c.references &&
+      !c.primaryKey &&
+      !/^(?:id|created_at|updated_at)$/i.test(c.name),
+  );
+  return domain.length === 0;
+}
+
+/** What `ensureTenancy` did, so the caller can report it. */
+export interface TenancyAddition {
+  design: DatabaseDesign;
+  /** Set when tenancy was added, describing what and why. */
+  added: string | null;
+}
+
+/**
+ * Add the tenant scoping the requirements ask for but the schema left out.
+ *
+ * This is the counterpart to `enforceTenancy`, and the more important half: a
+ * schema that DROPS required tenancy ships a cross-tenant data leak — every
+ * record queryable across organizations — which is the single most damaging flaw
+ * a multi-tenant system can have. A real enterprise run produced exactly that: a
+ * `TenantService` and a tenant-provisioning requirement, but a schema with no
+ * tenant table and no `*_id` scoping anywhere.
+ *
+ * Deliberately fires ONLY on the clear-cut total-miss case — the schema has no
+ * scope table AND no scoping column at all. When the model modelled *some*
+ * tenancy, it is trusted (completeness across every table is the prompt's job,
+ * and second-guessing partial work risks mangling a correct schema). A tenant
+ * FK is then added to every entity except the tenant table itself and pure join
+ * tables (which are scoped through their parents). Over-scoping a would-be global
+ * lookup table is the safe direction — the prompt rule is "EVERY table holding
+ * their data", and an extra join costs money where a missing one costs a leak.
+ */
+export function ensureTenancy(
+  design: DatabaseDesign,
+  requirements: RequirementDocument,
+  systemDesign?: SystemDesign | null,
+): TenancyAddition {
+  if (!requiresMultiTenancy(requirements, systemDesign)) {
+    return { design, added: null };
+  }
+
+  const hasScopeTable = design.entities.some(
+    (e) => TENANT_TABLE.test(e.name.trim()) && isScopeTable(e, design),
+  );
+  const hasScopingColumn = design.entities.some(alreadyScoped);
+  if (hasScopeTable || hasScopingColumn) return { design, added: null };
+
+  const { table, column } = tenantEntityFor(requirements, systemDesign);
+  const singular = column.replace(/_id$/, '');
+
+  const tenantTable: Entity = {
+    name: table,
+    description: `The ${table} (tenants) the platform serves; every tenant-scoped record links here.`,
+    columns: [
+      { name: 'id', type: 'uuid', nullable: false, primaryKey: true },
+      { name: 'name', type: 'string', nullable: false },
+      { name: 'status', type: 'enum', nullable: false },
+      { name: 'created_at', type: 'timestamp', nullable: false },
+      { name: 'updated_at', type: 'timestamp', nullable: false },
+    ],
+  };
+
+  const scopeColumn = (): EntityColumn => ({
+    name: column,
+    type: 'uuid',
+    nullable: false,
+    references: { entity: table, column: 'id' },
+  });
+
+  const scoped: string[] = [];
+  const entities = design.entities.map((entity) => {
+    if (isPureJunction(entity) || entity.columns.some((c) => c.name === column)) {
+      return entity;
+    }
+    scoped.push(entity.name);
+    const columns = [...entity.columns];
+    const pkIndex = columns.findIndex((c) => c.primaryKey);
+    columns.splice(pkIndex >= 0 ? pkIndex + 1 : 0, 0, scopeColumn());
+    return { ...entity, columns };
+  });
+
+  const relations: Relation[] = [
+    ...design.relations,
+    ...scoped.map((name) => ({
+      from: table,
+      to: name,
+      type: 'one-to-many' as const,
+      description: `Each ${singular} owns many ${name}.`,
+    })),
+  ];
+
+  return {
+    design: { ...design, entities: [tenantTable, ...entities], relations },
+    added:
+      `Added a "${table}" tenant table and a ${column} foreign key on ${scoped.length} table(s). ` +
+      `The requirements and system design describe a multi-tenant platform, but the ` +
+      `generated schema had no tenant scoping — which would leave every record queryable ` +
+      `across tenants, the most damaging flaw a multi-tenant schema can ship with.`,
+  };
+}
+
+/**
+ * Reconcile a schema's tenancy with what the requirements actually describe —
+ * add it when required and missing, strip it when present and unrequested.
+ *
+ * One entry point so a caller can't apply only half of the (asymmetric) rule.
+ * The two directions never both fire: `ensureTenancy` no-ops unless multi-tenancy
+ * is required, `enforceTenancy` no-ops when it is.
+ */
+export interface TenancyReconciliation {
+  design: DatabaseDesign;
+  added: string | null;
+  removed: string | null;
+}
+
+export function applyTenancy(
+  design: DatabaseDesign,
+  requirements: RequirementDocument,
+  systemDesign?: SystemDesign | null,
+): TenancyReconciliation {
+  if (requiresMultiTenancy(requirements, systemDesign)) {
+    const { design: next, added } = ensureTenancy(design, requirements, systemDesign);
+    return { design: next, added, removed: null };
+  }
+  const { design: next, removed } = enforceTenancy(design, requirements, systemDesign);
+  return { design: next, added: null, removed };
 }

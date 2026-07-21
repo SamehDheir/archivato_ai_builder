@@ -136,6 +136,109 @@ export function isJunctionEntity(entity: Entity): boolean {
   );
 }
 
+/**
+ * How the database models the user↔role link — the fact the API's user endpoints
+ * must agree with.
+ *
+ * `null` when there is no roles table to reason about.
+ */
+export type UserRoleCardinality = 'single' | 'many' | null;
+
+const USERS_TABLE = /^users?$/i;
+const ROLES_TABLE = /^roles?$/i;
+
+/**
+ * Read the actual user↔role cardinality out of the database design.
+ *
+ * The API and database stages were generated largely independently, so the
+ * database could model roles many-to-many (a `user_roles` join table) while the
+ * API's create/update-user body accepted a single `role_id` — an API that cannot
+ * use the multi-role capability the schema was built for. The fix is for the API
+ * to READ this from the schema rather than guess, so the two stay in sync.
+ *
+ *  - **many**: a pure junction table links users and roles, OR the design
+ *    declares a users↔roles many-to-many relation.
+ *  - **single**: `users` carries a `role_id` (or a direct FK to roles).
+ *  - **null**: no roles table — nothing to reconcile.
+ */
+export function userRoleCardinality(design: DatabaseDesign): UserRoleCardinality {
+  const entities = design.entities ?? [];
+  if (!entities.some((e) => ROLES_TABLE.test(e.name.trim()))) return null;
+
+  const links = (entity: Entity, table: RegExp): boolean =>
+    (entity.columns ?? []).some(
+      (c) => !!c.references && table.test(c.references.entity.trim()),
+    );
+
+  const hasJunction = entities.some(
+    (e) => isJunctionEntity(e) && links(e, USERS_TABLE) && links(e, ROLES_TABLE),
+  );
+  if (hasJunction) return 'many';
+
+  const m2mRelation = (design.relations ?? []).some(
+    (r) =>
+      r.type === 'many-to-many' &&
+      ((USERS_TABLE.test(r.from) && ROLES_TABLE.test(r.to)) ||
+        (ROLES_TABLE.test(r.from) && USERS_TABLE.test(r.to))),
+  );
+  if (m2mRelation) return 'many';
+
+  const users = entities.find((e) => USERS_TABLE.test(e.name.trim()));
+  const singleFk = (users?.columns ?? []).some(
+    (c) =>
+      /^role_id$/i.test(c.name) ||
+      (!!c.references && ROLES_TABLE.test(c.references.entity.trim())),
+  );
+  return singleFk ? 'single' : null;
+}
+
+/**
+ * Make the API's user endpoints agree with a many-to-many role model.
+ *
+ * The deterministic builder is already consistent (it reaches roles through the
+ * junction's nested routes), so this only ever repairs the LLM path, where the
+ * model tends to reach for a single `role_id: integer` out of habit. When the
+ * schema is many-to-many, any `role_id` field in a user-owning module's
+ * request/response schema becomes `role_ids` (an array). Single-role and no-role
+ * designs are left untouched — a single `role_id` is correct there.
+ */
+export function enforceRoleCardinality(
+  design: ApiDesign,
+  db: DatabaseDesign,
+): { design: ApiDesign; changed: boolean } {
+  if (userRoleCardinality(db) !== 'many') return { design, changed: false };
+
+  let changed = false;
+  const fix = (fields: SchemaField[] | undefined): SchemaField[] | undefined => {
+    if (!Array.isArray(fields)) return fields;
+    return fields.map((f) => {
+      if (/^role_id$/i.test(f.name)) {
+        changed = true;
+        return { ...f, name: 'role_ids', type: 'array' };
+      }
+      return f;
+    });
+  };
+
+  const modules = design.modules.map((m) => {
+    const coversUsers =
+      (m.coveredEntities ?? []).some((e) => USERS_TABLE.test(e.trim())) ||
+      /users/i.test(m.name) ||
+      /\/users(?:\/|$)/i.test(m.basePath);
+    if (!coversUsers) return m;
+    return {
+      ...m,
+      endpoints: m.endpoints.map((ep) => ({
+        ...ep,
+        requestSchema: fix(ep.requestSchema) ?? ep.requestSchema,
+        responseSchema: fix(ep.responseSchema) ?? ep.responseSchema,
+      })),
+    };
+  });
+
+  return changed ? { design: { ...design, modules }, changed } : { design, changed };
+}
+
 export function buildAuthModule(): ApiModule {
   const credentials: SchemaField[] = [
     { name: 'email', type: 'string', required: true },

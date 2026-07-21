@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
+  coverageSourcesFromDesign,
   enforcePaymentAvailability,
   findUncoveredRequirements,
   isBuildVsBuyCapability,
@@ -10,10 +11,12 @@ import {
   paymentProvidersFor,
   regulationsForMarket,
   significantTokens,
+  untrusted,
   type ArchitectureType,
   type BuildVsBuyItem,
   type BuildVsBuyRecommendation,
   type ConstraintCompliance,
+  type FunctionalRequirement,
   type IntentAnalysis,
   type ModuleComplexity,
   type PhasedArchitecture,
@@ -62,6 +65,13 @@ export interface SystemDesignContext {
 const DESIGN_MAX_TOKENS = 5120;
 
 /**
+ * Budget for the coverage-verification pass. It returns one small
+ * `{id, covered, where}` verdict per still-flagged requirement — a handful at
+ * most — so a modest ceiling is ample and stays well inside any TPM tier.
+ */
+const COVERAGE_MAX_TOKENS = 1024;
+
+/**
  * Owns the System Design stage: recommends an architecture type, a tech stack,
  * a service breakdown, a build-vs-buy analysis, per-module complexity, and (when
  * scale conflicts with budget/timeline) a phased plan. LLM-driven with a
@@ -101,7 +111,7 @@ export class SystemArchitectAgent extends BaseAgent {
     ctx: SystemDesignContext,
   ): Promise<SystemDesign> {
     const generatedAt = new Date().toISOString();
-    return this.generateArtifact<SystemDesign>({
+    const design = await this.generateArtifact<SystemDesign>({
       label: 'System design',
       prompt: this.buildPrompt(ctx),
       isValid: (raw) => this.isValid(raw),
@@ -109,6 +119,137 @@ export class SystemArchitectAgent extends BaseAgent {
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
       options: { maxTokens: DESIGN_MAX_TOKENS },
     });
+    // The deterministic pass above set `uncoveredRequirements` to a generous
+    // token-match's candidates; confirm them semantically before they reach the
+    // owner as "no service covers this".
+    return this.refineCoverage(design, ctx);
+  }
+
+  /**
+   * Second-pass coverage verification.
+   *
+   * `findUncoveredRequirements` is a deliberately generous token match — it is the
+   * cheap, offline first filter — but it still cannot see genuine synonymy
+   * ("login" ↔ "authentication") or a concern addressed only in prose. So any
+   * requirement it flagged is put back to the model, alongside the WHOLE design
+   * (services, tech stack, build-vs-buy, NFRs), with one question: is this
+   * actually addressed anywhere? Only the ones it confirms are still unaddressed
+   * survive as flags.
+   *
+   * Conservative by construction — a flag is cleared ONLY on an explicit
+   * `covered:true` with a stated location. An unparseable reply, a failed call, a
+   * missing verdict, or the offline mock all leave the candidate flagged, so the
+   * pass can lose false positives but never a real gap (recall is preserved). It
+   * runs only when there is something to check, so a clean design costs no call.
+   */
+  private async refineCoverage(
+    design: SystemDesign,
+    ctx: SystemDesignContext,
+  ): Promise<SystemDesign> {
+    const candidates = design.uncoveredRequirements ?? [];
+    if (candidates.length === 0) return design;
+
+    const survivors = await this.verifyCoverage(candidates, design, ctx);
+    if (survivors.length === candidates.length) return design;
+
+    // `undefined` (not []) means "no gaps", matching what `uncovered()` returns —
+    // JSON storage drops the key, so consumers see the same shape either way.
+    return {
+      ...design,
+      uncoveredRequirements: survivors.length > 0 ? survivors : undefined,
+    };
+  }
+
+  private async verifyCoverage(
+    candidates: string[],
+    design: SystemDesign,
+    ctx: SystemDesignContext,
+  ): Promise<string[]> {
+    const items = candidates
+      .map((id) => ctx.requirements.functional.find((f) => f.id === id))
+      .filter((f): f is FunctionalRequirement => !!f);
+    if (items.length === 0) return candidates;
+
+    try {
+      const raw = await this.thinkJson<{
+        coverage?: { id?: unknown; covered?: unknown; where?: unknown }[];
+      }>(this.buildCoveragePrompt(items, design, ctx), {
+        maxTokens: COVERAGE_MAX_TOKENS,
+      });
+      const verdicts = Array.isArray(raw?.coverage) ? raw.coverage : null;
+      if (!verdicts) return candidates; // couldn't read a verdict → keep all
+
+      // Clear a flag only on an affirmative "covered here" — everything else
+      // (uncovered, ambiguous, omitted) keeps the requirement flagged.
+      const cleared = new Set(
+        verdicts
+          .filter(
+            (v) =>
+              v &&
+              v.covered === true &&
+              typeof v.where === 'string' &&
+              v.where.trim().length > 0 &&
+              typeof v.id === 'string',
+          )
+          .map((v) => v.id as string),
+      );
+      const survivors = candidates.filter((id) => !cleared.has(id));
+      if (survivors.length < candidates.length) {
+        this.logger.debug(
+          `Coverage verification cleared ${candidates.length - survivors.length} false positive(s); still uncovered: ${survivors.join(', ') || 'none'}.`,
+        );
+      }
+      return survivors;
+    } catch (err) {
+      this.logger.warn(
+        `Coverage verification failed; keeping the deterministic gaps: ${err}`,
+      );
+      return candidates;
+    }
+  }
+
+  private buildCoveragePrompt(
+    items: FunctionalRequirement[],
+    design: SystemDesign,
+    ctx: SystemDesignContext,
+  ): string {
+    const nfr = ctx.requirements.nonFunctional
+      .map((n) => `- ${n.category}: ${n.description}`)
+      .join('\n');
+    return [
+      'You are auditing a system design for requirement coverage. A requirement is',
+      'COVERED when the design addresses it anywhere — a service responsibility, a',
+      'technology choice, a build-vs-buy decision, or a non-functional requirement.',
+      'Wording differs on purpose: "RBAC" addresses "role-based access control";',
+      '"encryption at rest / TLS" addresses "data encryption"; "Stripe" addresses',
+      '"payment processing". Judge intent, not shared words.',
+      '',
+      'Services:',
+      ...design.services.map((s) => `- ${s.name}: ${s.responsibility}`),
+      '',
+      'Tech stack:',
+      ...(design.techStack ?? []).map(
+        (t) => `- ${t.layer}: ${t.technology} — ${t.rationale}`,
+      ),
+      design.buildVsBuy?.length ? '\nBuild-vs-buy decisions:' : '',
+      ...(design.buildVsBuy ?? []).map(
+        (b) =>
+          `- ${b.capability}: ${b.recommendation}${b.suggestedService ? ` (${b.suggestedService})` : ''} — ${b.rationale}`,
+      ),
+      nfr ? '\nNon-functional requirements:' : '',
+      nfr,
+      '',
+      'Requirements to check:',
+      untrusted(items.map((f) => `${f.id}: ${f.title} — ${f.description}`).join('\n')),
+      '',
+      'For EACH requirement return a verdict. Return JSON:',
+      '{ coverage: [{ id, covered (boolean), where (the exact service/technology/decision that addresses it, or why nothing does) }] }.',
+      'Be strict: covered=true ONLY when something above genuinely implements or',
+      'provides it. Do not invent coverage to be helpful — a wrong "covered" hides a',
+      'real gap. If nothing addresses it, covered=false.',
+    ]
+      .filter((line) => line !== '')
+      .join('\n');
   }
 
   private buildPrompt(ctx: SystemDesignContext): string {
@@ -215,26 +356,29 @@ export class SystemArchitectAgent extends BaseAgent {
       this.ensureComplexity(raw.services as ServiceModule[], ctx),
       ctx,
     );
-    const buildVsBuy = sanitizeBuildVsBuy(raw.buildVsBuy);
+    const sanitized = sanitizeBuildVsBuy(raw.buildVsBuy);
     const compliance = sanitizeCompliance(raw.constraintCompliance);
     const conflict = this.hasScaleConflict(ctx, haystack);
+    const techStack = raw.techStack as TechChoice[];
+    const buildVsBuy = this.withAvailablePayments(
+      sanitized.length ? sanitized : this.buildVsBuy(haystack),
+      ctx,
+    );
 
     return {
       ...(raw as SystemDesign),
       sessionId,
       generatedAt,
       services,
-      buildVsBuy: this.withAvailablePayments(
-        buildVsBuy.length ? buildVsBuy : this.buildVsBuy(haystack),
-        ctx,
-      ),
+      techStack,
+      buildVsBuy,
       constraintCompliance: compliance.length
         ? compliance
         : this.constraintCompliance(ctx),
       phasedArchitecture: conflict
         ? validPhased(raw.phasedArchitecture) ?? this.phasedArchitecture(ctx)
         : undefined,
-      uncoveredRequirements: this.uncovered(services, ctx),
+      uncoveredRequirements: this.uncovered(services, techStack, buildVsBuy, ctx),
     };
   }
 
@@ -274,11 +418,19 @@ export class SystemArchitectAgent extends BaseAgent {
 
   private uncovered(
     services: ServiceModule[],
+    techStack: TechChoice[] | undefined,
+    buildVsBuy: BuildVsBuyItem[] | undefined,
     ctx: SystemDesignContext,
   ): string[] | undefined {
-    const gaps = findUncoveredRequirements(ctx.requirements.functional, services);
+    // Coverage can come from a technology choice or a build-vs-buy decision, not
+    // only a named service — so those are handed in as extra coverage sources.
+    const gaps = findUncoveredRequirements(
+      ctx.requirements.functional,
+      services,
+      coverageSourcesFromDesign({ techStack, buildVsBuy }),
+    );
     if (gaps.length === 0) return undefined;
-    this.logger.debug(`Requirements with no owning service: ${gaps.join(', ')}.`);
+    this.logger.debug(`Requirements no service token-matches (pending LLM check): ${gaps.join(', ')}.`);
     return gaps;
   }
 
@@ -315,18 +467,20 @@ export class SystemArchitectAgent extends BaseAgent {
     const conflict = this.hasScaleConflict(ctx, haystack);
 
     const withAuth = this.withAuthService(services, ctx);
+    const techStack = this.inferTechStack(haystack);
+    const buildVsBuy = this.withAvailablePayments(this.buildVsBuy(haystack), ctx);
 
     return {
       sessionId,
       generatedAt,
       architecture,
       architectureRationale: this.architectureRationale(architecture, ctx, conflict),
-      techStack: this.inferTechStack(haystack),
+      techStack,
       services: withAuth,
-      buildVsBuy: this.withAvailablePayments(this.buildVsBuy(haystack), ctx),
+      buildVsBuy,
       constraintCompliance: this.constraintCompliance(ctx),
       phasedArchitecture: conflict ? this.phasedArchitecture(ctx) : undefined,
-      uncoveredRequirements: this.uncovered(withAuth, ctx),
+      uncoveredRequirements: this.uncovered(withAuth, techStack, buildVsBuy, ctx),
     };
   }
 

@@ -162,15 +162,67 @@ function isRetryableThrow(err: unknown): boolean {
   return isAbortLike(err) || isNetworkThrow(err);
 }
 
-/** `Retry-After` in seconds, when the provider sends a usable one. */
-function retryAfterMs(res: { headers?: { get(name: string): string | null } }): number | null {
+/**
+ * How long we will actually wait when a provider tells us when to come back.
+ *
+ * Deliberately far above `MAX_BACKOFF_MS`, and the distinction is the whole
+ * point: our exponential backoff is a *guess* and should stay short, while a
+ * `Retry-After` is the server stating a fact. A token-per-minute limit refills
+ * inside its window by definition, so the wait is nearly always worth taking —
+ * this is the difference between a slow success and a degraded artifact.
+ */
+const MAX_RETRY_AFTER_MS = 30_000;
+
+/**
+ * When the provider says how long to wait, honour it — or give up now.
+ *
+ * The previous version clamped the server's number to `MAX_BACKOFF_MS` (8s),
+ * reasoning that a long wait exceeds the call's budget and falling back beats
+ * holding a worker. The reasoning was right about a *minute* and wrong about
+ * everything shorter, because clamping does not fail over — it **sleeps and then
+ * retries into a limit that is still in force**. A real run shows the cost:
+ *
+ *   Rate limit reached … Please try again in 17.9625s
+ *   Groq attempt 2/3 failed; retrying in 8000ms
+ *
+ * Attempt 2 was guaranteed to 429, and so was attempt 3. The clamp converted a
+ * recoverable rate limit into a certain fallback, three calls and ~16 wasted
+ * seconds later — worse on every axis than either waiting properly or stopping.
+ *
+ * So: honour the number up to `MAX_RETRY_AFTER_MS`, and past that return
+ * `Infinity`, which the caller reads as "do not retry" and fails over
+ * immediately. A doomed retry is never the better option.
+ *
+ * Groq also states the delay only in the response body on some errors, so the
+ * body is parsed when the header is absent — a wait we can honour is worth more
+ * than protocol purity.
+ */
+function retryAfterMs(
+  res: { headers?: { get(name: string): string | null } },
+  detail?: string,
+): number | null {
+  const seconds = headerSeconds(res) ?? bodySeconds(detail);
+  if (seconds === null) return null;
+  const ms = seconds * 1000;
+  return ms > MAX_RETRY_AFTER_MS ? Number.POSITIVE_INFINITY : ms;
+}
+
+function headerSeconds(res: {
+  headers?: { get(name: string): string | null };
+}): number | null {
   const raw = res.headers?.get('retry-after');
   if (!raw) return null;
   const seconds = Number(raw);
-  if (!Number.isFinite(seconds) || seconds < 0) return null;
-  // Cap it: a provider asking us to wait a minute exceeds the call's budget, and
-  // failing over to the deterministic fallback beats holding a worker that long.
-  return Math.min(seconds * 1000, MAX_BACKOFF_MS);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+}
+
+/** e.g. `"Please try again in 17.9625s"` — Groq's rate-limit body. */
+function bodySeconds(detail?: string): number | null {
+  const m = /try again in ([\d.]+)\s*(ms|s)\b/i.exec(detail ?? '');
+  if (!m) return null;
+  const value = Number(m[1]);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return m[2].toLowerCase() === 'ms' ? value / 1000 : value;
 }
 
 function backoffMs(attempt: number, baseMs: number): number {
@@ -271,7 +323,16 @@ export async function postLlmJson<T>(
       // on attempts that would fail identically.
       if (!retryable) throw httpError;
       lastError = httpError;
-      waitMs = retryAfterMs(res);
+      waitMs = retryAfterMs(res, detail);
+      // The provider named a wait longer than we are willing to hold a worker
+      // for. Fail over NOW rather than sleeping and retrying into a limit that
+      // is still in force — see `retryAfterMs`.
+      if (waitMs === Number.POSITIVE_INFINITY) {
+        logger.error(
+          `${label} asked for a retry delay beyond ${MAX_RETRY_AFTER_MS}ms; using the fallback instead of a doomed retry.`,
+        );
+        throw httpError;
+      }
     } catch (err) {
       // Retryable HTTP failures are *assigned* above, never thrown — so the only
       // LlmHttpError that can land here is the terminal one just raised.

@@ -558,6 +558,7 @@ export function summaryFromSlots(slots: SlotMap | undefined | null): {
   users?: string[];
   features?: string[];
   constraints?: string[];
+  scale?: string[];
 } {
   const users = splitSlotList(filledSlot(slots, 'target_users_roles'));
   const workflows = splitSlotList(filledSlot(slots, 'core_workflows'));
@@ -569,14 +570,18 @@ export function summaryFromSlots(slots: SlotMap | undefined | null): {
   const features = workflows.length
     ? workflows
     : splitSlotList(filledSlot(slots, 'data_entities'));
-  const constraints = [
-    ...splitSlotList(filledSlot(slots, 'constraints')),
-    ...splitSlotList(filledSlot(slots, 'scale_expectations')),
-  ];
+  // Constraints read the constraints slot and NOTHING else. Appending the scale
+  // answer here is the verbatim bleed-through the user reported: the Scale
+  // paragraph rendered whole inside Constraints, duplicating the field directly
+  // above it. Scale keeps its own field (see `RequirementsSummary.scale`) and
+  // reaches the document as a scalability NFR with its own unit.
+  const constraints = splitSlotList(filledSlot(slots, 'constraints'));
+  const scale = splitSlotList(filledSlot(slots, 'scale_expectations'));
 
   return {
     ...(users.length ? { users } : {}),
     ...(features.length ? { features } : {}),
     ...(constraints.length ? { constraints } : {}),
+    ...(scale.length ? { scale } : {}),
   };
 }

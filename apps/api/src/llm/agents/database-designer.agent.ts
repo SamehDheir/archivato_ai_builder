@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   type DatabaseDesign,
+  type DegradedReason,
   type Entity,
   type EntityColumn,
   type IntentAnalysis,
@@ -9,10 +10,12 @@ import {
   type RequirementDocument,
   type SystemDesign,
   untrustedField,
-  enforceTenancy,
+  applyTenancy,
+  requiresMultiTenancy,
+  tenantEntityFor,
   normalizeDatabaseDesign,
 } from '@archivato/shared';
-import { BaseAgent } from '../agent.base';
+import { BaseAgent, degradedReasonFor } from '../agent.base';
 import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
 
 /**
@@ -36,12 +39,46 @@ import { LLM_PROVIDER, type LlmProvider } from '../llm-provider.interface';
  * headroom for the prompt to grow, and 2.5x the room the truncation needed.
  * **Raising this is not free** — check the target model's TPM first.
  *
- * A budget rather than the API designer's chunking because a schema is one
- * coherent document: entities reference each other and 3NF decisions do not
- * split the way independent endpoint groups do. If schemas outgrow this, chunk
- * by entity group rather than raising it into the TPM wall again.
+ * This is the budget for the SINGLE-CALL path, which is still how a schema up to
+ * `SINGLE_CALL_ENTITY_BUDGET` tables is generated (the common case, unchanged).
+ * A larger schema is chunked instead — the escape hatch the original version of
+ * this comment reserved ("if schemas outgrow this, chunk by entity group rather
+ * than raising it into the TPM wall again"). See `generateChunked`.
  */
 const SCHEMA_MAX_TOKENS = 5120;
+
+/**
+ * Above this estimated table count, a schema is generated in chunks instead of
+ * one call. The estimate is `services + roles` (see `estimateEntityCount`) — a
+ * deliberately conservative proxy whose failure direction is safe: over-chunking
+ * a medium schema costs one extra small call and is always correct, while
+ * under-chunking only risks the truncation the single-call budget already
+ * tolerated up to ~12–15 tables, so the floor is well below that.
+ */
+const SINGLE_CALL_ENTITY_BUDGET = 9;
+
+/**
+ * Tables designed per chunk on the large-schema path.
+ *
+ * The mirror of the API designer's `MAX_ENTITIES_PER_CALL`. A fully-specified
+ * table (name, description, ~8 typed columns, its outgoing relations) is lighter
+ * than an endpoint group, so 6 fit comfortably inside `SCHEMA_CHUNK_MAX_TOKENS`
+ * with room for a reasoning model's headroom — the same "sized to one chunk, not
+ * the whole design" rule.
+ */
+const MAX_ENTITIES_PER_SCHEMA_CALL = 6;
+
+/** Sized to one chunk of tables, not the whole schema. */
+const SCHEMA_CHUNK_MAX_TOKENS = 4096;
+
+/**
+ * The enumerate call returns table NAMES and one-line purposes only — no
+ * columns — so it is tiny and fits any tier. This is the "table of contents"
+ * that makes chunking possible: unlike the API designer, whose entity list
+ * already exists from the database stage, the schema *invents* its tables, so
+ * there is nothing to partition until this call produces the list.
+ */
+const ENUMERATE_MAX_TOKENS = 1024;
 
 /** What the Database Designer needs from upstream stages. */
 export interface DatabaseDesignContext {
@@ -119,63 +156,256 @@ export class DatabaseDesignerAgent extends BaseAgent {
     ctx: DatabaseDesignContext,
   ): Promise<DatabaseDesign> {
     const generatedAt = new Date().toISOString();
+
+    // A large schema does not fit one call, and a cut-off reply doesn't announce
+    // itself — Groq's native JSON mode rejects it as a 400 (the whole design is
+    // thrown away for the template), and other providers parse it short (the tail
+    // tables silently vanish, relations first). So a large one is chunked; the
+    // single call below stays the path for everything at or under the budget.
+    if (estimateEntityCount(ctx) > SINGLE_CALL_ENTITY_BUDGET) {
+      const chunked = await this.generateChunked(sessionId, generatedAt, ctx);
+      if (chunked) return chunked;
+      this.logger.debug(
+        'Schema chunking yielded nothing; trying a single pass before the fallback.',
+      );
+    }
+
     return this.generateArtifact<DatabaseDesign>({
       label: 'Database design',
       prompt: this.buildPrompt(ctx),
       isValid: (raw) => this.isValid(raw),
       // `isValid` gates on entities, so a reply that simply omits `relations`
       // gets here — normalize rather than spread it through unchecked.
-      accept: (raw) =>
-        this.withoutUnrequestedTenancy(
-          normalizeDatabaseDesign({
-            ...(raw as DatabaseDesign),
-            sessionId,
-            generatedAt,
-          }),
-          ctx,
-        ),
+      accept: (raw) => this.acceptDesign(raw, sessionId, generatedAt, ctx),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
       options: { maxTokens: SCHEMA_MAX_TOKENS },
     });
   }
 
   /**
-   * Drop a tenancy layer the requirements never asked for.
+   * Normalize an accepted (whole) schema and drop any unrequested tenancy.
    *
-   * Applied on the LLM path only — the deterministic fallback derives its
-   * entities from the requirements and has no way to invent a tenant table. See
-   * `enforceTenancy` for why this is code rather than more prompt: the tenancy
-   * rule in the system prompt has to stay emphatic (a partial tenant scope is a
-   * cross-tenant leak), and an emphatic rule with no stated negative case reads
-   * as a default.
+   * Shared by the single-call path (where `generateArtifact` adds the provenance
+   * stamp) and the chunked path (which stamps itself, like the API designer). It
+   * deliberately does NOT stamp `generation`, so the two callers control that.
+   */
+  private acceptDesign(
+    raw: Partial<DatabaseDesign>,
+    sessionId: string,
+    generatedAt: string,
+    ctx: DatabaseDesignContext,
+  ): DatabaseDesign {
+    return this.withoutUnrequestedTenancy(
+      normalizeDatabaseDesign({
+        ...(raw as DatabaseDesign),
+        sessionId,
+        generatedAt,
+      }),
+      ctx,
+    );
+  }
+
+  /**
+   * Generate a large schema in chunks and merge it in code.
+   *
+   * Two phases, because a schema — unlike the API design, whose entity list
+   * already exists upstream — invents its own tables, so there is nothing to
+   * partition until we ask for the list:
+   *
+   *  1. **Enumerate** the full set of table names + one-line purposes (a tiny
+   *     response that fits any tier).
+   *  2. **Design** each batch of tables in its own call, handing the other
+   *     tables' names across as context so foreign keys and relations can point
+   *     at them by name.
+   *
+   * Merge rules mirror the API designer's, and the relation rule is the one that
+   * matters: **each chunk emits only the relations that originate FROM its own
+   * tables** (`from ∈ batch`), so every relationship is produced exactly once —
+   * by the chunk that owns its source table — and none is duplicated or dropped.
+   * A chunk that fails or returns junk contributes nothing; its tables simply
+   * won't appear, which is no worse than the single-call truncation this
+   * replaces. Tenancy and normalization run on the merged whole.
+   *
+   * Returns `null` (rather than throwing) whenever the chunked build can't be
+   * trusted — an empty enumerate, zero surviving tables, or a total outage — so
+   * the caller falls back to the single pass and then the deterministic build.
+   */
+  private async generateChunked(
+    sessionId: string,
+    generatedAt: string,
+    ctx: DatabaseDesignContext,
+  ): Promise<DatabaseDesign | null> {
+    let names: { name: string; purpose: string }[];
+    try {
+      names = await this.enumerateEntities(ctx);
+    } catch (err) {
+      this.logger.warn(
+        `Schema enumerate failed (${degradedReasonFor(err)}); falling back to a single pass.`,
+      );
+      return null;
+    }
+    if (names.length === 0) return null;
+
+    const chunks = chunk(names, MAX_ENTITIES_PER_SCHEMA_CALL);
+    const entities: Entity[] = [];
+    const relations: Relation[] = [];
+    const seen = new Set<string>();
+    let failure: DegradedReason | undefined;
+
+    for (const [index, part] of chunks.entries()) {
+      const inBatch = new Set(part.map((p) => p.name));
+      const others = names.filter((n) => !inBatch.has(n.name)).map((n) => n.name);
+      try {
+        const raw = await this.thinkJson<Partial<DatabaseDesign>>(
+          this.buildChunkPrompt(ctx, part, others, {
+            index: index + 1,
+            total: chunks.length,
+          }),
+          { maxTokens: SCHEMA_CHUNK_MAX_TOKENS },
+        );
+        if (!this.isValid(raw)) {
+          this.logger.debug(`Schema chunk ${index + 1} malformed; skipping.`);
+          continue;
+        }
+        for (const entity of raw.entities as Entity[]) {
+          const key = entity.name?.toLowerCase();
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          entities.push(entity);
+        }
+        // A relation belongs to the chunk that owns its source table, so every
+        // relationship is emitted once. A relation whose `from` is not in this
+        // batch would be speaking for another chunk's table — drop it.
+        for (const relation of raw.relations ?? []) {
+          if (relation?.from && inBatch.has(relation.from)) relations.push(relation);
+        }
+      } catch (err) {
+        if (chunks.length === 1) throw err;
+        failure = degradedReasonFor(err);
+        this.logger.warn(`Schema chunk ${index + 1} failed (${failure}): ${err}`);
+      }
+    }
+
+    if (entities.length === 0) return null;
+    return {
+      ...this.acceptDesign({ entities, relations }, sessionId, generatedAt, ctx),
+      generation: this.provenance('llm', failure),
+    };
+  }
+
+  /**
+   * Phase one of chunking: the list of tables the schema needs, names + purposes
+   * only. Untrusted model output, so names are sanitized and de-duplicated; an
+   * unusable reply returns `[]`, which routes the caller back to the single pass.
+   */
+  private async enumerateEntities(
+    ctx: DatabaseDesignContext,
+  ): Promise<{ name: string; purpose: string }[]> {
+    const raw = await this.thinkJson<{
+      entities?: { name?: unknown; purpose?: unknown }[];
+    }>(this.buildEnumeratePrompt(ctx), { maxTokens: ENUMERATE_MAX_TOKENS });
+
+    const list = Array.isArray(raw?.entities) ? raw.entities : [];
+    const seen = new Set<string>();
+    const out: { name: string; purpose: string }[] = [];
+    for (const item of list) {
+      const name = typeof item?.name === 'string' ? item.name.trim() : '';
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        name,
+        purpose: typeof item?.purpose === 'string' ? item.purpose.trim() : '',
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Reconcile the schema's tenancy with what the requirements/system design
+   * actually describe — ADD the tenant table + scoping when required and the
+   * model dropped it, STRIP it when present but unrequested.
+   *
+   * The code backstop exists because the prompt rule cannot be trusted to fire
+   * both ways: an emphatic "scope every table" with no stated negative reads as a
+   * default (so a single shop got tenancy), while the same rule buried under a
+   * thin summary got ignored (so an enterprise HealthTech platform shipped
+   * single-tenant). `applyTenancy` makes the deterministic detection, not the
+   * model's priors, decide — and runs on both the LLM and fallback paths.
    */
   private withoutUnrequestedTenancy(
     design: DatabaseDesign,
     ctx: DatabaseDesignContext,
   ): DatabaseDesign {
-    const { design: next, removed } = enforceTenancy(
+    const { design: next, added, removed } = applyTenancy(
       design,
       ctx.requirements,
       ctx.systemDesign,
     );
     if (removed) this.logger.debug(`Tenancy stripped: ${removed}`);
+    if (added) this.logger.warn(`Tenancy added: ${added}`);
     return next;
   }
 
+  /**
+   * The tenancy instruction, decided by the deterministic detector rather than
+   * left to the model's SaaS priors. This is what stops the schema from guessing
+   * multi-tenancy per run: the code reads the requirements + system design and
+   * tells the model, unambiguously, which world it is in. `applyTenancy` then
+   * enforces the same verdict on the output, so prompt and backstop agree.
+   */
+  private tenancyDirective(ctx: DatabaseDesignContext): string {
+    if (requiresMultiTenancy(ctx.requirements, ctx.systemDesign)) {
+      const { table, column } = tenantEntityFor(ctx.requirements, ctx.systemDesign);
+      return (
+        `MULTI-TENANT (required by the requirements/system design): include a "${table}" tenant ` +
+        `table and put a ${column} foreign key on EVERY table that holds tenant data — not only ` +
+        `on users. A tenant column on users alone is not isolation; it leaves every record ` +
+        `queryable across tenants.`
+      );
+    }
+    return (
+      'SINGLE BUSINESS: this product serves ONE organization. Do NOT add a ' +
+      'tenants/organizations/branches table and do NOT put any tenant/organization/branch ' +
+      'foreign key on any table.'
+    );
+  }
+
+  /** Services with their responsibilities — the responsibility is where the
+   * tenancy/scoping signal lives ("Provisions new tenants…"), so names alone (the
+   * old summary) dropped exactly what the schema needed to see. */
+  private servicesContext(ctx: DatabaseDesignContext): string {
+    return ctx.systemDesign.services
+      .map((s) => `- ${s.name}: ${s.responsibility}`)
+      .join('\n');
+  }
+
+  /** Roles with their descriptions — a role scoped to "a single branch" is a
+   * tenancy signal that a bare role name ("Branch Manager") loses. */
+  private rolesContext(ctx: DatabaseDesignContext): string {
+    return (
+      ctx.requirements.roles
+        .map((r) => `- ${r.name}: ${r.description ?? ''}`)
+        .join('\n') || '- none'
+    );
+  }
+
   private buildPrompt(ctx: DatabaseDesignContext): string {
-    const services = ctx.systemDesign.services.map((s) => s.name).join(', ');
-    const roles = ctx.requirements.roles.map((r) => r.name).join(', ');
     const entities = ctx.requirements.functional
-      .slice(0, 10)
-      .map((f) => `- ${f.title}`)
+      .map((f) => `- ${f.title}${f.description ? `: ${f.description}` : ''}`)
       .join('\n');
     return [
       untrustedField('Idea', ctx.idea),
       `Database engine: ${this.databaseType(ctx.systemDesign)}`,
-      `Services (each typically owns one or more tables): ${services}`,
-      `Roles (may need profile/permission tables): ${roles || 'none'}`,
+      'Services (each typically owns one or more tables):',
+      this.servicesContext(ctx),
+      'Roles (may need profile/permission tables):',
+      this.rolesContext(ctx),
       'Functional requirements (the data must support these):',
       entities || '- none listed',
+      '',
+      this.tenancyDirective(ctx),
       '',
       'Design the schema and return JSON with these keys:',
       '- databaseType: the database engine (echo the one above).',
@@ -187,6 +417,78 @@ export class DatabaseDesignerAgent extends BaseAgent {
       'If the system serves multiple organizations/branches/tenants, put the tenant FK on every table holding their data — not just on users.',
       'Add an audit-log entity whenever the requirements restrict who may read or change records, or name a regulated data category.',
     ].join('\n');
+  }
+
+  /**
+   * The enumerate prompt: ask ONLY for the complete table list (names +
+   * purposes), no columns. The persona's design rules (separate logins from the
+   * people served, junction tables for many-to-many, an audit log for regulated
+   * or access-restricted data, tenancy only for multi-org products) come from
+   * the shared system prompt, so they shape the list without being restated.
+   */
+  private buildEnumeratePrompt(ctx: DatabaseDesignContext): string {
+    const requirements = ctx.requirements.functional
+      .map((f) => `- ${f.title}${f.description ? `: ${f.description}` : ''}`)
+      .join('\n');
+    return [
+      untrustedField('Idea', ctx.idea),
+      `Database engine: ${this.databaseType(ctx.systemDesign)}`,
+      'Services (each typically owns one or more tables):',
+      this.servicesContext(ctx),
+      'Roles (may need profile/permission tables):',
+      this.rolesContext(ctx),
+      'Functional requirements (the data must support these):',
+      requirements || '- none listed',
+      '',
+      this.tenancyDirective(ctx),
+      '',
+      'List EVERY table this schema needs — the COMPLETE set, following the design',
+      'rules: separate the people who log in from the people the business serves,',
+      'add a join table for each many-to-many link, and add an audit-log table if',
+      'records are access-restricted or a regulated data category is involved.',
+      'If MULTI-TENANT above, the tenant table itself must be in this list.',
+      'Return JSON: { entities: [{ name (snake_case, plural), purpose (one short line) }] }.',
+      'Table NAMES and purposes only — do NOT design columns yet.',
+    ].join('\n');
+  }
+
+  /**
+   * The per-chunk prompt: fully design THIS batch's tables, with the other
+   * tables named as context so foreign keys and relations can reference them.
+   */
+  private buildChunkPrompt(
+    ctx: DatabaseDesignContext,
+    batch: { name: string; purpose: string }[],
+    others: string[],
+    part: { index: number; total: number },
+  ): string {
+    return [
+      untrustedField('Idea', ctx.idea),
+      `Database engine: ${this.databaseType(ctx.systemDesign)}`,
+      `Roles: ${ctx.requirements.roles.map((r) => r.name).join(', ') || 'none'}`,
+      this.tenancyDirective(ctx),
+      '',
+      `This is part ${part.index} of ${part.total} of ONE schema. Fully design ONLY`,
+      'these tables (design each one completely — do not defer any to another part):',
+      ...batch.map((b) => `- ${b.name}${b.purpose ? ` — ${b.purpose}` : ''}`),
+      '',
+      others.length > 0
+        ? `Other tables in this schema, handled in other parts — you MAY reference them in foreign keys and relations, but do NOT define their columns: ${others.join(', ')}.`
+        : '',
+      '',
+      'Return JSON with these keys:',
+      '- entities[]: {name (snake_case, plural), description, columns[] {name, type, nullable (boolean), primaryKey? (boolean), unique? (boolean), references? {entity, column}}}.',
+      '- relations[]: {from (entity), to (entity), type (one-to-one|one-to-many|many-to-many), description? (what the link means)}.',
+      '  Include ONLY relations that ORIGINATE FROM the tables you are designing in',
+      '  this part (from = one of your tables); reference other tables by their exact',
+      '  name. Relations from other parts\' tables are designed there.',
+      'Give every table an "id" uuid primary key plus created_at/updated_at, and back every relation with a foreign key column.',
+      'Give every table that moves through a lifecycle an enum "status" column; leave it off tables that never transition.',
+      'Link secondary records (lines, logs, attachments, invoices) to the transactional record they belong to, not only to a user.',
+      'If the system serves multiple organizations/branches/tenants, put the tenant FK on every table holding their data — not just on users.',
+    ]
+      .filter((line) => line !== '')
+      .join('\n');
   }
 
   private isValid(value: Partial<DatabaseDesign> | null): boolean {
@@ -243,14 +545,44 @@ export class DatabaseDesignerAgent extends BaseAgent {
       relations.push(ownedByUser('reports'));
     }
 
-    return {
-      sessionId,
-      generatedAt,
-      databaseType: this.databaseType(ctx.systemDesign),
-      entities,
-      relations,
-    };
+    // Reconcile tenancy on the deterministic build too: a multi-tenant project
+    // that falls back offline must still get its tenant table + scoping, and a
+    // single-business one must not. The template above never models tenancy, so
+    // this is the only place the fallback can gain it.
+    return this.withoutUnrequestedTenancy(
+      {
+        sessionId,
+        generatedAt,
+        databaseType: this.databaseType(ctx.systemDesign),
+        entities,
+        relations,
+      },
+      ctx,
+    );
   }
+}
+
+// ── chunking helpers ──────────────────────────────────────────────────────
+
+/**
+ * A conservative upper-ish estimate of how many tables the schema will hold,
+ * used only to decide whether to chunk. `services + roles` is a proxy, not a
+ * count: services map roughly to primary tables and roles to profile tables,
+ * while junction, secondary and audit tables push the true number higher — so
+ * this under-counts, which is the safe direction (the single-call budget
+ * tolerates a dozen-plus tables, and `SINGLE_CALL_ENTITY_BUDGET` sits well below
+ * that). Over-chunking a medium schema only costs one extra small call.
+ */
+function estimateEntityCount(ctx: DatabaseDesignContext): number {
+  const services = ctx.systemDesign.services?.length ?? 0;
+  const roles = ctx.requirements.roles?.length ?? 0;
+  return services + roles;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }
 
 // ── deterministic helpers ─────────────────────────────────────────────────
