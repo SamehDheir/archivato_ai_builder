@@ -58,6 +58,26 @@ export interface RequirementContext {
 }
 
 /**
+ * Output budget for one requirement document.
+ *
+ * Caught by the `describeShape` diagnostic the hour it was added: a real run
+ * logged `Model returned: { executiveSummary, functional }` — nine sections
+ * requested, two delivered, cut off right after the `functional` array. R7 is
+ * what pushed it over the old 2048: the document gained an executive summary,
+ * an out-of-scope list and an assumptions/open-questions list, on top of
+ * functional + non-functional + roles + business rules + constraints.
+ *
+ * Note this artifact is **first in the chain** — every later stage reads it — so
+ * its truncation is the most expensive of the four. `isValid` gates on
+ * `nonFunctional` and `roles`, both of which follow `functional` in the schema,
+ * so the whole document was discarded for the template.
+ *
+ * 5120 matches the other large artifacts; the TPM warning on
+ * `DEFAULT_MAX_TOKENS` applies.
+ */
+const REQUIREMENTS_MAX_TOKENS = 5120;
+
+/**
  * Owns the Requirements stage: turns a confirmed interview into a formal,
  * structured Requirement Document — a **two-audience** artifact (R7). The
  * client-facing sections (executive summary, functional requirements, roles,
@@ -129,6 +149,7 @@ export class RequirementEngineerAgent extends BaseAgent {
       accept: (raw) =>
         this.normalize(sessionId, generatedAt, raw, ctx, openQuestions),
       fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      options: { maxTokens: REQUIREMENTS_MAX_TOKENS },
     });
 
     // Screen the client-facing prose on the way out. This runs on BOTH paths: the
@@ -283,6 +304,13 @@ export class RequirementEngineerAgent extends BaseAgent {
       '- outOfScope[]: {item, reason?} — 3–6 capabilities explicitly NOT included (deferred/rejected in the interview, or typically expected in this domain but not requested).',
       '- assumptionsAndOpenQuestions[]: {assumption, impactIfWrong} — assumptions you made to fill genuine gaps, plus each open question above phrased as an assumed default, each with the concrete consequence if it is wrong.',
       '- nonFunctional[]: {id (NFR-n), category (e.g. security, performance, scalability, availability, usability), description (a measurable quality attribute in impact language)}.',
+      '  Keep distinct measurements in SEPARATE requirements, each with its own unit',
+      '  and time window. Throughput (orders per day), concurrency (simultaneous',
+      '  users), latency (response time) and uptime are four different numbers —',
+      '  never merge two into one figure. "10 concurrent orders per day" is not a',
+      '  requirement, it is two requirements collapsed into a contradiction, and it',
+      '  reaches a client who will read it as carelessness. If the interview gave you',
+      '  only one of them, state that one and leave the others out.',
       '- businessRules[]: {id (BR-n), description (a constraint or policy the system must enforce)}.',
       '- constraints[]: hard technical/business constraints stated by the user (strings).',
       '- assumptions[]: the same assumptions as plain strings (kept for compatibility).',

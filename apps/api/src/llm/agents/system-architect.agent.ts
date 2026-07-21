@@ -169,6 +169,13 @@ export class SystemArchitectAgent extends BaseAgent {
       '- architectureRationale: why this style fits THESE requirements + constraints (cite the driver, name the rejected alternative).',
       '- techStack[]: {layer (e.g. backend, frontend, database, cache, queue, auth), technology (a specific product/framework), rationale (tied to a requirement/constraint)}.',
       '- services[]: {name, responsibility (one sentence), dependencies[] (names of other services it calls), complexity (S|M|L|XL — rough build effort), complexityRationale (one line)}.',
+      '  EVERY functional requirement marked "must" or "should" must be owned by',
+      '  exactly one service. Before you answer, walk the requirement list and check',
+      '  each id has a home — a "should" is in scope and is being quoted for, so',
+      '  dropping it (reporting and analytics is the one most often lost) silently',
+      '  removes work the client is paying for. If a requirement genuinely needs no',
+      '  service of its own, fold it into the responsibility line of the service that',
+      '  carries it rather than leaving it unmentioned.',
       '- buildVsBuy[]: {capability (one of auth|payments|notifications|file_storage|maps_geo|search), recommendation (build|buy), suggestedService (a concrete well-known service, when buying), rationale, impact (time/cost/risk)} — cover the capabilities this project needs.',
       '- constraintCompliance[]: {constraint, howAddressed} for each stated constraint (empty array if none).',
       '- phasedArchitecture (ONLY on the scale-vs-budget/timeline conflict): {mvp, growthPath, migrationNotes}.',
@@ -621,7 +628,17 @@ function residencyLine(market: string): string {
   const regime = regulationsForMarket(market);
   return regime
     ? `- Data residency: ${regime.dataResidency} Name the hosting region in the rationale.`
-    : '- Data residency: no target market stated — do not assume a jurisdiction or a default hosting region.';
+    : // "Do not assume" was already here and was not enough: it says what to stop
+      // doing without saying what to do instead, so the model filled the gap with
+      // a plausible-sounding jurisdiction — inventing "EU (Frankfurt)" on one run
+      // of a project and "UAE / Gulf regulator" on the next run of the SAME
+      // project, neither ever mentioned by the client. Naming the required
+      // behaviour (state it as an unresolved assumption) is what the honesty rules
+      // elsewhere in this codebase do, and it gives the model somewhere to land.
+      '- Data residency: NO target market was stated. Do not name a hosting region, ' +
+      'a jurisdiction, or a compliance regime, and do not justify a choice with one. ' +
+      'Choose a region-neutral architecture and record the jurisdiction as an ' +
+      'explicit open assumption for the client to confirm.';
 }
 
 /**

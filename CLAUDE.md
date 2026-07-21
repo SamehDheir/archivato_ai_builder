@@ -1146,7 +1146,21 @@ tsconfig and never needs shared's `dist`.
       prompt breaches an 8K TPM free tier and is refused *before the model runs*.
       `SCHEMA_MAX_TOKENS` is 5120 — enough for a real schema, inside an 8K tier.
       **Check the target model's TPM before raising any `maxTokens`.**
-    - **It then happened twice more, and an agent with NO budget is the tell.**
+    - **It happened FOUR times, so the default was the bug.** `DEFAULT_MAX_TOKENS`
+      was **2048, copied independently into four providers** (Groq, Azure,
+      Cerebras, SiliconFlow; only Claude used 4096 — and Claude is the one
+      provider that never produced this bug). So "an agent that names no budget"
+      silently meant "an agent capped at 2048", and four artifacts outgrew it:
+      the schema, the review, the system design, and the **requirement
+      document** — which is *first in the chain*, so every later stage read a
+      truncated input. It now lives in **one file** (`llm/output-budget.ts`) at
+      **4096**, imported by all five providers so they cannot drift, and it is a
+      **floor, not a ceiling**: a genuinely unbounded artifact still names its
+      own (`SCHEMA_/REVIEW_/DESIGN_/REQUIREMENTS_MAX_TOKENS` 5120,
+      `CHUNK_MAX_TOKENS` 4096). Why not simply raise it to 5120 and delete the
+      per-agent constants: the default is reserved on **every** call including a
+      one-question interview turn, and that is exactly the 413 above.
+    - **The recurrences, and an agent with NO budget is the tell.**
       The reviewer and the system architect both passed no `options`, so both
       inherited Groq's 2048 while quietly outgrowing it (R10/R11 put an
       `actionType` + `patchTarget` on every review finding; R8 put `complexity` +
@@ -1174,13 +1188,26 @@ tsconfig and never needs shared's `dist`.
       providers, Groq applies no `REASONING_HEADROOM_TOKENS`. Adding it would
       raise the reserve for all 14 agents on the default provider and risks the
       413 above, so the budgets are sized to absorb the reasoning instead.
-    - **`describeShape()` is why the next one will be diagnosable.** The
-      `"malformed"` log line named no cause, so confirming the above needed a
-      `llm_usage` query to see `completionTokens` pinned to the cap. It now
-      prints the returned top-level **keys** — a truncated artifact is missing
-      the tail of its schema, a mis-shaped one has the wrong names. Keys only,
-      never values: the response is built from the client's own words, and the
-      log pipeline has a different access model than the artifact does.
+    - **`describeShape()` is why the next one will be diagnosable — and it
+      immediately proved itself.** The `"malformed"` log line named no cause, so
+      confirming the reviewer needed a `llm_usage` query to see
+      `completionTokens` pinned to the cap. It now prints the returned top-level
+      **keys**, and within the hour a real run logged `Requirement doc
+      malformed; using deterministic build. Model returned: { executiveSummary,
+      functional }` — nine sections requested, two delivered, diagnosed on
+      sight. A truncated artifact is missing the *tail* of its schema; a
+      mis-shaped one has the wrong names. Keys only, never values: the response
+      is built from the client's own words, and the log pipeline has a different
+      access model than the artifact does.
+    - **Two lessons about the process, not the code.** Fixing only the agents you
+      have *measurements* for leaves the rest of the class broken — the reviewer
+      and architect were fixed from real `llm_usage` rows, and the requirement
+      engineer (equally broken) was missed until it failed in front of a user;
+      the audit that should have run first is one grep for `maxTokens` across
+      `agents/`. And when a `maxTokens` change is proposed, **check the target
+      model's TPM**, then check whether the artifact's `isValid` gates on an
+      early or late field — that alone predicts whether truncation will be loud
+      (a fallback) or silent (a persisted stub).
     - **`BaseAgent.askWithinBudget` halves the budget once on a size refusal.**
       A 413 is not retryable *as sent* (waiting cannot help — the request breaches
       the ceiling on its own), so it is deliberately outside `isRetryableStatus`;

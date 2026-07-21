@@ -8,6 +8,7 @@ import type {
 import { parseJsonFromLlm } from './json.util';
 import { readOpenAiUsage, type OpenAiStyleUsage } from './openai-usage';
 import { postLlmJson, readLlmHttpConfig } from './llm-http';
+import { DEFAULT_MAX_TOKENS } from './output-budget';
 
 /**
  * Cerebras's production model. Deliberately not `zai-glm-4.7`, which the catalog
@@ -16,8 +17,6 @@ import { postLlmJson, readLlmHttpConfig } from './llm-http';
  */
 const DEFAULT_MODEL = 'gpt-oss-120b';
 const DEFAULT_BASE_URL = 'https://api.cerebras.ai/v1';
-const DEFAULT_MAX_TOKENS = 2048;
-
 /**
  * Extra output budget for a model that reasons before it answers — the
  * `REASONING_HEADROOM_TOKENS` rule from the SiliconFlow provider, for the same

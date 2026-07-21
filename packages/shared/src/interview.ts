@@ -65,6 +65,24 @@ export interface InterviewQuestion {
   options?: string[];
   /** When true the choices are multi-select (checkboxes); else single-select. */
   multiple?: boolean;
+  /**
+   * The slot this question was asked in order to fill.
+   *
+   * The interviewer picks its next question by finding the most valuable *unfilled
+   * slot*, so it already knows the answer's destination — and used to throw that
+   * away, leaving the same model to re-derive it during extraction on the next
+   * turn. When extraction silently skipped a slot (which it does, non-
+   * deterministically), the answer was lost even though the question had been
+   * asked and answered: the summary rendered an empty "Features"/"Constraints"
+   * section, and every regional guard downstream degraded to "not stated"
+   * because it keys off `target_market`.
+   *
+   * Recording it lets `advance()` bind the answer to the slot in code when the
+   * model forgets — the codebase's standing pattern of "the prompt is the primary
+   * defence, code is the backstop". Optional: plan questions carry it from
+   * `QUESTION_PLAN`, and an older transcript has none.
+   */
+  targetSlot?: SlotKey;
 }
 
 export interface InterviewExchange {
@@ -89,6 +107,70 @@ export const CORRECTION_ENTRY_PREFIX = 'correction:';
 export function isAskedQuestion(entry: InterviewExchange): boolean {
   const id = entry.question.id;
   return id !== NOTES_ENTRY_ID && !id.startsWith(CORRECTION_ENTRY_PREFIX);
+}
+
+/** Ids the adaptive interviewer mints for its own questions (`q1`, `q2`, …). */
+const ADAPTIVE_QUESTION_ID = /^q\d+$/;
+
+/**
+ * Was this transcript produced by the deterministic question plan?
+ *
+ * This distinction decides whether `question.phase` may be used as a data
+ * bucket, and getting it wrong corrupts the whole generated package. In plan
+ * mode the phase is exact — `QUESTION_PLAN` hard-codes it, so a1 *is* the goal
+ * and a2 *is* the roles. On the adaptive path the phase is a **free-text label
+ * the model attaches to a question it chose for slot-filling reasons**, so
+ * bucketing by it drops unrelated answers into the same field.
+ *
+ * It replaces `hasFilledSlots()`, which asked "did any slot get filled" as a
+ * proxy for the same question and was wrong in the one case that matters: an
+ * adaptive run whose extraction failed **also** has no slots, so it was read as
+ * plan mode and the positional fallback fired on a transcript it cannot
+ * describe — which is how raw answers about data entities and integrations
+ * ended up rendered as the project's user roles.
+ *
+ * Identity, not a heuristic: adaptive questions are minted as `q<n>` and plan
+ * questions carry their catalog ids (`a1`, `b1`, …), so this reads what the
+ * transcript *is* rather than inferring it from a downstream symptom. Notes and
+ * correction turns are ignored; a transcript with no asked questions at all is
+ * not adaptive.
+ */
+export function isPlanModeTranscript(history: InterviewExchange[]): boolean {
+  const asked = history.filter(isAskedQuestion);
+  return asked.length > 0 && !asked.some((e) => ADAPTIVE_QUESTION_ID.test(e.question.id));
+}
+
+/**
+ * Strip authoring artifacts out of text a human pasted in.
+ *
+ * Interview answers are frequently pasted from a doc, a chat window or an LLM,
+ * and arrive carrying the markup of wherever they came from. A real answer
+ * reached the confirmation gate reading `Patient books consultation
+ * $\rightarrow$ System verifies insurance` — the LaTeX rendered nowhere, and
+ * the same string was on its way into a requirement document the owner sends a
+ * client.
+ *
+ * Deliberately **narrow**: inline math arrows and the handful of TeX/markdown
+ * wrappers that carry no meaning of their own, each replaced by the character a
+ * reader expected to see. It does not attempt to strip prose, reflow text, or
+ * interpret intent — the same conservatism as `describesSameCapability` and the
+ * prompt-injection sanitizer, and for the same reason: a false positive here
+ * silently deletes a sentence from the client's own description of their
+ * business, and nobody ever learns why.
+ */
+export function stripMarkupArtifacts(text: string): string {
+  return (text ?? '')
+    // `$\rightarrow$`, `\to`, `-->`, `=>` … all mean "then".
+    .replace(/\$?\\(?:rightarrow|to|Rightarrow|longrightarrow)\$?/g, '→')
+    .replace(/(?:^|\s)(?:-{2,}>|={2,}>)(?=\s|$)/g, ' →')
+    // Wrappers whose only job was styling in the source document.
+    .replace(/\\(?:textbf|textit|emph|mathrm|text)\{([^}]*)\}/g, '$1')
+    // A bare `$…$` inline-math span around plain words.
+    .replace(/\$([^$\n]{1,80})\$/g, '$1')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 }
 
 /**

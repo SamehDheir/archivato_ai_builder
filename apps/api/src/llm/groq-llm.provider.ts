@@ -8,9 +8,9 @@ import type {
 import { parseJsonFromLlm } from './json.util';
 import { readOpenAiUsage, type OpenAiStyleUsage } from './openai-usage';
 import { postLlmJson, readLlmHttpConfig } from './llm-http';
+import { DEFAULT_MAX_TOKENS } from './output-budget';
 
 const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
-const DEFAULT_MAX_TOKENS = 2048;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 /**

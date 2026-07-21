@@ -46,6 +46,16 @@ export interface InterviewerDecision {
   phase?: string;
   /** The next question to ask; omitted when done. */
   question?: string;
+  /**
+   * The slot this question is meant to fill.
+   *
+   * The interviewer already picks its question by choosing the most valuable
+   * unfilled slot, so this costs it nothing to state — and it is what lets the
+   * service bind the answer in code when next turn's extraction skips that slot
+   * (see `InterviewQuestion.targetSlot`). Untrusted like every other model
+   * field: the caller validates it against `isSlotKey`.
+   */
+  targetSlot?: string;
   /** Optional tap-to-pick answer choices for a closed question. */
   options?: string[];
   /** Whether several options can be picked at once (checkboxes vs one choice). */
@@ -180,6 +190,7 @@ export class InterviewerAgent extends BaseAgent {
       '- "coverage": number 0..1 — your honest estimate of how complete the scoping now is.',
       '- "phase": one of ["understanding","business_logic","features","scale","technical","commercial"].',
       '- "question": string — the single next question (omit when done).',
+      '- "targetSlot": the slotKey this question is asked to fill (omit when done).',
       '- "options"?: array of up to 5 short, distinct answer choices (only for closed questions).',
       '- "multiple"?: boolean — true when more than one option can apply.',
       '- "slots"?: object mapping slotKey -> {value, confidence:"high"|"low", source:"explicit"|"inferred", na?:boolean, naReason?:string}.',
