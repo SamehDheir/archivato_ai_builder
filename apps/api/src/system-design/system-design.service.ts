@@ -167,6 +167,13 @@ export class SystemDesignService {
           phasedArchitecture: edited.phasedArchitecture ?? existing.phasedArchitecture,
           constraintCompliance:
             edited.constraintCompliance ?? existing.constraintCompliance,
+          // Carried over for the same reason as the rest of the R8 analysis: the
+          // editor's Draft has no field for it, so an edit that did not restore
+          // it would silently strip the design's stated scale reasoning — leaving
+          // the tech stack with nothing explaining why it is sized as it is.
+          scaleTier: edited.scaleTier ?? existing.scaleTier,
+          scaleTierRationale:
+            edited.scaleTierRationale ?? existing.scaleTierRationale,
           sessionId,
           generatedAt: new Date().toISOString(),
         },

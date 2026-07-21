@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   extractionGapAssumption,
+  isAssumptionKind,
   SLOT_KEYS,
   regulationsForMarket,
   screenRequirementDocument,
@@ -10,6 +11,7 @@ import {
   unsourcedRoleNames,
   untrusted,
   untrustedField,
+  withAssumptionKinds,
   type ArtifactLanguage,
   type BusinessAnalysis,
   type BusinessRule,
@@ -233,10 +235,14 @@ export class RequirementEngineerAgent extends BaseAgent {
     if (extra.length === 0) return doc;
     const base = doc.assumptionsAndOpenQuestions ?? [];
     const seen = new Set(base.map((a) => a.assumption.trim().toLowerCase()));
-    const merged = [
+    // Classified here as well as in `normalize`, because this runs AFTER it: an
+    // entry appended at this point would otherwise be the only one in the list
+    // with no `kind`. `withAssumptionKinds` never overwrites an existing one, so
+    // running it over the whole merged list is idempotent for the rest.
+    const merged = withAssumptionKinds([
       ...base,
       ...extra.filter((a) => !seen.has(a.assumption.trim().toLowerCase())),
-    ];
+    ]);
     return { ...doc, assumptionsAndOpenQuestions: merged };
   }
 
@@ -274,9 +280,15 @@ export class RequirementEngineerAgent extends BaseAgent {
       ? raw.constraints.filter((c): c is string => typeof c === 'string')
       : ctx.summary.constraints;
 
-    const modelAssumptions = mergeOpenQuestions(
-      sanitizeAssumptions(raw.assumptionsAndOpenQuestions),
-      openQuestions,
+    // `withAssumptionKinds` is the backstop, not the primary defence: the prompt
+    // asks the model to label each entry, and a label it supplied is kept. This
+    // only fills the gap for an unlabelled reply — where an unmade choice between
+    // two named platforms would otherwise render as a settled assumption.
+    const modelAssumptions = withAssumptionKinds(
+      mergeOpenQuestions(
+        sanitizeAssumptions(raw.assumptionsAndOpenQuestions),
+        openQuestions,
+      ),
     );
 
     return {
@@ -290,7 +302,7 @@ export class RequirementEngineerAgent extends BaseAgent {
       outOfScope: outOfScope.length ? outOfScope : fallbackOutOfScope(ctx),
       assumptionsAndOpenQuestions: modelAssumptions.length
         ? modelAssumptions
-        : deterministicAssumptions(ctx, openQuestions),
+        : withAssumptionKinds(deterministicAssumptions(ctx, openQuestions)),
       openQuestions,
     };
   }
@@ -377,7 +389,12 @@ export class RequirementEngineerAgent extends BaseAgent {
       '- functional[]: {id (FR-n), title (short), description (a user-outcome sentence, e.g. "Customers can track their orders in real time" — never "the system shall…"), priority (must|should|could)}.',
       '- roles[]: {name, description, permissions[] (concrete, least-privilege actions this role may perform, in plain language)}.',
       '- outOfScope[]: {item, reason?} — 3–6 capabilities explicitly NOT included (deferred/rejected in the interview, or typically expected in this domain but not requested).',
-      '- assumptionsAndOpenQuestions[]: {assumption, impactIfWrong} — assumptions you made to fill genuine gaps, plus each open question above phrased as an assumed default, each with the concrete consequence if it is wrong.',
+      '- assumptionsAndOpenQuestions[]: {assumption, impactIfWrong, kind} — assumptions you made to fill genuine gaps, plus each open question above, each with the concrete consequence if it is wrong.',
+      '  kind is "assumption" or "open_question", and the distinction matters to the client:',
+      '  * "assumption" — a low-stakes default it is reasonable to proceed on, where being wrong is cheap to correct (e.g. standard TLS encryption is sufficient when no compliance regime was named).',
+      '  * "open_question" — a decision that materially changes scope, cost or integration work depending on which way it goes, and that only the CLIENT can settle: choosing between two named third-party platforms, a hosting region, a compliance framework, a payment provider.',
+      '  Never resolve an open_question into a settled-sounding assumption. "Either Microsoft Teams or Slack will be used for notifications" is NOT an assumption — the client may use one, the other, or neither, and each answer is different integration work. Write it as the question it is.',
+      '  If you must pick one to keep the design moving, say plainly in the text that it is a placeholder pending the client\'s choice, not a recommendation.',
       '- nonFunctional[]: {id (NFR-n), category (e.g. security, performance, scalability, availability, usability), description (a measurable quality attribute in impact language)}.',
       '  Keep distinct measurements in SEPARATE requirements, each with its own unit',
       '  and time window. Throughput (orders per day), concurrency (simultaneous',
@@ -491,7 +508,9 @@ export class RequirementEngineerAgent extends BaseAgent {
       constraints: summary.constraints,
       assumptions: summary.assumptions,
       outOfScope: fallbackOutOfScope(ctx),
-      assumptionsAndOpenQuestions: deterministicAssumptions(ctx, openQuestions),
+      assumptionsAndOpenQuestions: withAssumptionKinds(
+        deterministicAssumptions(ctx, openQuestions),
+      ),
       openQuestions,
     };
   }
@@ -725,11 +744,19 @@ function fallbackOutOfScope(ctx: RequirementContext): OutOfScopeItem[] {
     }));
 }
 
-/** Phrase one interview open question as an assumed default + its impact. */
+/**
+ * Phrase one interview open question as an assumed default + its impact.
+ *
+ * `kind` is set at the source rather than left to `classifyAssumptionKind`,
+ * because here it is not a judgement call: these came from the interview's
+ * open-question list, which by construction is the set of things the owner could
+ * not answer. Nothing a text matcher decides could be more reliable than that.
+ */
 function openQuestionToAssumption(q: OpenQuestion): RequirementAssumption {
   return {
     assumption: `Assumed a sensible default pending the client's answer: ${q.questionForClient}`,
     impactIfWrong: 'Scope, timeline, or cost may change once the client confirms.',
+    kind: 'open_question',
   };
 }
 
@@ -781,12 +808,21 @@ function sanitizeAssumptions(value: unknown): RequirementAssumption[] {
   return value
     .map((raw) => {
       if (!raw || typeof raw !== 'object') return null;
-      const r = raw as { assumption?: unknown; impactIfWrong?: unknown };
+      const r = raw as {
+        assumption?: unknown;
+        impactIfWrong?: unknown;
+        kind?: unknown;
+      };
       const assumption = typeof r.assumption === 'string' ? r.assumption.trim() : '';
       if (!assumption) return null;
       const impactIfWrong =
         typeof r.impactIfWrong === 'string' ? r.impactIfWrong.trim() : '';
-      return { assumption, impactIfWrong };
+      // An unrecognized `kind` is dropped rather than coerced, so
+      // `withAssumptionKinds` classifies it from the text instead of trusting a
+      // value the model invented.
+      return isAssumptionKind(r.kind)
+        ? { assumption, impactIfWrong, kind: r.kind }
+        : { assumption, impactIfWrong };
     })
     .filter((x): x is RequirementAssumption => x !== null);
 }

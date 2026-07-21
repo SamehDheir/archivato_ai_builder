@@ -2117,6 +2117,105 @@ tsconfig and never needs shared's `dist`.
     `requirements.{executiveSummary,outOfScope,assumptionsAndOpenQuestions,
     impactIfWrong}` + `share.appendix.requirements` (EN+AR). Owner page shows all
     sections (`audience="full"`) with IDs demoted to muted mono reference text.
+- **Scale tier (`scale-tier.ts`) — the design agents never DECIDED how big the
+  system was.** A client described *"a lightweight task and reminder board for
+  small teams"*, stated 30–50 users at launch growing to 300–400, and received
+  Redis, BullMQ, a Vercel + AWS RDS hybrid, an `audit_logs` table, and multi-field
+  filtering on all six entities. Nothing errored; none of it is wrong for a real
+  enterprise SaaS, which is exactly the failure — **with no stated tier a model
+  falls back on what a professional SaaS "usually" has, which is the largest
+  system in its training data**, and the client is quoted hosting cost,
+  operational complexity and build time their own stated size contradicts. Three
+  root causes, all of them *defaults nobody had chosen*:
+  1. **The architect's own schema line enumerated the answer**: `techStack[]:
+     {layer (e.g. backend, frontend, database, cache, queue, auth), …}`. A model
+     reads an enumeration inside a schema as a checklist to fill. The examples are
+     now the layers every system genuinely has; the list is pinned by a test that
+     asserts `database, cache, queue` is **not** in the prompt.
+  2. **The database designer's audit-log rule had a condition every project
+     satisfies** — *"whenever the requirements restrict who may read or change
+     records"*. Every application with more than one role does. It was a default
+     wearing a conditional's clothes.
+  3. **The API designer gated its query surface on structure, not demand** —
+     "where the entity's columns support it", which every entity passes.
+  `assessScaleTier` (pure, runtime-free) reads the client's own figures and
+  returns `small | medium | large`. Eight things not to undo:
+  1. **The tier is decided by CODE and handed to the model as a verdict** — the
+     roadmap's week-numbers and the review's `overallScore` precedent. A tier the
+     model picks is a claim; a tier the code derives is auditable, and the point of
+     showing it is that an owner can check it against the numbers themselves. Told
+     only "here are some figures" a model reached for the enterprise stack; told
+     "this is the small tier and here is why", it designs to it. The evidence
+     travels with the verdict for the same reason.
+  2. **It calibrates in BOTH directions.** This is not a "keep it simple" switch:
+     `scale-scenarios.spec.ts` runs the reported task board *and* a multi-branch
+     clinic platform end-to-end and asserts the second one **still** gets its
+     queue. A change that only ever simplifies passes half that file and is a
+     different bug — an enterprise system that loses its queue fails under load,
+     and the client feels that one.
+  3. **A stated number sets the base tier; everything else may move it ONE step.**
+     "Enterprise-grade" over 300 users cannot conjure a multi-region deployment,
+     and "lightweight" over 60,000 users cannot talk a real system down to one box.
+     The clamp is what makes this a calibration rather than a vibe.
+  4. **Unknown ⇒ `medium`, never an extreme.** A guessed `small` under-builds a
+     genuine enterprise deal; a guessed `large` is the bug itself. `medium` is also
+     the right *behaviour* when scale is unknown — add a queue for the specific
+     feature that needs one, not as a platform default.
+  5. **The code backstops are asymmetric, like `applyTenancy`.**
+     `enforceScaleAppropriateStack` only ever REMOVES, and only at the small tier
+     (removing a queue from a genuinely large system is a defect under load;
+     leaving an unjustified one on a 400-user tool is invisible until the bill
+     arrives). `stripUnrequestedSupportTables` keeps any log table on **any**
+     audit/traceability/regulated-data signal — a missing audit trail is a
+     compliance hole, an extra one costs a table.
+     Removal is a **three-part** edit — the entity, its relations, **and** every FK
+     column referencing it — because a dangling `references` fails at `ALTER TABLE`,
+     nowhere near the code that dropped the table.
+  6. **The escape hatch is the same test in the prompt and in the code.**
+     `needsAsyncProcessing` is deliberately narrow: bulk imports, media processing,
+     external rate limits. **"Send a notification" is NOT async work** — that is the
+     exact feature that justified BullMQ + Redis for 400 users, and at that volume
+     it is a direct call. The deterministic `inferTechStack` used the same rule the
+     LLM path does, because its old test (`/notification|email|report/`) fired on
+     essentially every project, so the *offline* build was over-provisioning too.
+  7. **The API surface reads the tier off the system design, never recomputing
+     it** — one assessment of one set of numbers sizes both the infrastructure and
+     the contract. An **absent** tier (a design generated before this existed) means
+     the previous behaviour, exactly like an unstamped `sourceStamp` never reading
+     as stale. `page`/`limit` are never gated, and the lifecycle filter survives on
+     structure alone (a resource with states exists to be filtered by them);
+     `search` and a date range need a requirement that names that resource.
+  8. **`statedUserCount` reads people, never bare numbers**, and two traps are
+     pinned by tests: the word-gap between a figure and its noun must exclude
+     **digits** (`[^\s\d]+`, not `\w+`) or *"40 clinics, 60,000 registered
+     patients"* matches on `40` and swallows the 60,000 — the enterprise scenario
+     silently reading an order of magnitude small; and domain nouns (patients,
+     students, residents) count as users, since a health platform states its size
+     in patients. `\w` is also ASCII-only, so the gap never spanned an Arabic word.
+  `scaleTier` + `scaleTierRationale` are additive/optional on `SystemDesign` (the
+  JSON-blob convention, migration-free), rendered **above the tech-stack table**
+  in the view and both Markdown exporters — the tier is what licenses the rows
+  beneath it, so it is read first. The rationale is deterministic prose and
+  therefore `LocalizedCopy`, with **only numerals interpolated**: splicing client
+  words into a fixed sentence is the broken-grammar class already fixed once.
+  `SystemDesignService.save` carries both over (the editor's `Draft` has no field
+  for them).
+- **Assumptions vs. genuine open questions (`classifyAssumptionKind`).** The
+  requirement document rendered *"Either Microsoft Teams or Slack will be chosen
+  as the notification platform"* among its assumptions — a sentence that reads as
+  settled while describing something nobody decided. The client may use one, the
+  other, or neither, and each answer is different integration work, so a client
+  skimming the section accepts a choice they never made. `AssumptionKind`
+  (`assumption | open_question`, additive/optional on `RequirementAssumption`)
+  splits them. Four rules: the **prompt** is the primary defence and a `kind` the
+  model supplied is kept (it read the interview and knows which of its own
+  assumptions it was uneasy about); `withAssumptionKinds` only fills the gap;
+  the interview's own `openQuestions` are marked `open_question` **at the source**,
+  since by construction they are what the owner could not answer; and the
+  classifier is **conservative toward `assumption`** — explicit pending-choice
+  language qualifies alone, but a consequential *topic* needs an unresolved
+  alternation too, or every sensible security default becomes a blocker. The view
+  sorts open questions first with a "Needs your decision" badge.
 - **System Design = constraint-aware, priceable architecture (R8).** The System
   Architect now reads the interview's **constraint slots** (`SystemDesignContext.slots`
   — `budget_range`/`timeline`/`scale_expectations`/`constraints`/`existing_assets`,

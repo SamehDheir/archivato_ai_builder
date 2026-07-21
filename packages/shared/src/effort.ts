@@ -250,8 +250,15 @@ export interface ParsedBudget {
 
 const ARABIC_DIGITS = /[٠-٩۰-۹]/g;
 
-/** Normalize Arabic-Indic + extended Arabic-Indic digits to Latin. */
-function normalizeDigits(text: string): string {
+/**
+ * Normalize Arabic-Indic + extended Arabic-Indic digits to Latin.
+ *
+ * Exported because `scale-tier.ts` reads user counts out of the same
+ * client-written slot text these parsers read budgets and timelines from, and a
+ * second copy of this table would eventually disagree with this one about the
+ * same sentence.
+ */
+export function normalizeDigits(text: string): string {
   return text.replace(ARABIC_DIGITS, (d) => {
     const code = d.charCodeAt(0);
     const base = code >= 0x06f0 ? 0x06f0 : 0x0660;

@@ -1,18 +1,26 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
+  assessScaleTier,
   coverageSourcesFromDesign,
   enforcePaymentAvailability,
+  enforceScaleAppropriateStack,
   findUncoveredRequirements,
   isBuildVsBuyCapability,
   isModuleComplexity,
   missingAuthService,
+  needsAsyncProcessing,
   paymentAvailabilityFor,
   paymentProvidersFor,
   regulationsForMarket,
+  scaleEvidenceSummary,
+  scaleTierPromptBlock,
+  scaleTierRationale,
   significantTokens,
   untrusted,
+  type ArtifactLanguage,
   type ArchitectureType,
+  type ScaleAssessment,
   type BuildVsBuyItem,
   type BuildVsBuyRecommendation,
   type ConstraintCompliance,
@@ -90,6 +98,12 @@ export class SystemArchitectAgent extends BaseAgent {
     'Method: choose the SIMPLEST architecture that satisfies the requirements —',
     'default to a modular monolith and only reach for microservices when real',
     'scale, team, or independent-deployment signals justify the operational cost.',
+    'Size the INFRASTRUCTURE to the stated scale, not to what a professional SaaS',
+    'usually has. A cache, a job queue, a background worker or a second hosting',
+    'provider is a cost the client pays every month and a component the team must',
+    'operate; each one appears only when a specific requirement forces it, and its',
+    'rationale must name that requirement. When in doubt, leave it out — the',
+    'growth path can add it once real load justifies it.',
     'Ground every major decision in the constraints: when a budget or timeline is',
     'stated, cite it, prefer managed services over self-hosted, and NAME the',
     'rejected alternative and why it loses under these constraints (time, money,',
@@ -111,12 +125,20 @@ export class SystemArchitectAgent extends BaseAgent {
     ctx: SystemDesignContext,
   ): Promise<SystemDesign> {
     const generatedAt = new Date().toISOString();
+    // Decided once, by code, and used three times: it goes into the prompt, it is
+    // stamped onto the artifact, and it gates the stack backstop. One assessment
+    // for all three, so the tier the client reads is provably the tier the model
+    // was designing to.
+    const scale = this.assessScale(ctx);
+    this.logger.debug(`Scale tier ${scale.tier}: ${scaleEvidenceSummary(scale)}`);
     const design = await this.generateArtifact<SystemDesign>({
       label: 'System design',
-      prompt: this.buildPrompt(ctx),
+      prompt: this.buildPrompt(ctx, scale),
       isValid: (raw) => this.isValid(raw),
-      accept: (raw) => this.normalize(sessionId, generatedAt, raw, ctx),
-      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      accept: (raw, language) =>
+        this.normalize(sessionId, generatedAt, raw, ctx, scale, language),
+      fallback: (language) =>
+        this.buildDeterministic(sessionId, generatedAt, ctx, scale, language),
       options: { maxTokens: DESIGN_MAX_TOKENS },
     });
     // The deterministic pass above set `uncoveredRequirements` to a generous
@@ -252,7 +274,73 @@ export class SystemArchitectAgent extends BaseAgent {
       .join('\n');
   }
 
-  private buildPrompt(ctx: SystemDesignContext): string {
+  /**
+   * The scale reading, from the client's own words.
+   *
+   * The description text is everything the client said about what the product IS
+   * — the idea and the requirement prose — because the self-description signal
+   * ("a lightweight task board for small teams") lives there rather than in the
+   * scale slot, which often holds only a number or nothing at all.
+   */
+  private assessScale(ctx: SystemDesignContext): ScaleAssessment {
+    const r = ctx.requirements;
+    return assessScaleTier({
+      scaleText: slotText(ctx.slots, 'scale_expectations'),
+      budgetText: slotText(ctx.slots, 'budget_range'),
+      timelineText: slotText(ctx.slots, 'timeline'),
+      descriptionText: [
+        ctx.idea,
+        r.executiveSummary ?? '',
+        ...r.functional.map((f) => `${f.title} ${f.description}`),
+        ...r.nonFunctional.map((n) => n.description),
+        ...r.constraints,
+      ].join(' '),
+    });
+  }
+
+  /** The requirement prose the async-work escape hatch is tested against. */
+  private asyncHaystack(ctx: SystemDesignContext): string {
+    const r = ctx.requirements;
+    return [
+      ...r.functional.map((f) => `${f.title} ${f.description}`),
+      ...r.nonFunctional.map((n) => n.description),
+      ...r.constraints,
+    ].join(' ');
+  }
+
+  /**
+   * Apply the scale tier to a finished design: stamp it, and drop cache/queue
+   * infrastructure a small-tier project has no justification for.
+   *
+   * Runs on BOTH paths, like every other R8 guarantee, because the deterministic
+   * builder was over-provisioning too — its `inferTechStack` added BullMQ + Redis
+   * on the word "notification" alone, which every project with a reminder has.
+   */
+  private withScaleTier(
+    design: SystemDesign,
+    ctx: SystemDesignContext,
+    scale: ScaleAssessment,
+    language: ArtifactLanguage,
+  ): SystemDesign {
+    const { techStack, removed } = enforceScaleAppropriateStack(
+      design.techStack,
+      scale.tier,
+      this.asyncHaystack(ctx),
+    );
+    if (removed.length > 0) {
+      this.logger.warn(
+        `Small-tier design proposed ${removed.join(', ')} with no async requirement to justify it; removed.`,
+      );
+    }
+    return {
+      ...design,
+      techStack,
+      scaleTier: scale.tier,
+      scaleTierRationale: scaleTierRationale(scale, language),
+    };
+  }
+
+  private buildPrompt(ctx: SystemDesignContext, scale: ScaleAssessment): string {
     const fr = ctx.requirements.functional
       .map((f) => `- ${f.id} (${f.priority}): ${f.title}`)
       .join('\n');
@@ -286,6 +374,12 @@ export class SystemArchitectAgent extends BaseAgent {
       residencyLine(slotText(s, 'target_market')),
       paymentGuidanceLine(slotText(s, 'target_market')),
       '',
+      // The tier is decided in code and handed down as a verdict, not left to the
+      // model to infer from the numbers above. Told only "here are some figures",
+      // a model reliably reached for the enterprise stack it has seen most; told
+      // "this is the small tier and here is why", it designs to it.
+      scaleTierPromptBlock(scale),
+      '',
       'Rules:',
       '- Pick the simplest architecture that meets the requirements. Under a tight',
       '  budget or timeline, prefer a modular monolith over microservices and',
@@ -308,7 +402,17 @@ export class SystemArchitectAgent extends BaseAgent {
       'Return JSON with these keys:',
       '- architecture: one of monolith | modular_monolith | microservices.',
       '- architectureRationale: why this style fits THESE requirements + constraints (cite the driver, name the rejected alternative).',
-      '- techStack[]: {layer (e.g. backend, frontend, database, cache, queue, auth), technology (a specific product/framework), rationale (tied to a requirement/constraint)}.',
+      // The layer examples used to read "backend, frontend, database, cache,
+      // queue, auth". That list was doing real damage: a model reads an
+      // enumeration in a schema as a checklist to fill, so naming cache and queue
+      // here invited them onto every design regardless of scale — the single most
+      // direct cause of the over-provisioning this stage was producing. The
+      // examples are now the layers every system genuinely has; anything beyond
+      // them has to be earned under the infrastructure budget above.
+      '- techStack[]: {layer (e.g. backend, frontend, database, hosting, auth), technology (a specific product/framework), rationale (tied to a requirement/constraint)}.',
+      '  Include ONLY the layers this system actually needs. Every entry is a',
+      '  monthly cost and an operational burden — do not list a component because',
+      '  it is standard equipment, and respect the infrastructure budget above.',
       '- services[]: {name, responsibility (one sentence), dependencies[] (names of other services it calls), complexity (S|M|L|XL — rough build effort), complexityRationale (one line)}.',
       '  EVERY functional requirement marked "must" or "should" must be owned by',
       '  exactly one service. Before you answer, walk the requirement list and check',
@@ -350,6 +454,8 @@ export class SystemArchitectAgent extends BaseAgent {
     generatedAt: string,
     raw: Partial<SystemDesign>,
     ctx: SystemDesignContext,
+    scale: ScaleAssessment,
+    language: ArtifactLanguage,
   ): SystemDesign {
     const haystack = this.haystack(ctx);
     const services = this.withAuthService(
@@ -359,26 +465,41 @@ export class SystemArchitectAgent extends BaseAgent {
     const sanitized = sanitizeBuildVsBuy(raw.buildVsBuy);
     const compliance = sanitizeCompliance(raw.constraintCompliance);
     const conflict = this.hasScaleConflict(ctx, haystack);
-    const techStack = raw.techStack as TechChoice[];
     const buildVsBuy = this.withAvailablePayments(
       sanitized.length ? sanitized : this.buildVsBuy(haystack),
       ctx,
     );
 
+    // The tier is applied before coverage is computed, so a requirement is never
+    // reported as "covered" by a cache the backstop is about to remove.
+    const scaled = this.withScaleTier(
+      {
+        ...(raw as SystemDesign),
+        sessionId,
+        generatedAt,
+        services,
+        techStack: raw.techStack as TechChoice[],
+        buildVsBuy,
+        constraintCompliance: compliance.length
+          ? compliance
+          : this.constraintCompliance(ctx),
+        phasedArchitecture: conflict
+          ? validPhased(raw.phasedArchitecture) ?? this.phasedArchitecture(ctx)
+          : undefined,
+      },
+      ctx,
+      scale,
+      language,
+    );
+
     return {
-      ...(raw as SystemDesign),
-      sessionId,
-      generatedAt,
-      services,
-      techStack,
-      buildVsBuy,
-      constraintCompliance: compliance.length
-        ? compliance
-        : this.constraintCompliance(ctx),
-      phasedArchitecture: conflict
-        ? validPhased(raw.phasedArchitecture) ?? this.phasedArchitecture(ctx)
-        : undefined,
-      uncoveredRequirements: this.uncovered(services, techStack, buildVsBuy, ctx),
+      ...scaled,
+      uncoveredRequirements: this.uncovered(
+        services,
+        scaled.techStack,
+        buildVsBuy,
+        ctx,
+      ),
     };
   }
 
@@ -457,6 +578,8 @@ export class SystemArchitectAgent extends BaseAgent {
     sessionId: string,
     generatedAt: string,
     ctx: SystemDesignContext,
+    scale: ScaleAssessment,
+    language: ArtifactLanguage,
   ): SystemDesign {
     const haystack = this.haystack(ctx);
     const architecture = this.inferArchitecture(haystack, ctx.slots);
@@ -467,20 +590,33 @@ export class SystemArchitectAgent extends BaseAgent {
     const conflict = this.hasScaleConflict(ctx, haystack);
 
     const withAuth = this.withAuthService(services, ctx);
-    const techStack = this.inferTechStack(haystack);
     const buildVsBuy = this.withAvailablePayments(this.buildVsBuy(haystack), ctx);
 
+    const scaled = this.withScaleTier(
+      {
+        sessionId,
+        generatedAt,
+        architecture,
+        architectureRationale: this.architectureRationale(architecture, ctx, conflict),
+        techStack: this.inferTechStack(haystack, ctx, scale),
+        services: withAuth,
+        buildVsBuy,
+        constraintCompliance: this.constraintCompliance(ctx),
+        phasedArchitecture: conflict ? this.phasedArchitecture(ctx) : undefined,
+      },
+      ctx,
+      scale,
+      language,
+    );
+
     return {
-      sessionId,
-      generatedAt,
-      architecture,
-      architectureRationale: this.architectureRationale(architecture, ctx, conflict),
-      techStack,
-      services: withAuth,
-      buildVsBuy,
-      constraintCompliance: this.constraintCompliance(ctx),
-      phasedArchitecture: conflict ? this.phasedArchitecture(ctx) : undefined,
-      uncoveredRequirements: this.uncovered(withAuth, techStack, buildVsBuy, ctx),
+      ...scaled,
+      uncoveredRequirements: this.uncovered(
+        withAuth,
+        scaled.techStack,
+        buildVsBuy,
+        ctx,
+      ),
     };
   }
 
@@ -557,7 +693,11 @@ export class SystemArchitectAgent extends BaseAgent {
     return parts.join(' ');
   }
 
-  private inferTechStack(text: string): TechChoice[] {
+  private inferTechStack(
+    text: string,
+    ctx: SystemDesignContext,
+    scale: ScaleAssessment,
+  ): TechChoice[] {
     const preferNoSql = /nosql|mongo|document db/.test(text);
     const stack: TechChoice[] = [
       {
@@ -583,11 +723,27 @@ export class SystemArchitectAgent extends BaseAgent {
         rationale: 'Stateless auth suitable for API + SPA.',
       },
     ];
-    if (/(notification|email|sms|async|queue|report)/.test(text)) {
+    // The old test was `/(notification|email|sms|async|queue|report)/`, which
+    // fires on essentially every project — anything that emails a user, or has a
+    // report — and so the offline design shipped a Redis instance and a job
+    // queue to a five-person task board. Sending an email at that volume is a
+    // direct call. A queue now needs a real async workload (a bulk import, media
+    // processing, an external rate limit) AND a tier that can carry the
+    // operational cost. `needsAsyncProcessing` is the same test the LLM path's
+    // escape hatch uses, so the two paths cannot disagree about the same project.
+    const async = needsAsyncProcessing(this.asyncHaystack(ctx));
+    if (async || scale.tier === 'large') {
       stack.push({
         layer: 'queue',
         technology: 'BullMQ + Redis',
-        rationale: 'Background jobs for notifications and async processing.',
+        // The rationale must describe the row it is attached to and nothing
+        // else. It used to promise "background processing and caching" while
+        // only a queue was added — a claim no tech-stack entry backed, and one
+        // the review's constraint-coverage check reads as a coverage source, so
+        // it could clear a performance requirement nothing implemented.
+        rationale: async
+          ? 'The requirements include work that cannot complete inside a request, so it runs on a background worker.'
+          : 'At the stated scale, moving long-running work off the request thread keeps response times independent of peak load.',
       });
     }
     return stack;

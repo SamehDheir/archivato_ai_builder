@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   buildRestApi,
+  enforceQuerySurface,
   enforceRoleCardinality,
   mergeMissingCoverage,
   normalizeApiModule,
@@ -16,6 +17,7 @@ import {
   type Entity,
   type ExcludedEntity,
   type IntentAnalysis,
+  type QueryScope,
   type RequirementDocument,
   type SystemDesign,
   untrustedField,
@@ -79,9 +81,13 @@ export class ApiDesignerAgent extends BaseAgent {
     'Method: group endpoints by resource/module; use noun-based, pluralized,',
     'lowercase paths (/api/orders, /api/orders/:id) and the correct HTTP verb',
     '(GET read, POST create, PUT/PATCH update, DELETE remove). List endpoints are',
-    'queryable, not merely paginated: alongside page/limit they expose free-text',
-    'search, a filter for the resource\'s lifecycle state, a date range, and a',
-    'filter per relevant foreign key. Update endpoints can move a resource through',
+    'paginated, and carry the filters the requirements actually call for — a',
+    'lifecycle filter where the resource has states, and free-text search, date',
+    'ranges or foreign-key filters where a requirement describes searching,',
+    'reporting on, or slicing that specific resource. Do not give every resource a',
+    'maximal query surface: a filter nobody asked for is an endpoint contract the',
+    'frontend never calls and build time the client still pays for.',
+    'Update endpoints can move a resource through',
     'its lifecycle, not just edit its attributes. Request schemas exclude',
     '(id, timestamps, password_hash); response schemas reflect what is actually',
     'returned. Every endpoint declares realistic status codes including its error',
@@ -122,7 +128,7 @@ export class ApiDesignerAgent extends BaseAgent {
         // and per-module attribution already lives on `ApiModule.source`.
         if (!coverage.missing.length) {
           return this.reconcileRoles(
-            { ...design, generation: this.provenance('llm') },
+            { ...this.trimQuerySurface(design, ctx), generation: this.provenance('llm') },
             ctx,
           );
         }
@@ -139,7 +145,7 @@ export class ApiDesignerAgent extends BaseAgent {
         // Whatever is still uncovered is the service's to fill deterministically
         // before it persists anything — never the user's to discover.
         return this.reconcileRoles(
-          { ...design, generation: this.provenance('llm') },
+          { ...this.trimQuerySurface(design, ctx), generation: this.provenance('llm') },
           ctx,
         );
       }
@@ -159,6 +165,30 @@ export class ApiDesignerAgent extends BaseAgent {
       },
       ctx,
     );
+  }
+
+  /**
+   * Narrow a model-authored query surface to what the requirements asked for.
+   *
+   * The prompt is the primary defence; this is the backstop that makes it hold
+   * — the same split as `enforceScaleAppropriateStack` on the tech stack. A
+   * design generated before the scale tier existed carries no tier, so
+   * `queryScopeFor` returns undefined and this is a no-op.
+   */
+  private trimQuerySurface(design: ApiDesign, ctx: ApiDesignContext): ApiDesign {
+    const scope = queryScopeFor(ctx);
+    if (!scope) return design;
+    const { design: next, trimmed } = enforceQuerySurface(
+      design,
+      ctx.databaseDesign,
+      scope,
+    );
+    if (trimmed.length > 0) {
+      this.logger.debug(
+        `Trimmed ${trimmed.length} unrequested list filter(s) at the ${scope.tier} tier: ${trimmed.join(', ')}.`,
+      );
+    }
+    return next;
   }
 
   /**
@@ -376,11 +406,17 @@ export class ApiDesignerAgent extends BaseAgent {
         ? 'Include an Auth module (register/login/refresh) alongside the resource groups; it covers no checklist entity, so give it coveredEntities: [].\nA public registration endpoint must NOT accept role, permission, or tenant/organization ids in its request body — a caller who can name their own role can register as an administrator. Those are assigned by an authenticated admin endpoint.'
         : 'Do not include an Auth module — another part of this design already has it.',
       this.roleCardinalityDirective(ctx),
-      'LIST ENDPOINTS — a GET collection\'s requestSchema is its query string. Beyond page/limit, include (where the entity\'s columns support it):',
-      '- search: free-text over the entity\'s own text columns, when it has any.',
-      '- the lifecycle column itself (status/state), when the entity has one.',
-      '- a date range as <date_column_without_at>_from / _to (e.g. created_from, created_to).',
-      '- one filter per relevant foreign-key column, named exactly as the column (e.g. customer_id).',
+      // The gate used to be "where the entity's columns support it", which is a
+      // purely structural test every entity passes — so a lightweight task board
+      // got free-text search, a date range and five FK filters on comments,
+      // notifications and audit logs alike. The gate is now what the requirements
+      // ask for; the structural test remains as the ceiling, not the trigger.
+      'LIST ENDPOINTS — a GET collection\'s requestSchema is its query string. Always include page/limit. Then add, ONLY where BOTH the columns support it AND a requirement calls for it:',
+      '- the lifecycle column itself (status/state), whenever the entity has one — a resource with states exists to be filtered by them.',
+      '- search: free-text over the entity\'s own text columns, when a requirement describes searching, finding or browsing THIS resource.',
+      '- a date range as <date_column_without_at>_from / _to (e.g. created_from, created_to), when a requirement describes reporting, history, or filtering this resource by time.',
+      '- a filter per foreign-key column a requirement describes scoping this resource by (e.g. customer_id). Do not add one per FK by reflex.',
+      `- ${scaleGuidance(ctx)}`,
       'Use the data model\'s own column names, all optional (required: false). Never expose a password, hash, token, or secret column as a filter.',
       'Updates must be able to change the lifecycle state too, not only descriptive fields.',
       'Omit server-managed fields (id, created_at, updated_at, password_hash) from request BODIES (POST/PUT/PATCH).',
@@ -439,6 +475,7 @@ export class ApiDesignerAgent extends BaseAgent {
   ): ApiDesign {
     const { modules, excludedEntities } = buildRestApi(ctx.databaseDesign, {
       includeAuth: true,
+      queryScope: queryScopeFor(ctx),
     });
     const design: ApiDesign = { sessionId, generatedAt, modules };
     if (excludedEntities.length > 0) design.excludedEntities = excludedEntities;
@@ -447,6 +484,43 @@ export class ApiDesignerAgent extends BaseAgent {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
+
+/**
+ * What the requirements ask a list endpoint to do, scoped by the tier the System
+ * Architect already decided.
+ *
+ * The tier is READ from the system design rather than recomputed here, so the
+ * API surface and the infrastructure are sized by one assessment of one set of
+ * numbers. A design generated before the tier existed carries none, and an
+ * absent tier means the previous behaviour — the structural maximum — exactly
+ * like an absent `sourceStamp` never reads as stale.
+ */
+function queryScopeFor(ctx: ApiDesignContext): QueryScope | undefined {
+  const tier = ctx.systemDesign.scaleTier;
+  if (!tier) return undefined;
+  return { tier, requirementText: requirementText(ctx) };
+}
+
+function requirementText(ctx: ApiDesignContext): string {
+  const r = ctx.requirements;
+  return [
+    ...(r.functional ?? []).map((f) => `${f.title} ${f.description}`),
+    ...(r.nonFunctional ?? []).map((n) => n.description),
+    ...(r.businessRules ?? []).map((b) => b.description),
+  ].join(' ');
+}
+
+/** The tier's one-line instruction for the prompt's list-endpoint section. */
+function scaleGuidance(ctx: ApiDesignContext): string {
+  switch (ctx.systemDesign.scaleTier) {
+    case 'small':
+      return 'This is a SMALL/MVP-scale system: keep the query surface minimal. Most resources need only page/limit (plus a status filter where they have states). Add search or a date range only where a requirement above plainly asks for it on that resource.';
+    case 'large':
+      return 'This is a LARGE-scale system: a rich query surface on the high-traffic resources is justified, but still tie each filter to a requirement rather than adding one per column.';
+    default:
+      return 'Add filters where a requirement calls for them; a resource nobody searches needs no search parameter.';
+  }
+}
 
 /** Name, purpose, columns and relationships — the checklist line for one entity. */
 function describeEntity(entity: Entity, db: DatabaseDesign): string {

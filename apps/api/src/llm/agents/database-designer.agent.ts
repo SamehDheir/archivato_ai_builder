@@ -12,6 +12,8 @@ import {
   untrustedField,
   applyTenancy,
   requiresMultiTenancy,
+  stripUnrequestedSupportTables,
+  supportTableDirective,
   tenantEntityFor,
   normalizeDatabaseDesign,
 } from '@archivato/shared';
@@ -141,6 +143,13 @@ export class DatabaseDesignerAgent extends BaseAgent {
     'Do not put a unique constraint on a contact field that real people share',
     '(a household phone number, a shared family email); uniqueness belongs on',
     'identifiers such as a national ID or an account number.',
+    'Model what the requirements ask for and nothing more. Every table is a',
+    'migration, a set of endpoints, and build time the client is quoted for, so a',
+    'table exists because a functional requirement, a business rule or a stated',
+    'constraint needs it — never because a professional product usually has one.',
+    'Audit logs, activity feeds, delivery-status logs and soft-delete columns are',
+    'features in their own right: include them when they were asked for, and',
+    'leave them out when they were not.',
     'Output standard: names are snake_case and consistent (plural tables, singular',
     'columns), every relationship is one-to-one / one-to-many / many-to-many and',
     'is backed by a real FK, and the schema fully covers the services and roles',
@@ -195,14 +204,44 @@ export class DatabaseDesignerAgent extends BaseAgent {
     generatedAt: string,
     ctx: DatabaseDesignContext,
   ): DatabaseDesign {
-    return this.withoutUnrequestedTenancy(
-      normalizeDatabaseDesign({
-        ...(raw as DatabaseDesign),
-        sessionId,
-        generatedAt,
-      }),
+    return this.withoutUnrequestedTables(
+      this.withoutUnrequestedTenancy(
+        normalizeDatabaseDesign({
+          ...(raw as DatabaseDesign),
+          sessionId,
+          generatedAt,
+        }),
+        ctx,
+      ),
       ctx,
     );
+  }
+
+  /**
+   * Drop log-style tables the requirements never asked for.
+   *
+   * The code half of the same division of labour `withoutUnrequestedTenancy`
+   * implements, and it exists for the same reason: the prompt rule that was
+   * supposed to gate the audit log had a condition every project satisfied, so it
+   * was a default wearing a conditional's clothes. Running here means it applies
+   * to the single-call path, the chunked path, and the deterministic build alike
+   * — the chunked path especially, where no single call sees the whole schema and
+   * a per-chunk instruction could not be checked.
+   */
+  private withoutUnrequestedTables(
+    design: DatabaseDesign,
+    ctx: DatabaseDesignContext,
+  ): DatabaseDesign {
+    const { design: next, removed } = stripUnrequestedSupportTables(
+      design,
+      ctx.requirements,
+    );
+    if (removed.length > 0) {
+      this.logger.debug(
+        `Removed unrequested supporting table(s): ${removed.join(', ')}.`,
+      );
+    }
+    return next;
   }
 
   /**
@@ -407,6 +446,8 @@ export class DatabaseDesignerAgent extends BaseAgent {
       '',
       this.tenancyDirective(ctx),
       '',
+      supportTableDirective(ctx.requirements),
+      '',
       'Design the schema and return JSON with these keys:',
       '- databaseType: the database engine (echo the one above).',
       '- entities[]: {name (snake_case, plural), description, columns[] {name, type, nullable (boolean), primaryKey? (boolean), unique? (boolean), references? {entity, column}}}.',
@@ -415,7 +456,13 @@ export class DatabaseDesignerAgent extends BaseAgent {
       'Give every entity that moves through a lifecycle an enum "status" column; leave it off entities that never transition.',
       'Link secondary records (lines, logs, attachments, invoices) to the transactional record they belong to, not only to a user.',
       'If the system serves multiple organizations/branches/tenants, put the tenant FK on every table holding their data — not just on users.',
-      'Add an audit-log entity whenever the requirements restrict who may read or change records, or name a regulated data category.',
+      // This line used to read "Add an audit-log entity whenever the requirements
+      // restrict who may read or change records, or name a regulated data
+      // category." The intent was conditional; the condition was not. EVERY
+      // application with roles restricts who may read or change records, so the
+      // rule fired universally and a 40-person internal task board shipped an
+      // `audit_logs` table nobody asked for. The verdict is now computed in code
+      // by `supportTableDirective` above, which states both branches explicitly.
     ].join('\n');
   }
 
@@ -442,10 +489,11 @@ export class DatabaseDesignerAgent extends BaseAgent {
       '',
       this.tenancyDirective(ctx),
       '',
-      'List EVERY table this schema needs — the COMPLETE set, following the design',
-      'rules: separate the people who log in from the people the business serves,',
-      'add a join table for each many-to-many link, and add an audit-log table if',
-      'records are access-restricted or a regulated data category is involved.',
+      supportTableDirective(ctx.requirements),
+      '',
+      'List EVERY table this schema needs — the COMPLETE set, and nothing beyond',
+      'it — following the design rules: separate the people who log in from the',
+      'people the business serves, and add a join table for each many-to-many link.',
       'If MULTI-TENANT above, the tenant table itself must be in this list.',
       'Return JSON: { entities: [{ name (snake_case, plural), purpose (one short line) }] }.',
       'Table NAMES and purposes only — do NOT design columns yet.',
@@ -467,6 +515,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
       `Database engine: ${this.databaseType(ctx.systemDesign)}`,
       `Roles: ${ctx.requirements.roles.map((r) => r.name).join(', ') || 'none'}`,
       this.tenancyDirective(ctx),
+      supportTableDirective(ctx.requirements),
       '',
       `This is part ${part.index} of ${part.total} of ONE schema. Fully design ONLY`,
       'these tables (design each one completely — do not defer any to another part):',
@@ -549,14 +598,17 @@ export class DatabaseDesignerAgent extends BaseAgent {
     // that falls back offline must still get its tenant table + scoping, and a
     // single-business one must not. The template above never models tenancy, so
     // this is the only place the fallback can gain it.
-    return this.withoutUnrequestedTenancy(
-      {
-        sessionId,
-        generatedAt,
-        databaseType: this.databaseType(ctx.systemDesign),
-        entities,
-        relations,
-      },
+    return this.withoutUnrequestedTables(
+      this.withoutUnrequestedTenancy(
+        {
+          sessionId,
+          generatedAt,
+          databaseType: this.databaseType(ctx.systemDesign),
+          entities,
+          relations,
+        },
+        ctx,
+      ),
       ctx,
     );
   }

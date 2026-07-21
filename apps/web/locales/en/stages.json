@@ -9,6 +9,7 @@
     "outOfScope": "Out of scope",
     "assumptionsAndOpenQuestions": "Assumptions & open questions",
     "impactIfWrong": "If this is wrong:",
+    "needsClientDecision": "Needs your decision",
     "businessRules": "Business rules",
     "constraints": "Constraints",
     "assumptions": "Assumptions",
@@ -30,6 +31,14 @@
     "generated": "Generated {{date}}",
     "architecture": "Architecture",
     "techStack": "Tech stack",
+    "scale": {
+      "label": "Scale tier",
+      "tier": {
+        "small": "Small / MVP",
+        "medium": "Medium",
+        "large": "Large / Enterprise"
+      }
+    },
     "services": "Services",
     "buildVsBuy": {
       "title": "Build vs. buy",

@@ -41,6 +41,7 @@ import {
   type ArtifactLanguage,
   type LocalizedCopy,
 } from './artifact-language';
+import type { AssumptionKind, RequirementAssumption } from './requirements';
 
 /**
  * Filler that says nothing about *which* capability or role is meant. Matches
@@ -298,4 +299,86 @@ export function unsourcedRoleAssumption(
     assumption: copy.roleAssumption(roleName),
     impactIfWrong: copy.roleImpact,
   };
+}
+
+// ── assumptions vs. genuine open questions ──────────────────────────────────
+
+/**
+ * Language that says a choice has NOT been made.
+ *
+ * The reported line was *"Either Microsoft Teams or Slack will be chosen as the
+ * instant notification platform"*, rendered among the assumptions — a sentence
+ * that reads as settled while describing something nobody has decided. The
+ * client may use one of the two, or neither, and which it is changes the
+ * integration work; presenting it as an assumption invites them to skim past it
+ * and later discover the scope assumed the other one.
+ */
+const PENDING_CHOICE_EN =
+  /\b(?:either\b[^.]{0,90}?\bor\b|\bor\b[^.]{0,60}?\b(?:will be|to be)\s+(?:chosen|selected|decided|picked|determined|used)|(?:will|to)\s+be\s+(?:decided|confirmed|determined|selected|chosen)|\btbd\b|to be advised|pending (?:the )?(?:client|customer|their)|not (?:yet )?(?:been )?(?:decided|chosen|selected|confirmed)|awaiting (?:the )?(?:client|customer|a decision))\b/i;
+
+const PENDING_CHOICE_AR =
+  /(?:إما\s[^.،]{0,90}?\sأو\s|سيتم\s+(?:اختيار|تحديد|اعتماد)|سيُختار|لم\s+(?:يتم\s+)?(?:تحديد|اختيار|اعتماد)|بانتظار\s+(?:قرار|رد|تأكيد)|في\s+انتظار\s+العميل|يُحدَّد\s+لاحقًا)/;
+
+/**
+ * Topics where picking wrong changes scope, cost or integration work.
+ *
+ * The list is short and specific rather than a general notion of "important",
+ * because the cost of over-classifying is real: relabel a genuinely low-stakes
+ * default as an open question and the section fills with things the client must
+ * answer before anything can proceed, which is exactly the friction the
+ * assumptions section exists to avoid.
+ */
+const CONSEQUENTIAL_TOPIC_EN =
+  /\b(?:integrat\w*|platform|provider|processor|gateway|vendor|third[- ]?party|hosting|host|region|data residency|jurisdiction|cloud|complian\w*|regulation|regulator|framework|standard|payment|sso|identity provider|erp|crm)\b/i;
+
+const CONSEQUENTIAL_TOPIC_AR =
+  /(?:تكامل|منصة|مزود|بوابة دفع|طرف ثالث|استضافة|منطقة|إقامة البيانات|اختصاص قضائي|سحاب|امتثال|تنظيم|إطار|معيار|دفع|هوية)/;
+
+/** An "X or Y" alternation — the shape of an unmade choice between named options. */
+const ALTERNATION = /\bor\b|\bversus\b|\bvs\.?\b|\sأو\s/i;
+
+/**
+ * Is this entry a genuine open question for the client, or a default we may
+ * proceed on?
+ *
+ * Two ways in, and they are deliberately different strengths. Explicit
+ * pending-choice language ("will be chosen", "to be decided", "TBD") is enough on
+ * its own — the sentence says outright that nothing is settled. A consequential
+ * *topic* alone is not: "assumed standard TLS encryption is sufficient" is about
+ * compliance and is still a perfectly reasonable default. It takes the topic
+ * **and** an unresolved alternation between named options to qualify.
+ *
+ * Conservative by construction, in the same direction as `describesSameCapability`
+ * and `namesExcludedCapability`: an entry that is really an open question but
+ * reads as an assumption is the status quo, while an ordinary assumption
+ * relabelled as a blocking question is a new annoyance in a document a client
+ * reads. Anything it does not recognize stays an `assumption`.
+ */
+export function classifyAssumptionKind(text: string): AssumptionKind {
+  const value = (text ?? '').trim();
+  if (!value) return 'assumption';
+  if (PENDING_CHOICE_EN.test(value) || PENDING_CHOICE_AR.test(value)) {
+    return 'open_question';
+  }
+  const consequential =
+    CONSEQUENTIAL_TOPIC_EN.test(value) || CONSEQUENTIAL_TOPIC_AR.test(value);
+  return consequential && ALTERNATION.test(value) ? 'open_question' : 'assumption';
+}
+
+/**
+ * Classify a whole list, leaving any entry that already carries a `kind` alone.
+ *
+ * The model is asked to label these itself and a label it supplied is kept: it
+ * read the interview and knows which of its own assumptions it was uneasy about.
+ * This only fills the gap — for an unlabelled model response, for the
+ * deterministic path, and for every row written before the field existed.
+ */
+export function withAssumptionKinds(
+  items: readonly RequirementAssumption[],
+): RequirementAssumption[] {
+  return items.map((item) =>
+    item.kind
+      ? item
+      : { ...item, kind: classifyAssumptionKind(item.assumption) },
+  );
 }
