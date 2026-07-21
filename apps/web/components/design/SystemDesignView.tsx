@@ -191,6 +191,28 @@ export function SystemDesignView({
       )}
 
       <Section title={t('system.techStack')} icon={Layers}>
+        {/* Above the table, not below it: the tier is what licenses (or forbids)
+            every row underneath — a cache, a queue, a second host — so it has to
+            be read first. Rendered only when stamped; a design generated before
+            the tier existed simply omits the line, the same rule that keeps an
+            unstamped `sourceStamp` from ever reading as stale. */}
+        {design.scaleTier && (
+          <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md border border-border bg-muted/40 px-3 py-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {t('system.scale.label')}
+            </span>
+            <Badge variant="secondary">
+              {t(`system.scale.tier.${design.scaleTier}`, {
+                defaultValue: design.scaleTier,
+              })}
+            </Badge>
+            {design.scaleTierRationale && (
+              <p className="min-w-0 flex-1 text-xs text-muted-foreground" dir="auto">
+                {design.scaleTierRationale}
+              </p>
+            )}
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow>

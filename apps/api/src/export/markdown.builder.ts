@@ -70,6 +70,9 @@ export function buildMarkdown(bundle: ExportBundle): string {
   const s = bundle.systemDesign;
   h(2, 'System Design');
   p(`**Architecture:** ${s.architecture} — ${s.architectureRationale}`);
+  // Above the stack table, as in the view: the tier is what justifies the rows
+  // beneath it, so an owner reading the export sees the reasoning before the bill.
+  if (s.scaleTierRationale) p(`**Scale:** ${s.scaleTierRationale}`);
   h(3, 'Tech stack');
   out.push('| Layer | Technology | Rationale |', '| --- | --- | --- |');
   for (const t of s.techStack) out.push(`| ${t.layer} | ${t.technology} | ${t.rationale} |`);

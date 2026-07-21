@@ -9,6 +9,7 @@
     "outOfScope": "خارج النطاق",
     "assumptionsAndOpenQuestions": "الافتراضات والأسئلة المفتوحة",
     "impactIfWrong": "إذا كان هذا غير صحيح:",
+    "needsClientDecision": "يحتاج إلى قرارك",
     "businessRules": "قواعد العمل",
     "constraints": "القيود",
     "assumptions": "الافتراضات",
@@ -30,6 +31,14 @@
     "generated": "تم التوليد {{date}}",
     "architecture": "البنية",
     "techStack": "الحزمة التقنية",
+    "scale": {
+      "label": "مستوى الحجم",
+      "tier": {
+        "small": "صغير / الحد الأدنى",
+        "medium": "متوسط",
+        "large": "كبير / مؤسسي"
+      }
+    },
     "services": "الخدمات",
     "buildVsBuy": {
       "title": "البناء أم الشراء",

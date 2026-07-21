@@ -220,6 +220,12 @@ export const EXAMPLE_SYSTEM_DESIGN: SystemDesign = {
   architecture: 'modular_monolith',
   architectureRationale:
     'A modular monolith keeps the marketplace simple to build and deploy at launch while enforcing clear module boundaries (booking, payments, reviews). Modules can be extracted into services later if a domain needs independent scaling.',
+  // The example tour and the public /demo-scoping-package page render this
+  // fixture through the real views, so a section missing here is a section a
+  // prospect never sees — the fixture has to carry every part of the artifact.
+  scaleTier: 'medium',
+  scaleTierRationale:
+    'Scale tier: Medium — 3000 expected users, a budget that supports managed infrastructure. The infrastructure below is sized to that.',
   techStack: [
     {
       layer: 'backend',

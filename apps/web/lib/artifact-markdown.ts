@@ -133,6 +133,9 @@ export function systemDesignToMarkdown(design: SystemDesign): string {
   );
 
   h(2, 'Tech stack');
+  // The tier justifies the table below it, so it is printed before the table —
+  // matching both the view and the API-side exporter.
+  if (design.scaleTierRationale) out.push(design.scaleTierRationale, '');
   if (design.techStack.length) {
     out.push('| Layer | Technology | Rationale |', '| --- | --- | --- |');
     for (const t of design.techStack) {

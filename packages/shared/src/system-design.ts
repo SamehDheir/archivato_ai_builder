@@ -7,6 +7,7 @@ import type { LocalizedArtifact } from './artifact-language';
 import type { GenerationProvenance } from './generation';
 import type { FunctionalRequirement, UserRole } from './requirements';
 import { paymentAvailabilityFor, paymentProvidersFor } from './region';
+import type { ScaleTier } from './scale-tier';
 import { significantTokens } from './text';
 
 export type ArchitectureType =
@@ -115,6 +116,20 @@ export interface SystemDesign extends LocalizedArtifact {
   generation?: GenerationProvenance;
   architecture: ArchitectureType;
   architectureRationale: string;
+  /**
+   * How much system this project actually needs, decided from the client's own
+   * stated figures by `assessScaleTier` — never taken from the model.
+   *
+   * It is shown above the tech stack for the same reason the architecture
+   * rationale is shown beside the architecture: the tier is what licenses (or
+   * forbids) a cache, a queue and managed infrastructure, so an owner has to be
+   * able to check it against the numbers in the requirement document. Optional
+   * and additive (the JSON-blob convention) — designs generated before this
+   * existed simply don't render the line.
+   */
+  scaleTier?: ScaleTier;
+  /** Why that tier, in the artifact's language. Written by code, not the model. */
+  scaleTierRationale?: string;
   techStack: TechChoice[];
   services: ServiceModule[];
   /**

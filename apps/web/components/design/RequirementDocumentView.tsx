@@ -95,9 +95,15 @@ export function RequirementDocumentView({
     ? doc.assumptionsAndOpenQuestions
     : [
         ...doc.assumptions.map((assumption) => ({ assumption, impactIfWrong: '' })),
+        // These ARE open questions — they came from the interview's gap list, the
+        // same source `openQuestionToAssumption` marks `open_question` on the
+        // current path. Dropping the label here would render a legacy document's
+        // unanswered questions as settled assumptions, which is the exact defect
+        // the badge exists to fix.
         ...(doc.openQuestions ?? []).map((q) => ({
           assumption: q.questionForClient,
           impactIfWrong: '',
+          kind: 'open_question' as const,
         })),
       ];
 
@@ -280,20 +286,53 @@ export function RequirementDocumentView({
           count={assumptionItems.length}
           icon={Lightbulb}
         >
+          {/* Open questions first, and marked. The section used to render one
+              flat list, which let a decision nobody had made ("either Teams or
+              Slack will be chosen") sit among settled defaults reading as though
+              it were settled too — a client skims past it and the scope quietly
+              assumes one of the two. Sorting is stable within each group, so the
+              document's own order survives inside them. */}
           <ul className="space-y-2 text-sm">
-            {assumptionItems.map((a, i) => (
-              <li key={i} className="rounded-lg border border-border/60 p-3">
-                <div dir="auto">{a.assumption}</div>
-                {a.impactIfWrong && (
-                  <div className="mt-1 text-xs text-muted-foreground" dir="auto">
-                    <span className="font-medium">
-                      {t('requirements.impactIfWrong')}
-                    </span>{' '}
-                    {a.impactIfWrong}
+            {[...assumptionItems]
+              .sort(
+                (a, b) =>
+                  Number(b.kind === 'open_question') -
+                  Number(a.kind === 'open_question'),
+              )
+              .map((a, i) => (
+                <li
+                  key={i}
+                  className={
+                    a.kind === 'open_question'
+                      ? 'rounded-lg border border-warning/40 bg-warning-subtle p-3'
+                      : 'rounded-lg border border-border/60 p-3'
+                  }
+                >
+                  {a.kind === 'open_question' && (
+                    <Badge variant="warning" className="mb-1.5">
+                      {t('requirements.needsClientDecision')}
+                    </Badge>
+                  )}
+                  <div
+                    dir="auto"
+                    className={
+                      a.kind === 'open_question'
+                        ? 'text-warning-subtle-foreground'
+                        : undefined
+                    }
+                  >
+                    {a.assumption}
                   </div>
-                )}
-              </li>
-            ))}
+                  {a.impactIfWrong && (
+                    <div className="mt-1 text-xs text-muted-foreground" dir="auto">
+                      <span className="font-medium">
+                        {t('requirements.impactIfWrong')}
+                      </span>{' '}
+                      {a.impactIfWrong}
+                    </div>
+                  )}
+                </li>
+              ))}
           </ul>
         </Section>
       )}

@@ -24,6 +24,7 @@ import {
   validateEntityCoverage,
   withResolvedCoverage,
 } from './api-design.coverage';
+import type { ScaleTier } from './scale-tier';
 
 /** Columns the server owns — never accepted in a request body. */
 const SERVER_MANAGED = new Set(['id', 'created_at', 'updated_at', 'password_hash']);
@@ -35,6 +36,18 @@ export interface BuildRestApiOptions {
   source?: ApiModuleSource;
   /** Include the Auth module. Default: false. */
   includeAuth?: boolean;
+  /**
+   * What the requirements actually ask a list endpoint to do. Absent ⇒ the
+   * structural maximum, which is what this builder always produced.
+   */
+  queryScope?: QueryScope;
+}
+
+/** The inputs `queryDemandFor` weighs, threaded down from the API designer. */
+export interface QueryScope {
+  tier: ScaleTier;
+  /** Functional + non-functional requirement prose, concatenated. */
+  requirementText: string;
 }
 
 /** Endpoint groups plus the exclusions that account for the rest. */
@@ -58,25 +71,118 @@ const STATUS_COLUMN = /^(status|state)$|_(status|state)$/i;
 const SENSITIVE = /password|secret|token|hash|salt/i;
 
 /**
- * More than this many foreign-key filters on one list endpoint stops being a
- * useful contract and starts being noise the frontend never calls.
+ * How many foreign-key filters one list endpoint may carry, per tier.
+ *
+ * Beyond a handful this stops being a useful contract and starts being noise the
+ * frontend never calls — and on a small internal tool, "a handful" is smaller.
+ * Five was the flat ceiling before scale was a consideration; it remains the
+ * ceiling for a large system, where a list genuinely gets sliced many ways.
  */
-const MAX_FK_FILTERS = 5;
+const MAX_FK_FILTERS: Record<ScaleTier, number> = { small: 2, medium: 3, large: 5 };
+
+/** The default when no scope is supplied: the structural maximum, as before. */
+const DEFAULT_FK_FILTERS = MAX_FK_FILTERS.large;
+
+/** Which optional query capabilities a list endpoint should expose. */
+export interface ListQueryDemand {
+  search: boolean;
+  /** Filter on the lifecycle column, when the entity has one. */
+  status: boolean;
+  dateRange: boolean;
+  maxFkFilters: number;
+}
+
+/**
+ * Everything the columns structurally support — the behaviour before scale was
+ * weighed, and the fallback whenever no scope is known.
+ */
+export const FULL_QUERY_DEMAND: ListQueryDemand = {
+  search: true,
+  status: true,
+  dateRange: true,
+  maxFkFilters: DEFAULT_FK_FILTERS,
+};
+
+/** Verbs that make a sentence a request to search or filter something. */
+const SEARCH_DEMAND =
+  /\b(?:search|filter|find|look ?up|browse|query|sort|narrow|autocomplete|type[- ]?ahead)\b|(?:بحث|يبحث|تصفية|فلترة|فرز|تصفح)/i;
+
+/** Language that makes a sentence a request to slice something by time. */
+const DATE_DEMAND =
+  /\b(?:date range|between .{0,20}dates?|by date|over time|per (?:day|week|month)|monthly|weekly|daily|history|historical|trend|report|analytics|dashboard|archive|overdue|due date|upcoming)\b|(?:نطاق زمني|حسب التاريخ|شهري|أسبوعي|يومي|تقرير|سجل تاريخي|متأخر)/i;
+
+/**
+ * Sentences that talk about this entity, by name.
+ *
+ * Crude on purpose — a stem match on the table's own noun. A precise
+ * entity-to-requirement mapping is a much harder problem and getting it slightly
+ * wrong here costs at most one query parameter, which is the cheap direction.
+ */
+function sentencesAbout(entity: Entity, requirementText: string): string {
+  // `singular()` strips a bare trailing "s", which is right for the path segments
+  // it was written for and wrong here: it turns `addresses` into `addresse` and
+  // `statuses` into `statuse`, tokens that appear in no sentence — so demand
+  // detection silently failed closed for every -es plural, reporting "nobody
+  // asked to search this" about an entity a requirement plainly named.
+  const noun = singularNoun(entity.name).replace(/_/g, ' ').toLowerCase();
+  if (noun.length < 3) return '';
+  return requirementText
+    .split(/(?<=[.!?؟\n])\s+/)
+    .filter((s) => s.toLowerCase().includes(noun))
+    .join(' ');
+}
+
+/**
+ * What the requirements actually ask a list endpoint for THIS entity to do.
+ *
+ * The bug this fixes: both the prompt and this builder produced free-text
+ * search, a lifecycle filter, a date range and up to five foreign-key filters on
+ * **every** entity, gated only on whether the columns allowed it. On a
+ * lightweight internal task board that meant multi-field filtering on comments,
+ * notifications and audit logs — endpoints nobody would ever call, each of which
+ * is real build and test time in the effort estimate.
+ *
+ * The gate is applied at the **small tier only**, and that restraint is
+ * deliberate. On a medium or large system the entity count is higher and the
+ * requirement prose is richer, so structural inference is much closer to right,
+ * and stripping a filter a big system genuinely needs is a defect the client
+ * feels. On a small one, the requirements are short enough that their silence
+ * about searching `comments` really does mean nobody asked to search comments.
+ *
+ * `page`/`limit` are never gated: a list endpoint without them is worse at every
+ * scale, and they cost one line each. The lifecycle filter likewise survives on
+ * structure alone — an entity with a `status` column exists to be filtered by it.
+ */
+export function queryDemandFor(entity: Entity, scope: QueryScope): ListQueryDemand {
+  const maxFkFilters = MAX_FK_FILTERS[scope.tier] ?? DEFAULT_FK_FILTERS;
+  if (scope.tier !== 'small') return { ...FULL_QUERY_DEMAND, maxFkFilters };
+
+  const relevant = sentencesAbout(entity, scope.requirementText);
+  return {
+    search: SEARCH_DEMAND.test(relevant),
+    status: true,
+    dateRange: DATE_DEMAND.test(relevant),
+    maxFkFilters,
+  };
+}
 
 /**
  * The query parameters a list endpoint for this entity supports — derived from
- * the entity's own columns, not guessed.
+ * the entity's own columns, narrowed to what the requirements ask for.
  *
- * Pagination alone is not a usable list API: the first thing any real client
- * needs is to search it, narrow it to a lifecycle state, bound it by date, and
- * scope it to a parent record. Each of those is inferable from the schema, so it
- * is built here rather than left to the model to remember — the deterministic
- * fallback and the LLM path then agree on what a list endpoint looks like.
+ * Pagination alone is not a usable list API: a real client needs to narrow a
+ * list to a lifecycle state and scope it to a parent record, and both are
+ * inferable from the schema. Free-text search and date ranges are a step beyond
+ * that — genuinely useful on a system whose requirements describe searching and
+ * reporting, and pure noise on one whose do not — so `demand` decides those.
  *
  * On a GET, `requestSchema` is what the OpenAPI export turns into `in: 'query'`
  * parameters, so these flow through to the spec, Postman, and the scaffold.
  */
-export function listQueryParams(entity: Entity): SchemaField[] {
+export function listQueryParams(
+  entity: Entity,
+  demand: ListQueryDemand = FULL_QUERY_DEMAND,
+): SchemaField[] {
   const params: SchemaField[] = [
     { name: 'page', type: 'integer', required: false },
     { name: 'limit', type: 'integer', required: false },
@@ -93,10 +199,10 @@ export function listQueryParams(entity: Entity): SchemaField[] {
       !SERVER_MANAGED.has(c.name.toLowerCase()) &&
       !SENSITIVE.test(c.name),
   );
-  if (searchable) push({ name: 'search', type: 'string', required: false });
+  if (demand.search && searchable) push({ name: 'search', type: 'string', required: false });
 
   const status = columns.find((c) => STATUS_COLUMN.test(c.name));
-  if (status) push({ name: status.name, type: 'string', required: false });
+  if (demand.status && status) push({ name: status.name, type: 'string', required: false });
 
   // Prefer the audit timestamp every entity carries; fall back to whatever
   // domain date the entity actually has (issued_at, sent_at, scheduled_for…).
@@ -104,13 +210,13 @@ export function listQueryParams(entity: Entity): SchemaField[] {
     columns.find((c) => c.name.toLowerCase() === 'created_at') ??
     columns.find((c) => c.type.trim().toLowerCase().startsWith('timestamp')) ??
     columns.find((c) => c.type.trim().toLowerCase() === 'date');
-  if (dateColumn) {
+  if (demand.dateRange && dateColumn) {
     const base = dateColumn.name.replace(/_at$/i, '');
     push({ name: `${base}_from`, type: 'string', required: false });
     push({ name: `${base}_to`, type: 'string', required: false });
   }
 
-  for (const fk of foreignKeys(entity).slice(0, MAX_FK_FILTERS)) {
+  for (const fk of foreignKeys(entity).slice(0, demand.maxFkFilters)) {
     push({ name: fk.name, type: fk.type, required: false });
   }
 
@@ -282,7 +388,10 @@ export function buildAuthModule(): ApiModule {
 }
 
 /** The five standard REST endpoints for one entity. */
-export function buildEntityModule(entity: Entity): ApiModule {
+export function buildEntityModule(
+  entity: Entity,
+  demand: ListQueryDemand = FULL_QUERY_DEMAND,
+): ApiModule {
   const resource = entity.name;
   const basePath = `/api/${resource}`;
 
@@ -304,7 +413,7 @@ export function buildEntityModule(entity: Entity): ApiModule {
         method: 'GET',
         path: basePath,
         summary: `List ${resource}.`,
-        requestSchema: listQueryParams(entity),
+        requestSchema: listQueryParams(entity, demand),
         responseSchema,
         statusCodes: [200],
       },
@@ -371,6 +480,13 @@ export function buildRestApi(
     return null;
   };
 
+  // One demand per entity, so the nested child-collection endpoint below asks the
+  // same question of the same entity as its own list endpoint did.
+  const demandFor = (entity: Entity): ListQueryDemand =>
+    options.queryScope
+      ? queryDemandFor(entity, options.queryScope)
+      : FULL_QUERY_DEMAND;
+
   const modules = new Map<string, ApiModule>();
   const excludedEntities: ExcludedEntity[] = [];
   const nestedOnly: Entity[] = [];
@@ -384,14 +500,14 @@ export function buildRestApi(
       nestedOnly.push(entity);
       continue;
     }
-    modules.set(entity.name, buildEntityModule(entity));
+    modules.set(entity.name, buildEntityModule(entity, demandFor(entity)));
   }
 
   for (const entity of nestedOnly) {
     const parent = parentOf(entity)!;
     const parentModule = modules.get(parent.name);
     if (!parentModule) {
-      modules.set(entity.name, buildEntityModule(entity));
+      modules.set(entity.name, buildEntityModule(entity, demandFor(entity)));
       continue;
     }
     parentModule.endpoints.push(...junctionEndpoints(entity, parent));
@@ -408,7 +524,9 @@ export function buildRestApi(
     if (!parent || !inScope.has(parent.name)) continue;
     const parentModule = modules.get(parent.name);
     if (!parentModule) continue;
-    parentModule.endpoints.push(childCollectionEndpoint(entity, parent));
+    parentModule.endpoints.push(
+      childCollectionEndpoint(entity, parent, demandFor(entity)),
+    );
   }
 
   const built = [...modules.values()];
@@ -429,6 +547,7 @@ export function buildRestApi(
 export function ensureEntityCoverage(
   design: ApiDesign,
   databaseDesign: DatabaseDesign,
+  queryScope?: QueryScope,
 ): ApiDesign {
   const names = (databaseDesign.entities ?? []).map((e) => e.name);
   const resolved = withResolvedCoverage(design, names);
@@ -438,11 +557,94 @@ export function ensureEntityCoverage(
   const filler = buildRestApi(databaseDesign, {
     only: coverage.missing,
     source: 'generated-fallback',
+    // Without this the filler groups carried the full query surface while every
+    // model-authored group beside them carried the narrowed one — two
+    // conventions inside a single API design, inherited by the OpenAPI spec,
+    // the Postman collection and the scaffold.
+    queryScope,
   });
   return withResolvedCoverage(
     mergeMissingCoverage(resolved, filler, coverage.missing),
     names,
   );
+}
+
+/** Query parameters that are always allowed, whatever the requirements say. */
+const ALWAYS_ALLOWED_PARAMS = /^(?:page|limit|per_?page|offset|cursor|sort|order|sort_?by)$/i;
+
+/** Names a model reaches for when it means free-text search. */
+const SEARCH_PARAM = /^(?:search|q|query|keyword|term|filter)$/i;
+
+/** A date-range bound, in the conventions a model actually emits. */
+const DATE_RANGE_PARAM =
+  /_(?:from|to|after|before)$|^(?:from|to|start_?date|end_?date|date_?from|date_?to)$/i;
+
+/**
+ * Trim a model-authored list endpoint's query surface to what the requirements
+ * asked for.
+ *
+ * The deterministic builder was already scale-aware, but the *model* path — the
+ * one that produced the reported over-broad design — had only the prompt behind
+ * it. That is the wrong half to leave unguarded: the prompt is the primary
+ * defence everywhere in this codebase precisely because a deterministic backstop
+ * sits behind it, and the tech stack got both while this got one.
+ *
+ * **Removal only, and only of optional filters.** Dropping an optional query
+ * parameter cannot break a contract — a client that never sends it behaves
+ * identically — whereas adding or renaming one could. `page`/`limit` and the
+ * ordering parameters are never touched, and above the small tier
+ * `queryDemandFor` returns the full surface, so this is a no-op there.
+ */
+export function enforceQuerySurface(
+  design: ApiDesign,
+  databaseDesign: DatabaseDesign,
+  scope: QueryScope,
+): { design: ApiDesign; trimmed: string[] } {
+  const byName = new Map((databaseDesign.entities ?? []).map((e) => [e.name, e]));
+  const trimmed: string[] = [];
+
+  const modules = design.modules.map((module) => {
+    // The group's own entity decides the demand; a group covering several (or
+    // none, like Auth) is left alone rather than judged by an arbitrary member.
+    const covered = module.coveredEntities ?? [];
+    const entity = covered.length === 1 ? byName.get(covered[0]) : undefined;
+    if (!entity) return module;
+
+    const demand = queryDemandFor(entity, scope);
+    if (demand.search && demand.dateRange && demand.maxFkFilters >= 5) return module;
+
+    const fkNames = new Set(foreignKeys(entity).map((c) => c.name.toLowerCase()));
+    const endpoints = module.endpoints.map((endpoint) => {
+      if (endpoint.method !== 'GET' || endpoint.path !== module.basePath) {
+        return endpoint;
+      }
+      let keptFks = 0;
+      const requestSchema = (endpoint.requestSchema ?? []).filter((param) => {
+        const name = param.name ?? '';
+        if (ALWAYS_ALLOWED_PARAMS.test(name)) return true;
+        if (!demand.search && SEARCH_PARAM.test(name)) {
+          trimmed.push(`${module.name}.${name}`);
+          return false;
+        }
+        if (!demand.dateRange && DATE_RANGE_PARAM.test(name)) {
+          trimmed.push(`${module.name}.${name}`);
+          return false;
+        }
+        if (fkNames.has(name.toLowerCase())) {
+          if (keptFks >= demand.maxFkFilters) {
+            trimmed.push(`${module.name}.${name}`);
+            return false;
+          }
+          keptFks += 1;
+        }
+        return true;
+      });
+      return { ...endpoint, requestSchema };
+    });
+    return { ...module, endpoints };
+  });
+
+  return { design: { ...design, modules }, trimmed };
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -504,13 +706,17 @@ function parentKey(junction: Entity, parent: Entity): string | null {
   );
 }
 
-function childCollectionEndpoint(child: Entity, parent: Entity): ApiEndpoint {
+function childCollectionEndpoint(
+  child: Entity,
+  parent: Entity,
+  demand: ListQueryDemand = FULL_QUERY_DEMAND,
+): ApiEndpoint {
   return {
     method: 'GET',
     path: `/api/${parent.name}/:id/${child.name}`,
     summary: `List ${child.name} for a ${singular(parent.name)}.`,
     // The parent is already pinned by the path, so its FK filter is redundant.
-    requestSchema: listQueryParams(child).filter(
+    requestSchema: listQueryParams(child, demand).filter(
       (p) => p.name !== parentKey(child, parent),
     ),
     responseSchema: (child.columns ?? []).map((c) => ({
@@ -528,4 +734,21 @@ function capitalize(value: string): string {
 
 function singular(table: string): string {
   return table.endsWith('s') ? table.slice(0, -1) : table;
+}
+
+/**
+ * Singularize a table name for **prose matching**, unlike `singular()`, which
+ * exists to build readable endpoint summaries and only strips a trailing "s".
+ *
+ * Handles the two English plural forms that mis-stem: `-ies` → `-y`
+ * (`categories` → `category`) and a sibilant `-es` → base (`addresses` →
+ * `address`, `statuses` → `status`, `boxes` → `box`). Everything else falls
+ * through to the bare "s" rule. Deliberately not a full inflector — the cost of
+ * a miss here is one query parameter, so a conservative rule that never mangles
+ * a word beats a clever one that sometimes does.
+ */
+function singularNoun(table: string): string {
+  if (/[^aeiou]ies$/i.test(table)) return `${table.slice(0, -3)}y`;
+  if (/(?:ss|sh|ch|x|z|s)es$/i.test(table)) return table.slice(0, -2);
+  return singular(table);
 }

@@ -53,6 +53,24 @@ export interface OutOfScopeItem {
 }
 
 /**
+ * Whether an entry is something we may proceed on, or something only the client
+ * can settle.
+ *
+ * The section was one undifferentiated list, and that flattened a real
+ * distinction: *"standard TLS encryption is sufficient"* is a low-stakes default
+ * a dev shop can reasonably run with, whereas *"either Microsoft Teams or Slack
+ * will be chosen as the notification platform"* is a decision that changes the
+ * integration work, and it shipped worded as though it were already settled. A
+ * client skimming the section sees an assumption they are invited to accept, and
+ * a choice they never made is then quietly baked into the scope.
+ *
+ * `open_question` is the honest label for the second kind: it is unresolved, the
+ * client must answer it, and if the design had to pick something to keep moving,
+ * that pick is a placeholder rather than a considered recommendation.
+ */
+export type AssumptionKind = 'assumption' | 'open_question';
+
+/**
  * An assumption the document rests on, paired with what breaks if it's wrong.
  * The merged home (R7) for the interview's open questions (the owner couldn't
  * answer, so we assumed a default) plus the assumptions the agent itself made to
@@ -63,6 +81,15 @@ export interface RequirementAssumption {
   assumption: string;
   /** The concrete consequence if this assumption turns out to be false. */
   impactIfWrong: string;
+  /**
+   * Optional and additive: absent entries render as plain assumptions, which is
+   * what every row written before this existed actually was.
+   */
+  kind?: AssumptionKind;
+}
+
+export function isAssumptionKind(value: unknown): value is AssumptionKind {
+  return value === 'assumption' || value === 'open_question';
 }
 
 export interface RequirementDocument extends LocalizedArtifact {
