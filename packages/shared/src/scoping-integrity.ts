@@ -35,6 +35,12 @@
  */
 
 import { significantTokens } from './text';
+import {
+  copyFor,
+  DEFAULT_ARTIFACT_LANGUAGE,
+  type ArtifactLanguage,
+  type LocalizedCopy,
+} from './artifact-language';
 
 /**
  * Filler that says nothing about *which* capability or role is meant. Matches
@@ -214,14 +220,57 @@ export function transcriptSuggestsBusinessRules(transcript: string): boolean {
  * into the assumptions list, which is precisely the section for "here is
  * something we could not settle".
  */
-export const EXTRACTION_GAP_ASSUMPTION =
-  'Assumed there are no additional business rules beyond those already captured. ' +
-  'The discovery call did contain policy language (approvals, thresholds, automatic actions) ' +
-  'that could not be extracted into discrete rules — review this section manually before sending.';
+const PROVENANCE_COPY: LocalizedCopy<{
+  extractionGapAssumption: string;
+  extractionGapImpact: string;
+  roleAssumption: (roleName: string) => string;
+  roleImpact: string;
+}> = {
+  en: {
+    extractionGapAssumption:
+      'Assumed there are no additional business rules beyond those already captured. ' +
+      'The discovery call did contain policy language (approvals, thresholds, automatic actions) ' +
+      'that could not be extracted into discrete rules — review this section manually before sending.',
+    extractionGapImpact:
+      'A missed rule usually surfaces during build as rework, since the behaviour was expected but never specified.',
+    roleAssumption: (roleName) =>
+      `Assumed the project needs a "${roleName}" role — it was inferred from the described workflows, not named by the client.`,
+    roleImpact:
+      'If this role does not exist, its permissions and screens are unnecessary scope; if it is really two roles, the permission model needs revisiting.',
+  },
+  ar: {
+    extractionGapAssumption:
+      'افترضنا عدم وجود قواعد عمل إضافية غير ما تم توثيقه. ' +
+      'تضمّنت مكالمة الاستكشاف صياغات سياسات (موافقات، حدود، إجراءات تلقائية) ' +
+      'تعذّر استخلاصها إلى قواعد منفصلة — راجع هذا القسم يدويًا قبل الإرسال.',
+    extractionGapImpact:
+      'القاعدة المُغفَلة تظهر عادةً أثناء التنفيذ على شكل إعادة عمل، لأن السلوك كان متوقَّعًا دون أن يُوثَّق.',
+    roleAssumption: (roleName) =>
+      `افترضنا أن المشروع يحتاج إلى دور «${roleName}» — استُنتج من سير العمل الموصوف ولم يذكره العميل صراحةً.`,
+    roleImpact:
+      'إن لم يكن هذا الدور موجودًا فإن صلاحياته وشاشاته نطاق زائد؛ وإن كان في الواقع دورين فإن نموذج الصلاحيات يحتاج إلى مراجعة.',
+  },
+};
 
-/** The impact line paired with {@link EXTRACTION_GAP_ASSUMPTION}. */
-export const EXTRACTION_GAP_IMPACT =
-  'A missed rule usually surfaces during build as rework, since the behaviour was expected but never specified.';
+/**
+ * The note that stands in for a silently-empty business-rules section, in the
+ * document's own language.
+ *
+ * A function rather than the pair of constants it replaces: these lines go into
+ * the assumptions list of a document a client reads, and a hardcoded English
+ * pair dropped two English sentences into an otherwise Arabic section — the
+ * partial-translation failure this module is otherwise dedicated to catching,
+ * committed by the module itself.
+ */
+export function extractionGapAssumption(
+  language: ArtifactLanguage = DEFAULT_ARTIFACT_LANGUAGE,
+): { assumption: string; impactIfWrong: string } {
+  const copy = copyFor(PROVENANCE_COPY, language);
+  return {
+    assumption: copy.extractionGapAssumption,
+    impactIfWrong: copy.extractionGapImpact,
+  };
+}
 
 /**
  * The assumption line for a role the client never named.
@@ -234,13 +283,19 @@ export const EXTRACTION_GAP_IMPACT =
  * already gets right for hosting region and compliance regime, applied to the
  * one other place a specific was being asserted without a source.
  */
-export function unsourcedRoleAssumption(roleName: string): {
+export function unsourcedRoleAssumption(
+  roleName: string,
+  language: ArtifactLanguage = DEFAULT_ARTIFACT_LANGUAGE,
+): {
   assumption: string;
   impactIfWrong: string;
 } {
+  const copy = copyFor(PROVENANCE_COPY, language);
   return {
-    assumption: `Assumed the project needs a "${roleName}" role — it was inferred from the described workflows, not named by the client.`,
-    impactIfWrong:
-      'If this role does not exist, its permissions and screens are unnecessary scope; if it is really two roles, the permission model needs revisiting.',
+    // The role NAME is interpolated as the model wrote it and is never
+    // translated — it is a proper noun in this document, and the schema, the
+    // permission tables and the API all refer to it by that exact string.
+    assumption: copy.roleAssumption(roleName),
+    impactIfWrong: copy.roleImpact,
   };
 }

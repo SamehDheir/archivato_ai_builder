@@ -37,6 +37,7 @@ function seed(
     fixLog: null,
     proposalDrafts: null,
     generateExtendedArtifacts: true,
+    artifactLanguage: null,
     createdAt: now,
     updatedAt: now,
   });

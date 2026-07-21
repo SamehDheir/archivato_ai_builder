@@ -43,6 +43,7 @@ function session(): InterviewSession {
     fixLog: null,
     proposalDrafts: null,
     generateExtendedArtifacts: true,
+    artifactLanguage: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

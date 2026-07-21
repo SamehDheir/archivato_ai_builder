@@ -6,6 +6,13 @@ import { LocaleProvider } from '@/components/shared/i18n';
 import { PageviewTracker } from '@/components/shared/pageview-tracker';
 import { CookieConsent } from '@/components/shared/cookie-consent';
 import {
+  defaultLocale,
+  locales,
+  LOCALE_COOKIE,
+  LOCALE_STORAGE,
+  rtlLocales,
+} from '@/lib/i18n/settings';
+import {
   siteDescription as description,
   siteName as title,
   siteTagline,
@@ -144,9 +151,22 @@ export const viewport: Viewport = {
 const themeScript = `(function(){try{var t=localStorage.getItem('archivato.theme')||'dark';document.documentElement.classList.toggle('dark',t==='dark');}catch(e){document.documentElement.classList.add('dark');}})();`;
 
 // Set <html lang/dir> before first paint from the saved locale (localStorage,
-// then cookie) so an Arabic (RTL) user never sees an LTR flash. Mirrors the
-// LocaleProvider default.
-const localeScript = `(function(){try{var l=localStorage.getItem('archivato.locale');if(!l){var m=document.cookie.match(/archivato_locale=([^;]+)/);l=m&&m[1];}l=(l==='ar')?'ar':'en';var e=document.documentElement;e.lang=l;e.dir=(l==='ar')?'rtl':'ltr';}catch(e){}})();`;
+// then cookie) so an RTL user never sees an LTR flash. Mirrors the LocaleProvider
+// default.
+//
+// BUILT from the locale tables rather than written out, because this is an inline
+// string that runs before React and so cannot call `dirFor`. Hand-writing the
+// direction test here is how a future RTL locale (he, fa, ur) would translate
+// correctly and still paint LTR for the first frame: the app would flip on mount
+// and the pre-paint script — the thing whose entire job is preventing that flash —
+// would be the one place still saying `=== 'ar'`. Adding to `rtlLocales` is enough.
+const localeScript = `(function(){try{
+var S=${JSON.stringify(locales)},R=${JSON.stringify(rtlLocales)};
+var l=localStorage.getItem(${JSON.stringify(LOCALE_STORAGE)});
+if(!l){var m=document.cookie.match(${JSON.stringify(LOCALE_COOKIE)}+"=([^;]+)");l=m&&m[1];}
+if(S.indexOf(l)<0)l=${JSON.stringify(defaultLocale)};
+var e=document.documentElement;e.lang=l;e.dir=R.indexOf(l)>=0?'rtl':'ltr';
+}catch(e){}})();`;
 
 // The cookie-consent banner is server-rendered (part of the first paint — a
 // post-hydration mount popped in seconds late and cost Speed Index). For a

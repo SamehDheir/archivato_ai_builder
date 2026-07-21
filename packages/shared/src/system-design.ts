@@ -3,6 +3,7 @@
  * Produced from a confirmed interview + its Requirement Document.
  */
 
+import type { LocalizedArtifact } from './artifact-language';
 import type { GenerationProvenance } from './generation';
 import type { FunctionalRequirement, UserRole } from './requirements';
 import { paymentAvailabilityFor, paymentProvidersFor } from './region';
@@ -107,7 +108,7 @@ export interface ConstraintCompliance {
   howAddressed: string;
 }
 
-export interface SystemDesign {
+export interface SystemDesign extends LocalizedArtifact {
   sessionId: string;
   generatedAt: string;
   /** How this design was produced — see `generation.ts`. Absent = unknown. */

@@ -3,6 +3,7 @@
  * stage, produced from a confirmed interview. Structured JSON (spec Step 3).
  */
 
+import type { LocalizedArtifact } from './artifact-language';
 import type { OpenQuestion } from './interview';
 import type { GenerationProvenance } from './generation';
 import { stripUrls } from './prompt-safety';
@@ -64,7 +65,7 @@ export interface RequirementAssumption {
   impactIfWrong: string;
 }
 
-export interface RequirementDocument {
+export interface RequirementDocument extends LocalizedArtifact {
   sessionId: string;
   /** ISO timestamp. */
   generatedAt: string;

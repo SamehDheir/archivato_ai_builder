@@ -8,6 +8,7 @@
  * it as a product-strategy view of the same session.
  */
 
+import type { LocalizedArtifact } from './artifact-language';
 import type { GenerationProvenance } from './generation';
 import { stripUrls } from './prompt-safety';
 
@@ -31,7 +32,7 @@ export interface SuccessMetric {
   rationale: string;
 }
 
-export interface ProductVision {
+export interface ProductVision extends LocalizedArtifact {
   sessionId: string;
   generatedAt: string;
   /** How this vision was produced — see `generation.ts`. Absent = unknown. */

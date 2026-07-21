@@ -1,0 +1,13 @@
+-- AlterTable
+-- The language this project's GENERATED PROSE is written in ('en' | 'ar').
+--
+-- Deliberately NULLABLE with no default, unlike `generateExtendedArtifacts`,
+-- which backfilled every existing row. NULL here means "never chosen", which
+-- resolves on read to the language the client described their business in
+-- (`detectArtifactLanguage` over the idea). Backfilling 'en' would be a lie
+-- about the pre-existing rows and, worse, would pin every old Arabic-language
+-- project to English forever the moment it was next regenerated.
+--
+-- Artifacts already written carry no language stamp of their own and read as
+-- English (`DEFAULT_ARTIFACT_LANGUAGE`), so nothing already generated changes.
+ALTER TABLE "interview_sessions" ADD COLUMN     "artifactLanguage" TEXT;

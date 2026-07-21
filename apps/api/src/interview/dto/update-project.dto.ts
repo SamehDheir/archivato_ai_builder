@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -7,6 +8,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { ARTIFACT_LANGUAGES, type ArtifactLanguage } from '@archivato/shared';
 
 /**
  * Partial update of a project's owner-facing labels (`PATCH /interview/:id`).
@@ -50,4 +52,18 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsBoolean()
   generateExtendedArtifacts?: boolean;
+
+  /**
+   * The language this project's artifacts are generated in. Set from the control
+   * at the confirmation gate, or later when an owner decides the package should
+   * go to a stakeholder who reads the other language.
+   *
+   * `@IsIn` over the shared list rather than `@IsString`, so junk is a **400**
+   * instead of a value that reaches the agents and silently resolves back to
+   * English — the `ScaffoldQueryDto` rule. It is also what stops an unsupported
+   * locale being persisted into a column every string table is keyed by.
+   */
+  @IsOptional()
+  @IsIn(ARTIFACT_LANGUAGES as readonly string[])
+  artifactLanguage?: ArtifactLanguage;
 }

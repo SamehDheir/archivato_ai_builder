@@ -2,6 +2,11 @@
   "conversation": "Conversation",
   "interviewer": "Interviewer",
   "you": "You",
+  "transcript": {
+    "empty": "No conversation was recorded for this project.",
+    "notes": "Call notes",
+    "correction": "Correction"
+  },
   "questionN": "Question {{n}} of up to {{max}}",
   "qShort": "Q{{n}}",
   "pickMulti": "Pick any that apply — add detail below if you like.",
@@ -74,5 +79,9 @@
     "copy": "Copy question",
     "copyAll": "Copy all",
     "copyFailed": "Couldn't copy to the clipboard"
+  },
+  "language": {
+    "label": "Document language",
+    "hint": "The language every generated document is written in — including the proposal your client reads. Set from how the project was described; change it if your client reads the other language. Table names, API paths and technology names always stay in English."
   }
 }

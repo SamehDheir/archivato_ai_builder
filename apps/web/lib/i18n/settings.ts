@@ -15,10 +15,23 @@ export const LOCALE_LABEL: Record<Locale, string> = {
   ar: 'Arabic',
 };
 
-/** Right-to-left locales. */
-const RTL_LOCALES: Locale[] = ['ar'];
+/**
+ * Right-to-left locales — the single source of truth for direction.
+ *
+ * Adding an RTL locale (he, fa, ur, …) means adding it to `locales` and to this
+ * list, and nothing else: `dirFor` is what `<html dir>`, the pre-paint script in
+ * the root layout, and Radix's `DirectionProvider` all consult. Nothing in the
+ * layout compares against `'ar'` directly, so the mirroring is a property of the
+ * language's writing direction rather than of one specific language.
+ *
+ * Exported because the root layout's pre-paint script has to be BUILT from it —
+ * that script is an inline string running before React, so it cannot call
+ * `dirFor`, and a hand-copied `'ar'` in there would be the one place a new RTL
+ * locale silently failed to flip.
+ */
+export const rtlLocales: readonly Locale[] = ['ar'];
 export const isRtl = (locale: string): boolean =>
-  RTL_LOCALES.includes(locale as Locale);
+  rtlLocales.includes(locale as Locale);
 export const dirFor = (locale: string): 'rtl' | 'ltr' =>
   isRtl(locale) ? 'rtl' : 'ltr';
 

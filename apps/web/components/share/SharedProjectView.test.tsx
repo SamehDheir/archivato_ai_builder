@@ -35,10 +35,11 @@ jest.mock('@/components/shared/theme', () => ({
 }));
 
 // The real loader dynamic-imports the `stages`/`share` bundles into the i18next
-// singleton — pointless here (react-i18next is mocked) and it would pull i18next
-// in. Resolving immediately still exercises the component's "hold until ready" gate.
+// singleton and switches the active language to the document's — pointless here
+// (react-i18next is mocked) and it would pull i18next in. Resolving immediately
+// still exercises the component's "hold until ready" gate.
 jest.mock('@/lib/i18n/client', () => ({
-  loadShareNamespaces: () => Promise.resolve(),
+  applyShareDocumentLanguage: () => Promise.resolve(),
 }));
 
 const project: SharedProject = {
@@ -58,6 +59,7 @@ const project: SharedProject = {
   qaPlan: EXAMPLE_QA_PLAN,
   // The server's call, not the page's — a Pro owner's link arrives with `false`.
   watermark: true,
+  language: 'en',
 };
 
 describe('SharedProjectView', () => {

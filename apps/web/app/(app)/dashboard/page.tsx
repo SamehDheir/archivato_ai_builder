@@ -17,6 +17,7 @@ import {
 import type {
   ApiDesign,
   DatabaseDesign,
+  ArtifactLanguage,
   InterviewState,
   Permission,
   PipelineStageName,
@@ -99,6 +100,13 @@ export default function Home() {
   const openUpgrade = useUpgrade();
   const router = useRouter();
   const { t } = useTranslation('dashboard');
+  // Tab labels come from the `project` namespace, which is the ONE place they
+  // live. `dashboard.json` used to carry its own copy purely so the breadcrumb
+  // could read them, and the two drifted: the duplicate never gained `business`,
+  // `threat` or `qa`, so opening Business Analysis rendered the literal key
+  // `tab.business` in the breadcrumb — in English as well as Arabic, because a
+  // missing key falls back to the key, not to the other locale.
+  const { t: tTab } = useTranslation('project');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [state, setState] = useState<InterviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -720,8 +728,8 @@ export default function Home() {
       {
         label:
           state.status === 'confirmed'
-            ? t(`tab.${stageTab}`)
-            : t('tab.interview'),
+            ? tTab(`tab.${stageTab}`)
+            : tTab('tab.interview'),
       },
     ];
   }
@@ -763,9 +771,36 @@ export default function Home() {
     }
   }
 
+  /**
+   * Set the language every artifact will be generated in.
+   *
+   * Same shape and same failure posture as `setExtendedArtifacts`: mirror onto
+   * local state only after the write succeeds, so the control never shows a
+   * choice the server refused. It deliberately does NOT retranslate anything
+   * already generated — each artifact carries the language it was written in,
+   * and only a regeneration rewrites one.
+   */
+  async function setArtifactLanguage(language: ArtifactLanguage) {
+    if (!state) return;
+    try {
+      await interviewApi.update(state.sessionId, { artifactLanguage: language });
+      setState((prev) => (prev ? { ...prev, artifactLanguage: language } : prev));
+      await refreshProjects();
+    } catch (e) {
+      toast({
+        title: t('toast.settingSaveFailed'),
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'error',
+      });
+    }
+  }
+
   // ⌘K command palette: quick actions, jump to a project, or (in a confirmed
   // project) jump to any reachable stage.
   const stageAvailable: Record<TabKey, boolean> = {
+    // Always reachable — the transcript predates every artifact and no restore
+    // can rewind it. Mirrors `available` in ProjectStages.
+    interview: true,
     business: true,
     vision: true,
     requirements: true,
@@ -866,7 +901,7 @@ export default function Home() {
               .filter((tab) => stageAvailable[tab])
               .map((tab) => ({
                 id: `stage-${tab}`,
-                label: t(`tab.${tab}`),
+                label: tTab(`tab.${tab}`),
                 hint: t('palette.stage'),
                 run: () => void goToStage(tab),
               })),
@@ -1033,6 +1068,7 @@ export default function Home() {
                 onConfirm={handleConfirm}
                 onEditSlot={handleEditSlot}
                 onToggleExtendedArtifacts={(v) => void setExtendedArtifacts(v)}
+                onChangeArtifactLanguage={(l) => void setArtifactLanguage(l)}
               />
             </>
           )}
@@ -1041,12 +1077,14 @@ export default function Home() {
             <ProjectStages
               sessionId={state.sessionId}
               summary={state.summary}
+              history={state.history}
               doc={doc}
               design={design}
               dbDesign={dbDesign}
               apiDesign={apiDesign}
               review={review}
               isPro={sub?.plan === 'pro'}
+              artifactLanguage={state.artifactLanguage}
               busy={busy}
               stream={stream}
               error={error}

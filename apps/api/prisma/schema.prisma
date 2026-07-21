@@ -277,6 +277,17 @@ model InterviewSession {
   /// derivation; `confirm()` pins one. Existing rows were backfilled to `true` by
   /// the previous migration, so nothing already created changed behaviour.
   generateExtendedArtifacts Boolean?
+  /// Which language this project's GENERATED PROSE is written in ('en' | 'ar').
+  /// Distinct from the viewer's UI locale: an artifact is generated once and then
+  /// read by people with no toggle (the public share page), so the language
+  /// belongs to the project, not to whoever is looking at it.
+  ///
+  /// **NULL = never chosen**, which resolves to the language the client described
+  /// their business in (`detectArtifactLanguage` over the idea). Deriving on read
+  /// rather than stamping at creation is the `generateExtendedArtifacts` rule: it
+  /// lets the default keep tracking an idea the owner corrects at the gate. A
+  /// non-null value is the owner's explicit choice and no detection overrules it.
+  artifactLanguage String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

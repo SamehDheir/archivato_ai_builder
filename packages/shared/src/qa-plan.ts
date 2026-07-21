@@ -9,6 +9,7 @@
  * deterministic fallback, so it always yields a complete, useful plan.
  */
 
+import type { LocalizedArtifact } from './artifact-language';
 import type { DerivedArtifact } from './freshness';
 import type { GenerationProvenance } from './generation';
 
@@ -50,7 +51,7 @@ export interface TestSuite {
   cases: TestCase[];
 }
 
-export interface QaPlan extends DerivedArtifact {
+export interface QaPlan extends DerivedArtifact, LocalizedArtifact {
   /** How this plan was produced — see `generation.ts`. Absent = unknown. */
   generation?: GenerationProvenance;
   sessionId: string;

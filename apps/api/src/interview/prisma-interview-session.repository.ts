@@ -11,6 +11,7 @@ import type {
   RequirementsSummary,
   SlotMap,
 } from '@archivato/shared';
+import { isArtifactLanguage } from '@archivato/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { InterviewSession } from './interview-session.entity';
 import type { InterviewSessionRepository } from './interview-session.repository';
@@ -45,6 +46,7 @@ export class PrismaInterviewSessionRepository
         fixLog: toJson(session.fixLog),
         proposalDrafts: toJson(session.proposalDrafts),
         generateExtendedArtifacts: session.generateExtendedArtifacts,
+        artifactLanguage: session.artifactLanguage,
       },
     });
     return toEntity(row);
@@ -95,6 +97,7 @@ export class PrismaInterviewSessionRepository
         fixLog: toJson(session.fixLog),
         proposalDrafts: toJson(session.proposalDrafts),
         generateExtendedArtifacts: session.generateExtendedArtifacts,
+        artifactLanguage: session.artifactLanguage,
       },
     });
     return toEntity(row);
@@ -134,6 +137,7 @@ function toEntity(row: {
   fixLog: Prisma.JsonValue;
   proposalDrafts: Prisma.JsonValue;
   generateExtendedArtifacts: boolean | null;
+  artifactLanguage: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): InterviewSession {
@@ -164,6 +168,15 @@ function toEntity(row: {
     // Null is meaningful here (= not decided), so it must NOT be coerced — read it
     // through `resolveExtendedArtifacts`, which applies the budget-derived default.
     generateExtendedArtifacts: row.generateExtendedArtifacts,
+    // Null is meaningful here too (= never chosen), so it is preserved rather
+    // than defaulted — `resolveArtifactLanguage` derives from the idea while it
+    // stays null. `isArtifactLanguage` guards the column because it is a plain
+    // TEXT field: a value written by an older build, a manual edit, or a future
+    // locale that was rolled back must read as "not chosen", never be cast into
+    // a language the code has no string table for.
+    artifactLanguage: isArtifactLanguage(row.artifactLanguage)
+      ? row.artifactLanguage
+      : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

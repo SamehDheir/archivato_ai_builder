@@ -271,8 +271,22 @@ readiness, 503 when degraded).
   two artifacts that reach a third party — the requirement document and the
   proposal message — are screened on the way out so no injected link can ride
   along. Pure helpers in `@archivato/shared/prompt-safety.ts`.
-- **i18n by default:** all UI chrome is English + Arabic with RTL-safe logical
-  styling; AI artifacts stay server-side English by convention.
+- **i18n by default:** all UI chrome is English + Arabic, and the **layout
+  mirrors** in Arabic rather than merely translating — direction is derived from
+  the locale's writing direction (`rtlLocales`, one list) and applied at three
+  seams that must agree: `<html dir>`, logical CSS throughout, and Radix's
+  `DirectionProvider` (Radix reads direction from React context, not the DOM, so
+  without it every `Tabs`/`Select` stamps `dir="ltr"` on itself and silently
+  overrides the page). Adding another RTL locale is a one-line change.
+  **Generated documents are written in the project's own language**
+  — detected from how the client described the business, changeable at the
+  confirmation gate. One rule, applied everywhere: chrome follows the viewer's
+  locale, generated prose follows the *document's* language (produced in it on the
+  first pass, never translated afterwards), and code-facing identifiers — table
+  names, API paths, enum values — stay English in both. Enforced rather than
+  documented: `npm run lint --workspace @archivato/web` fails on a translation key
+  missing from any locale, a `t('…')` that resolves nowhere, or colloquial Arabic
+  where Modern Standard is required.
 - **Design tokens only:** every colour, type step, radius, shadow and duration is
   a CSS variable in `apps/web/app/globals.css`. Raw hex and Tailwind's stock
   palette are **blocked by ESLint** in components — colour has to mean a semantic

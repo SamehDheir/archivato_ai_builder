@@ -5,6 +5,8 @@
  * any design work begins.
  */
 
+import type { ArtifactLanguage } from './artifact-language';
+
 /** The interview phases, in ask order. */
 export enum InterviewPhase {
   /** A — main goal & users. */
@@ -330,6 +332,13 @@ export interface ProjectSummary {
    */
   generateExtendedArtifacts?: boolean;
   /**
+   * The language this project's generated prose is written in. Always resolved
+   * server-side (an unset column derives from the client's own words), so the
+   * dashboard never has to guess. Optional only for back-compat with an older
+   * cached payload; absent reads as `DEFAULT_ARTIFACT_LANGUAGE`.
+   */
+  artifactLanguage?: ArtifactLanguage;
+  /**
    * ISO timestamp of creation. The free plan allows N designs **per calendar
    * month**, so the client counts the projects created in the current period
    * (`countInQuotaPeriod`) — the project list stays the meter, with no usage table.
@@ -368,4 +377,15 @@ export interface InterviewState {
    * can override before confirming. Optional for back-compat; absent reads as `true`.
    */
   generateExtendedArtifacts?: boolean;
+  /**
+   * The language this project's artifacts will be generated in — derived from the
+   * client's own words, and shown at the confirmation gate as a control the owner
+   * can change before the pipeline starts.
+   *
+   * It is surfaced at the gate rather than buried in settings because that is the
+   * last moment before generation, and the language of a document is not
+   * something anyone wants to discover after paying for it. `confirm()` pins
+   * whatever it lands on.
+   */
+  artifactLanguage?: ArtifactLanguage;
 }

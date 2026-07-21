@@ -18,6 +18,7 @@ import {
   isPlanModeTranscript,
   isUnlimitedQuota,
   startOfQuotaPeriod,
+  type ArtifactLanguage,
   type InterviewExchange,
   type InterviewQuestion,
   type InterviewState,
@@ -43,7 +44,10 @@ import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
 } from './interview-session.repository';
-import type { InterviewSession } from './interview-session.entity';
+import {
+  resolveArtifactLanguage,
+  type InterviewSession,
+} from './interview-session.entity';
 import { BillingService } from '../billing/billing.service';
 import { QUESTION_PLAN, TOTAL_QUESTIONS } from './question-plan';
 import { detectLanguage } from './language';
@@ -149,6 +153,11 @@ export class InterviewService {
       // toggle at the gate keeps tracking a corrected budget until the owner
       // touches it. `confirm()` pins whatever it lands on.
       generateExtendedArtifacts: null,
+      // Null = never chosen, so `resolveArtifactLanguage` derives it from the
+      // idea. Not stamped here for the same reason the flag above is not: the
+      // owner may still rewrite the idea, and a language pinned at the moment of
+      // creation would ignore the correction. `confirm()` pins one.
+      artifactLanguage: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -208,6 +217,13 @@ export class InterviewService {
       session.generateExtendedArtifacts,
       session.slots,
     );
+    // Pin the artifact language for the same reason and at the same moment. Up
+    // to here it tracked the idea, which the owner could still rewrite; from here
+    // the pipeline starts generating, and every artifact must be written in the
+    // same language as the one before it. Deriving it per stage instead would let
+    // an idea edited mid-pipeline produce a package that changes language halfway
+    // through — the exact half-translated document this whole system prevents.
+    session.artifactLanguage = resolveArtifactLanguage(session);
     await this.repo.save(session);
     return this.toState(session);
   }
@@ -234,6 +250,7 @@ export class InterviewService {
       clientName?: string;
       weeklyRate?: number | null;
       generateExtendedArtifacts?: boolean;
+      artifactLanguage?: ArtifactLanguage;
     },
   ): Promise<ProjectSummary> {
     const session = await this.require(sessionId);
@@ -251,6 +268,14 @@ export class InterviewService {
     // become visible and generate the way they always did.
     if (patch.generateExtendedArtifacts !== undefined) {
       session.generateExtendedArtifacts = patch.generateExtendedArtifacts;
+    }
+    // The owner's explicit language choice. It is accepted **after** confirm too:
+    // an owner who realises the package should go to an English-reading
+    // stakeholder sets it here and regenerates. It deliberately does NOT
+    // retranslate anything already written — artifacts are stamped with the
+    // language they were generated in, and only a regeneration rewrites one.
+    if (patch.artifactLanguage !== undefined) {
+      session.artifactLanguage = patch.artifactLanguage;
     }
     await this.repo.save(session);
     return this.toSummary(session);
@@ -341,6 +366,9 @@ export class InterviewService {
         s.generateExtendedArtifacts,
         s.slots,
       ),
+      // Derived while the column is null, so the dashboard shows the language the
+      // project would actually generate in rather than a blank.
+      artifactLanguage: resolveArtifactLanguage(s),
       // The per-month quota's meter: the client counts what was created this
       // period rather than what is owned (see `countInQuotaPeriod`).
       createdAt: s.createdAt.toISOString(),
@@ -717,6 +745,9 @@ export class InterviewService {
         session.generateExtendedArtifacts,
         session.slots,
       ),
+      // Same derive-on-read rule: the gate shows (and lets the owner change) the
+      // language the pipeline is about to generate in, not a stored null.
+      artifactLanguage: resolveArtifactLanguage(session),
     };
   }
 }

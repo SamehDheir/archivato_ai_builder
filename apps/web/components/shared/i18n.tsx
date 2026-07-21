@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import { I18nextProvider, useTranslation } from 'react-i18next';
+import { DirectionProvider } from '@radix-ui/react-direction';
 import { Languages } from 'lucide-react';
 import i18n, { loadLocale } from '@/lib/i18n/client';
 import {
@@ -49,10 +50,34 @@ function readStoredLocale(): Locale {
 }
 
 /**
- * Holds the active locale and keeps i18next + `<html lang/dir>` in sync. Sits
- * just under ThemeProvider in the layout. SSR renders the default locale; on
- * mount we apply the persisted choice (the pre-paint script has already set
- * `dir`/`lang` to avoid an RTL flash).
+ * Holds the active locale and keeps i18next + `<html lang/dir>` + **Radix's
+ * direction context** in sync. Sits just under ThemeProvider in the layout. SSR
+ * renders the default locale; on mount we apply the persisted choice (the
+ * pre-paint script has already set `dir`/`lang` to avoid an RTL flash).
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * The `DirectionProvider` is not optional decoration — without it the entire app
+ * silently renders LTR in Arabic, and this is the bug it fixes.
+ *
+ * Radix resolves direction through a React context, NOT from the DOM. Its
+ * `useDirection(localDir)` returns `localDir || contextDir || 'ltr'`, and with no
+ * provider mounted that last branch always wins. Every `Tabs` root then stamps a
+ * literal `dir="ltr"` **onto its own DOM node** (so do `Select`'s content and
+ * every roving-focus group), and an explicit `dir` attribute beats an inherited
+ * one — so `<html dir="rtl">` is overridden for that whole subtree.
+ *
+ * That is why the symptom looked like "the text translated but the layout did
+ * not": the artifact column carries its own explicit `dir`, so Arabic *prose*
+ * still laid out RTL, while everything around it quietly reverted. On the
+ * project page the offending node is the `Tabs` root that IS the flex container
+ * holding the stage rail and the artifact column, so the rail stayed on the left
+ * and the content on the right — on every stage, because they share one root.
+ *
+ * Fixing this per-component (passing `dir` to each `Tabs`/`Select`) would be a
+ * patch that the next Radix primitive forgets. The context is the seam Radix
+ * designed for it, so it is established once, here, beside the locale it derives
+ * from — and any RTL locale added to `rtlLocales` is handled with no further
+ * work, since `dirFor` is the only thing consulted.
  */
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(defaultLocale);
@@ -89,7 +114,9 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <LocaleContext.Provider value={{ locale, setLocale }}>
-      <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
+      <DirectionProvider dir={dirFor(locale)}>
+        <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
+      </DirectionProvider>
     </LocaleContext.Provider>
   );
 }

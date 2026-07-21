@@ -192,7 +192,7 @@ export function ProposalModal({
       >
         <div className="flex items-start justify-between gap-3 border-b border-border p-5 pb-4">
           <div className="flex items-center gap-2">
-            <Send className="h-4 w-4 shrink-0 text-primary" />
+            <Send className="h-4 w-4 shrink-0 text-primary rtl:-scale-x-100" />
             <div>
               <h2 id="proposal-title" className="text-base font-semibold">
                 {t('proposal.title')}

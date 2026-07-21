@@ -32,6 +32,7 @@ import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
 } from '../interview/interview-session.repository';
+import { resolveArtifactLanguage } from '../interview/interview-session.entity';
 import {
   REQUIREMENT_DOCUMENT_REPOSITORY,
   type RequirementDocumentRepository,
@@ -299,6 +300,12 @@ export class ShareService {
           ? withoutGeneration({ ...design.qaPlan, sessionId: token })
           : null,
       watermark: shouldWatermarkShare(plan),
+      // Read off the session, not off one artifact: the requirement document is
+      // the oldest artifact in the package, so an owner who switched language and
+      // regenerated only the later stages would otherwise have the page laid out
+      // for a document that no longer represents it. The session is the one place
+      // that holds the project's current answer.
+      language: resolveArtifactLanguage(session),
     };
   }
 

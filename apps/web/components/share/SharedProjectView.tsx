@@ -20,6 +20,11 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { SharedProject } from '@archivato/shared';
+import {
+  artifactTextDirection,
+  detectArtifactLanguage,
+  type ArtifactLanguage,
+} from '@archivato/shared';
 import { cn } from '@/lib/utils';
 import { useFormat } from '@/lib/i18n/format';
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +43,8 @@ import { ApiDesignView } from '@/components/design/ApiDesignView';
 import { ReviewView } from '@/components/review/ReviewView';
 import { ThreatModelView } from '@/components/security/ThreatModelView';
 import { QaPlanView } from '@/components/qa/QaPlanView';
-import { loadShareNamespaces } from '@/lib/i18n/client';
+import { applyShareDocumentLanguage } from '@/lib/i18n/client';
+import { DirectionProvider } from '@radix-ui/react-direction';
 
 /**
  * The public, read-only page behind a share link.
@@ -61,20 +67,69 @@ import { loadShareNamespaces } from '@/lib/i18n/client';
  * duplicated. The page lives outside the `(app)` route group and mounts only the
  * provider it actually needs (`ToastProvider`, for the ER-diagram export buttons).
  */
+/**
+ * The language to present a shared package in.
+ *
+ * `project.language` is the server's answer and is authoritative. It is optional
+ * only in practice: a link minted before the field existed, read by a browser
+ * that cached the older payload, arrives without it — and those are exactly the
+ * packages whose prose may be Arabic with nothing anywhere saying so. Reading the
+ * document's own text is the only signal left, and a client staring at a
+ * backwards proposal is the worst place to have no answer.
+ */
+function documentLanguageOf(project: SharedProject): ArtifactLanguage {
+  return (
+    project.language ??
+    detectArtifactLanguage(
+      [
+        project.vision?.vision,
+        project.requirements?.executiveSummary,
+        project.requirements?.functional?.[0]?.title,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    )
+  );
+}
+
 export function SharedProjectView({ project }: { project: SharedProject }) {
-  // The artifact views read the `stages` namespace, which is not in the eager
-  // (public) i18n tier. Hold the first render until it lands so the page never
-  // flashes raw translation keys at a client seeing this for the first time.
+  const language = documentLanguageOf(project);
+  // Two things have to land before the first paint, and they are the same
+  // decision: the artifact views read the `stages` namespace (not in the eager
+  // public tier), and the chrome has to be in the **document's** language rather
+  // than the visitor's default.
+  //
+  // The second is the one that matters here. A client following a link arrives
+  // with no stored locale, so they would get English headings around an Arabic
+  // proposal — translated chrome next to untranslated-looking prose, on the page
+  // their vendor sent to win the work. Holding the render until both settle also
+  // means the page never flashes raw keys at someone seeing the product for the
+  // first time.
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    void loadShareNamespaces().then(() => setReady(true));
-  }, []);
+    void applyShareDocumentLanguage(language).then(() => setReady(true));
+  }, [language]);
 
   if (!ready) return <SharedProjectSkeleton />;
   return (
-    <ToastProvider>
-      <SharedProjectContent project={project} />
-    </ToastProvider>
+    /*
+     * Radix reads direction from context, not from the DOM — so the `dir` on the
+     * content wrapper below is invisible to it, and without this override every
+     * Radix root inside would inherit the *viewer's* direction from the app-wide
+     * provider in `LocaleProvider`.
+     *
+     * That is the wrong signal on exactly this page, and only on this page: the
+     * reader is the client, arriving cold with no stored locale, so the viewer's
+     * direction is a default rather than a choice. The document's direction is a
+     * fact — these artifacts were generated once, in one language. Same rule that
+     * already sends the chrome's *language* here (`applyShareDocumentLanguage`);
+     * direction just has to travel through Radix's seam to get there.
+     */
+    <DirectionProvider dir={artifactTextDirection(language)}>
+      <ToastProvider>
+        <SharedProjectContent project={project} />
+      </ToastProvider>
+    </DirectionProvider>
   );
 }
 
@@ -92,7 +147,25 @@ function SharedProjectContent({ project }: { project: SharedProject }) {
      * inside its own container, so the measure holds and the page body never
      * scrolls sideways.
      */
-    <div className="mx-auto max-w-3xl space-y-10 px-4 py-8 sm:px-6 sm:py-12">
+    <div
+      /*
+       * The document's own direction, from the server, not the viewer's locale.
+       *
+       * This page is public: there is no session, no toggle, and the reader is
+       * the client, not the owner. So the direction cannot be a UI preference —
+       * it is a property of the artifacts, which were generated once in one
+       * language and will not change because someone opened them elsewhere.
+       *
+       * Explicit `dir` rather than relying on the per-element `dir="auto"`
+       * inside the artifact views: `auto` keys off the first strong character,
+       * so an Arabic paragraph that opens with a technology name ("PostgreSQL
+       * كان الخيار…") is laid out backwards, and every element with no `dir` at
+       * all would silently inherit the page's.
+       */
+      dir={artifactTextDirection(documentLanguageOf(project))}
+      lang={documentLanguageOf(project)}
+      className="mx-auto max-w-3xl space-y-10 px-4 py-8 sm:px-6 sm:py-12"
+    >
       <ProposalHeader project={project} />
 
       {/* ── The client's four questions, in the order they ask them ─────────── */}

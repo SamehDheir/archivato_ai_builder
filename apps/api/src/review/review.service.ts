@@ -14,6 +14,7 @@ import {
   INTERVIEW_SESSION_REPOSITORY,
   type InterviewSessionRepository,
 } from '../interview/interview-session.repository';
+import { resolveArtifactLanguage } from '../interview/interview-session.entity';
 import {
   REQUIREMENT_DOCUMENT_REPOSITORY,
   type RequirementDocumentRepository,
@@ -140,6 +141,11 @@ export class ReviewService {
       serviceSubscriptions: costEstimate?.serviceSubscriptions,
       outOfScope: requirements.outOfScope,
       promisedCapabilities,
+      // These findings wrap values the model wrote (a constraint sentence, an
+      // excluded capability) in prose the code composes, and the owner reads them
+      // in the review panel. Without this the panel told them, half in each
+      // language, that their own document contradicted itself.
+      language: resolveArtifactLanguage(session),
     });
 
     const report = await this.reviewer.generate(sessionId, {

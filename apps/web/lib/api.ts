@@ -1,4 +1,5 @@
 import type {
+  ArtifactLanguage,
   AccountRole,
   AdminLlmUsage,
   AdminStats,
@@ -236,6 +237,8 @@ export const interviewApi = {
       weeklyRate?: number | null;
       /** Whether this project produces the threat model + QA plan (R12). */
       generateExtendedArtifacts?: boolean;
+      /** The language every artifact is generated in. */
+      artifactLanguage?: ArtifactLanguage;
     },
   ) =>
     request<ProjectSummary>(`/interview/${sessionId}`, {

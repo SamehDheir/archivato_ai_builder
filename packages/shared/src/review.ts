@@ -6,6 +6,13 @@
  * suggestions.
  */
 
+import {
+  copyFor,
+  toArtifactLanguage,
+  type ArtifactLanguage,
+  type LocalizedArtifact,
+  type LocalizedCopy,
+} from './artifact-language';
 import type { DerivedArtifact } from './freshness';
 import type { GenerationProvenance } from './generation';
 import { hasTimelineConflict, parseTimelineWeeks, type EffortEstimate } from './effort';
@@ -138,7 +145,7 @@ export interface ConsistencyFinding extends ReviewFinding {
   artifacts: [string, string];
 }
 
-export interface ReviewReport extends DerivedArtifact {
+export interface ReviewReport extends DerivedArtifact, LocalizedArtifact {
   /** How this report was produced — see `generation.ts`. Absent = unknown. */
   generation?: GenerationProvenance;
   sessionId: string;
@@ -207,6 +214,18 @@ export interface ConsistencyCheckInput {
    * `outOfScope` to catch a capability that is excluded and delivered at once.
    */
   promisedCapabilities?: PromisedCapability[];
+  /**
+   * The language to compose the findings in.
+   *
+   * These are code-composed sentences that interpolate values the model wrote
+   * (a constraint, an excluded capability, a bought service). Leaving the
+   * surrounding prose in English while the value came back Arabic is the exact
+   * half-and-half sentence this system exists to prevent — and these land in the
+   * owner's review panel, which is rendered in their locale.
+   *
+   * Optional so an existing caller compiles; absent reads as English.
+   */
+  language?: ArtifactLanguage;
 }
 
 /** One thing the package says it will deliver, and which artifact says so. */
@@ -376,10 +395,64 @@ function timelineSeverity(effortWeeks: number, availableWeeks: number): Severity
  * fallback). Each check guards its own inputs and stays silent when they're
  * missing. All findings are tagged `source: 'automated'`.
  */
+/**
+ * The four automated consistency findings, in every language.
+ *
+ * Each one wraps a value the model produced — a constraint sentence, the name of
+ * an excluded capability, a bought service — so the sentence and the value have
+ * to agree about what language they are in. Composing English prose around an
+ * Arabic capability name is how the review panel ended up telling an owner, in
+ * two languages at once, that their own document contradicted itself.
+ */
+const CONSISTENCY_COPY: LocalizedCopy<{
+  timelineTitle: string;
+  timelineDetail: (weeks: number, available: number) => string;
+  constraintTitle: string;
+  constraintDetail: (constraint: string) => string;
+  boughtTitle: string;
+  boughtDetail: (capability: string, service?: string) => string;
+  scopeTitle: string;
+  scopeDetail: (item: string, artifact: string, label: string) => string;
+}> = {
+  en: {
+    timelineTitle: 'Effort exceeds the stated timeline',
+    timelineDetail: (weeks, available) =>
+      `The estimated build is at least ~${weeks} person-weeks, but the stated timeline is only ~${available} weeks. Reduce scope to hit the deadline, extend the timeline, or add people.`,
+    constraintTitle: 'Constraint not addressed in the design',
+    constraintDetail: (constraint) =>
+      `The constraint “${constraint}” has no matching entry in the design's constraint-compliance list. Confirm the architecture actually satisfies it.`,
+    boughtTitle: 'Bought capability missing from the cost estimate',
+    boughtDetail: (capability, service) =>
+      `The design recommends buying ${capability}${
+        service ? ` (${service})` : ''
+      }, but the cost estimate has no subscription line for it. Regenerate the cost estimate so the client sees the running cost.`,
+    scopeTitle: 'Excluded capability appears elsewhere in the package',
+    scopeDetail: (item, artifact, label) =>
+      `“${item}” is listed as out of scope, but ${artifact} promises “${label}”. Either remove the exclusion or drop the capability — a client who spots both will read the exclusion as a way out of work they think they are paying for.`,
+  },
+  ar: {
+    timelineTitle: 'الجهد المقدَّر يتجاوز المدة الزمنية المذكورة',
+    timelineDetail: (weeks, available) =>
+      `الجهد المقدَّر للتنفيذ لا يقل عن ${weeks} أسبوع-شخص تقريبًا، بينما المدة المذكورة نحو ${available} أسبوعًا فقط. قلّص النطاق للالتزام بالموعد، أو مدّد المدة، أو زد عدد أفراد الفريق.`,
+    constraintTitle: 'قيد غير مُعالَج في التصميم',
+    constraintDetail: (constraint) =>
+      `القيد «${constraint}» ليس له ما يقابله في قائمة الالتزام بالقيود في التصميم. تأكّد من أن البنية تلبّيه فعليًا.`,
+    boughtTitle: 'قدرة مشتراة غير مدرجة في تقدير التكلفة',
+    boughtDetail: (capability, service) =>
+      `يوصي التصميم بشراء ${capability}${
+        service ? ` (${service})` : ''
+      }، لكن تقدير التكلفة لا يتضمّن بندَ اشتراك لها. أعد توليد تقدير التكلفة ليرى العميل التكلفة التشغيلية.`,
+    scopeTitle: 'قدرة مستثناة تظهر في موضع آخر من الحزمة',
+    scopeDetail: (item, artifact, label) =>
+      `«${item}» مُدرج ضمن ما هو خارج النطاق، لكن ${artifact} يَعِد بـ«${label}». إمّا أن تحذف الاستثناء أو تحذف القدرة — فالعميل الذي يلاحظ الأمرين سيقرأ الاستثناء على أنه تهرّب من عمل يعتقد أنه يدفع مقابله.`,
+  },
+};
+
 export function buildConsistencyFindings(
   input: ConsistencyCheckInput,
 ): ConsistencyFinding[] {
   const findings: ConsistencyFinding[] = [];
+  const copy = copyFor(CONSISTENCY_COPY, toArtifactLanguage(input.language));
 
   // 1. Effort vs timeline. Unparseable timeline → skip. Uses the low end of the
   //    estimate (weeksMin): a conflict means even the best case blows the deadline.
@@ -394,10 +467,8 @@ export function buildConsistencyFindings(
     findings.push({
       source: 'automated',
       artifacts: ['effort', 'timeline'],
-      title: 'Effort exceeds the stated timeline',
-      detail: `The estimated build is at least ~${weeks} person-weeks, but the stated timeline is only ~${Math.round(
-        available,
-      )} weeks. Reduce scope to hit the deadline, extend the timeline, or add people.`,
+      title: copy.timelineTitle,
+      detail: copy.timelineDetail(weeks, Math.round(available)),
       severity: timelineSeverity(weeks, available),
     });
   }
@@ -414,8 +485,8 @@ export function buildConsistencyFindings(
       findings.push({
         source: 'automated',
         artifacts: ['constraints', 'constraintCompliance'],
-        title: 'Constraint not addressed in the design',
-        detail: `The constraint “${c}” has no matching entry in the design's constraint-compliance list. Confirm the architecture actually satisfies it.`,
+        title: copy.constraintTitle,
+        detail: copy.constraintDetail(c),
         severity: 'medium',
       });
     }
@@ -431,13 +502,11 @@ export function buildConsistencyFindings(
         findings.push({
           source: 'automated',
           artifacts: ['buildVsBuy', 'serviceSubscriptions'],
-          title: 'Bought capability missing from the cost estimate',
-          detail: `The design recommends buying ${item.capability.replace(
-            /_/g,
-            ' ',
-          )}${
-            item.suggestedService ? ` (${item.suggestedService})` : ''
-          }, but the cost estimate has no subscription line for it. Regenerate the cost estimate so the client sees the running cost.`,
+          title: copy.boughtTitle,
+          detail: copy.boughtDetail(
+            item.capability.replace(/_/g, ' '),
+            item.suggestedService,
+          ),
           severity: 'low',
         });
       }
@@ -459,8 +528,8 @@ export function buildConsistencyFindings(
       findings.push({
         source: 'automated',
         artifacts: ['outOfScope', conflict.artifact],
-        title: 'Excluded capability appears elsewhere in the package',
-        detail: `“${item}” is listed as out of scope, but ${conflict.artifact} promises “${conflict.label}”. Either remove the exclusion or drop the capability — a client who spots both will read the exclusion as a way out of work they think they are paying for.`,
+        title: copy.scopeTitle,
+        detail: copy.scopeDetail(item, conflict.artifact, conflict.label),
         severity: 'medium',
       });
     }

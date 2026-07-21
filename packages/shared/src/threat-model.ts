@@ -10,6 +10,7 @@
  * deterministic fallback, so it always yields a complete, useful model.
  */
 
+import type { LocalizedArtifact } from './artifact-language';
 import type { Severity } from './review';
 import type { DerivedArtifact } from './freshness';
 import type { GenerationProvenance } from './generation';
@@ -60,7 +61,7 @@ export interface Threat {
   mitigation: string;
 }
 
-export interface ThreatModel extends DerivedArtifact {
+export interface ThreatModel extends DerivedArtifact, LocalizedArtifact {
   /** How this model was produced — see `generation.ts`. Absent = unknown. */
   generation?: GenerationProvenance;
   sessionId: string;

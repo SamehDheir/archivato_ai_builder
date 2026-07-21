@@ -8,6 +8,7 @@
  * implementation plan derived from it.
  */
 
+import type { LocalizedArtifact } from './artifact-language';
 import type { DerivedArtifact } from './freshness';
 import type { GenerationProvenance } from './generation';
 import { roundHalf, type EffortEstimate } from './effort';
@@ -73,7 +74,7 @@ export interface AlternativeRoadmaps {
   excludedFromDeadline: string[];
 }
 
-export interface ProjectRoadmap extends DerivedArtifact {
+export interface ProjectRoadmap extends DerivedArtifact, LocalizedArtifact {
   /** How this roadmap was produced — see `generation.ts`. Absent = unknown. */
   generation?: GenerationProvenance;
   sessionId: string;

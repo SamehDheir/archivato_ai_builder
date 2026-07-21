@@ -4,11 +4,16 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
 import {
+  artifactTextDirection,
   askedQuestionCount,
+  ARTIFACT_LANGUAGE_NAMES,
+  ARTIFACT_LANGUAGES,
   INTERVIEW_MAX_QUESTIONS,
+  type ArtifactLanguage,
   type InterviewState,
 } from "@archivato/shared";
 import { Badge } from "@/components/ui/badge";
+import { InterviewTranscript } from "@/components/interview/InterviewTranscript";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +35,7 @@ export function InterviewPanel({
   onConfirm,
   onEditSlot,
   onToggleExtendedArtifacts,
+  onChangeArtifactLanguage,
 }: {
   state: InterviewState;
   busy: boolean;
@@ -43,6 +49,12 @@ export function InterviewPanel({
    * Omitted ⇒ the toggle isn't shown (it's the owner's call, and only theirs).
    */
   onToggleExtendedArtifacts?: (value: boolean) => void;
+  /**
+   * Set the language every artifact will be generated in. Omitted ⇒ the control
+   * isn't shown — same rule as the toggle above: it's the owner's call, and a
+   * read-only view of a gate has no business offering it.
+   */
+  onChangeArtifactLanguage?: (language: ArtifactLanguage) => void;
 }) {
   const { t } = useTranslation("interview");
   const question = state.currentQuestion;
@@ -97,46 +109,16 @@ export function InterviewPanel({
           <CardHeader>
             <CardTitle>{t("conversation")}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-5">
-            {state.history.map((ex, i) => (
-              <div key={i} className="space-y-2">
-                {/* Interviewer question */}
-                <div className="max-w-[88%]">
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      {t("interviewer")}
-                    </span>
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] uppercase"
-                    >
-                      {ex.question.phase}
-                    </Badge>
-                    <span className="text-[10px] text-muted-foreground">
-                      {t("qShort", { n: i + 1 })}
-                    </span>
-                  </div>
-                  <div
-                    dir="auto"
-                    className="rounded-lg rounded-tl-sm border border-border bg-muted/40 px-3.5 py-2.5 text-sm leading-relaxed"
-                  >
-                    {ex.question.prompt}
-                  </div>
-                </div>
-                {/* User answer */}
-                <div className="ms-auto max-w-[88%]">
-                  <div className="mb-1 text-end text-xs font-semibold text-primary">
-                    {t("you")}
-                  </div>
-                  <div
-                    dir="auto"
-                    className="whitespace-pre-wrap rounded-lg rounded-tr-sm border border-primary/40 bg-primary/10 px-3.5 py-2.5 text-sm leading-relaxed"
-                  >
-                    {ex.answer}
-                  </div>
-                </div>
-              </div>
-            ))}
+          <CardContent>
+            {/*
+              The same component the confirmed project's Interview tab renders.
+              It also fixes a numbering bug that lived here: this list used
+              `i + 1`, so pasted call notes and every slot correction were
+              numbered as questions — the transcript's own version of the
+              progress-counter bug that `askedQuestionCount` was introduced to
+              fix.
+            */}
+            <InterviewTranscript history={state.history} />
           </CardContent>
         </Card>
       )}
@@ -278,6 +260,61 @@ export function InterviewPanel({
                   </span>
                 </span>
               </label>
+            )}
+
+            {/*
+              The language every artifact will be written in.
+
+              It sits at the gate, next to the toggle above, because this is the
+              last moment before generation starts — and the language of a
+              document is not something anyone wants to discover *after* paying
+              for it. The default is read from the client's own words, so an
+              Arabic discovery call already points at Arabic and most owners will
+              never touch this; what it is really for is the case the detection
+              cannot know about, where the call was in Arabic but the package goes
+              to an English-reading stakeholder.
+
+              Each option is named in its OWN language (`ARTIFACT_LANGUAGE_NAMES`,
+              not i18n): someone looking for Arabic finds العربية, not the English
+              word for it.
+            */}
+            {onChangeArtifactLanguage && (
+              <div className="mt-3 rounded-lg border border-border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium">
+                    {t("language.label")}
+                  </span>
+                  <div className="flex gap-1.5">
+                    {ARTIFACT_LANGUAGES.map((code) => {
+                      const active =
+                        (state.artifactLanguage ?? "en") === code;
+                      return (
+                        <Button
+                          key={code}
+                          type="button"
+                          size="sm"
+                          variant={active ? "default" : "outline"}
+                          disabled={busy}
+                          aria-pressed={active}
+                          onClick={() => onChangeArtifactLanguage(code)}
+                        >
+                          {/*
+                            `lang` + `dir` so the endonym renders in its own
+                            script's shaping and direction, whatever the
+                            surrounding UI locale is.
+                          */}
+                          <span lang={code} dir={artifactTextDirection(code)}>
+                            {ARTIFACT_LANGUAGE_NAMES[code]}
+                          </span>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {t("language.hint")}
+                </p>
+              </div>
             )}
 
             <div className="mt-4 flex gap-2">

@@ -1,11 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
+  copyFor,
   MARKET_HONESTY_RULES,
   normalizeBusinessAnalysis,
   normalizeMvpAssessment,
   stripMetrics,
   withResearchChecklist,
+  type ArtifactLanguage,
+  type LocalizedCopy,
   type BusinessAnalysis,
   type IntentAnalysis,
   type RequirementsSummary,
@@ -83,8 +86,10 @@ export class BusinessAnalystAgent extends BaseAgent {
       label: 'Business analysis',
       prompt: this.buildPrompt(ctx),
       isValid: (raw) => this.isValid(raw),
-      accept: (raw) => this.normalize(sessionId, generatedAt, raw, ctx),
-      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      accept: (raw, language) =>
+        this.normalize(sessionId, generatedAt, raw, ctx, language),
+      fallback: (language) =>
+        this.buildDeterministic(sessionId, generatedAt, ctx, language),
     });
   }
 
@@ -152,6 +157,7 @@ export class BusinessAnalystAgent extends BaseAgent {
     generatedAt: string,
     raw: Partial<BusinessAnalysis>,
     ctx: BusinessAnalysisContext,
+    language: ArtifactLanguage,
   ): BusinessAnalysis {
     // Shape first (arrays coerced, confidences sanitized, checklist backfilled),
     // then strip any banned metric the prompt failed to prevent. Order matters:
@@ -160,8 +166,13 @@ export class BusinessAnalystAgent extends BaseAgent {
       ...(raw as BusinessAnalysis),
       sessionId,
       generatedAt,
+      // Stamped BEFORE normalizing, because `normalizeBusinessAnalysis` composes
+      // the research checklist and reads the language off the artifact it is
+      // given. Stamping afterwards would build an English checklist and then
+      // label the document Arabic.
+      language,
       mvp: {
-        ...normalizeMvpAssessment(raw.mvp),
+        ...normalizeMvpAssessment(raw.mvp, language),
         // The interview's own feature list is a better default core than an
         // empty one — the model omitting it says nothing about the features.
         recommendedCore: raw.mvp?.recommendedCore ?? ctx.summary.features.slice(0, 5),
@@ -172,11 +183,14 @@ export class BusinessAnalystAgent extends BaseAgent {
       ...shaped,
       competitors: shaped.competitors.map((c) => ({
         ...c,
-        positioning: stripMetrics(c.positioning),
-        strengths: c.strengths.map(stripMetrics),
-        weaknesses: c.weaknesses.map(stripMetrics),
+        positioning: stripMetrics(c.positioning, language),
+        strengths: c.strengths.map((v) => stripMetrics(v, language)),
+        weaknesses: c.weaknesses.map((v) => stripMetrics(v, language)),
       })),
-      market: { ...shaped.market, sizeNote: stripMetrics(shaped.market.sizeNote) },
+      market: {
+        ...shaped.market,
+        sizeNote: stripMetrics(shaped.market.sizeNote, language),
+      },
     };
   }
 
@@ -195,29 +209,36 @@ export class BusinessAnalystAgent extends BaseAgent {
     sessionId: string,
     generatedAt: string,
     ctx: BusinessAnalysisContext,
+    language: ArtifactLanguage,
   ): BusinessAnalysis {
     const s = ctx.slots;
+    const copy = copyFor(FALLBACK_COPY, language);
     const domain = slotText(s, 'business_domain') || ctx.industry || ctx.idea;
     const roles = splitSlotList(slotText(s, 'target_users_roles')).slice(0, 4);
     const workflows = splitSlotList(slotText(s, 'core_workflows'));
 
-    const segments: UserSegment[] = (roles.length ? roles : ['Primary user']).map(
+    const segments: UserSegment[] = (roles.length ? roles : [copy.primaryUser]).map(
       (name) => ({
         name,
-        description: `A ${name.toLowerCase()} in ${domain}.`,
-        jobToBeDone: workflows[0] ?? ctx.summary.goal ?? 'Use the product to get their work done.',
-        painPoints: ['Recorded in the interview — confirm with the client.'],
+        description: copy.segmentDescription(name, domain),
+        jobToBeDone: workflows[0] ?? ctx.summary.goal ?? copy.genericJob,
+        painPoints: [copy.painFromInterview],
       }),
     );
 
     return withResearchChecklist({
       sessionId,
       generatedAt,
+      // Stamped here too, and it is load-bearing rather than decorative:
+      // `withResearchChecklist` below composes its sentences in the language it
+      // reads off this object. An unstamped fallback would build an English
+      // checklist into a document whose every other line is Arabic.
+      language,
       problem: {
-        problem: ctx.summary.goal || `Operate ${domain} without the current manual process.`,
-        whoHasIt: roles.join(', ') || 'The client’s users',
-        currentAlternative: slotText(s, 'existing_assets') || 'Not stated in the interview.',
-        costOfInaction: 'Not stated in the interview — worth asking the client.',
+        problem: ctx.summary.goal || copy.operateWithoutManual(domain),
+        whoHasIt: roles.join(copy.listSeparator) || copy.theClientsUsers,
+        currentAlternative: slotText(s, 'existing_assets') || copy.notStated,
+        costOfInaction: copy.notStatedWorthAsking,
       },
       segments,
       // Deliberately empty: an offline run has no basis for naming a competitor.
@@ -225,28 +246,114 @@ export class BusinessAnalystAgent extends BaseAgent {
       market: {
         demandSignals: [],
         headwinds: [],
-        sizeNote: 'Not assessed — this analysis was generated without an AI provider.',
+        sizeNote: copy.notAssessedNoProvider,
         confidence: 'unverified',
       },
       usp: {
-        statement: `A ${domain} product built around: ${workflows.slice(0, 2).join('; ') || ctx.summary.goal || 'the client’s core workflow'}.`,
+        statement: copy.uspStatement(
+          domain,
+          workflows.slice(0, 2).join('; ') || ctx.summary.goal || copy.coreWorkflow,
+        ),
         differentiators: workflows.slice(0, 3),
-        defensibility: 'Not assessed — confirm what makes this hard to copy.',
+        defensibility: copy.defensibilityNotAssessed,
       },
       mvp: {
         verdict: 'well-scoped',
-        reasoning: 'Not assessed offline; the feature list was taken as stated.',
+        reasoning: copy.mvpNotAssessedOffline,
         recommendedCore: ctx.summary.features.slice(0, 5),
         deferSuggestions: ctx.summary.features.slice(5),
       },
       verdict: 'needs-validation',
-      verdictRationale:
-        'This analysis was generated without an AI provider, so the market and ' +
-        'competitive sections were not assessed. Re-run it with a provider configured.',
+      verdictRationale: copy.verdictRationaleOffline,
       researchChecklist: [],
     });
   }
 }
+
+/**
+ * The prose this agent composes when there is no model to write it.
+ *
+ * An offline fallback is the case where localization is easiest to forget and
+ * most damaging to skip: it fires exactly when generation has already degraded,
+ * so an English-only fallback drops an English section into an otherwise Arabic
+ * package and the owner sees the half-translated document they were promised was
+ * fixed. `LocalizedCopy` makes a missing language a compile error, so a locale
+ * added later cannot ship with this file quietly still in English.
+ *
+ * Note what is NOT translated: the slot values interpolated into these sentences
+ * (`domain`, role names, workflows) are the **client's own words**, and those are
+ * already in whatever language they typed them in. The code composes around them;
+ * it never rewrites them.
+ */
+const FALLBACK_COPY: LocalizedCopy<{
+  primaryUser: string;
+  segmentDescription: (role: string, domain: string) => string;
+  genericJob: string;
+  painFromInterview: string;
+  operateWithoutManual: (domain: string) => string;
+  theClientsUsers: string;
+  listSeparator: string;
+  notStated: string;
+  notStatedWorthAsking: string;
+  notAssessedNoProvider: string;
+  uspStatement: (domain: string, around: string) => string;
+  coreWorkflow: string;
+  defensibilityNotAssessed: string;
+  mvpNotAssessedOffline: string;
+  verdictRationaleOffline: string;
+}> = {
+  en: {
+    primaryUser: 'Primary user',
+    segmentDescription: (role, domain) => `A ${role.toLowerCase()} in ${domain}.`,
+    genericJob: 'Use the product to get their work done.',
+    painFromInterview: 'Recorded in the interview — confirm with the client.',
+    operateWithoutManual: (domain) =>
+      `Operate ${domain} without the current manual process.`,
+    theClientsUsers: 'The client’s users',
+    listSeparator: ', ',
+    notStated: 'Not stated in the interview.',
+    notStatedWorthAsking: 'Not stated in the interview — worth asking the client.',
+    notAssessedNoProvider:
+      'Not assessed — this analysis was generated without an AI provider.',
+    uspStatement: (domain, around) =>
+      `A ${domain} product built around: ${around}.`,
+    coreWorkflow: 'the client’s core workflow',
+    defensibilityNotAssessed:
+      'Not assessed — confirm what makes this hard to copy.',
+    mvpNotAssessedOffline:
+      'Not assessed offline; the feature list was taken as stated.',
+    verdictRationaleOffline:
+      'This analysis was generated without an AI provider, so the market and ' +
+      'competitive sections were not assessed. Re-run it with a provider configured.',
+  },
+  ar: {
+    primaryUser: 'المستخدم الأساسي',
+    segmentDescription: (role, domain) => `${role} في مجال ${domain}.`,
+    genericJob: 'استخدام المنتج لإنجاز عمله.',
+    painFromInterview: 'مسجَّل في المقابلة — يُرجى التأكيد مع العميل.',
+    operateWithoutManual: (domain) =>
+      `إدارة ${domain} دون الاعتماد على العملية اليدوية الحالية.`,
+    theClientsUsers: 'مستخدمو العميل',
+    // Arabic lists are separated by the Arabic comma (U+060C), not the Latin one.
+    // A Latin comma in Arabic text renders with the wrong shape and, in a
+    // right-to-left run, sits on the wrong side of the word it follows.
+    listSeparator: '، ',
+    notStated: 'غير مذكور في المقابلة.',
+    notStatedWorthAsking: 'غير مذكور في المقابلة — يُستحسن سؤال العميل عنه.',
+    notAssessedNoProvider:
+      'لم يُقيَّم — أُنشئ هذا التحليل دون الاتصال بمزوّد ذكاء اصطناعي.',
+    uspStatement: (domain, around) =>
+      `منتج في مجال ${domain} مبني حول: ${around}.`,
+    coreWorkflow: 'سير العمل الأساسي لدى العميل',
+    defensibilityNotAssessed:
+      'لم تُقيَّم — يُرجى تحديد ما يجعل هذا المنتج صعب التقليد.',
+    mvpNotAssessedOffline:
+      'لم يُقيَّم دون اتصال؛ اعتُمدت قائمة الميزات كما وردت.',
+    verdictRationaleOffline:
+      'أُنشئ هذا التحليل دون الاتصال بمزوّد ذكاء اصطناعي، لذلك لم تُقيَّم أقسام ' +
+      'السوق والمنافسة. أعد تشغيله بعد ضبط مزوّد.',
+  },
+};
 
 function slotText(slots: SlotMap | undefined, key: SlotKey): string {
   const value = slots?.[key];

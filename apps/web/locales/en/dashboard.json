@@ -176,23 +176,6 @@
     "api-design": "API design",
     "review": "AI review"
   },
-  "tab": {
-    "vision": "Vision",
-    "requirements": "Requirements",
-    "system": "Architecture",
-    "database": "Database",
-    "api": "API",
-    "diagrams": "Diagrams",
-    "canvas": "Canvas",
-    "review": "Review",
-    "roadmap": "Roadmap",
-    "cost": "Cost",
-    "export": "Export",
-    "apidocs": "API Docs",
-    "refine": "Refine",
-    "history": "History",
-    "interview": "Interview"
-  },
   "breadcrumb": {
     "projects": "Scopings",
     "project": "Scoping"

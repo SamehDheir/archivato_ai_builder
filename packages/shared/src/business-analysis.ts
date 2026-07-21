@@ -31,6 +31,14 @@
  * building, nor a competitor list the vendor did not research.
  */
 
+import {
+  artifactLanguageOf,
+  copyFor,
+  DEFAULT_ARTIFACT_LANGUAGE,
+  type ArtifactLanguage,
+  type LocalizedArtifact,
+  type LocalizedCopy,
+} from './artifact-language';
 import type { GenerationProvenance } from './generation';
 
 /** How much weight a claim can bear. */
@@ -161,7 +169,7 @@ export const VIABILITY_VERDICTS: readonly ViabilityVerdict[] = [
   'high-risk',
 ];
 
-export interface BusinessAnalysis {
+export interface BusinessAnalysis extends LocalizedArtifact {
   sessionId: string;
   generatedAt: string;
   /** How this analysis was produced — see `generation.ts`. Absent = unknown. */
@@ -254,6 +262,69 @@ function stringList(value: unknown): string[] {
 }
 
 /**
+ * The sentences this module composes in CODE, in every language.
+ *
+ * **This table is the fix for the broken-grammar bug.** The checklist item below
+ * used to be one hardcoded English template — `Confirm ${name} is a real
+ * competitor here…` — with the competitor's name interpolated into it. Once the
+ * analyst started answering in Arabic, the *value* came back Arabic and the
+ * sentence around it stayed English, producing a line that read as neither
+ * language and that the owner was about to forward to a client.
+ *
+ * The rule it encodes: **a sentence is localized as a whole sentence.** Never
+ * translate a fragment and splice it into fixed prose, and never compose fixed
+ * prose around a fragment whose language you do not control. Because the table
+ * is `LocalizedCopy`, a language with a missing entry is a compile error rather
+ * than a silent English fallback.
+ */
+const COPY: LocalizedCopy<{
+  confirmCompetitor: (name: string) => string;
+  verifyMarket: string;
+  noCompetitors: string;
+  mvpNotAssessed: string;
+  marketNotAssessed: string;
+  undisclosedAmount: string;
+  aNumberOf: (unit: string) => string;
+  established: string;
+  raisedFunding: string;
+  /** Verbs after which "<an undisclosed amount>" collapses to "funding". */
+  raisedPrefixes: string[];
+}> = {
+  en: {
+    confirmCompetitor: (name) =>
+      `Confirm ${name} is a real competitor here, and check how it is positioned.`,
+    verifyMarket:
+      'Verify the market read (demand, competition, saturation) with the client.',
+    noCompetitors:
+      'No competitors were identified — research who else serves these users.',
+    mvpNotAssessed: 'The MVP cut was not assessed — treat this as unreviewed.',
+    marketNotAssessed: 'Not assessed.',
+    undisclosedAmount: 'an undisclosed amount',
+    aNumberOf: (unit) => `a number of ${unit}`,
+    established: 'established',
+    raisedFunding: 'raised funding',
+    raisedPrefixes: ['raised'],
+  },
+  ar: {
+    confirmCompetitor: (name) =>
+      `تأكّد من أن ${name} منافس فعلي في هذا السوق، وراجع موقعه التنافسي.`,
+    verifyMarket:
+      'راجع قراءة السوق (الطلب، المنافسة، درجة الإشباع) مع العميل.',
+    noCompetitors:
+      'لم يتم تحديد أي منافسين — ابحث عن الجهات الأخرى التي تخدم هؤلاء المستخدمين.',
+    mvpNotAssessed:
+      'لم يُقيَّم نطاق المنتج الأولي — تعامل معه على أنه غير مراجَع.',
+    marketNotAssessed: 'لم يُقيَّم.',
+    undisclosedAmount: 'مبلغ غير معلن',
+    aNumberOf: (unit) => `عدد من ${arabicPlural(unit)}`,
+    established: 'قائمة منذ سنوات',
+    raisedFunding: 'حصلت على تمويل',
+    // Empty on purpose — see the collapse step in `stripMetrics`.
+    raisedPrefixes: [],
+  },
+};
+
+/**
  * Coerce a possibly-partial analysis into a complete, safe-to-render shape.
  *
  * **Every array here is REQUIRED by the type, and that is the trap** — the
@@ -272,6 +343,10 @@ function stringList(value: unknown): string[] {
 export function normalizeBusinessAnalysis(analysis: BusinessAnalysis): BusinessAnalysis {
   const problem = analysis.problem ?? ({} as ProblemStatement);
   const usp = analysis.usp ?? ({} as UniqueSellingProposition);
+  // The artifact's own stamp, not a parameter: this runs at both repository read
+  // boundaries as well as at the agent, and only the agent has a session.
+  const language = artifactLanguageOf(analysis);
+  const copy = copyFor(COPY, language);
 
   const normalized: BusinessAnalysis = {
     ...analysis,
@@ -302,7 +377,7 @@ export function normalizeBusinessAnalysis(analysis: BusinessAnalysis): BusinessA
     market: {
       demandSignals: stringList(analysis.market?.demandSignals),
       headwinds: stringList(analysis.market?.headwinds),
-      sizeNote: analysis.market?.sizeNote ?? 'Not assessed.',
+      sizeNote: analysis.market?.sizeNote ?? copy.marketNotAssessed,
       confidence: toClaimConfidence(analysis.market?.confidence),
     },
     usp: {
@@ -310,7 +385,7 @@ export function normalizeBusinessAnalysis(analysis: BusinessAnalysis): BusinessA
       differentiators: stringList(usp.differentiators),
       defensibility: usp.defensibility ?? '',
     },
-    mvp: normalizeMvpAssessment(analysis.mvp),
+    mvp: normalizeMvpAssessment(analysis.mvp, language),
     verdict: toViabilityVerdict(analysis.verdict),
     verdictRationale: analysis.verdictRationale ?? '',
     researchChecklist: stringList(analysis.researchChecklist),
@@ -322,13 +397,14 @@ export function normalizeBusinessAnalysis(analysis: BusinessAnalysis): BusinessA
 /** Coerce the MVP block, keeping a defaulted verdict honest about being one. */
 export function normalizeMvpAssessment(
   raw: Partial<MvpAssessment> | undefined,
+  language: ArtifactLanguage = DEFAULT_ARTIFACT_LANGUAGE,
 ): MvpAssessment {
   const stated = (MVP_VERDICTS as readonly string[]).includes(raw?.verdict as string);
   return {
     verdict: toMvpVerdict(raw?.verdict),
     reasoning:
       raw?.reasoning ??
-      (stated ? '' : 'The MVP cut was not assessed — treat this as unreviewed.'),
+      (stated ? '' : copyFor(COPY, language).mvpNotAssessed),
     recommendedCore: stringList(raw?.recommendedCore),
     deferSuggestions: stringList(raw?.deferSuggestions),
   };
@@ -343,6 +419,10 @@ export function normalizeMvpAssessment(
  * present a guess as settled — exactly the failure the stage is shaped to avoid.
  */
 export function withResearchChecklist(analysis: BusinessAnalysis): BusinessAnalysis {
+  // Read off the artifact rather than taken as a parameter: this runs at BOTH
+  // repository read boundaries, where there is no session to ask. An artifact
+  // written before the stamp existed reads as English, which is what it is.
+  const copy = copyFor(COPY, artifactLanguageOf(analysis));
   const checklist = [...analysis.researchChecklist];
   const add = (item: string) => {
     if (!checklist.some((c) => c.toLowerCase() === item.toLowerCase())) {
@@ -352,14 +432,14 @@ export function withResearchChecklist(analysis: BusinessAnalysis): BusinessAnaly
 
   for (const c of analysis.competitors) {
     if (c.confidence === 'unverified') {
-      add(`Confirm ${c.name} is a real competitor here, and check how it is positioned.`);
+      add(copy.confirmCompetitor(c.name));
     }
   }
   if (analysis.market.confidence === 'unverified') {
-    add('Verify the market read (demand, competition, saturation) with the client.');
+    add(copy.verifyMarket);
   }
   if (!analysis.competitors.length) {
-    add('No competitors were identified — research who else serves these users.');
+    add(copy.noCompetitors);
   }
 
   return { ...analysis, researchChecklist: checklist };
@@ -374,14 +454,144 @@ export function withResearchChecklist(analysis: BusinessAnalysis): BusinessAnaly
  * check and precisely the one that would discredit the whole package. Dropping
  * the clause costs a little fluency and removes a claim we cannot stand behind.
  */
-export function stripMetrics(text: string): string {
-  return text
-    .replace(/\$\s?\d[\d,.]*\s*(m|bn|b|k|million|billion|thousand)?/gi, 'an undisclosed amount')
+export function stripMetrics(
+  text: string,
+  language: ArtifactLanguage = DEFAULT_ARTIFACT_LANGUAGE,
+): string {
+  // The replacements go INTO the model's prose, so they have to be in the same
+  // language as the sentence they land in. Hardcoding "an undisclosed amount"
+  // spliced an English clause into an Arabic competitor description — the same
+  // half-and-half sentence the checklist template produced, arriving through the
+  // one function whose whole job is to make a sentence safe to forward.
+  const copy = copyFor(COPY, language);
+  const cleaned = text
+    .replace(MONEY, copy.undisclosedAmount)
     .replace(
-      /\b\d[\d,.]*\+?\s*(users|customers|clients|employees|staff|seats)\b/gi,
-      'a number of $1',
+      COUNTED_UNITS,
+      // A function replacement rather than a `'$1'` string: the replacement text
+      // is now table data, and `$` is meaningful to `String.replace`. A copy
+      // entry that happened to contain `$&` or `$1` would splice matched text
+      // into the sentence instead of being written literally.
+      (_full, unit: string) => copy.aNumberOf(unit),
     )
-    .replace(/\bfounded in \d{4}\b/gi, 'established')
-    .replace(/\braised\s+an undisclosed amount\b/gi, 'raised funding')
+    .replace(FOUNDING_YEAR, copy.established)
     .trim();
+
+  // Collapse "raised <an undisclosed amount>" into "raised funding", which is
+  // what the sentence was actually saying. Built from the copy table because the
+  // phrase it must match is whatever the first replacement just wrote, and that
+  // is language-specific.
+  //
+  // **An empty prefix list means "never run", not "match anything".** Building
+  // the alternation unconditionally produced `(?:)\s+مبلغ غير معلن`, whose empty
+  // group matches the empty string — so it swallowed the space before the phrase
+  // and emitted `جمعتحصلت على تمويل`, two verbs fused into a non-word. Arabic's
+  // list is empty on purpose: `جمعت مبلغ غير معلن` already reads naturally, and
+  // collapsing it gave "funding" twice in one clause.
+  if (copy.raisedPrefixes.length === 0) return cleaned;
+  return cleaned
+    .replace(
+      new RegExp(
+        `(?:${copy.raisedPrefixes.map(escapeRegExp).join('|')})\\s+${escapeRegExp(copy.undisclosedAmount)}`,
+        'gi',
+      ),
+      copy.raisedFunding,
+    )
+    .trim();
+}
+
+/**
+ * Digit characters, Latin **and** Arabic-Indic.
+ *
+ * A model writing Arabic uses ٠-٩ freely, and every pattern below matched only
+ * `0-9`. That made this entire backstop a no-op the moment the analyst started
+ * answering in Arabic: still running, still passing its (English) tests, and no
+ * longer removing anything — the worst state for a safety net to be in.
+ */
+const DIGITS = '0-9٠-٩۰-۹';
+
+/**
+ * Thousands / decimal separators, in both conventions.
+ *
+ * `٬` (U+066C) and `٫` (U+066B) are the Arabic separators. Omitting them split
+ * `١٠٬٠٠٠ عميل` in the middle of the number and produced `١٠٬عدد من عميل` — the
+ * figure half-removed, which is worse than leaving it alone.
+ */
+const SEPARATORS = ',.٬٫';
+
+/** A money figure. The currency mark and digits travel; the magnitude words don't. */
+const MONEY = new RegExp(
+  `[$€£]\\s?[${DIGITS}][${DIGITS}${SEPARATORS}]*\\s*` +
+    `(m|bn|b|k|million|billion|thousand|مليون|مليار|ألف|الف)?`,
+  'gi',
+);
+
+/**
+ * A counted business metric — the "10,000 customers" class of claim.
+ *
+ * The Arabic units matter for the same reason the whole file exists: a customer
+ * count is the first thing a client fact-checks, and this one was invented.
+ * There is no `\b` around the Arabic alternatives — JavaScript's word boundary
+ * is ASCII-only and never fires next to Arabic script, so requiring one would
+ * have silently disabled every Arabic branch.
+ */
+const COUNTED_UNITS = new RegExp(
+  `[${DIGITS}][${DIGITS}${SEPARATORS}]*\\+?\\s*` +
+    `(users|customers|clients|employees|staff|seats|` +
+    `مستخدمين|مستخدمًا|مستخدما|مستخدم|عملاء|عميلًا|عميلا|عميل|` +
+    `زبائن|زبون|موظفين|موظفًا|موظفا|موظف|مشتركين|مشتركًا|مشتركا|مشترك)`,
+  'gi',
+);
+
+/** A founding date, in either script's digits and either language's phrasing. */
+const FOUNDING_YEAR = new RegExp(
+  `(?:\\bfounded in|تأسّست عام|تأسست عام|تأسّست في|تأسست في)\\s*[${DIGITS}]{4}`,
+  'gi',
+);
+
+/**
+ * The definite plural for each unit `COUNTED_UNITS` can capture.
+ *
+ * Arabic requires a definite plural after `عدد من`, so interpolating the noun as
+ * the model wrote it produced `عدد من عميل` — "a number of customer". The set is
+ * closed (this map and that pattern are the same list), and Arabic plurals are
+ * irregular enough that deriving one is not an option. An unrecognized unit is
+ * returned untouched rather than mangled: the English units reaching here belong
+ * to an English sentence, where the code never runs.
+ */
+function arabicPlural(unit: string): string {
+  return ARABIC_PLURALS[unit] ?? unit;
+}
+
+const ARABIC_PLURALS: Record<string, string> = {
+  مستخدم: 'المستخدمين',
+  مستخدمًا: 'المستخدمين',
+  مستخدما: 'المستخدمين',
+  مستخدمين: 'المستخدمين',
+  عميل: 'العملاء',
+  عميلًا: 'العملاء',
+  عميلا: 'العملاء',
+  عملاء: 'العملاء',
+  زبون: 'الزبائن',
+  زبائن: 'الزبائن',
+  موظف: 'الموظفين',
+  موظفًا: 'الموظفين',
+  موظفا: 'الموظفين',
+  موظفين: 'الموظفين',
+  مشترك: 'المشتركين',
+  مشتركًا: 'المشتركين',
+  مشتركا: 'المشتركين',
+  مشتركين: 'المشتركين',
+};
+
+/**
+ * Escape a string for literal use inside a `RegExp`.
+ *
+ * The copy table is data, and one of its entries is now compiled into a pattern.
+ * Without this a translation containing a regex metacharacter would either throw
+ * at module load or match something nobody intended — the same rule that keeps
+ * `basePath` out of a constructed RegExp in the API designer.
+ */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

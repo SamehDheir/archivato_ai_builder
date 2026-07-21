@@ -4,6 +4,7 @@
  * status codes. Derived from the Database Design + System Design services.
  */
 
+import type { LocalizedArtifact } from './artifact-language';
 import type { GenerationProvenance } from './generation';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -69,7 +70,7 @@ export interface ExcludedEntity {
   reason: string;
 }
 
-export interface ApiDesign {
+export interface ApiDesign extends LocalizedArtifact {
   sessionId: string;
   generatedAt: string;
   /**
