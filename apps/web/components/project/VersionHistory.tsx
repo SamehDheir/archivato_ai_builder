@@ -192,9 +192,20 @@ export function VersionHistory({
           <div className="overflow-hidden rounded-md border border-border">
             <div className="grid grid-cols-2 border-b border-border bg-muted/40 text-xs font-semibold">
               <div className="px-3 py-1.5">v{fromV}</div>
-              <div className="border-l border-border px-3 py-1.5">v{toV}</div>
+              <div className="border-s border-border px-3 py-1.5">v{toV}</div>
             </div>
-            <div className="max-h-96 overflow-auto font-mono text-xs leading-5">
+            {/*
+              `dir="ltr"`: these panes render the artifact's JSON, which is code.
+              On an Arabic page they inherit RTL, and bidi then reorders every
+              line that mixes braces, quotes and Latin keys — a diff whose
+              punctuation has migrated to the wrong end is unreadable, and this is
+              the one view whose entire job is letting someone compare two texts
+              character by character. Same rule as email/path/table-name fields.
+            */}
+            <div
+              dir="ltr"
+              className="max-h-96 overflow-auto font-mono text-xs leading-5"
+            >
               {diff.map((row, i) => (
                 <div key={i} className="grid grid-cols-2">
                   <pre
@@ -205,7 +216,7 @@ export function VersionHistory({
                     {row.left ?? ''}
                   </pre>
                   <pre
-                    className={`whitespace-pre-wrap break-all border-l border-border px-3 ${
+                    className={`whitespace-pre-wrap break-all border-s border-border px-3 ${
                       row.type === 'add' ? 'bg-primary/15' : ''
                     }`}
                   >

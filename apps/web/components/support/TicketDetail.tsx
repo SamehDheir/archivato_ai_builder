@@ -391,7 +391,7 @@ export function TicketDetail({
                   {sending ? (
                     <Loader2 className="me-1.5 h-4 w-4 animate-spin" />
                   ) : (
-                    <Send className="me-1.5 h-4 w-4" />
+                    <Send className="me-1.5 h-4 w-4 rtl:-scale-x-100" />
                   )}
                   {t('detail.sendReply')}
                 </Button>

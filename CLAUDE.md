@@ -602,16 +602,12 @@ tsconfig and never needs shared's `dist`.
      shorter message via its `BUDGETS` ladder is not truncation: every rung is a
      complete message that says less, and the link, the opted-in price, and the
      closing question never fall off any rung.)
-  5. **Arabic output here is DELIBERATE, and is not the deferred GREEN item.**
-     Generated *artifacts* stay server-side English. This isn't an artifact — it's
-     the owner's outbound message to their client, and a Mostaql bid written in
-     English is a bid that loses. `CHANNEL_DEFAULT_LOCALE`: mostaql→ar, upwork→en,
-     email/generic→the project locale; always user-overridable.
-     **Known limit:** because the artifacts are English, the *offline fallback* in
-     Arabic mixes Arabic chrome with English scope text. The LLM path translates
-     naturally, so this only shows in mock/demo mode; fixing it properly is the
-     GREEN "Arabic generated artifacts" item — a deterministic fallback cannot
-     machine-translate.
+  5. **Arabic output here is DELIBERATE.** A Mostaql bid written in English is a
+     bid that loses. `CHANNEL_DEFAULT_LOCALE`: mostaql→ar, upwork→en,
+     email/generic→the project locale; always user-overridable. This used to be
+     the *only* Arabic the pipeline produced — the artifacts were English — which
+     is what the artifact-language system below fixed. The proposal keeps its own
+     channel-driven locale because the channel, not the document, decides here.
   6. **Drafts live on the SESSION** (`proposalDrafts Json?`, migration
      `20260717120000_add_proposal_drafts`), capped at 5 by `appendProposalDraft` —
      the R11 `fixLog` precedent, for the same reason: version snapshots rewind
@@ -1469,6 +1465,124 @@ tsconfig and never needs shared's `dist`.
   artifact) on all nine tabs, with a one-click regenerate. The regenerate action
   is optional, so the share page and example project render read-only. i18n
   `stages.generation.*` incl. a per-reason message (EN+AR).
+- **Artifact language (`artifact-language.ts`) — generated prose is written in the
+  target language, never translated afterwards.** A full Arabic run produced a
+  package that was half-translated at random: an Arabic competitor name inside an
+  English sentence, Arabic section headers above an English architecture
+  rationale, `ليش هاد الخيار` (Levantine dialect) on a client-facing button.
+  **The cause was not a broken translation layer — there was no translation layer
+  and no decision at all.** Only 2 of 15 agents were ever told what language to
+  write in (the interviewer, from `detectLanguage`, and the proposal writer, from
+  its channel); the other 13 were handed an Arabic transcript with no instruction,
+  and a model in that position picks a language **per field, per run**. Nothing
+  errored; every stage was confidently inconsistent in the same way. The policy is
+  now explicit and uniform:
+  - **Static UI chrome** → the viewer's i18n locale. Unchanged.
+  - **Generated prose** → the project's `artifactLanguage`, produced in that
+    language **on the first pass**. Nothing is translated after the fact, and no
+    sentence is ever assembled from pieces in two languages.
+  - **Code-facing identifiers** (table/column names, API paths, enum values,
+    `FR-1`, technology names) → English at every language. `CODE_FACING_RULE` is
+    embedded in both language rules, so the one behaviour that was already right —
+    an English schema under Arabic chrome — is now *stated* rather than lucky.
+
+  Eleven things not to undo:
+  1. **The language is a property of the PROJECT, not of the viewer.**
+     `artifactLanguage String?` on the session (migration
+     `20260721120000_add_artifact_language`). An artifact is generated once and
+     then read by people with no toggle — the public share page has neither a
+     session nor an owner — so a UI-locale-driven language would relabel a
+     document nobody regenerated. **`null` = never chosen** and derives from
+     `detectArtifactLanguage(idea)`, the client's own words; `confirm()` pins it,
+     exactly like `generateExtendedArtifacts` and for the same reason (it must
+     keep tracking an idea the owner is still editing, then stop).
+  2. **The instruction is applied at ONE chokepoint** —
+     `BaseAgent.hardenedSystemPrompt` appends `outputLanguageRules(language)`
+     beside `UNTRUSTED_INPUT_RULES`. A rule fifteen agents state by hand is a rule
+     the sixteenth forgets, and that is precisely how thirteen of them ended up
+     with no instruction at all. A new agent is localized before it is written.
+  3. **The prompt cache is keyed BY LANGUAGE.** `ClaudeLlmProvider` marks the
+     system prompt with `cache_control`, so it must be *stable*, not merely equal.
+     A `Map<ArtifactLanguage, string>` keeps two stable strings; rebuilding it per
+     call would silently defeat prompt caching on every request.
+  4. **It travels ambiently, over the SAME two seams as usage attribution** —
+     `LlmCallContext.resolveLanguage`, established by `LlmContextInterceptor`
+     (HTTP) and `PipelineProcessor` (BullMQ). Threading a field through a dozen
+     stage services is the wide invasive change that seam already exists to avoid;
+     this way a new stage and a new service are localized without being touched.
+     It is a **memoized thunk**, not a value: the interceptor is global, so an
+     eager session read would tax every request that merely mentions a session id
+     and never calls a model. It reads `:id` as well as `:sessionId` (the pipeline
+     routes are inconsistent — `/review/:id/fix/propose` calls a model), while
+     *attribution* deliberately keeps using `:sessionId` alone, or the usage meter
+     would start recording tickets and users as sessions.
+  5. **Every artifact is STAMPED with the language it was written in**
+     (`LocalizedArtifact`, JSON-blob convention, migration-free). The normalizers
+     run at both repository read boundaries, where there is **no session to ask**,
+     so the artifact has to carry its own answer. Unlike `generation` it is **not**
+     stripped for the share page: it states what language the document is in,
+     which its reader can already see, and the public page needs it to lay the
+     text out. An **unstamped artifact reads as English** — the `sourceStamp`
+     rule; pre-existing rows are English, and relabelling them would send a reader
+     looking for a translation that was never there.
+  6. **A sentence is localized as a WHOLE sentence.** This is the fix for the
+     broken-grammar class: `Confirm ${c.name} is a real competitor here…` was one
+     hardcoded English template with a model-supplied value dropped into it, and
+     once the analyst answered in Arabic the result was grammatical in neither
+     language. Never translate a fragment and splice it into fixed prose, and
+     never compose fixed prose around a fragment whose language you do not
+     control. Fixed at `withResearchChecklist`, `stripMetrics`,
+     `unsourcedRoleAssumption`, `extractionGapAssumption`,
+     `buildConsistencyFindings`.
+  7. **`LocalizedCopy<T> = Record<ArtifactLanguage, T>` is the mechanism, and the
+     compile error is the point.** A table that forgets a language cannot be
+     built, and **adding a locale to `ArtifactLanguage` fails the build at every
+     untranslated table**. Deterministic prose is therefore never half-localized:
+     the failure mode is a red build, not a sentence that reads half in each
+     language. That is what makes this hold for the *next* locale, not just Arabic.
+  8. **`stripMetrics` had to learn Arabic, or it was a no-op.** The honesty
+     backstop matched only `0-9` and English unit words, so the moment the analyst
+     answered in Arabic it was still running, still passing its (English) tests,
+     and no longer removing anything — the worst state for a safety net. It now
+     matches Arabic-Indic digits and the Arabic thousands separator `٬` (omitting
+     it split `١٠٬٠٠٠ عميل` mid-number into `١٠٬عدد من عميل`), plus Arabic unit
+     nouns with no `\b` (JavaScript's word boundary is ASCII-only and never fires
+     next to Arabic script). Two traps it shipped with: an **empty**
+     `raisedPrefixes` built `(?:)\s+…`, whose empty group matches the empty string
+     and fused two verbs into `جمعتحصلت`; and Arabic needs a definite **plural**
+     after `عدد من`, so the captured noun goes through `ARABIC_PLURALS` instead of
+     being interpolated raw as `عدد من عميل`. **Assert the output, not merely the
+     absence of the figure.**
+  9. **MSA (الفصحى) is pinned in the prompt AND enforced in the locale files.** A
+     model mirrors its input's register, and an interview held in dialect produced
+     a client-facing document in dialect. Separately, 47 hand-written Arabic
+     strings — most of the landing page and much of the **client-facing share
+     page** — were Levantine. MSA is the one variety that reads as professional in
+     Riyadh, Cairo and Casablanca alike. `check-i18n.mjs` fails the build on
+     colloquial tokens (whole-token matching, since `هيكل` contains `هيك`;
+     `MSA_ALLOWLIST` holds the false positives).
+  10. **On the share page the CHROME follows the DOCUMENT.** It is the one surface
+      where the viewer's preference is the wrong signal: the reader is the client,
+      arriving cold with no stored locale, so they got English headings around an
+      Arabic proposal — the exact half-translated page, on the one artifact that
+      wins the work. `applyShareDocumentLanguage(project.language)` switches
+      i18next before the first paint, and `SharedProject.language` carries the
+      answer. Everywhere else the chrome still follows the viewer.
+  11. **The fallback speaks the language too.** An agent that falls back offline
+      still emits a document, and an always-English fallback drops an English
+      section into an Arabic package **exactly when generation has already
+      degraded**. `generateArtifact` resolves the language once, *before* the
+      call, and hands it to both `accept` and `fallback` — resolving it inside the
+      catch block would leave a call-failure fallback without one.
+
+  **Coverage, stated honestly:** the LLM path is complete (every agent, via the
+  chokepoint). Deterministic prose is localized where it *interpolates model
+  output* or is client-facing — the business-analysis fallback, the research
+  checklist, the provenance notes, the consistency findings. Other agents'
+  whole-artifact fallback templates still compose English; they run only with no
+  provider configured or after a model failure, and `LocalizedCopy` means each one
+  converts by adding a table rather than by re-architecting anything.
+
 - **Prompt-injection defense (`prompt-safety.ts`) — the input is untrusted and
   two of the outputs reach a stranger.** Every artifact is generated from text
   the owner did not write (the idea, interview answers, **pasted call notes**, an
@@ -2557,10 +2671,18 @@ tsconfig and never needs shared's `dist`.
   a dev tool) — use it instead of `toLocaleString()`. **Plurals:** i18next resolves
   the CLDR category per language and does **not** fall back `_few`→`_other`; a key
   called with `count` in Arabic needs the full set (`_zero/_one/_two/_few/_many/
-  _other`) or it silently leaks the English `_other` via `fallbackLng`. AI **output**
-  (agent prompts/artifacts) stays server-side/English for now — this slice is UI
-  chrome only, except the interview, whose questions already adapt to the idea's
-  language (`apps/api/src/interview/language.ts`).
+  _other`) or it silently leaks the English `_other` via `fallbackLng`. **AI output
+  is no longer English-only** — see "Artifact language" in Architecture: generated
+  prose is written in the project's `artifactLanguage`, UI chrome follows the
+  viewer's locale, and code-facing identifiers stay English in both.
+  **Enforced, not documented:** `apps/web/scripts/check-i18n.mjs` (folded into
+  `npm run lint --workspace @archivato/web`, so it runs in CI) fails the build on a
+  key present in one locale and missing in another, on a literal `t('…')` that
+  resolves in no namespace it is called with, and on colloquial Arabic. It exists
+  because the breadcrumb shipped the literal key `tab.business`: `dashboard.json`
+  kept its own copy of `tab.*` and never gained the three tabs added later, and
+  i18next renders a missing key **as the key**, in every locale, without throwing.
+  Duplicating a key set across namespaces is how that happens — don't.
 - **Structure:** `app/` holds routes only. The **root** level is the lean public
   surface — `layout.tsx`, `page.tsx` (marketing **landing** at `/`), `privacy/`,
   `terms/`, `s/[token]/` (the public **share** page), and the metadata files
@@ -2747,11 +2869,32 @@ tsconfig and never needs shared's `dist`.
      Download button) overflowed the page at 360px, because the button can't
      shrink and the row couldn't wrap. They all carry `flex-wrap` now, and the
      text block beside them carries `min-w-0`.
-  4. **AI-generated artifact text needs `dir="auto"`, and RTL is where you find
-     out you forgot.** The artifacts are server-side English; on an Arabic page
-     an English string with no `dir` inherits RTL and bidi reorders it — the
-     sentence's full stop jumps to the wrong end. The requirements/NFR/business-
-     rule cells were missing it and looked fine in every LTR screenshot.
+  4a. **`dir="auto"` on a FORM FIELD reads the value, not the placeholder — so an
+     empty one falls back to LTR.** This shipped site-wide: every input and
+     textarea carrying `dir="auto"` (44 of them) rendered its Arabic placeholder
+     flush left with the full stop on the wrong end, which is most of what an
+     Arabic user sees before they have typed anything. The attribute is still
+     right the moment there *is* a value — someone typing English into a form on
+     an Arabic page should see their own sentence left-to-right — so the fix is
+     one CSS rule in `globals.css` scoped to exactly the state where `auto` has
+     nothing to read: `input[dir='auto']:placeholder-shown` → `direction: inherit`
+     **plus `unicode-bidi: normal`**. Both properties or neither: `dir="auto"` is
+     implemented as `unicode-bidi: plaintext`, which resolves direction per
+     paragraph from content and otherwise ignores the `direction` you just set.
+     Verified by measuring computed `direction` in a real Chromium across empty /
+     typed-Arabic / typed-English / `dir="ltr"` fields — bidi is not something to
+     reason about from the spec and call done.
+  4. **AI-generated artifact text needs a direction, and RTL is where you find
+     out you forgot.** An English string with no `dir` on an Arabic page inherits
+     RTL and bidi reorders it — the sentence's full stop jumps to the wrong end.
+     The requirements/NFR/business-rule cells were missing it and looked fine in
+     every LTR screenshot. Per-element `dir="auto"` stays, but it is **not
+     sufficient on its own**: it keys off the first strong character, so an Arabic
+     paragraph opening with a technology name ("PostgreSQL كان الخيار…") lays out
+     backwards. The **container** therefore carries an explicit
+     `artifactTextDirection(language)` — the share page root and the owner's
+     artifact column — so the document's own direction wins and elements with no
+     `dir` at all inherit correctly.
   5. **Logical properties, always** (`ms/me/ps/pe`, `start/end`, `text-start`).
      R14 swept up live bugs where physical ones had shipped: toasts pinned
      `right-4` (so they surfaced on the RTL page's *leading* edge), `TableHead`
@@ -2762,7 +2905,53 @@ tsconfig and never needs shared's `dist`.
      cards' `border-l` accent bar stayed on the physical left.
      `left-1/2 -translate-x-1/2` centring is symmetric and fine.
   6. A chevron that **rotates** to show state needs no `rtl:-scale-x-100` — it's
-     symmetric about the vertical axis. An **arrow** does.
+     symmetric about the vertical axis. An **arrow** does. A **`Send`** paper
+     plane does too (it points along the reading direction); **`ExternalLink`**
+     deliberately does not — it means "opens elsewhere", not a direction of travel.
+  7. **Radix resolves direction from a React CONTEXT, not from the DOM — so
+     `LocaleProvider` MUST mount `<DirectionProvider>`.** This is the single
+     defect that made the whole app render LTR in Arabic, and it survived the
+     entire R14 sweep because none of R14's rules could see it. `useDirection()`
+     returns `localDir || contextDir || 'ltr'`; with no provider that last branch
+     always wins, and every `Tabs` root (plus `Select` content and every
+     roving-focus group) then stamps a literal **`dir="ltr"` onto its own DOM
+     node**. An explicit `dir` beats an inherited one, so that one node overrode
+     `<html dir="rtl">` for its whole subtree. On the project page that node **is**
+     the `md:flex` container holding the stage rail and the artifact column, so
+     the rail stayed on the left and the content on the right — on **every** stage,
+     because they share one root. Measured in a real browser at 1280px: forcing
+     `dir="ltr"` puts the rail at x=280 and the column at x=524; letting it inherit
+     puts the rail at x=1056 and the column at x=280.
+     - **The symptom is diagnostic and misleading.** It reads as "the text
+       translated but the layout didn't", which points at physical CSS — and the
+       CSS was already clean. The artifact column carries its own explicit `dir`,
+       so Arabic *prose* still laid out RTL while all the chrome around it quietly
+       reverted. When RTL is half-broken, **look for a node that re-declares `dir`
+       before auditing stylesheets**: `document.querySelectorAll('[dir]')` and
+       compare each against the document.
+     - **Wherever we set an explicit `dir` on a subtree, Radix's context must
+       agree**, or Radix stamps the opposite inside it. That is why the two
+       document-direction surfaces each mount their own nested provider:
+       `SharedProjectView` (the share page's chrome follows the **document**, since
+       the reader is a client with no stored locale) and the owner's artifact
+       column in `ProjectStages`.
+     - **Never fix this per-component** by passing `dir` to each `Tabs`/`Select` —
+       that is a patch the next Radix primitive forgets. `@radix-ui/react-direction`
+       is an explicit dependency of `apps/web` for this reason, and it must stay
+       **deduped to one copy** (context identity is what makes the provider work).
+     - Pinned by `components/shared/i18n.test.tsx`, which asserts against a **real
+       `Tabs`** rather than against `LocaleProvider`'s output — what has to stay
+       true is that *Radix* agrees with the document, and only Radix's own
+       resolution can report that.
+  8. **Direction is derived from the locale's writing direction, never from
+     `=== 'ar'`.** `rtlLocales` in `lib/i18n/settings.ts` is the single source of
+     truth; `dirFor` is what `<html dir>`, the pre-paint script, and the
+     `DirectionProvider` all consult, so adding he/fa/ur is a one-line change. The
+     pre-paint script in `app/layout.tsx` is **built from those tables** rather
+     than written out — it runs before React and cannot call `dirFor`, so a
+     hand-written `'ar'` there would be the one place a new RTL locale translated
+     correctly and still painted LTR for the first frame, which is the exact flash
+     that script exists to prevent.
 - **Loading = skeletons shaped like the content, never a spinner (R14).** A
   spinner says "wait"; a skeleton says "here is what is coming, and how much".
   `ArtifactSkeleton` (`components/shared/`) is the one loading state for every

@@ -157,7 +157,7 @@ export function CommandPalette({
                         onClose();
                         c.run();
                       }}
-                      className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors ${
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-start text-sm transition-colors ${
                         isActive ? 'bg-muted' : 'hover:bg-muted/60'
                       }`}
                     >

@@ -9,6 +9,7 @@
  * if a field isn't here, a link holder cannot see it.
  */
 
+import type { ArtifactLanguage } from './artifact-language';
 import type { RequirementDocument } from './requirements';
 import type { SystemDesign } from './system-design';
 import type { DatabaseDesign } from './database-design';
@@ -103,6 +104,25 @@ export interface SharedProject {
    * their brand alone, which is a large part of what the paid plan sells.
    */
   watermark: boolean;
+  /**
+   * The language this package's prose was generated in.
+   *
+   * The public page has no locale toggle and no session, and its reader is the
+   * **client** — so the page cannot ask anyone what language to lay the document
+   * out in; it has to be told. Derived server-side from the artifacts' own
+   * stamps, which is the only source that survives the projection.
+   *
+   * Unlike `generation`, this deliberately **is** shared: it says what language
+   * the document is in, which its reader can already see, and without it the page
+   * would render an Arabic proposal left-to-right.
+   *
+   * Optional purely for back-compat: the server always sets it, but a payload
+   * cached by a browser before the field existed will not carry one, and those
+   * are exactly the packages whose prose may be Arabic with nothing saying so.
+   * The page falls back to reading the document's own text — see
+   * `documentLanguageOf`. Absent is therefore "work it out", not "English".
+   */
+  language?: ArtifactLanguage;
 }
 
 /**

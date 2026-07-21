@@ -886,7 +886,7 @@ function SentBadge({ lastViewedAt }: { lastViewedAt: string | null }) {
   if (!lastViewedAt) {
     return (
       <Badge variant="secondary" className="gap-1">
-        <Send className="h-3 w-3" />
+        <Send className="h-3 w-3 rtl:-scale-x-100" />
         {t('card.sent')}
       </Badge>
     );

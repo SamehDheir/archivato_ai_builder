@@ -135,7 +135,7 @@ export function IdeaToProductDemo() {
                   type="button"
                   onClick={() => setActive(i)}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors',
+                    'flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-start text-sm transition-colors',
                     state === 'active' &&
                       'border-primary/50 bg-primary/10 font-semibold text-foreground',
                     state === 'done' &&
@@ -199,7 +199,7 @@ function StageScreen({ index }: { index: number }) {
           <div className="rounded-lg border border-border bg-card px-3 py-2.5 font-mono text-sm leading-relaxed">
             <span className="text-muted-foreground">idea&gt; </span>
             A clinic booking app with appointments, billing &amp; reports
-            <span className="ml-0.5 inline-block h-4 w-[3px] translate-y-0.5 animate-pulse bg-primary align-middle" />
+            <span className="ms-0.5 inline-block h-4 w-[3px] translate-y-0.5 animate-pulse bg-primary align-middle" />
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
             <Tag>Industry: Healthcare</Tag>
@@ -485,13 +485,15 @@ function Bubble({
         <span className="mt-0.5 flex h-5 shrink-0 items-center rounded bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
           AI
         </span>
-        <p className="rounded-lg rounded-tl-sm bg-muted px-3 py-1.5">{children}</p>
+        {/* `ss` = start-start: the squared corner is the bubble's tail, so it
+            belongs on the reading-leading edge and has to flip in Arabic. */}
+        <p className="rounded-lg rounded-ss-sm bg-muted px-3 py-1.5">{children}</p>
       </div>
     );
   }
   return (
     <div className="flex justify-end">
-      <p className="max-w-[85%] rounded-lg rounded-tr-sm bg-primary/10 px-3 py-1.5">
+      <p className="max-w-[85%] rounded-lg rounded-se-sm bg-primary/10 px-3 py-1.5">
         {children}
       </p>
     </div>

@@ -1,4 +1,5 @@
 import type {
+  ArtifactLanguage,
   FixLogEntry,
   InterviewExchange,
   InterviewQuestion,
@@ -10,6 +11,7 @@ import type {
   ProjectIdeaInput,
   SlotMap,
 } from '@archivato/shared';
+import { detectArtifactLanguage } from '@archivato/shared';
 
 /**
  * The persisted state of one interview session. Today this lives in memory;
@@ -88,6 +90,38 @@ export interface InterviewSession {
    * changed behaviour.
    */
   generateExtendedArtifacts: boolean | null;
+  /**
+   * The language this project's **generated prose** is written in.
+   *
+   * Not the viewer's UI locale, and not derivable from it: an artifact is
+   * generated once and then read by people who have no toggle — the public share
+   * page has neither a session nor an owner — so the language is a property of
+   * the project.
+   *
+   * **`null` = the owner never chose**, which resolves to the language the client
+   * described their business in. Read it through
+   * `resolveArtifactLanguage(session)`, never bare — the derivation is the same
+   * pattern as `generateExtendedArtifacts`, and for the same reason: it keeps
+   * tracking an idea the owner is still editing, and stops the moment they state
+   * a preference.
+   */
+  artifactLanguage: ArtifactLanguage | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/**
+ * The language this project's artifacts are generated in.
+ *
+ * The owner's explicit choice wins; absent one, the client's own words decide.
+ * The idea is the right signal rather than the transcript: it is present from
+ * the first moment (before any answer exists), it is what the owner typed to
+ * describe the engagement, and it is stable — deriving from the running
+ * transcript would let one English answer mid-interview flip the language of a
+ * document whose earlier half was already generated in Arabic.
+ */
+export function resolveArtifactLanguage(
+  session: Pick<InterviewSession, 'artifactLanguage' | 'input'>,
+): ArtifactLanguage {
+  return session.artifactLanguage ?? detectArtifactLanguage(session.input.idea);
 }

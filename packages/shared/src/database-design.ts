@@ -4,6 +4,7 @@
  * System Design. Includes entities, primary keys, foreign keys, and relations.
  */
 
+import type { LocalizedArtifact } from './artifact-language';
 import type { GenerationProvenance } from './generation';
 
 /**
@@ -73,7 +74,7 @@ export interface Relation {
   description?: string;
 }
 
-export interface DatabaseDesign {
+export interface DatabaseDesign extends LocalizedArtifact {
   sessionId: string;
   generatedAt: string;
   /** How this design was produced — see `generation.ts`. Absent = unknown. */

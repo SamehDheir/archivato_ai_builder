@@ -1,5 +1,5 @@
 import {
-  EXTRACTION_GAP_ASSUMPTION,
+  extractionGapAssumption,
   InterviewPhase,
   roleIsSourced,
   sharesVerbatimSpan,
@@ -271,7 +271,9 @@ describe('field-services scoping regression (new domain, deterministic path)', (
       const assumptions = (doc.assumptionsAndOpenQuestions ?? [])
         .map((a) => a.assumption)
         .join(' ');
-      expect(assumptions).toContain(EXTRACTION_GAP_ASSUMPTION.slice(0, 40));
+      expect(assumptions).toContain(
+        extractionGapAssumption('en').assumption.slice(0, 40),
+      );
     }
   });
 

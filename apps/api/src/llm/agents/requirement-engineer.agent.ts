@@ -1,8 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
-  EXTRACTION_GAP_ASSUMPTION,
-  EXTRACTION_GAP_IMPACT,
+  extractionGapAssumption,
   SLOT_KEYS,
   regulationsForMarket,
   screenRequirementDocument,
@@ -11,6 +10,7 @@ import {
   unsourcedRoleNames,
   untrusted,
   untrustedField,
+  type ArtifactLanguage,
   type BusinessAnalysis,
   type BusinessRule,
   type FunctionalRequirement,
@@ -161,6 +161,10 @@ export class RequirementEngineerAgent extends BaseAgent {
     // the model — so they're folded into the assumptions on BOTH paths, and the
     // raw client-question list is attached verbatim too.
     const openQuestions = ctx.openQuestions ?? [];
+    // Resolved here as well as inside `generateArtifact`, because the provenance
+    // notes below are appended *after* it returns and compose their own
+    // sentences. Both reads hit the same memoized thunk, so this is one lookup.
+    const language = await this.artifactLanguage();
     const doc = await this.generateArtifact<RequirementDocument>({
       label: 'Requirement doc',
       prompt: this.buildPrompt(ctx),
@@ -176,7 +180,7 @@ export class RequirementEngineerAgent extends BaseAgent {
     // link pasted into the interview reaches the share page with no model involved
     // at all.
     const { document, removed } = screenRequirementDocument(
-      this.withProvenanceNotes(doc, ctx),
+      this.withProvenanceNotes(doc, ctx, language),
     );
     if (removed.length > 0) {
       this.logger.warn(
@@ -211,19 +215,19 @@ export class RequirementEngineerAgent extends BaseAgent {
   private withProvenanceNotes(
     doc: RequirementDocument,
     ctx: RequirementContext,
+    language: ArtifactLanguage,
   ): RequirementDocument {
     const extra: RequirementAssumption[] = [];
 
     const roleNames = (doc.roles ?? []).map((r) => r.name);
     const invented = unsourcedRoleNames(roleNames, statedRolesText(ctx));
-    for (const name of invented) extra.push(unsourcedRoleAssumption(name));
+    for (const name of invented) {
+      extra.push(unsourcedRoleAssumption(name, language));
+    }
 
     const noRules = (doc.businessRules ?? []).length === 0;
     if (noRules && transcriptSuggestsBusinessRules(transcriptText(ctx))) {
-      extra.push({
-        assumption: EXTRACTION_GAP_ASSUMPTION,
-        impactIfWrong: EXTRACTION_GAP_IMPACT,
-      });
+      extra.push(extractionGapAssumption(language));
     }
 
     if (extra.length === 0) return doc;

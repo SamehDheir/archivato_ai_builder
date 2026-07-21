@@ -310,6 +310,30 @@
     font-family: var(--font-sans), ui-sans-serif, sans-serif;
   }
 
+  /* ── An EMPTY dir="auto" field must follow the page, not fall back to LTR ──
+     `dir="auto"` resolves direction from the element's **value**, and for a form
+     control the placeholder is not part of that calculation. An empty field
+     therefore has no strong character to read, falls back to LTR, and renders an
+     Arabic placeholder flush left with its full stop on the wrong end — on every
+     input and textarea in the app, which is most of what an Arabic user sees
+     before they have typed anything.
+
+     `dir="auto"` is still right the moment there IS a value: these fields hold
+     free text, and someone typing English into a form on an Arabic page should
+     see their own sentence laid out left-to-right. So the override is scoped to
+     exactly the state where `auto` has nothing to work with — `:placeholder-shown`
+     stops matching on the first keystroke and `auto` takes over again.
+
+     `unicode-bidi: normal` is required, not decorative: `dir="auto"` is
+     implemented as `unicode-bidi: plaintext`, which resolves each paragraph's
+     direction from its own content and would otherwise ignore the `direction`
+     set here. Both properties, or neither works. */
+  input[dir='auto']:placeholder-shown,
+  textarea[dir='auto']:placeholder-shown {
+    direction: inherit;
+    unicode-bidi: normal;
+  }
+
   code,
   kbd,
   pre,

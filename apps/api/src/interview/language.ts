@@ -1,25 +1,25 @@
 /**
- * Lightweight language detection for the interview. We only distinguish Arabic
- * from everything else (treated as English), which is enough to let the adaptive
- * interviewer answer in the same language the user wrote their idea in.
+ * Interview language — which language to ask the next question in.
  *
- * Pure + dependency-free so it's trivially testable and runs offline.
+ * This used to be its own detector. It is now a re-export of the shared
+ * `detectArtifactLanguage`, because the interview language and the project's
+ * artifact language are **the same decision**: the client described their
+ * business in some language, the interview should ask in it, and the scoping
+ * document they are handed at the end should come back in it.
+ *
+ * Keeping two copies meant two thresholds that could disagree about the same
+ * project — an interview conducted in Arabic feeding a pipeline that generated
+ * English, which is precisely the half-translated result this consolidation
+ * exists to prevent. The shared module also carries the prompt rules the agents
+ * need, so the type and the instruction cannot drift apart either.
  */
 
-export type InterviewLanguage = 'ar' | 'en';
+import {
+  detectArtifactLanguage,
+  type ArtifactLanguage,
+} from '@archivato/shared';
 
-/** Arabic script blocks (base + supplement + presentation forms). */
-const ARABIC = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/g;
+/** Kept as an alias so the interviewer's context type still reads in its own terms. */
+export type InterviewLanguage = ArtifactLanguage;
 
-/**
- * Returns `'ar'` when a meaningful share of the letters are Arabic, so a mostly
- * Arabic idea (with a few English tech terms) still reads as Arabic. Defaults to
- * `'en'` for empty or non-Arabic text.
- */
-export function detectLanguage(text: string): InterviewLanguage {
-  if (!text) return 'en';
-  const arabic = (text.match(ARABIC) ?? []).length;
-  const letters = (text.match(/\p{L}/gu) ?? []).length;
-  if (letters === 0) return 'en';
-  return arabic / letters >= 0.3 ? 'ar' : 'en';
-}
+export const detectLanguage = detectArtifactLanguage;

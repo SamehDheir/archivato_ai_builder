@@ -85,4 +85,9 @@ export const DEMO_SCOPING_PACKAGE: SharedProject = {
   threatModel: EXAMPLE_THREAT_MODEL,
   qaPlan: EXAMPLE_QA_PLAN,
   watermark: false,
+  // The fixture's artifacts are written in English, so the page must lay out
+  // left-to-right even for a visitor browsing the site in Arabic. This is the
+  // whole reason the field is on the payload rather than read from the UI locale:
+  // the direction belongs to the document, not to whoever is reading it.
+  language: 'en',
 };

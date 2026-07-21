@@ -1,8 +1,20 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
-import { normalizeUsageStage, type PipelineStageName } from '@archivato/shared';
-import { runWithLlmContext } from '../llm/usage/llm-usage.context';
+import {
+  DEFAULT_ARTIFACT_LANGUAGE,
+  normalizeUsageStage,
+  type PipelineStageName,
+} from '@archivato/shared';
+import {
+  lazyArtifactLanguage,
+  runWithLlmContext,
+} from '../llm/usage/llm-usage.context';
+import {
+  INTERVIEW_SESSION_REPOSITORY,
+  type InterviewSessionRepository,
+} from '../interview/interview-session.repository';
+import { resolveArtifactLanguage } from '../interview/interview-session.entity';
 import { RequirementsService } from '../requirements/requirements.service';
 import { SystemDesignService } from '../system-design/system-design.service';
 import { DatabaseDesignService } from '../database-design/database-design.service';
@@ -27,6 +39,8 @@ export class PipelineProcessor extends WorkerHost {
     private readonly apiDesign: ApiDesignService,
     private readonly review: ReviewService,
     private readonly versions: VersionsService,
+    @Inject(INTERVIEW_SESSION_REPOSITORY)
+    private readonly sessions: InterviewSessionRepository,
   ) {
     super();
   }
@@ -42,6 +56,16 @@ export class PipelineProcessor extends WorkerHost {
         userId: userId ?? null,
         sessionId,
         stage: normalizeUsageStage(stage),
+        // …and the artifact language with it, so a stage generated through the
+        // queue is written in the same language as one generated through the SSE
+        // stream. Without this, which language a document came out in would
+        // depend on which transport the client happened to use.
+        resolveLanguage: lazyArtifactLanguage(async () => {
+          const session = await this.sessions.findById(sessionId);
+          return session
+            ? resolveArtifactLanguage(session)
+            : DEFAULT_ARTIFACT_LANGUAGE;
+        }),
       },
       () => this.run(stage, sessionId),
     );

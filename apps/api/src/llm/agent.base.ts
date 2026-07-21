@@ -1,10 +1,13 @@
 import { Logger } from '@nestjs/common';
 import type {
   AgentRole,
+  ArtifactLanguage,
   DegradedReason,
   GenerationProvenance,
+  LocalizedArtifact,
 } from '@archivato/shared';
-import { UNTRUSTED_INPUT_RULES } from '@archivato/shared';
+import { outputLanguageRules, UNTRUSTED_INPUT_RULES } from '@archivato/shared';
+import { currentArtifactLanguage } from './usage/llm-usage.context';
 import type {
   LlmProvider,
   LlmMessage,
@@ -38,7 +41,7 @@ export abstract class BaseAgent {
     options?: LlmCompleteOptions,
   ): Promise<string> {
     return this.llm.complete(this.buildMessages(userPrompt), {
-      system: this.hardenedSystemPrompt,
+      system: await this.hardenedSystemPrompt(),
       ...options,
       agent: this.role,
     });
@@ -50,31 +53,72 @@ export abstract class BaseAgent {
     options?: LlmCompleteOptions,
   ): Promise<T> {
     return this.llm.completeJson<T>(this.buildMessages(userPrompt), {
-      system: this.hardenedSystemPrompt,
+      system: await this.hardenedSystemPrompt(),
       ...options,
       agent: this.role,
     });
   }
 
   /**
-   * The agent's persona with `UNTRUSTED_INPUT_RULES` appended — the instruction
-   * hierarchy that gives `untrusted()`'s fence its meaning.
+   * The language this agent must write its prose in.
    *
-   * It is applied **here** rather than written into each agent's `systemPrompt`
-   * for the reason `generateArtifact` exists: fourteen agents interpolate client
-   * text, and a rule each one states by hand is a rule the fifteenth agent
-   * forgets. This way a new agent is defended before it is written.
+   * Read ambiently from the LLM call context (established by the HTTP
+   * interceptor and the BullMQ worker) rather than passed down through the
+   * fifteen agent context types, for the reason that context exists: threading a
+   * field through a dozen stage services is the wide invasive change the seam
+   * was built to avoid.
    *
-   * Cached because the string must be *stable* across calls, not merely equal:
-   * `ClaudeLlmProvider` marks the system prompt with `cache_control`, and a
-   * freshly built prompt per call would defeat prompt caching on every request.
+   * Exposed to subclasses because a **deterministic fallback** needs it too. The
+   * model is only half the story: an agent that falls back offline still emits a
+   * document, and a fallback that is always English would put an English section
+   * inside an otherwise Arabic package — the same broken half-translated page,
+   * arriving exactly when generation had already degraded.
    */
-  private get hardenedSystemPrompt(): string {
-    this.cachedSystemPrompt ??= [this.systemPrompt, ...UNTRUSTED_INPUT_RULES].join(' ');
-    return this.cachedSystemPrompt;
+  protected artifactLanguage(): Promise<ArtifactLanguage> {
+    return currentArtifactLanguage();
   }
 
-  private cachedSystemPrompt?: string;
+  /**
+   * The agent's persona with the standing rules appended — the untrusted-input
+   * hierarchy that gives `untrusted()`'s fence its meaning, and the output
+   * language the artifact must be written in.
+   *
+   * Both are applied **here** rather than written into each agent's
+   * `systemPrompt` for the reason `generateArtifact` exists: fifteen agents
+   * interpolate client text, and a rule each one states by hand is a rule the
+   * sixteenth forgets. This way a new agent is defended, and localized, before
+   * it is written.
+   *
+   * The language rule matters most because its absence was **silent**. Only the
+   * interviewer and the proposal writer were ever told what language to answer
+   * in; the other thirteen were handed an Arabic transcript with no instruction,
+   * and a model in that position picks a language per field — one real run
+   * returned an Arabic competitor name and an English architecture rationale from
+   * the same pipeline. Nothing errored, and every stage was confidently
+   * inconsistent in the same way.
+   *
+   * Cached **per language** because the string must be *stable* across calls, not
+   * merely equal: `ClaudeLlmProvider` marks the system prompt with
+   * `cache_control`, and a freshly built prompt per call would defeat prompt
+   * caching on every request. Keying the cache by language keeps that property —
+   * an agent used in both languages holds two stable strings, not one that
+   * churns.
+   */
+  private async hardenedSystemPrompt(): Promise<string> {
+    const language = await this.artifactLanguage();
+    let cached = this.cachedSystemPrompts.get(language);
+    if (!cached) {
+      cached = [
+        this.systemPrompt,
+        ...UNTRUSTED_INPUT_RULES,
+        outputLanguageRules(language),
+      ].join(' ');
+      this.cachedSystemPrompts.set(language, cached);
+    }
+    return cached;
+  }
+
+  private readonly cachedSystemPrompts = new Map<ArtifactLanguage, string>();
 
   private buildMessages(userPrompt: string): LlmMessage[] {
     return [{ role: 'user', content: userPrompt }];
@@ -96,26 +140,39 @@ export abstract class BaseAgent {
    * Whether that counts as *degraded* is a separate, presentation-time question
    * (`isDegradedGeneration` also treats the mock provider as degraded).
    */
-  protected async generateArtifact<T extends { generation?: GenerationProvenance }>(
+  protected async generateArtifact<
+    T extends { generation?: GenerationProvenance } & LocalizedArtifact,
+  >(
     spec: {
       /** Human-readable artifact name, used only in log lines. */
       label: string;
       prompt: string;
       isValid: (raw: Partial<T>) => boolean;
-      /** Build the artifact from accepted model output. */
-      accept: (raw: Partial<T>) => T;
-      /** Build the artifact without the model. */
-      fallback: () => T;
+      /**
+       * Build the artifact from accepted model output.
+       *
+       * Receives the language so the agent can stamp it onto the artifact and
+       * localize any sentence the *code* composes around the model's values —
+       * the class of bug where an English template wrapped an Arabic value and
+       * produced a sentence that read as neither language.
+       */
+      accept: (raw: Partial<T>, language: ArtifactLanguage) => T;
+      /** Build the artifact without the model, in the project's language. */
+      fallback: (language: ArtifactLanguage) => T;
       options?: LlmCompleteOptions;
     },
   ): Promise<T> {
     const logger = this.logger;
     let reason: DegradedReason = 'invalid_output';
+    // Resolved once, before the call, so both branches below agree — and so a
+    // fallback triggered by a *failed* call still knows the language, which a
+    // resolution deferred until the catch block could not guarantee.
+    const language = await this.artifactLanguage();
 
     try {
       const raw = await this.askWithinBudget<T>(spec.prompt, spec.options);
       if (spec.isValid(raw)) {
-        return this.stamp(spec.accept(raw), { mode: 'llm' });
+        return this.stamp(spec.accept(raw, language), { mode: 'llm' }, language);
       }
       // Name what came back. A bare "malformed" says a billed call was thrown
       // away and nothing about why — diagnosing one real case (a review
@@ -134,7 +191,11 @@ export abstract class BaseAgent {
       reason = degradedReasonFor(err);
       logger.warn(`${spec.label} failed (${reason}); using fallback: ${err}`);
     }
-    return this.stamp(spec.fallback(), { mode: 'fallback', degradedReason: reason });
+    return this.stamp(
+      spec.fallback(language),
+      { mode: 'fallback', degradedReason: reason },
+      language,
+    );
   }
 
   /**
@@ -199,13 +260,24 @@ export abstract class BaseAgent {
    * stamp wrong. The other direction — a human edit, which must *keep* the
    * existing stamp — is `preserveGeneration` in `@archivato/shared`.
    */
-  private stamp<T extends { generation?: GenerationProvenance }>(
+  private stamp<T extends { generation?: GenerationProvenance } & LocalizedArtifact>(
     artifact: T,
     provenance: Pick<GenerationProvenance, 'mode' | 'degradedReason'>,
+    language: ArtifactLanguage,
   ): T {
     return {
       ...artifact,
       generation: this.provenance(provenance.mode, provenance.degradedReason),
+      // The language rides *on the artifact*, not just in the session, because
+      // every reader downstream needs it and most of them have no session to ask:
+      // the normalizers at both repository boundaries, the exporters, the share
+      // projection, and the web views that must set text direction. Stamping it
+      // here means one write path covers all of them.
+      //
+      // Unlike `generation`, it is NOT stripped for the share page — it states
+      // what language the document is in, which its reader can already see, and
+      // the public page needs it to lay the text out correctly.
+      language,
     };
   }
 

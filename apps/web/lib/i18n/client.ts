@@ -86,4 +86,34 @@ export async function loadShareNamespaces(): Promise<void> {
   }
 }
 
+/**
+ * Put the share page into the language its **document** is written in.
+ *
+ * The public page is the one surface where the viewer's preference is the wrong
+ * signal. Everywhere else the chrome follows a locale the user chose; here the
+ * reader is the *client*, arriving cold from a link with no stored preference,
+ * so they get the default — English — while the artifacts may be Arabic. That
+ * produces the exact failure this whole change exists to remove: translated
+ * headers wrapped around prose in another language, on the page a vendor sends
+ * to win the work.
+ *
+ * So the document decides. `loadLocale` first, because `changeLanguage` on a
+ * locale whose bundle has not been registered renders raw keys for a frame; the
+ * chrome namespaces are loaded alongside it for the same reason.
+ *
+ * Failure resolves rather than throws (the `loadLocale` posture): a client who
+ * cannot fetch the Arabic chunk should read an English-chrome page, not a
+ * broken one.
+ */
+export async function applyShareDocumentLanguage(locale: Locale): Promise<void> {
+  await Promise.all([loadShareNamespaces(), loadLocale(locale)]);
+  if (i18n.language !== locale) {
+    try {
+      await i18n.changeLanguage(locale);
+    } catch {
+      /* keep the current language rather than fail the page */
+    }
+  }
+}
+
 export default i18n;
