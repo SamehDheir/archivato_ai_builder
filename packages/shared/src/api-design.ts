@@ -149,6 +149,61 @@ function absolutePath(raw: unknown, basePath: string): string {
   return rest.length ? `${base}/${rest.join('/')}` : base;
 }
 
+/**
+ * Coerce whatever the model emitted for status codes into a clean array of
+ * distinct HTTP integers.
+ *
+ * `Array.isArray(e.statusCodes) ? e.statusCodes : []` was not enough: it checked
+ * the container, never the contents. Real designs shipped codes with no
+ * separator — `[201400409]` (one giant integer), `"201400409"` (a digit string),
+ * `"200, 400, 401"` (a CSV string) — and the view rendered each *element* as one
+ * badge, so `201400409` displayed as a single run-together number while a sibling
+ * endpoint's `[200, 400, 409]` rendered correctly. It slipped through because
+ * SOME endpoints in the same document were well-formed.
+ *
+ * The repair is deterministic because an HTTP status code is exactly three digits
+ * in [100, 599]: a 9-digit run is unambiguously three codes. Each token is either
+ * a valid 3-digit code, or a longer digit run that splits cleanly into 3-digit
+ * codes (all in range), or — failing both — a single number kept only if it is a
+ * valid code. Anything else is dropped rather than rendered as garbage. Runs at
+ * the store's read boundary too, so it also repairs rows already persisted.
+ */
+export function normalizeStatusCodes(raw: unknown): number[] {
+  const out: number[] = [];
+  const push = (n: number): void => {
+    if (Number.isInteger(n) && n >= 100 && n <= 599 && !out.includes(n)) out.push(n);
+  };
+  const fromDigits = (digits: string): void => {
+    if (!digits) return;
+    if (digits.length === 3) {
+      push(Number(digits));
+      return;
+    }
+    if (digits.length > 3 && digits.length % 3 === 0) {
+      const chunks = digits.match(/.{3}/g) ?? [];
+      const codes = chunks.map(Number);
+      if (codes.every((n) => n >= 100 && n <= 599)) {
+        codes.forEach(push);
+        return;
+      }
+    }
+    push(Number(digits)); // last resort — dropped by `push` if out of range
+  };
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+    } else if (typeof value === 'number' && Number.isFinite(value)) {
+      fromDigits(String(Math.trunc(Math.abs(value))));
+    } else if (typeof value === 'string') {
+      const tokens = value.split(/[^0-9]+/).filter(Boolean);
+      if (tokens.length > 1) tokens.forEach(fromDigits);
+      else fromDigits(tokens[0] ?? '');
+    }
+  };
+  visit(raw);
+  return out;
+}
+
 export function normalizeApiEndpoint(
   endpoint: ApiEndpoint,
   basePath: string,
@@ -165,7 +220,7 @@ export function normalizeApiEndpoint(
     summary: typeof e.summary === 'string' ? e.summary : '',
     requestSchema: Array.isArray(e.requestSchema) ? e.requestSchema : [],
     responseSchema: Array.isArray(e.responseSchema) ? e.responseSchema : [],
-    statusCodes: Array.isArray(e.statusCodes) ? e.statusCodes : [],
+    statusCodes: normalizeStatusCodes(e.statusCodes),
   };
 }
 

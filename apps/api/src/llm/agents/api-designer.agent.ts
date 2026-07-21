@@ -2,9 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   buildRestApi,
+  enforceRoleCardinality,
   mergeMissingCoverage,
   normalizeApiModule,
   normalizeExcludedEntities,
+  userRoleCardinality,
   validateEntityCoverage,
   withResolvedCoverage,
   type ApiDesign,
@@ -119,7 +121,10 @@ export class ApiDesignerAgent extends BaseAgent {
         // `llm` even when a later repair runs: the chunked design is model-authored,
         // and per-module attribution already lives on `ApiModule.source`.
         if (!coverage.missing.length) {
-          return { ...design, generation: this.provenance('llm') };
+          return this.reconcileRoles(
+            { ...design, generation: this.provenance('llm') },
+            ctx,
+          );
         }
 
         // One repair round-trip, scoped to the gap. It doubles as the truncation
@@ -133,7 +138,10 @@ export class ApiDesignerAgent extends BaseAgent {
 
         // Whatever is still uncovered is the service's to fill deterministically
         // before it persists anything — never the user's to discover.
-        return { ...design, generation: this.provenance('llm') };
+        return this.reconcileRoles(
+          { ...design, generation: this.provenance('llm') },
+          ctx,
+        );
       }
       // No modules at all. If the chunks reported a transport cause, that is the
       // honest reason — "the answer was incomplete" would blame the model for
@@ -144,10 +152,53 @@ export class ApiDesignerAgent extends BaseAgent {
       degraded = degradedReasonFor(err);
       this.logger.warn(`API design failed (${degraded}); using fallback: ${err}`);
     }
-    return {
-      ...this.buildDeterministic(sessionId, generatedAt, ctx),
-      generation: this.provenance('fallback', degraded),
-    };
+    return this.reconcileRoles(
+      {
+        ...this.buildDeterministic(sessionId, generatedAt, ctx),
+        generation: this.provenance('fallback', degraded),
+      },
+      ctx,
+    );
+  }
+
+  /**
+   * Make the user endpoints agree with the database's user↔role cardinality.
+   *
+   * The database and API stages are generated largely independently, so the
+   * schema could model roles many-to-many (a `user_roles` join) while the model,
+   * out of habit, gave the create-user body a single `role_id`. This reads the
+   * real cardinality from the schema and rewrites `role_id` → `role_ids[]` when
+   * it's many-to-many. Deterministic and cheap; a no-op on the offline build,
+   * which already reaches roles through the junction's nested routes.
+   */
+  private reconcileRoles(design: ApiDesign, ctx: ApiDesignContext): ApiDesign {
+    const { design: next, changed } = enforceRoleCardinality(
+      design,
+      ctx.databaseDesign,
+    );
+    if (changed) {
+      this.logger.debug(
+        'Rewrote a single role_id to role_ids[] to match the many-to-many role schema.',
+      );
+    }
+    return next;
+  }
+
+  /**
+   * Tell the model the user↔role cardinality the database actually chose, so the
+   * create/update-user contract matches it instead of defaulting to a single
+   * `role_id`. The deterministic `reconcileRoles` enforces the same verdict on
+   * the output, so prompt and backstop agree.
+   */
+  private roleCardinalityDirective(ctx: ApiDesignContext): string {
+    switch (userRoleCardinality(ctx.databaseDesign)) {
+      case 'many':
+        return 'USER ROLES: the database models users↔roles as MANY-TO-MANY. The create/update-user request and the user response MUST use role_ids (a JSON array of ids), never a single role_id.';
+      case 'single':
+        return 'USER ROLES: the database gives each user ONE role — use a single role_id, not an array.';
+      default:
+        return '';
+    }
   }
 
   /**
@@ -308,7 +359,7 @@ export class ApiDesignerAgent extends BaseAgent {
     lines.push(
       'Return JSON with these keys:',
       '- modules[]: {name, basePath (e.g. /api/orders), coveredEntities[] (exact entity names from the checklist this group gives access to), endpoints[]}.',
-      '  Each endpoint: {method (GET|POST|PUT|PATCH|DELETE), path, summary (what it does), requestSchema[] {name, type, required (boolean)}, responseSchema[] {name, type, required (boolean)}, statusCodes[] (integers incl. error cases)}.',
+      '  Each endpoint: {method (GET|POST|PUT|PATCH|DELETE), path, summary (what it does), requestSchema[] {name, type, required (boolean)}, responseSchema[] {name, type, required (boolean)}, statusCodes[] (a JSON array of DISTINCT integers, e.g. [200,400,404] — never one run-together number like 200400404, never a string)}.',
       '- excludedEntities[]: {entity (exact name), reason} — only for checklist entities you deliberately give no endpoint group.',
       '',
       'COVERAGE RULES (the design is invalid if broken):',
@@ -324,6 +375,7 @@ export class ApiDesignerAgent extends BaseAgent {
       opts.includeAuth
         ? 'Include an Auth module (register/login/refresh) alongside the resource groups; it covers no checklist entity, so give it coveredEntities: [].\nA public registration endpoint must NOT accept role, permission, or tenant/organization ids in its request body — a caller who can name their own role can register as an administrator. Those are assigned by an authenticated admin endpoint.'
         : 'Do not include an Auth module — another part of this design already has it.',
+      this.roleCardinalityDirective(ctx),
       'LIST ENDPOINTS — a GET collection\'s requestSchema is its query string. Beyond page/limit, include (where the entity\'s columns support it):',
       '- search: free-text over the entity\'s own text columns, when it has any.',
       '- the lifecycle column itself (status/state), when the entity has one.',

@@ -10,7 +10,9 @@ import {
   type RequirementDocument,
   type SystemDesign,
   untrustedField,
-  enforceTenancy,
+  applyTenancy,
+  requiresMultiTenancy,
+  tenantEntityFor,
   normalizeDatabaseDesign,
 } from '@archivato/shared';
 import { BaseAgent, degradedReasonFor } from '../agent.base';
@@ -321,42 +323,89 @@ export class DatabaseDesignerAgent extends BaseAgent {
   }
 
   /**
-   * Drop a tenancy layer the requirements never asked for.
+   * Reconcile the schema's tenancy with what the requirements/system design
+   * actually describe — ADD the tenant table + scoping when required and the
+   * model dropped it, STRIP it when present but unrequested.
    *
-   * Applied on the LLM path only — the deterministic fallback derives its
-   * entities from the requirements and has no way to invent a tenant table. See
-   * `enforceTenancy` for why this is code rather than more prompt: the tenancy
-   * rule in the system prompt has to stay emphatic (a partial tenant scope is a
-   * cross-tenant leak), and an emphatic rule with no stated negative case reads
-   * as a default.
+   * The code backstop exists because the prompt rule cannot be trusted to fire
+   * both ways: an emphatic "scope every table" with no stated negative reads as a
+   * default (so a single shop got tenancy), while the same rule buried under a
+   * thin summary got ignored (so an enterprise HealthTech platform shipped
+   * single-tenant). `applyTenancy` makes the deterministic detection, not the
+   * model's priors, decide — and runs on both the LLM and fallback paths.
    */
   private withoutUnrequestedTenancy(
     design: DatabaseDesign,
     ctx: DatabaseDesignContext,
   ): DatabaseDesign {
-    const { design: next, removed } = enforceTenancy(
+    const { design: next, added, removed } = applyTenancy(
       design,
       ctx.requirements,
       ctx.systemDesign,
     );
     if (removed) this.logger.debug(`Tenancy stripped: ${removed}`);
+    if (added) this.logger.warn(`Tenancy added: ${added}`);
     return next;
   }
 
+  /**
+   * The tenancy instruction, decided by the deterministic detector rather than
+   * left to the model's SaaS priors. This is what stops the schema from guessing
+   * multi-tenancy per run: the code reads the requirements + system design and
+   * tells the model, unambiguously, which world it is in. `applyTenancy` then
+   * enforces the same verdict on the output, so prompt and backstop agree.
+   */
+  private tenancyDirective(ctx: DatabaseDesignContext): string {
+    if (requiresMultiTenancy(ctx.requirements, ctx.systemDesign)) {
+      const { table, column } = tenantEntityFor(ctx.requirements, ctx.systemDesign);
+      return (
+        `MULTI-TENANT (required by the requirements/system design): include a "${table}" tenant ` +
+        `table and put a ${column} foreign key on EVERY table that holds tenant data — not only ` +
+        `on users. A tenant column on users alone is not isolation; it leaves every record ` +
+        `queryable across tenants.`
+      );
+    }
+    return (
+      'SINGLE BUSINESS: this product serves ONE organization. Do NOT add a ' +
+      'tenants/organizations/branches table and do NOT put any tenant/organization/branch ' +
+      'foreign key on any table.'
+    );
+  }
+
+  /** Services with their responsibilities — the responsibility is where the
+   * tenancy/scoping signal lives ("Provisions new tenants…"), so names alone (the
+   * old summary) dropped exactly what the schema needed to see. */
+  private servicesContext(ctx: DatabaseDesignContext): string {
+    return ctx.systemDesign.services
+      .map((s) => `- ${s.name}: ${s.responsibility}`)
+      .join('\n');
+  }
+
+  /** Roles with their descriptions — a role scoped to "a single branch" is a
+   * tenancy signal that a bare role name ("Branch Manager") loses. */
+  private rolesContext(ctx: DatabaseDesignContext): string {
+    return (
+      ctx.requirements.roles
+        .map((r) => `- ${r.name}: ${r.description ?? ''}`)
+        .join('\n') || '- none'
+    );
+  }
+
   private buildPrompt(ctx: DatabaseDesignContext): string {
-    const services = ctx.systemDesign.services.map((s) => s.name).join(', ');
-    const roles = ctx.requirements.roles.map((r) => r.name).join(', ');
     const entities = ctx.requirements.functional
-      .slice(0, 10)
-      .map((f) => `- ${f.title}`)
+      .map((f) => `- ${f.title}${f.description ? `: ${f.description}` : ''}`)
       .join('\n');
     return [
       untrustedField('Idea', ctx.idea),
       `Database engine: ${this.databaseType(ctx.systemDesign)}`,
-      `Services (each typically owns one or more tables): ${services}`,
-      `Roles (may need profile/permission tables): ${roles || 'none'}`,
+      'Services (each typically owns one or more tables):',
+      this.servicesContext(ctx),
+      'Roles (may need profile/permission tables):',
+      this.rolesContext(ctx),
       'Functional requirements (the data must support these):',
       entities || '- none listed',
+      '',
+      this.tenancyDirective(ctx),
       '',
       'Design the schema and return JSON with these keys:',
       '- databaseType: the database engine (echo the one above).',
@@ -378,26 +427,26 @@ export class DatabaseDesignerAgent extends BaseAgent {
    * the shared system prompt, so they shape the list without being restated.
    */
   private buildEnumeratePrompt(ctx: DatabaseDesignContext): string {
-    const services = ctx.systemDesign.services.map((s) => s.name).join(', ');
-    const roles = ctx.requirements.roles.map((r) => r.name).join(', ');
     const requirements = ctx.requirements.functional
-      .slice(0, 14)
-      .map((f) => `- ${f.title}`)
+      .map((f) => `- ${f.title}${f.description ? `: ${f.description}` : ''}`)
       .join('\n');
     return [
       untrustedField('Idea', ctx.idea),
       `Database engine: ${this.databaseType(ctx.systemDesign)}`,
-      `Services (each typically owns one or more tables): ${services}`,
-      `Roles (may need profile/permission tables): ${roles || 'none'}`,
+      'Services (each typically owns one or more tables):',
+      this.servicesContext(ctx),
+      'Roles (may need profile/permission tables):',
+      this.rolesContext(ctx),
       'Functional requirements (the data must support these):',
       requirements || '- none listed',
+      '',
+      this.tenancyDirective(ctx),
       '',
       'List EVERY table this schema needs — the COMPLETE set, following the design',
       'rules: separate the people who log in from the people the business serves,',
       'add a join table for each many-to-many link, and add an audit-log table if',
-      'records are access-restricted or a regulated data category is involved. Add',
-      'tenant/organization tables ONLY if the product serves multiple organizations',
-      'as customers of the platform.',
+      'records are access-restricted or a regulated data category is involved.',
+      'If MULTI-TENANT above, the tenant table itself must be in this list.',
       'Return JSON: { entities: [{ name (snake_case, plural), purpose (one short line) }] }.',
       'Table NAMES and purposes only — do NOT design columns yet.',
     ].join('\n');
@@ -417,6 +466,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
       untrustedField('Idea', ctx.idea),
       `Database engine: ${this.databaseType(ctx.systemDesign)}`,
       `Roles: ${ctx.requirements.roles.map((r) => r.name).join(', ') || 'none'}`,
+      this.tenancyDirective(ctx),
       '',
       `This is part ${part.index} of ${part.total} of ONE schema. Fully design ONLY`,
       'these tables (design each one completely — do not defer any to another part):',
@@ -495,13 +545,20 @@ export class DatabaseDesignerAgent extends BaseAgent {
       relations.push(ownedByUser('reports'));
     }
 
-    return {
-      sessionId,
-      generatedAt,
-      databaseType: this.databaseType(ctx.systemDesign),
-      entities,
-      relations,
-    };
+    // Reconcile tenancy on the deterministic build too: a multi-tenant project
+    // that falls back offline must still get its tenant table + scoping, and a
+    // single-business one must not. The template above never models tenancy, so
+    // this is the only place the fallback can gain it.
+    return this.withoutUnrequestedTenancy(
+      {
+        sessionId,
+        generatedAt,
+        databaseType: this.databaseType(ctx.systemDesign),
+        entities,
+        relations,
+      },
+      ctx,
+    );
   }
 }
 
