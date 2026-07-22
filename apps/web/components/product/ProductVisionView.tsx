@@ -10,7 +10,7 @@ import {
   Target,
   Users,
 } from 'lucide-react';
-import type { ProductVision } from '@archivato/shared';
+import { dedupeBy, dedupeStrings, type ProductVision } from '@archivato/shared';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { useFormat } from '@/lib/i18n/format';
 import { Section } from '@/components/design/RequirementDocumentView';
@@ -19,6 +19,15 @@ import { Section } from '@/components/design/RequirementDocumentView';
 export function ProductVisionView({ vision }: { vision: ProductVision }) {
   const { t } = useTranslation('stages');
   const fmt = useFormat();
+  // Dedupe each list before counting or rendering: a stored vision can carry the
+  // same MVP line, metric or persona twice, and with nothing removing them the
+  // section renders doubled. First occurrence wins (order preserved), and the
+  // count badges read the deduped length.
+  const goals = dedupeStrings(vision.goals ?? []);
+  const mvp = dedupeStrings(vision.mvp ?? []);
+  const futureFeatures = dedupeStrings(vision.futureFeatures ?? []);
+  const successMetrics = dedupeBy(vision.successMetrics ?? [], (m) => m.name);
+  const personas = dedupeBy(vision.personas ?? [], (p) => p.name);
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
@@ -47,9 +56,9 @@ export function ProductVisionView({ vision }: { vision: ProductVision }) {
         </p>
       </div>
 
-      <Section title={t('vision.goals')} icon={Target} count={vision.goals.length}>
+      <Section title={t('vision.goals')} icon={Target} count={goals.length}>
         <ul className="list-disc space-y-1 ps-5 text-sm">
-          {vision.goals.map((g, i) => (
+          {goals.map((g, i) => (
             <li key={i} dir="auto">
               {g}
             </li>
@@ -63,11 +72,11 @@ export function ProductVisionView({ vision }: { vision: ProductVision }) {
           <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-success">
             <Rocket className="h-4 w-4" /> {t('vision.mvp')}
             <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs font-normal">
-              {vision.mvp.length}
+              {mvp.length}
             </span>
           </h4>
           <ul className="list-disc space-y-1 ps-5 text-sm">
-            {vision.mvp.map((m, i) => (
+            {mvp.map((m, i) => (
               <li key={i} dir="auto">
                 {m}
               </li>
@@ -79,12 +88,12 @@ export function ProductVisionView({ vision }: { vision: ProductVision }) {
             <ListChecks className="h-4 w-4 text-muted-foreground" />{' '}
             {t('vision.futureRoadmap')}
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
-              {vision.futureFeatures.length}
+              {futureFeatures.length}
             </span>
           </h4>
-          {vision.futureFeatures.length ? (
+          {futureFeatures.length ? (
             <ul className="list-disc space-y-1 ps-5 text-sm">
-              {vision.futureFeatures.map((f, i) => (
+              {futureFeatures.map((f, i) => (
                 <li key={i} dir="auto">
                   {f}
                 </li>
@@ -99,10 +108,10 @@ export function ProductVisionView({ vision }: { vision: ProductVision }) {
       <Section
         title={t('vision.successMetrics')}
         icon={Gauge}
-        count={vision.successMetrics.length}
+        count={successMetrics.length}
       >
         <div className="space-y-2">
-          {vision.successMetrics.map((m, i) => (
+          {successMetrics.map((m, i) => (
             <div key={i} className="rounded-lg border border-border bg-card p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-medium" dir="auto">
@@ -120,9 +129,9 @@ export function ProductVisionView({ vision }: { vision: ProductVision }) {
         </div>
       </Section>
 
-      <Section title={t('vision.personas')} icon={Users} count={vision.personas.length}>
+      <Section title={t('vision.personas')} icon={Users} count={personas.length}>
         <div className="grid gap-3 sm:grid-cols-2">
-          {vision.personas.map((p, i) => (
+          {personas.map((p, i) => (
             <div key={i} className="rounded-lg border border-border bg-card p-3">
               <p className="font-semibold" dir="auto">
                 {p.name}

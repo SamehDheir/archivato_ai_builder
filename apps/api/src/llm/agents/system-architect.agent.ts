@@ -3,6 +3,7 @@ import {
   AgentRole,
   assessScaleTier,
   coverageSourcesFromDesign,
+  dedupeBy,
   enforcePaymentAvailability,
   enforceScaleAppropriateStack,
   findUncoveredRequirements,
@@ -472,9 +473,16 @@ export class SystemArchitectAgent extends BaseAgent {
     language: ArtifactLanguage,
   ): SystemDesign {
     const haystack = this.haystack(ctx);
-    const services = this.withAuthService(
-      this.ensureComplexity(raw.services as ServiceModule[], ctx),
-      ctx,
+    // Dedupe by name before anything else reads the list: a model can return the
+    // same service twice, and there is no read-boundary normalizer for system
+    // design (the repo serves stored JSON verbatim), so an unremoved repeat would
+    // render — and price, via complexity → effort — the same module twice.
+    const services = dedupeBy(
+      this.withAuthService(
+        this.ensureComplexity(raw.services as ServiceModule[], ctx),
+        ctx,
+      ),
+      (s) => s.name,
     );
     const sanitized = sanitizeBuildVsBuy(raw.buildVsBuy);
     const compliance = sanitizeCompliance(raw.constraintCompliance);

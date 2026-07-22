@@ -1243,6 +1243,25 @@ tsconfig and never needs shared's `dist`.
     on read) so the two can't drift. **A missing array must read as empty, never as
     undefined.** When a required field on a JSON-stored artifact starts arriving
     absent, fix the read — not the crash site.
+    - **The normalizers also DE-DUPLICATE (`dedupeBy`, `collections.ts`).** A list
+      section rendering N times identically — reported as the System Design
+      "Services" list five times over, the Vision "MVP"/"Success metrics" twice —
+      was never a React bug: the views map each array exactly once. The **arrays
+      carried duplicate entries** (a model lists `AuthService` twice, a re-merged
+      generation chunk repeats a table) and **nothing removed them** — an artifact
+      is generated, stored as JSON, and served back verbatim, so a repeat in the
+      data is a repeat on every page. The safeguard is `dedupeBy(items, key)`
+      (pure/shared, order-preserving, first occurrence wins) folded into the
+      read-boundary normalizers by stable identity: entities by name (+ columns),
+      relations by `from|to|type`, API modules by name (+ endpoints by
+      `method path`), threats by `category|component|threat`, QA suites by name
+      (+ cases by id), review findings by title. It heals a **stored** row on read
+      and cleans exports/share in one place. **System design and product vision
+      have no read-boundary normalizer** (the system-design repo serves raw JSON),
+      so they dedupe write-side (`SystemArchitectAgent.normalize` services;
+      `ProductManagerAgent.dedupeLists`) **and** defensively in the view before the
+      `.map` (so the `count` badge reads the deduped length too). When adding a new
+      list-rendering view, dedupe at the artifact's normalizer, not per-component.
     - **It recurred, because each agent's `isValid` gates on ONE field.** A terser
       model omitted `relations` and `DatabaseDesignView` died on
       `design.relations.length`. There are now `normalizeDatabaseDesign` /

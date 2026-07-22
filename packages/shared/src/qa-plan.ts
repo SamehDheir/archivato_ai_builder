@@ -12,6 +12,7 @@
 import type { LocalizedArtifact } from './artifact-language';
 import type { DerivedArtifact } from './freshness';
 import type { GenerationProvenance } from './generation';
+import { dedupeBy, dedupeStrings } from './collections';
 
 export type TestType =
   | 'unit'
@@ -84,20 +85,28 @@ export function normalizeQaPlan(plan: QaPlan): QaPlan {
   return {
     ...plan,
     summary: typeof plan?.summary === 'string' ? plan.summary : '',
-    strategy: strings(plan?.strategy),
-    coverageGoals: strings(plan?.coverageGoals),
-    tooling: strings(plan?.tooling),
-    outOfScope: strings(plan?.outOfScope),
-    suites: Array.isArray(plan?.suites)
-      ? plan.suites
-          .filter((s): s is TestSuite => !!s && typeof s.name === 'string')
-          .map((s) => ({
-            ...s,
-            objective: typeof s.objective === 'string' ? s.objective : '',
-            cases: Array.isArray(s.cases)
-              ? s.cases.filter((c): c is TestCase => !!c && typeof c.title === 'string')
-              : [],
-          }))
-      : [],
+    strategy: dedupeStrings(strings(plan?.strategy)),
+    coverageGoals: dedupeStrings(strings(plan?.coverageGoals)),
+    tooling: dedupeStrings(strings(plan?.tooling)),
+    outOfScope: dedupeStrings(strings(plan?.outOfScope)),
+    // Dedupe suites by name and cases by their TC id (also public — QA plan
+    // renders on the share page), so a repeated suite doesn't re-list its cases.
+    suites: dedupeBy(
+      Array.isArray(plan?.suites)
+        ? plan.suites
+            .filter((s): s is TestSuite => !!s && typeof s.name === 'string')
+            .map((s) => ({
+              ...s,
+              objective: typeof s.objective === 'string' ? s.objective : '',
+              cases: dedupeBy(
+                Array.isArray(s.cases)
+                  ? s.cases.filter((c): c is TestCase => !!c && typeof c.title === 'string')
+                  : [],
+                (c) => c.id || c.title,
+              ),
+            }))
+        : [],
+      (s) => s.name,
+    ),
   };
 }

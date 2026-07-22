@@ -11,11 +11,12 @@ import {
   Scale,
   ShieldCheck,
 } from 'lucide-react';
-import type {
-  BuildVsBuyItem,
-  DecisionRef,
-  ModuleComplexity,
-  SystemDesign,
+import {
+  dedupeBy,
+  type BuildVsBuyItem,
+  type DecisionRef,
+  type ModuleComplexity,
+  type SystemDesign,
 } from '@archivato/shared';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -93,8 +94,15 @@ export function SystemDesignView({
   // The decision the "Explain" modal is currently showing (null = closed).
   const [explaining, setExplaining] = useState<DecisionRef | null>(null);
 
-  const buildVsBuy = design.buildVsBuy ?? [];
-  const compliance = design.constraintCompliance ?? [];
+  // Dedupe every list before it is counted or rendered. A stored design can carry
+  // repeats (an LLM listing a service twice, a re-merged chunk) and nothing
+  // upstream removes them, so without this the same card renders N times over —
+  // the reported bug. First occurrence wins, so the model's ordering is kept, and
+  // the `count` badges below read the deduped length rather than the inflated one.
+  const services = dedupeBy(design.services ?? [], (s) => s.name);
+  const techStack = dedupeBy(design.techStack ?? [], (t) => `${t.layer}|${t.technology}`);
+  const buildVsBuy = dedupeBy(design.buildVsBuy ?? [], (b) => b.capability);
+  const compliance = dedupeBy(design.constraintCompliance ?? [], (c) => c.constraint);
   // Owner-only: the share payload never carries it (stripped in ShareService).
   const uncovered = design.uncoveredRequirements ?? [];
 
@@ -222,7 +230,7 @@ export function SystemDesignView({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {design.techStack.map((tech) => (
+            {techStack.map((tech) => (
               <TableRow key={tech.layer + tech.technology}>
                 <TableCell className="font-mono text-xs">{tech.layer}</TableCell>
                 <TableCell className="font-medium" dir="auto">
@@ -262,7 +270,7 @@ export function SystemDesignView({
 
       <Section title={t('system.services')} icon={Boxes}>
         <div className="grid gap-3 sm:grid-cols-2">
-          {design.services.map((s) => (
+          {services.map((s) => (
             <Card key={s.name} className="border-s-2 border-s-primary/50">
               <CardContent className="p-4">
                 {/* The explain label is a nowrap phrase and these cards are a

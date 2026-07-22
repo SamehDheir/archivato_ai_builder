@@ -6,6 +6,7 @@
 
 import type { LocalizedArtifact } from './artifact-language';
 import type { GenerationProvenance } from './generation';
+import { dedupeBy } from './collections';
 
 /**
  * Common column types we suggest in the UI. Real models (and real databases)
@@ -108,26 +109,40 @@ export function normalizeDatabaseDesign(design: DatabaseDesign): DatabaseDesign 
       typeof design?.databaseType === 'string' && design.databaseType.trim()
         ? design.databaseType
         : 'PostgreSQL',
-    entities: Array.isArray(design?.entities)
-      ? design.entities
-          .filter((e): e is Entity => !!e && typeof e.name === 'string')
-          .map((e) => ({
-            ...e,
-            description: typeof e.description === 'string' ? e.description : '',
-            columns: Array.isArray(e.columns)
-              ? e.columns.filter(
-                  (c): c is EntityColumn => !!c && typeof c.name === 'string',
-                )
-              : [],
-          }))
-      : [],
+    // Dedupe by name: a generated schema can repeat a table (an LLM listing it
+    // twice, a re-merged chunk), and with nothing removing it the ERD and the
+    // view render the entity — and its whole column block — over again. Columns
+    // are deduped within each entity for the same reason.
+    entities: dedupeBy(
+      Array.isArray(design?.entities)
+        ? design.entities
+            .filter((e): e is Entity => !!e && typeof e.name === 'string')
+            .map((e) => ({
+              ...e,
+              description: typeof e.description === 'string' ? e.description : '',
+              columns: dedupeBy(
+                Array.isArray(e.columns)
+                  ? e.columns.filter(
+                      (c): c is EntityColumn => !!c && typeof c.name === 'string',
+                    )
+                  : [],
+                (c) => c.name,
+              ),
+            }))
+        : [],
+      (e) => e.name,
+    ),
     // The field that crashed. A relation naming an endpoint that isn't a string
-    // is dropped rather than rendered as "undefined → undefined".
-    relations: Array.isArray(design?.relations)
-      ? design.relations.filter(
-          (r): r is Relation =>
-            !!r && typeof r.from === 'string' && typeof r.to === 'string',
-        )
-      : [],
+    // is dropped rather than rendered as "undefined → undefined"; identical
+    // edges are folded so the diagram draws each once.
+    relations: dedupeBy(
+      Array.isArray(design?.relations)
+        ? design.relations.filter(
+            (r): r is Relation =>
+              !!r && typeof r.from === 'string' && typeof r.to === 'string',
+          )
+        : [],
+      (r) => `${r.from}|${r.to}|${r.type}`,
+    ),
   };
 }
