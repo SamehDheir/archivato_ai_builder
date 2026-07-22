@@ -63,9 +63,16 @@ export function CostView({
 
   const [scaleIdx, setScaleIdx] = useState(1); // default to the 1,000-user view
   const { scales, providers, cheapestByScale, recommended, workload } = estimate;
+  // `hosting` is the reconciled recommendation (System Design's host when it is
+  // viable); `recommended` is the legacy arithmetic pick, kept only so an
+  // estimate stored before the reconciliation existed still highlights a row.
+  const headlineProvider = estimate.hosting?.provider ?? recommended;
   const owner = !!onSaveWeeklyRate;
 
-  const recommendedProvider = providers.find((p) => p.provider === recommended);
+  const recommendedProvider = providers.find((p) => p.provider === headlineProvider);
+  const alternativeProvider = providers.find(
+    (p) => p.provider === estimate.hosting?.alternative?.provider,
+  );
   const sorted = [...providers].sort(
     (a, b) => a.costs[scaleIdx].monthlyUsd - b.costs[scaleIdx].monthlyUsd,
   );
@@ -129,7 +136,10 @@ export function CostView({
       {recommendedProvider && (
         <div className="mb-5 rounded-lg border border-primary/30 bg-primary/5 p-4">
           <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
-            <Sparkles className="h-3.5 w-3.5" /> {t('cost.bestValue')}
+            <Sparkles className="h-3.5 w-3.5" />
+            {estimate.hosting?.source === 'system-design'
+              ? t('cost.hosting.fromDesign')
+              : t('cost.bestValue')}
           </div>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <span className="text-base font-semibold">
@@ -138,8 +148,24 @@ export function CostView({
             <ModelBadge model={recommendedProvider.model} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground" dir="auto">
-            {recommendedProvider.bestFor}
+            {/* `rationale` is generated from this project's numbers; `bestFor` is
+                the old static platform blurb, kept only for estimates stored
+                before the reasoning existed. */}
+            {estimate.hosting?.rationale ??
+              recommendedProvider.rationale ??
+              recommendedProvider.bestFor}
           </p>
+          {estimate.hosting?.alternative && (
+            <p
+              className="mt-2 border-t border-primary/20 pt-2 text-sm text-muted-foreground"
+              dir="auto"
+            >
+              <span className="me-1 font-semibold text-foreground">
+                {t('cost.hosting.alternative')}
+              </span>
+              {estimate.hosting.alternative.note}
+            </p>
+          )}
         </div>
       )}
 
@@ -163,16 +189,31 @@ export function CostView({
                 key={p.provider}
                 className={cn(
                   'border-b border-border/60 last:border-0',
-                  p.provider === recommended && 'bg-primary/[0.04]',
+                  p.provider === headlineProvider && 'bg-primary/[0.04]',
+                  p.fit?.viable === false && 'opacity-60',
                 )}
               >
                 <td className="px-3 py-2.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{p.name}</span>
                     <ModelBadge model={p.model} />
+                    {/* The badge the brief asked for: which row the architecture
+                        already committed to, so the table reads as a comparison
+                        against a decision rather than a competing verdict. */}
+                    {estimate.hosting?.source === 'system-design' &&
+                      p.provider === estimate.hosting.provider && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          {t('cost.hosting.selected')}
+                        </Badge>
+                      )}
+                    {p.fit?.viable === false && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {t('cost.hosting.notViable')}
+                      </Badge>
+                    )}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground" dir="auto">
-                    {p.summary}
+                    {p.rationale ?? p.summary}
                   </div>
                 </td>
                 {p.costs.map((c, i) => {

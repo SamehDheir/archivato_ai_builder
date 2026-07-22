@@ -5,13 +5,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  artifactLanguageOf,
   buildBudgetCheck,
   buildEffortEstimate,
   buildServiceCostLines,
   estimateCosts,
+  hostingChoiceFromDesign,
   REFERENCE_RATES,
+  resolveServiceTargets,
+  runtimeStyleFromDesign,
+  serviceTargetInput,
   upstreamStamp,
   type CostEstimate,
+  type CostProjectProfile,
 } from '@archivato/shared';
 import {
   INTERVIEW_SESSION_REPOSITORY,
@@ -111,6 +117,22 @@ export class CostEstimateService {
       hasOutOfScope: !!requirements?.outOfScope?.length,
     });
 
+    // The hosting recommendation is reconciled with the design rather than
+    // computed beside it. The system design was already loaded above (for effort
+    // and the service subscriptions) — the hosting decision simply never read
+    // it, which is how the Cost tab came to crown a provider the architecture
+    // had already passed over.
+    const targets = resolveServiceTargets(
+      serviceTargetInput({ slots: session.slots, summary: session.summary }),
+    );
+    const profile: CostProjectProfile = {
+      scaleTier: systemDesign.scaleTier,
+      totalUsers: targets.totalUsers?.value ?? null,
+      concurrentUsers: targets.concurrentUsers?.value ?? null,
+      chosenProvider: hostingChoiceFromDesign(systemDesign),
+      runtime: runtimeStyleFromDesign(systemDesign),
+    };
+
     const estimate: CostEstimate = {
       sessionId,
       generatedAt: new Date().toISOString(),
@@ -121,6 +143,8 @@ export class CostEstimateService {
         endpoints,
         databaseType: databaseDesign.databaseType,
         architecture: systemDesign.architecture,
+        profile,
+        language: artifactLanguageOf(systemDesign),
       }),
       effort,
       serviceSubscriptions,
