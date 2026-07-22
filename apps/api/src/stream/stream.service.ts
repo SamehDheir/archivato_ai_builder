@@ -1,7 +1,13 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import {
   buildNarration,
-  type PipelineStageName,
+  isStandaloneStage,
+  type StreamStageName,
   type StreamEvent,
 } from '@archivato/shared';
 import { RequirementsService } from '../requirements/requirements.service';
@@ -9,24 +15,46 @@ import { SystemDesignService } from '../system-design/system-design.service';
 import { DatabaseDesignService } from '../database-design/database-design.service';
 import { ApiDesignService } from '../api-design/api-design.service';
 import { ReviewService } from '../review/review.service';
+import { BusinessAnalysisService } from '../business-analysis/business-analysis.service';
+import { ProductVisionService } from '../product-vision/product-vision.service';
+import { RoadmapService } from '../roadmap/roadmap.service';
+import { ThreatModelService } from '../threat-model/threat-model.service';
+import { QaPlanService } from '../qa-plan/qa-plan.service';
 import { VersionsService } from '../versions/versions.service';
 import { BillingService } from '../billing/billing.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 
 /**
- * Stages that require an active Pro plan — mirrors `JobsController.PRO_STAGES`.
+ * Stages that require an active Pro plan — mirrors `JobsController.PRO_STAGES`
+ * for the design chain, plus each standalone stage's own `ProGuard`.
+ *
  * The gate is enforced here (server-side) BEFORE any generation runs, so a
- * client that opens the stream directly can never generate a Pro artifact.
+ * client that opens the stream directly can never generate a Pro artifact. It
+ * has to be restated rather than inferred: the standalone controllers carry
+ * `ProGuard` as a route decorator, and SSE does not go through those routes.
+ * Business analysis and product vision are free stages and are deliberately
+ * absent.
  */
-const PRO_STAGES = new Set<PipelineStageName>(['api-design', 'review']);
+const PRO_STAGES = new Set<StreamStageName>([
+  'api-design',
+  'review',
+  'roadmap',
+  'threat-model',
+  'qa-plan',
+]);
 
 /** Human title for the "consulting the …" working step per stage. */
-const AGENT_TITLES: Record<PipelineStageName, string> = {
+const AGENT_TITLES: Record<StreamStageName, string> = {
   requirements: 'Requirement Engineer',
   'system-design': 'System Architect',
   'database-design': 'Database Designer',
   'api-design': 'API Designer',
   review: 'AI Architect Reviewer',
+  'business-analysis': 'Business Analyst',
+  'product-vision': 'Product Manager',
+  roadmap: 'Roadmap Planner',
+  'threat-model': 'Security Engineer',
+  'qa-plan': 'QA Lead',
 };
 
 /** Keep-alive interval while the (possibly slow) model call is in flight. */
@@ -56,6 +84,11 @@ export class StreamService {
     private readonly databaseDesign: DatabaseDesignService,
     private readonly apiDesign: ApiDesignService,
     private readonly review: ReviewService,
+    private readonly businessAnalysis: BusinessAnalysisService,
+    private readonly productVision: ProductVisionService,
+    private readonly roadmap: RoadmapService,
+    private readonly threatModel: ThreatModelService,
+    private readonly qaPlan: QaPlanService,
     private readonly versions: VersionsService,
     private readonly billing: BillingService,
     private readonly analytics: AnalyticsService,
@@ -63,7 +96,7 @@ export class StreamService {
 
   async *run(
     sessionId: string,
-    stage: PipelineStageName,
+    stage: StreamStageName,
     userId: string,
   ): AsyncGenerator<StreamEvent> {
     // 1. Entitlement gate — before any generation, so it can't be bypassed.
@@ -119,21 +152,27 @@ export class StreamService {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Generation failed.';
-      const code = err instanceof ForbiddenException ? 'forbidden' : undefined;
-      yield { type: 'error', message, code };
+      yield { type: 'error', message, code: errorCode(err) };
       return;
     }
 
-    // 3. Version snapshot — same bookkeeping the async worker does.
-    try {
-      await this.versions.snapshot(sessionId, `generate ${stage}`);
-    } catch (err) {
-      // A snapshot failure must not sink a successful generation.
-      this.logger.warn(
-        `Version snapshot failed for ${sessionId}/${stage}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
+    // 3. Version snapshot — same bookkeeping the async worker does, and ONLY for
+    //    the design chain. The standalone artifacts are deliberately excluded
+    //    from snapshots (a restore rewinds the design, and these hang off it
+    //    without gating it), so snapshotting here would cut a version whose
+    //    design content is identical to the last one and make the history read
+    //    as though the design changed when nothing did.
+    if (!isStandaloneStage(stage)) {
+      try {
+        await this.versions.snapshot(sessionId, `generate ${stage}`);
+      } catch (err) {
+        // A snapshot failure must not sink a successful generation.
+        this.logger.warn(
+          `Version snapshot failed for ${sessionId}/${stage}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
 
     // 4. Narrate the finished artifact, typed out chunk-by-chunk.
@@ -151,9 +190,16 @@ export class StreamService {
     yield { type: 'artifact', result: artifact };
   }
 
-  /** Route a stage name to its service's `generate()` (mirrors the worker). */
+  /**
+   * Route a stage name to its service's `generate()`.
+   *
+   * Each call is the SAME method the stage's own controller invokes, so every
+   * upstream gate it owns still runs — the standalone stages 409 until their
+   * inputs exist exactly as they do over HTTP. Streaming is a transport, not a
+   * second way in.
+   */
   private generateStage(
-    stage: PipelineStageName,
+    stage: StreamStageName,
     sessionId: string,
   ): Promise<unknown> {
     switch (stage) {
@@ -167,12 +213,37 @@ export class StreamService {
         return this.apiDesign.generate(sessionId);
       case 'review':
         return this.review.generate(sessionId);
+      case 'business-analysis':
+        return this.businessAnalysis.generate(sessionId);
+      case 'product-vision':
+        return this.productVision.generate(sessionId);
+      case 'roadmap':
+        return this.roadmap.generate(sessionId);
+      case 'threat-model':
+        return this.threatModel.generate(sessionId);
+      case 'qa-plan':
+        return this.qaPlan.generate(sessionId);
       default:
         return Promise.reject(
-          new Error(`Unknown pipeline stage: ${stage as string}`),
+          new Error(`Unknown stage: ${stage as string}`),
         );
     }
   }
+}
+
+/**
+ * Map a generation failure to a client-actionable code.
+ *
+ * `upgrade_required` is emitted by the gate above, before generation. This
+ * covers what the stage services themselves throw — and the 409 matters now
+ * that the standalone stages stream: roadmap, threat model and QA plan all
+ * refuse until the API design exists, and without a code the client shows a raw
+ * message for a state it could explain ("finish the pipeline first").
+ */
+function errorCode(err: unknown): string | undefined {
+  if (err instanceof ForbiddenException) return 'forbidden';
+  if (err instanceof ConflictException) return 'stage_not_ready';
+  return undefined;
 }
 
 /**

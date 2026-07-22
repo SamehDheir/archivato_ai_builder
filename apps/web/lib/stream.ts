@@ -1,5 +1,14 @@
-import type { PipelineStageName, StreamEvent } from '@archivato/shared';
-import { API_URL, ApiError, jobsApi } from '@/lib/api';
+import type { StreamEvent, StreamStageName } from '@archivato/shared';
+import {
+  API_URL,
+  ApiError,
+  businessAnalysisApi,
+  jobsApi,
+  productVisionApi,
+  qaPlanApi,
+  roadmapApi,
+  threatModelApi,
+} from '@/lib/api';
 
 /** One rendered narration step, accumulated on the client from stream events. */
 export interface StreamStep {
@@ -17,6 +26,18 @@ export interface StreamView {
 }
 
 export const emptyStreamView: StreamView = { steps: [] };
+
+/**
+ * SSE has no status code, so the server sends a `code` and this maps it back.
+ * Anything unrecognized is a plain failure — never silently an entitlement or
+ * readiness problem, which would send the caller down a recovery path (the
+ * upgrade modal) for a fault that isn't one.
+ */
+const STREAM_ERROR_STATUS: Record<string, number> = {
+  upgrade_required: 402,
+  forbidden: 403,
+  stage_not_ready: 409,
+};
 
 /**
  * Fold one stream event into the console view (pure — safe as a React reducer).
@@ -50,25 +71,57 @@ export function reduceStreamEvent(
 }
 
 /**
- * Open a Server-Sent Events stream for one pipeline stage and resolve with the
- * generated artifact. Each narration event is delivered to `onEvent` so the UI
- * can render the live "console".
+ * The non-streaming route for a stage, used whenever SSE can't be established.
+ *
+ * The design chain has BullMQ behind `/jobs`; the standalone stages never did
+ * (nothing queues them), so their fallback is the same POST their own tab has
+ * always called. Both go through the auth-refreshing `request()` wrapper, which
+ * is the point — it is the path that survives the expired cookie EventSource
+ * cannot refresh.
+ */
+function generateWithoutStream<T>(
+  sessionId: string,
+  stage: StreamStageName,
+): Promise<T> {
+  // A switch, not a lookup table: a table is built in full on every call, so it
+  // dereferences all five clients to route to one. That is wasted work in the
+  // browser and a hazard under a partial mock, where an unrelated client being
+  // absent throws before the right one is ever reached.
+  switch (stage) {
+    case 'business-analysis':
+      return businessAnalysisApi.generate(sessionId) as Promise<T>;
+    case 'product-vision':
+      return productVisionApi.generate(sessionId) as Promise<T>;
+    case 'roadmap':
+      return roadmapApi.generate(sessionId) as Promise<T>;
+    case 'threat-model':
+      return threatModelApi.generate(sessionId) as Promise<T>;
+    case 'qa-plan':
+      return qaPlanApi.generate(sessionId) as Promise<T>;
+    default:
+      return jobsApi.run<T>(sessionId, stage);
+  }
+}
+
+/**
+ * Open a Server-Sent Events stream for one stage and resolve with the generated
+ * artifact. Each narration event is delivered to `onEvent` so the UI can render
+ * the live "console".
  *
  * Resilience: if the stream errors *before any event arrives* (SSE blocked by a
  * proxy, EventSource unsupported, or an expired auth cookie that EventSource
- * can't refresh), we transparently fall back to the polling `/jobs` path — which
- * goes through the auth-refreshing `request()` wrapper. A mid-stream drop after
- * events have arrived surfaces as an error (the artifact is still persisted and
- * re-fetchable).
+ * can't refresh), we transparently fall back to the stage's non-streaming route.
+ * A mid-stream drop after events have arrived surfaces as an error (the artifact
+ * is still persisted and re-fetchable).
  */
 export function streamStage<T>(
   sessionId: string,
-  stage: PipelineStageName,
+  stage: StreamStageName,
   onEvent: (event: StreamEvent) => void,
 ): Promise<T> {
-  // No EventSource (SSR / very old browser): go straight to polling.
+  // No EventSource (SSR / very old browser): go straight to the plain route.
   if (typeof EventSource === 'undefined') {
-    return jobsApi.run<T>(sessionId, stage);
+    return generateWithoutStream<T>(sessionId, stage);
   }
 
   return new Promise<T>((resolve, reject) => {
@@ -96,9 +149,10 @@ export function streamStage<T>(
       if (event.type === 'artifact') {
         finish(() => resolve(event.result as T));
       } else if (event.type === 'error') {
-        // Only the entitlement error maps to 402 (so callers can pop the
-        // upgrade modal); every other failure is a generic error.
-        const status = event.code === 'upgrade_required' ? 402 : 400;
+        // Map back to the status the same failure carries over HTTP, so a caller
+        // branching on `402` (pop the upgrade modal) or `409` (the stage's
+        // upstream isn't ready) behaves identically whichever transport ran.
+        const status = STREAM_ERROR_STATUS[event.code ?? ''] ?? 400;
         finish(() => reject(new ApiError(event.message, status, event.code)));
       }
     };
@@ -115,8 +169,8 @@ export function streamStage<T>(
         // We already showed live output, then the connection dropped.
         reject(new Error('The stream was interrupted. Please try again.'));
       } else {
-        // Never connected — degrade to the durable polling path.
-        jobsApi.run<T>(sessionId, stage).then(resolve, reject);
+        // Never connected — degrade to the stage's durable non-streaming route.
+        generateWithoutStream<T>(sessionId, stage).then(resolve, reject);
       }
     };
   });

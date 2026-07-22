@@ -1,12 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
+  enforceScaleAppropriateOperations,
+  scaleOperationsPromptBlock,
   TEST_TYPES,
   type ApiDesign,
   type DatabaseDesign,
   type IntentAnalysis,
   type QaPlan,
   type RequirementDocument,
+  type ScaleTier,
   type TestCase,
   type TestPriority,
   type TestSuite,
@@ -96,17 +99,44 @@ export class QaPlannerAgent extends BaseAgent {
         .slice(0, 8)
         .map((f) => f.description)
         .join(' | ')}`,
+      // The same tier the architecture was sized to. A QA plan is a standing
+      // operational commitment — every tool in it is one the team installs, runs
+      // in CI and maintains — so it is sized by the same verdict, not by a fresh
+      // guess at how big the project is.
+      ...(this.tier(ctx)
+        ? ['', scaleOperationsPromptBlock(this.tier(ctx))]
+        : []),
       '',
       'Produce the test plan as JSON with these keys:',
       '- summary: 1-3 sentences on the testing approach and where risk is concentrated.',
       '- strategy[]: the guiding principles for the plan (strings).',
       '- suites[]: {name, type, objective, cases[] {id (TC-n), title, expected (the pass condition), priority}}.',
       '- coverageGoals[]: measurable coverage targets (strings).',
-      '- tooling[]: recommended tools that actually run on the tech stack above — never a tool from another language ecosystem.',
+      '- tooling[]: recommended tools that actually run on the tech stack above — never a tool from another language ecosystem, and never heavier than the scale tier justifies.',
       '- outOfScope[]: what this plan deliberately does not cover (strings).',
       'type ∈ unit | integration | e2e | security | performance | acceptance. priority ∈ high | medium | low.',
       'Provide at least one suite (with cases) for every test type.',
     ].join('\n');
+  }
+
+  /**
+   * The tier the System Architect decided, read off the design — never
+   * recomputed, so the test plan and the architecture are sized by one
+   * assessment. `undefined` on a design predating the tier means the previous
+   * behaviour.
+   */
+  private tier(ctx: QaPlanContext): ScaleTier | undefined {
+    return ctx.systemDesign.scaleTier;
+  }
+
+  /** The requirement prose the small-tier escape hatch is tested against. */
+  private requirementText(ctx: QaPlanContext): string {
+    const r = ctx.requirements;
+    return [
+      ...(r.functional ?? []).map((f) => `${f.title} ${f.description}`),
+      ...(r.nonFunctional ?? []).map((n) => `${n.category} ${n.description}`),
+      ...(r.businessRules ?? []).map((b) => b.description),
+    ].join(' ');
   }
 
   private isValid(value: Partial<QaPlan> | null): boolean {
@@ -153,9 +183,33 @@ export class QaPlannerAgent extends BaseAgent {
       strategy: this.strings(raw.strategy) ?? this.strategy(ctx),
       suites: suites.length ? suites : this.buildSuites(ctx),
       coverageGoals: this.strings(raw.coverageGoals) ?? this.coverageGoals(),
-      tooling: this.strings(raw.tooling) ?? this.tooling(ctx),
+      tooling: this.rightSizeTooling(this.strings(raw.tooling), ctx),
       outOfScope: this.strings(raw.outOfScope) ?? this.outOfScope(),
     };
+  }
+
+  /**
+   * Drop tooling a small-tier project cannot justify running.
+   *
+   * The backstop only ever removes, and only at the small tier — the asymmetry
+   * `enforceScaleAppropriateStack` established. A list emptied by it falls back
+   * to the deterministic, tier-sized toolchain rather than shipping an empty
+   * section: a test plan with no tools is not an improvement on one with the
+   * wrong tools.
+   */
+  private rightSizeTooling(
+    tooling: string[] | undefined,
+    ctx: QaPlanContext,
+  ): string[] {
+    const { lines, removed } = enforceScaleAppropriateOperations(
+      tooling,
+      this.tier(ctx),
+      this.requirementText(ctx),
+    );
+    if (removed.length > 0) {
+      this.logger.debug(`Small tier: dropped QA tooling ${removed.join(', ')}`);
+    }
+    return lines.length > 0 ? lines : this.tooling(ctx);
   }
 
   // ── deterministic fallback ──────────────────────────────────────────────
@@ -352,6 +406,15 @@ export class QaPlannerAgent extends BaseAgent {
     ];
   }
 
+  /**
+   * The recommended toolchain, sized to the tier.
+   *
+   * Only the *performance* and *test-data* lines move, and that is deliberate:
+   * the unit/integration/e2e/security base is proportionate at every tier —
+   * cutting it would be cutting testing, not cutting scale. What does not scale
+   * down is a load-testing programme and a container-per-run database on a
+   * project with one process and no DevOps capacity.
+   */
   private tooling(ctx: QaPlanContext): string[] {
     const hay = [
       ctx.systemDesign.architecture,
@@ -359,6 +422,7 @@ export class QaPlannerAgent extends BaseAgent {
     ]
       .join(' ')
       .toLowerCase();
+    const small = this.tier(ctx) === 'small';
     const tools: string[] = [];
     const isNode = /nest|node|next|express|typescript|javascript/.test(hay);
     tools.push(
@@ -367,9 +431,17 @@ export class QaPlannerAgent extends BaseAgent {
         : 'Unit/integration: the stack’s standard test runner + an HTTP assertion library',
     );
     tools.push('End-to-end: Playwright (or Cypress) driving the real UI');
-    tools.push('Performance: k6 or Artillery for load testing');
+    tools.push(
+      small
+        ? 'Performance: a scripted latency check (autocannon or k6) against the busiest list endpoint — a full load-testing suite is not warranted at this scale'
+        : 'Performance: k6 or Artillery for load testing',
+    );
     tools.push('Security: OWASP ZAP baseline scan + dependency audit in CI');
-    tools.push('Test data: containerized DB (Testcontainers) with seeded fixtures');
+    tools.push(
+      small
+        ? 'Test data: a disposable test database (Docker Compose or the host’s free tier) with seeded fixtures'
+        : 'Test data: containerized DB (Testcontainers) with seeded fixtures',
+    );
     return tools;
   }
 

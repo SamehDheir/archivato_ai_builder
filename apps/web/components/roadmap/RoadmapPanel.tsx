@@ -12,6 +12,8 @@ import { RoadmapView } from '@/components/roadmap/RoadmapView';
 import { StaleNotice } from '@/components/project/StaleNotice';
 import { useToast } from '@/components/shared/toast';
 import { GenerationNotice } from '@/components/project/GenerationNotice';
+import { StreamingConsole } from '@/components/project/StreamingConsole';
+import { useStreamedGeneration } from '@/lib/use-streamed-generation';
 
 /**
  * The Roadmap Planner tab. Standalone: fetches its own artifact and can
@@ -33,7 +35,10 @@ export function RoadmapPanel({
   const { t } = useTranslation('stages');
   const [roadmap, setRoadmap] = useState<ProjectRoadmap | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, view, run } = useStreamedGeneration<ProjectRoadmap>(
+    sessionId,
+    'roadmap',
+  );
 
   const load = useCallback(async () => {
     try {
@@ -50,9 +55,8 @@ export function RoadmapPanel({
   }, [load, reloadKey]);
 
   async function generate() {
-    setBusy(true);
     try {
-      setRoadmap(await roadmapApi.generate(sessionId));
+      setRoadmap(await run());
       toast({ title: t('roadmap.generated'), variant: 'success' });
     } catch (e) {
       toast({
@@ -60,8 +64,6 @@ export function RoadmapPanel({
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -70,7 +72,9 @@ export function RoadmapPanel({
   }
 
   if (!roadmap) {
-    return (
+    return view ? (
+      <StreamingConsole stage="roadmap" view={view} />
+    ) : (
       <EmptyState
         icon={Flag}
         title={t('roadmap.emptyTitle')}
@@ -85,6 +89,7 @@ export function RoadmapPanel({
 
   return (
     <div className="space-y-3">
+      {view && <StreamingConsole stage="roadmap" view={view} />}
       <StaleNotice
         stage="roadmap"
         artifact={roadmap}

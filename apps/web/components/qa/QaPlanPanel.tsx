@@ -12,6 +12,8 @@ import { QaPlanView } from '@/components/qa/QaPlanView';
 import { StaleNotice } from '@/components/project/StaleNotice';
 import { useToast } from '@/components/shared/toast';
 import { GenerationNotice } from '@/components/project/GenerationNotice';
+import { StreamingConsole } from '@/components/project/StreamingConsole';
+import { useStreamedGeneration } from '@/lib/use-streamed-generation';
 
 /**
  * The QA Planner tab. Standalone: fetches its own artifact and can
@@ -33,7 +35,10 @@ export function QaPlanPanel({
   const { t } = useTranslation('stages');
   const [plan, setPlan] = useState<QaPlan | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, view, run } = useStreamedGeneration<QaPlan>(
+    sessionId,
+    'qa-plan',
+  );
 
   const load = useCallback(async () => {
     try {
@@ -50,9 +55,8 @@ export function QaPlanPanel({
   }, [load, reloadKey]);
 
   async function generate() {
-    setBusy(true);
     try {
-      setPlan(await qaPlanApi.generate(sessionId));
+      setPlan(await run());
       toast({ title: t('qa.generated'), variant: 'success' });
     } catch (e) {
       toast({
@@ -60,8 +64,6 @@ export function QaPlanPanel({
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -70,7 +72,9 @@ export function QaPlanPanel({
   }
 
   if (!plan) {
-    return (
+    return view ? (
+      <StreamingConsole stage="qa-plan" view={view} />
+    ) : (
       <EmptyState
         icon={FlaskConical}
         title={t('qa.emptyTitle')}
@@ -85,6 +89,7 @@ export function QaPlanPanel({
 
   return (
     <div className="space-y-3">
+      {view && <StreamingConsole stage="qa-plan" view={view} />}
       <StaleNotice
         stage="qa-plan"
         artifact={plan}

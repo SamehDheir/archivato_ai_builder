@@ -1,11 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
+  scaleOperationsPromptBlock,
   STRIDE_CATEGORIES,
   type ApiDesign,
   type DatabaseDesign,
   type IntentAnalysis,
   type RequirementDocument,
+  type ScaleTier,
   type Severity,
   type StrideCategory,
   type SystemDesign,
@@ -94,6 +96,13 @@ export class ThreatModelerAgent extends BaseAgent {
       `Non-functional: ${ctx.requirements.nonFunctional
         .map((n) => n.category)
         .join(', ')}`,
+      // Threats are found at any scale; what changes with scale is what the team
+      // can realistically operate as a control. A mitigation naming a product
+      // nobody will buy is not a mitigation — it reads as done and leaves the
+      // threat open.
+      ...(this.tier(ctx)
+        ? ['', scaleOperationsPromptBlock(this.tier(ctx))]
+        : []),
       '',
       'Produce the STRIDE threat model as JSON with these keys:',
       '- summary: 1-3 sentences on the overall posture and the top exposure.',
@@ -102,7 +111,19 @@ export class ThreatModelerAgent extends BaseAgent {
       '- threats[]: {category, component (the real entry point/asset), threat (the concrete attack), severity, mitigation (a specific control)}.',
       'category ∈ spoofing | tampering | repudiation | information_disclosure | denial_of_service | elevation_of_privilege.',
       'severity ∈ low | medium | high | critical. Include at least one threat for every one of the six categories.',
+      'Rate and mitigate honestly for the stated tier: name the threat whatever the scale, but every mitigation must be a control THIS team can actually operate.',
     ].join('\n');
+  }
+
+  /**
+   * The tier the System Architect decided, read off the design.
+   *
+   * Severity is never scaled down by it — a small project's IDOR is still an
+   * IDOR. Only the *mitigation* moves, because a control the team will not buy or
+   * run is not a control; it is a threat marked closed.
+   */
+  private tier(ctx: ThreatModelContext): ScaleTier | undefined {
+    return ctx.systemDesign.scaleTier;
   }
 
   private isValid(value: Partial<ThreatModel> | null): boolean {
@@ -300,6 +321,11 @@ export class ThreatModelerAgent extends BaseAgent {
     );
 
     // ── Denial of Service (availability) ─────────────────────────────────
+    // The threat is identical at every tier; the control is not. A WAF is a
+    // product to buy and tune, and recommending one to a team running a single
+    // managed instance produces a mitigation nobody implements — so at the small
+    // tier the control is the edge protection their host already includes.
+    const small = this.tier(ctx) === 'small';
     add(
       'denial_of_service',
       'Public API',
@@ -307,7 +333,9 @@ export class ThreatModelerAgent extends BaseAgent {
         ? 'Even with global throttling, expensive endpoints can be targeted to exhaust CPU/DB connections.'
         : 'No rate limiting means a single client can flood the API and exhaust resources.',
       hasRateLimit ? 'medium' : 'high',
-      'Apply per-route rate limits, request size/time limits, and DB connection pooling; put a WAF/CDN in front.',
+      small
+        ? 'Apply per-route rate limits in the application, cap request size and timeout, pool DB connections, and turn on the DDoS/CDN protection the host already provides.'
+        : 'Apply per-route rate limits, request size/time limits, and DB connection pooling; put a WAF/CDN in front.',
     );
     if (!hasQueue) {
       add(
@@ -315,7 +343,13 @@ export class ThreatModelerAgent extends BaseAgent {
         'Heavy operations',
         'Heavy work (reports, exports, emails) running inline with requests can exhaust request threads under load.',
         'medium',
-        'Offload heavy work to a background queue with concurrency limits.',
+        // At the small tier the design has no queue *by decision*, so prescribing
+        // one here would have the security artifact contradict the architecture
+        // in the same package. Bound the work instead — which is the real control
+        // at this volume, and the cheaper one.
+        small
+          ? 'Bound the work instead of queuing it: cap result-set and export sizes, set a request timeout, and run any long report on a schedule rather than on demand.'
+          : 'Offload heavy work to a background queue with concurrency limits.',
       );
     }
 

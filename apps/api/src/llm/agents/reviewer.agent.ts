@@ -1,11 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
+  enforceScaleAppropriateOperations,
   isSuggestedResolution,
   namesExcludedCapability,
   normalizeReviewReport,
   patchTargetFor,
   PATCH_SECTION_KEYS,
+  scaleOperationsPromptBlock,
   type ApiDesign,
   type ClientReadinessFinding,
   type ConsistencyFinding,
@@ -162,6 +164,14 @@ export class ReviewerAgent extends BaseAgent {
       untrustedField('Idea', ctx.idea),
       `Architecture: ${ctx.systemDesign.architecture}`,
       `Tech stack: ${techStack}`,
+      // Without this the reviewer marks a correctly-sized design DOWN for the very
+      // simplicity the architect was instructed to choose — "no caching layer", "no
+      // asynchronous processing" — and hands the owner a patch button that puts
+      // Redis back. The review is the artifact that adjudicates the others, so it
+      // has to be judging against the same tier they were built to.
+      ...(ctx.systemDesign.scaleTier
+        ? ['', scaleOperationsPromptBlock(ctx.systemDesign.scaleTier)]
+        : []),
       `Services: ${ctx.systemDesign.services.map((s) => s.name).join(', ')}`,
       `Entities: ${ctx.databaseDesign.entities.map((e) => e.name).join(', ')}`,
       `Relations: ${ctx.databaseDesign.relations.length}`,
@@ -208,7 +218,22 @@ export class ReviewerAgent extends BaseAgent {
       }),
       'Note the design\'s services, the API modules, and the database entities are',
       'deliberately NOT patchable — a finding about those is "advisory".',
+      '',
+      'Absent infrastructure that the scale tier above rules out is NOT a finding.',
+      'Do not report a missing cache, queue, autoscaling, replica or monitoring',
+      'stack as a scalability, performance or cost issue, and do not let its absence',
+      'depress a sub-score, unless a stated requirement proves this system needs it.',
     ].join('\n');
+  }
+
+  /** The requirement prose the small-tier escape hatch is tested against. */
+  private requirementText(ctx: ReviewContext): string {
+    const r = ctx.requirements;
+    return [
+      ...(r.functional ?? []).map((f) => `${f.title} ${f.description}`),
+      ...(r.nonFunctional ?? []).map((n) => `${n.category} ${n.description}`),
+      ...(r.businessRules ?? []).map((b) => b.description),
+    ].join(' ');
   }
 
   /** A slot's text value, or '' when absent / marked not-applicable. */
@@ -288,7 +313,14 @@ export class ReviewerAgent extends BaseAgent {
       performanceRisks,
       costOptimizations,
       missingFeatures: this.withoutExcluded(raw.missingFeatures ?? [], ctx),
-      recommendations: raw.recommendations ?? [],
+      // Small-tier only, removal-only — the standing asymmetry. A model that
+      // recommended a monitoring platform anyway does not get to put it in the
+      // owner's "next actions" list.
+      recommendations: enforceScaleAppropriateOperations(
+        raw.recommendations ?? [],
+        ctx.systemDesign.scaleTier,
+        this.requirementText(ctx),
+      ).lines,
       clientReadinessIssues,
       consistencyFindings,
     });
@@ -401,14 +433,24 @@ export class ReviewerAgent extends BaseAgent {
     const haystack = this.haystack(ctx);
     const hasQueue = /bullmq|redis|queue|kafka|rabbit/.test(haystack);
     const hasCache = /redis|cache|cdn/.test(haystack);
+    // At the small tier a missing cache or queue is the architecture doing what it
+    // was told, not a gap. Reporting it here scored a correctly-sized design down
+    // on two axes at once and offered a `patch` that would have written Redis
+    // straight back into the tech stack the tier had just cleared — the review
+    // undoing the design, inside one package.
+    const rightSized = ctx.systemDesign.scaleTier === 'small';
+    // Read as "this concern is settled", not as "the component is present" — at
+    // the small tier it is settled precisely BY the component's absence.
+    const asyncSettled = hasQueue || rightSized;
+    const cacheSettled = hasCache || rightSized;
     const securityIssues = this.securityIssues(ctx, haystack);
-    const scalabilityIssues = this.scalabilityIssues(ctx, hasQueue);
-    const performanceRisks = this.performanceRisks(ctx, hasCache);
-    const costOptimizations = this.costOptimizations(ctx, hasCache);
+    const scalabilityIssues = this.scalabilityIssues(ctx, asyncSettled);
+    const costOptimizations = this.costOptimizations(ctx, cacheSettled);
+    const performanceRisks = this.performanceRisks(ctx, cacheSettled);
 
     const scores: ReviewScores = {
       security: this.scoreFrom(securityIssues),
-      scalability: this.scalabilityScore(ctx, hasQueue, hasCache),
+      scalability: this.scalabilityScore(ctx, asyncSettled, cacheSettled),
       performance: this.scoreFrom(performanceRisks),
       cost: this.scoreFrom(costOptimizations),
       // The deal-risk axis needs LLM judgment; offline we show a neutral baseline
@@ -432,7 +474,7 @@ export class ReviewerAgent extends BaseAgent {
       performanceRisks,
       costOptimizations,
       missingFeatures: this.missingFeatures(ctx, haystack),
-      recommendations: this.recommendations(ctx, hasCache),
+      recommendations: this.recommendations(ctx, cacheSettled),
       clientReadinessIssues: [],
       consistencyFindings: ctx.automatedConsistency ?? [],
       clientReadinessNote:
@@ -524,12 +566,24 @@ export class ReviewerAgent extends BaseAgent {
       });
     }
 
-    recs.push({
-      title: 'Right-size and autoscale compute',
-      detail:
-        'Set autoscaling with sensible floors/ceilings and right-sized instances so you are not paying for idle capacity off-peak.',
-      severity: 'low',
-    });
+    recs.push(
+      ctx.systemDesign.scaleTier === 'small'
+        ? {
+            // Autoscaling on a one-instance deployment is not a saving; it is a
+            // configuration surface and a bill floor for capacity this system
+            // will not use.
+            title: 'Start on the smallest instance that serves the load',
+            detail:
+              'Pick the smallest paid tier that meets the latency target and review it once real traffic exists. At this scale the saving is in not provisioning capacity ahead of demand, not in autoscaling it.',
+            severity: 'low',
+          }
+        : {
+            title: 'Right-size and autoscale compute',
+            detail:
+              'Set autoscaling with sensible floors/ceilings and right-sized instances so you are not paying for idle capacity off-peak.',
+            severity: 'low',
+          },
+    );
     recs.push({
       title: 'Index and pool the database',
       detail:
@@ -684,12 +738,15 @@ export class ReviewerAgent extends BaseAgent {
     return missing;
   }
 
-  private recommendations(ctx: ReviewContext, hasCache: boolean): string[] {
+  private recommendations(ctx: ReviewContext, cacheSettled: boolean): string[] {
+    const small = ctx.systemDesign.scaleTier === 'small';
     const recs: string[] = [
       'Add automated tests (unit + integration) and a CI pipeline before launch.',
-      'Add structured logging, metrics, and tracing for observability.',
+      small
+        ? 'Emit structured logs to the host’s log stream, expose a /health endpoint, and route errors to an alerting address.'
+        : 'Add structured logging, metrics, and tracing for observability.',
     ];
-    if (!hasCache) {
+    if (!cacheSettled) {
       recs.push('Introduce a caching layer for read-heavy endpoints.');
     }
     if (ctx.systemDesign.architecture === 'microservices') {

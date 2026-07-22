@@ -12,6 +12,8 @@ import { ThreatModelView } from '@/components/security/ThreatModelView';
 import { StaleNotice } from '@/components/project/StaleNotice';
 import { useToast } from '@/components/shared/toast';
 import { GenerationNotice } from '@/components/project/GenerationNotice';
+import { StreamingConsole } from '@/components/project/StreamingConsole';
+import { useStreamedGeneration } from '@/lib/use-streamed-generation';
 
 /**
  * The Threat Modeler tab. Standalone: fetches its own artifact and can
@@ -33,7 +35,10 @@ export function ThreatModelPanel({
   const { t } = useTranslation('stages');
   const [model, setModel] = useState<ThreatModel | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, view, run } = useStreamedGeneration<ThreatModel>(
+    sessionId,
+    'threat-model',
+  );
 
   const load = useCallback(async () => {
     try {
@@ -50,9 +55,8 @@ export function ThreatModelPanel({
   }, [load, reloadKey]);
 
   async function generate() {
-    setBusy(true);
     try {
-      setModel(await threatModelApi.generate(sessionId));
+      setModel(await run());
       toast({ title: t('threat.generated'), variant: 'success' });
     } catch (e) {
       toast({
@@ -60,8 +64,6 @@ export function ThreatModelPanel({
         description: e instanceof Error ? e.message : String(e),
         variant: 'error',
       });
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -70,7 +72,9 @@ export function ThreatModelPanel({
   }
 
   if (!model) {
-    return (
+    return view ? (
+      <StreamingConsole stage="threat-model" view={view} />
+    ) : (
       <EmptyState
         icon={ShieldAlert}
         title={t('threat.emptyTitle')}
@@ -85,6 +89,7 @@ export function ThreatModelPanel({
 
   return (
     <div className="space-y-3">
+      {view && <StreamingConsole stage="threat-model" view={view} />}
       <StaleNotice
         stage="threat-model"
         artifact={model}

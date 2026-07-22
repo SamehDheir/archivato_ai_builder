@@ -14,5 +14,8 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
+  // `*.fixtures.ts` holds shared test scenarios. It cannot be named `.spec.ts`
+  // (jest's testRegex would require it to contain tests) but it is test-only
+  // code, so it is kept out of `dist` alongside the specs.
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.fixtures.ts"]
 }

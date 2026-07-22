@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Loader2, Radio } from 'lucide-react';
-import type { PipelineStageName } from '@archivato/shared';
+import type { StreamStageName } from '@archivato/shared';
 import type { StreamView } from '@/lib/stream';
 
 /**
@@ -20,7 +20,7 @@ export function StreamingConsole({
   stage,
   view,
 }: {
-  stage: PipelineStageName;
+  stage: StreamStageName;
   view: StreamView;
 }) {
   const { t } = useTranslation('project');

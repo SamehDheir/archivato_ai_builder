@@ -1,5 +1,6 @@
 import {
   buildNarration,
+  STREAM_STAGES,
   type ApiDesign,
   type DatabaseDesign,
   type RequirementDocument,
@@ -135,16 +136,64 @@ describe('buildNarration', () => {
   });
 
   it('is total: never throws and always returns steps, even on empty artifacts', () => {
-    for (const stage of [
-      'requirements',
-      'system-design',
-      'database-design',
-      'api-design',
-      'review',
-    ] as const) {
+    // Every stage, from the list itself — so a stage added to the union without
+    // a narration case fails here rather than at runtime, mid-stream, in front
+    // of the user it was added for.
+    for (const stage of STREAM_STAGES) {
       const steps = buildNarration(stage, {} as never);
       expect(Array.isArray(steps)).toBe(true);
       expect(steps.length).toBeGreaterThan(0);
     }
+  });
+
+  it('narrates the standalone stages the stream newly covers', () => {
+    const roadmap = {
+      sessionId: 's1',
+      generatedAt: 'now',
+      summary: 'Three phases.',
+      totalEstimate: '12-16 weeks',
+      phases: [
+        {
+          name: 'MVP',
+          goal: 'Ship the core.',
+          milestones: [],
+          dependsOn: [],
+          isMvp: true,
+          weeksMin: 6,
+          weeksMax: 8,
+        },
+      ],
+    } as never;
+
+    const steps = buildNarration('roadmap', roadmap);
+    const all = steps.map((s) => `${s.label}\n${s.body ?? ''}`).join('\n');
+
+    expect(all).toContain('MVP');
+    expect(all).toContain('12-16 weeks');
+  });
+
+  it('narrates a threat model by STRIDE category', () => {
+    const model = {
+      sessionId: 's1',
+      generatedAt: 'now',
+      summary: '',
+      threats: [
+        {
+          category: 'spoofing',
+          component: 'Auth',
+          threat: 'Credential stuffing against the sign-in endpoint',
+          severity: 'high',
+          mitigation: 'Rate limit sign-in',
+        },
+      ],
+      trustBoundaries: [],
+      assumptions: [],
+    } as never;
+
+    const all = buildNarration('threat-model', model)
+      .map((s) => `${s.label}\n${s.body ?? ''}`)
+      .join('\n');
+
+    expect(all).toContain('Credential stuffing');
   });
 });
