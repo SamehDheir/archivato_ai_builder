@@ -990,7 +990,7 @@ tsconfig and never needs shared's `dist`.
     floor the API mints against): create/copy/views/revoke, with no upgrade path,
     since there is no 402 to catch any more.
 - **Streaming generation (`stream`) — the "narration layer".** A live alternative
-  to the poll-based `/jobs` path for the 5 pipeline stages. `GET /stream/:sessionId/:stage`
+  to the poll-based `/jobs` path, covering **all 10 LLM stages**. `GET /stream/:sessionId/:stage`
   is a Nest **`@Sse()`** endpoint (owner-guarded by the same `SessionOwnerGuard`,
   `@Throttle(THROTTLE_AI)`, records the `generate` analytics event). Because
   artifacts are **structured JSON** and every agent has a **deterministic fallback**
@@ -1014,6 +1014,44 @@ tsconfig and never needs shared's `dist`.
   `generateStage` drives it. Narration text is **server-side English** (per the
   i18n convention that AI output stays English); only the chrome is i18n'd
   (`project.stream.live`, EN+AR).
+  - **The five standalone LLM stages stream too** (business analysis, product
+    vision, roadmap, threat model, QA plan). They kept a disabled button reading
+    "Generating…" for the same 20–60 seconds the design chain narrates — including
+    the **business analysis auto-run right after the interview is confirmed**,
+    which is a first-time user's first sight of the product doing anything. They
+    differ from the design chain in no way that justified it: same agents, same
+    provider, same fallbacks. `StandaloneStageName` / `StreamStageName` in
+    `streaming.ts`, and `isStreamStage` replaces the controller's
+    `PIPELINE_STAGES` check.
+  - **`StandaloneStageName` is deliberately NOT folded into `PipelineStageName`.**
+    That type means "a stage the BullMQ worker runs and a version snapshot
+    covers", and both halves are load-bearing — these artifacts are excluded from
+    snapshots on purpose, so widening it would quietly start cutting snapshots for
+    artifacts a restore must not rewind. `StreamService.run` guards the snapshot
+    with `isStandaloneStage` for the same reason.
+  - **The cost estimate is absent on purpose.** It is 100% deterministic
+    (`estimateCosts`, zero LLM calls, milliseconds), so there is no waiting to
+    narrate; streaming it would stage a performance of work that never happened
+    and imply a model was involved — the reason it carries no `generation` stamp.
+  - **Each stage's `generate()` is called unchanged**, so every upstream gate it
+    owns still runs: roadmap/threat/QA still 409 until the API design exists.
+    Streaming is a transport, not a second way in. SSE has no status code, so
+    `errorCode()` maps the throw to a `code` and the client's
+    `STREAM_ERROR_STATUS` maps it back — a `409` must not reach a caller as a
+    generic failure when the UI can explain it.
+  - **The non-SSE fallback is per-stage** (`generateWithoutStream`): the design
+    chain has BullMQ behind `/jobs`, the standalone stages never did, so theirs is
+    the same POST their tab always called. It is a **switch, not a lookup table** —
+    a table is built in full on every call, dereferencing all five clients to
+    route to one.
+  - **The panels share a hook, not state** (`useStreamedGeneration`). The
+    dashboard owns the *pipeline's* stream state (one console across five tabs,
+    plus version/project refreshes); each standalone panel owns its own generation,
+    which is the existing division of labour here.
+  - **`jest.setup.ts` stubs `Element.prototype.scrollIntoView`** — jsdom
+    implements no layout and ships none, and the console follows its own tail in
+    an effect, so the TypeError surfaces as an unrelated render failure in
+    whatever test mounts it.
 - **"Explain this decision" (`ArchitectExplainer`).** An on-demand rationale for
   one System Design choice — the architecture, a tech-stack pick, or a service.
   `POST /system-design/:sessionId/explain` (owner-guarded, `@Throttle(THROTTLE_AI)`),
@@ -2276,6 +2314,65 @@ tsconfig and never needs shared's `dist`.
   words into a fixed sentence is the broken-grammar class already fixed once.
   `SystemDesignService.save` carries both over (the editor's `Draft` has no field
   for them).
+- **Operational proportionality — the tier is a SIGNAL four more agents consume,
+  not a fix that lived in one prompt.** The architect was cured and the same bias
+  shipped anyway, one page over: on the very project whose design correctly ran
+  one process and one managed database, the **Roadmap**'s Hardening phase
+  scheduled *"Integrate Prometheus metrics"* and *"Centralized logging — send
+  logs to ELK stack"*. Nothing was broken. The roadmap, QA planner, threat
+  modeler and reviewer each recommend infrastructure of their own, **none of them
+  had ever been told a tier existed**, and a model with no stated size reaches for
+  the largest system in its training data — the identical failure, reproduced
+  independently four times because the calibration was written into one agent's
+  prompt instead of being a value. The audit found all four guessing, and the
+  reviewer was the worst of them: it marked a correctly-sized design down for
+  "No caching layer" and "No asynchronous processing" (**18 points of
+  `scalability`**), then offered a `patch` that would have written Redis straight
+  back into the stack the architect had just been instructed to leave out — the
+  package arguing with itself, with the review winning. Eight things not to undo:
+  1. **`OPERATIONS_BUDGET` is keyed by tier and lives beside `assessScaleTier`**,
+     so what "small" licenses is stated once. Four prompts quoting one table
+     cannot drift; four prompts each describing proportionality in their own words
+     is how this bug got made. Reuse the existing tiers — a stage inventing its own
+     size vocabulary reintroduces exactly the disagreement this closes.
+  2. **The tier is READ off the system design, never recomputed.** Every one of
+     these stages already loads it. Re-deriving from the requirement doc would
+     give four assessments of one project that agree only by luck, and the whole
+     point is that the owner sees one number everywhere. Pinned by a test that
+     asserts the same verdict string reaches all four prompts.
+  3. **An absent tier sends NO block at all** — a design generated before tiers
+     existed means the previous behaviour, the `sourceStamp` rule. Guessing a tier
+     to fill the gap would size a plan from an assessment nobody made.
+  4. **The prompt is the primary defence; the code backstop only ever REMOVES,
+     and only at the small tier** (`enforceOperationsScale`) — the asymmetry
+     `enforceScaleAppropriateStack` already established. Deleting an observability
+     stack from a genuine enterprise platform is an outage nobody can diagnose;
+     leaving an unjustified one on a 400-user tool is invisible until the bill
+     arrives.
+  5. **Deletion alone was the wrong answer for a PLAN.** Strip both tasks from a
+     "Monitoring & Logging" milestone and the milestone empties — a roadmap that
+     over-scaled observability becomes one with no observability at all. The
+     milestone was never wrong; its implementation was. So an emptied one is
+     **replaced** with `SMALL_TIER_OPERATIONS_TASK` (host log stream + `/health` +
+     an error alert address), which is `LocalizedCopy` because it lands on the
+     **LLM path**, where the roadmap is written in the project's language.
+  6. **The escape hatch is the same test in the prompt and in the code**, the
+     `needsAsyncProcessing` precedent: a requirement that genuinely demands
+     assurance (a contractual uptime target, a regulated audit trail) keeps the
+     heavier tooling at any tier. Told a flat prohibition, a model drops work a
+     contract requires.
+  7. **The matcher is narrow on purpose.** It fires on operations *recommendations*,
+     so a Supporting Features task indexing products **in Elasticsearch for search**
+     survives untouched — an over-broad pattern silently deletes real scope, which
+     is worse than the over-provisioning it was cleaning up.
+  8. **`scale-operations.spec.ts` runs BOTH directions and imports the scenarios
+     from `scale-scenarios.fixtures.ts`** rather than re-declaring them. "Every
+     stage agrees about this project" is only a claim if it is literally one
+     project; two hand-maintained copies drift by a figure and the agreement test
+     quietly becomes a test of two projects that happen to match. The enterprise
+     half asserts the clinic platform **still** gets tracing, caching,
+     Testcontainers, load testing and a WAF — a change that only ever strips
+     tooling passes half the file and is a different bug.
 - **Assumptions vs. genuine open questions (`classifyAssumptionKind`).** The
   requirement document rendered *"Either Microsoft Teams or Slack will be chosen
   as the notification platform"* among its assumptions — a sentence that reads as

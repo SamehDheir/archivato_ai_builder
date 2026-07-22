@@ -14,7 +14,12 @@
     "system-design": "system design",
     "database-design": "database design",
     "api-design": "API design",
-    "review": "AI review"
+    "review": "AI review",
+    "business-analysis": "business analysis",
+    "product-vision": "product vision",
+    "roadmap": "roadmap",
+    "threat-model": "threat model",
+    "qa-plan": "QA plan"
   },
   "tab": {
     "vision": "Vision",

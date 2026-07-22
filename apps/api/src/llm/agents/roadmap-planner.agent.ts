@@ -2,9 +2,15 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   buildPhaseEffort,
+  copyFor,
+  DEFAULT_ARTIFACT_LANGUAGE,
   formatWeekRange,
+  isOverScaledForTier,
+  scaleOperationsPromptBlock,
+  SMALL_TIER_OPERATIONS_TASK,
   type AlternativeRoadmaps,
   type ApiDesign,
+  type ArtifactLanguage,
   type DatabaseDesign,
   type EffortEstimate,
   type IntentAnalysis,
@@ -12,6 +18,7 @@ import {
   type RequirementDocument,
   type RoadmapMilestone,
   type RoadmapPhase,
+  type ScaleTier,
   type SlotMap,
   type SystemDesign,
   untrustedField,
@@ -88,9 +95,34 @@ export class RoadmapPlannerAgent extends BaseAgent {
       label: 'Roadmap',
       prompt: this.buildPrompt(ctx),
       isValid: (raw) => this.isValid(raw),
-      accept: (raw) => this.normalize({ ...raw, sessionId, generatedAt }, ctx),
-      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      accept: (raw, language) =>
+        this.normalize({ ...raw, sessionId, generatedAt }, ctx, language),
+      fallback: (language) =>
+        this.buildDeterministic(sessionId, generatedAt, ctx, language),
     });
+  }
+
+  /**
+   * The tier the System Architect already decided, read off the design.
+   *
+   * Never re-derived here. The plan for building a system and the system itself
+   * must be sized by one assessment of one set of numbers — a roadmap that ran
+   * `assessScaleTier` again would be a second opinion able to drift from the
+   * architecture it is scheduling, and the drift would be invisible until a
+   * reader held both artifacts at once.
+   */
+  private tier(ctx: RoadmapContext): ScaleTier | undefined {
+    return ctx.systemDesign.scaleTier;
+  }
+
+  /** The requirement prose the small-tier escape hatch is tested against. */
+  private requirementText(ctx: RoadmapContext): string {
+    const r = ctx.requirements;
+    return [
+      ...(r.functional ?? []).map((f) => `${f.title} ${f.description}`),
+      ...(r.nonFunctional ?? []).map((n) => `${n.category} ${n.description}`),
+      ...(r.businessRules ?? []).map((b) => b.description),
+    ].join(' ');
   }
 
   private buildPrompt(ctx: RoadmapContext): string {
@@ -109,12 +141,22 @@ export class RoadmapPlannerAgent extends BaseAgent {
       `Roles: ${ctx.requirements.roles.map((r) => r.name).join(', ') || 'none'}`,
       `Core workflow (defines the MVP): ${workflow || 'the primary end-to-end flow'}`,
       `Stated timeline: ${timeline || 'not stated'}`,
+      `Tech stack: ${ctx.systemDesign.techStack
+        .map((t) => `${t.layer}: ${t.technology}`)
+        .join(', ')}`,
+      // The hardening phase is where an unsized plan reaches for an observability
+      // platform, so the stack is printed for the model to check its own
+      // recommendations against: this design either runs a queue and a cache or it
+      // does not, and the plan may not schedule work on infrastructure that is
+      // absent from it.
+      ...blockLines(scaleOperationsPromptBlock(this.tier(ctx))),
       '',
       'Produce the implementation roadmap as JSON with these keys:',
       '- summary: 1-2 sentences on the delivery approach.',
       '- phases[]: {name, goal, dependsOn[] (names of earlier phases only), moduleNames[] (which Services this phase builds), milestones[], and for phase 1 only isMvp:true + mvpStatement}.',
       '  Each milestone: {title, tasks[] {title, detail?}} — tasks reference concrete services/entities/endpoints from this design.',
       '  Do NOT include any effort/week/day numbers on phases, milestones, or the roadmap — omit them entirely.',
+      '  Operational tasks (monitoring, logging, security tooling, deployment topology) must fit the scale tier stated above.',
     ];
 
     // B3 — a timeline conflict: ask for the dual roadmap. Only requested when the
@@ -152,14 +194,18 @@ export class RoadmapPlannerAgent extends BaseAgent {
   }
 
   /** Backfill optional fields the model may omit so the shape is always complete. */
-  private normalize(raw: Partial<ProjectRoadmap>, ctx: RoadmapContext): ProjectRoadmap {
-    let phases = this.mapPhases(raw.phases, ctx);
+  private normalize(
+    raw: Partial<ProjectRoadmap>,
+    ctx: RoadmapContext,
+    language: ArtifactLanguage = DEFAULT_ARTIFACT_LANGUAGE,
+  ): ProjectRoadmap {
+    let phases = this.rightSizeOperations(this.mapPhases(raw.phases, ctx), ctx, language);
     // The LLM never emits week numbers — compute them from the effort estimate.
     if (ctx.effort) phases = buildPhaseEffort(phases, ctx.effort);
 
     // B3 — keep the dual roadmap only when we actually asked for it and the model
     // returned both halves; otherwise it's a single roadmap.
-    const alt = this.mapAlternatives(raw.alternativeRoadmaps, ctx);
+    const alt = this.mapAlternatives(raw.alternativeRoadmaps, ctx, language);
 
     return {
       sessionId: raw.sessionId!,
@@ -212,10 +258,67 @@ export class RoadmapPlannerAgent extends BaseAgent {
     );
   }
 
+  /**
+   * The code backstop for over-scaled operational work — the small tier only.
+   *
+   * The prompt above is the primary defence and this is what catches it when the
+   * prompt loses, which is the standing division of labour here
+   * (`enforceScaleAppropriateStack`, `applyTenancy`, `enforcePaymentAvailability`).
+   * It exists because an emphatic prompt rule with no code behind it is exactly
+   * what failed the first time: "choose the SIMPLEST architecture" was already in
+   * the architect's prompt while it was recommending Redis.
+   *
+   * It **replaces rather than merely deletes** when a milestone would be emptied,
+   * and that asymmetry is the point. Deleting "Integrate Prometheus metrics" and
+   * "Ship logs to an ELK stack" from a Monitoring & Logging milestone would leave
+   * a plan with no observability at all — trading one wrong roadmap for another.
+   * The milestone was right; only its implementation outgrew the project.
+   */
+  private rightSizeOperations(
+    phases: RoadmapPhase[],
+    ctx: RoadmapContext,
+    language: ArtifactLanguage,
+  ): RoadmapPhase[] {
+    const tier = this.tier(ctx);
+    if (tier !== 'small') return phases;
+    const requirementText = this.requirementText(ctx);
+    const proportional = copyFor(SMALL_TIER_OPERATIONS_TASK, language);
+
+    let replaced = false;
+    const rightSized = phases.map((phase) => ({
+      ...phase,
+      milestones: phase.milestones.map((milestone) => {
+        const kept = milestone.tasks.filter(
+          (t) =>
+            !isOverScaledForTier(
+              `${t.title} ${t.detail ?? ''}`,
+              tier,
+              requirementText,
+            ),
+        );
+        if (kept.length === milestone.tasks.length) return milestone;
+        // Only the milestone this emptied gets our line, and only once — a
+        // roadmap repeating the same sentence in three places reads as broken
+        // tooling, which is how the owner learns to distrust the whole plan.
+        if (kept.length > 0) return { ...milestone, tasks: kept };
+        replaced = true;
+        return { ...milestone, tasks: [{ ...proportional }] };
+      }),
+    }));
+
+    if (replaced) {
+      this.logger.debug(
+        'Small tier: replaced an over-scaled observability milestone with host-provided logging',
+      );
+    }
+    return rightSized;
+  }
+
   /** Map + effort-fill the dual roadmap, or undefined when it wasn't produced. */
   private mapAlternatives(
     raw: AlternativeRoadmaps | undefined,
     ctx: RoadmapContext,
+    language: ArtifactLanguage,
   ): AlternativeRoadmaps | undefined {
     if (!ctx.requestDualRoadmap || !raw) return undefined;
     // `isValid` gates on `phases` and never looks at this branch, so a malformed
@@ -224,8 +327,19 @@ export class RoadmapPlannerAgent extends BaseAgent {
     // answered `withinDeadline: { phases: [...] }`, an object that sailed past
     // `?? []` and died on `.map`. `phasesOf` reads either shape, so the dual
     // roadmap survives instead of being silently dropped.
-    const within = this.mapPhases(phasesOf(raw.withinDeadline), ctx);
-    const full = this.mapPhases(phasesOf(raw.fullScope), ctx);
+    // Both halves go through the same right-sizing as the main plan — a reduced-
+    // scope alternative that still schedules a monitoring stack would reintroduce
+    // the very cost the owner opened it to cut.
+    const within = this.rightSizeOperations(
+      this.mapPhases(phasesOf(raw.withinDeadline), ctx),
+      ctx,
+      language,
+    );
+    const full = this.rightSizeOperations(
+      this.mapPhases(phasesOf(raw.fullScope), ctx),
+      ctx,
+      language,
+    );
     if (within.length === 0 || full.length === 0) return undefined;
     return {
       withinDeadline: ctx.effort ? buildPhaseEffort(within, ctx.effort) : within,
@@ -253,12 +367,13 @@ export class RoadmapPlannerAgent extends BaseAgent {
     sessionId: string,
     generatedAt: string,
     ctx: RoadmapContext,
+    language: ArtifactLanguage = DEFAULT_ARTIFACT_LANGUAGE,
   ): ProjectRoadmap {
     let phases: RoadmapPhase[] = [
       this.foundationPhase(ctx),
       this.corePhase(ctx),
       this.supportingPhase(ctx),
-      this.hardeningPhase(ctx),
+      this.hardeningPhase(ctx, language),
     ].filter((p) => p.milestones.length > 0);
 
     // Re-chain dependencies to the previous surviving phase so a dropped phase
@@ -396,7 +511,41 @@ export class RoadmapPlannerAgent extends BaseAgent {
     );
   }
 
-  private hardeningPhase(_ctx: RoadmapContext): RoadmapPhase {
+  /**
+   * Hardening, sized to the tier.
+   *
+   * The offline build had the reported bug too, and more sharply than the model
+   * did: it scheduled "Add caching for read-heavy endpoints" unconditionally — on
+   * a design `enforceScaleAppropriateStack` had *just* stripped the cache from.
+   * The plan and the architecture were contradicting each other in the same
+   * package, and an install with no LLM key shipped that for every project.
+   */
+  private hardeningPhase(
+    ctx: RoadmapContext,
+    language: ArtifactLanguage,
+  ): RoadmapPhase {
+    const small = this.tier(ctx) === 'small';
+    const proportional = copyFor(SMALL_TIER_OPERATIONS_TASK, language);
+
+    const performance = small
+      ? [this.task('Add DB indexes and pagination on list endpoints')]
+      : [
+          this.task('Add caching for read-heavy endpoints'),
+          this.task('Add DB indexes and pagination on list endpoints'),
+        ];
+
+    // At the small tier the host's own log stream and uptime check are the plan;
+    // metrics and tracing backends are a platform to run, and nobody here runs it.
+    const observability = small
+      ? [
+          this.task(proportional.title, proportional.detail),
+          this.task('Integration/E2E tests and a CI gate'),
+        ]
+      : [
+          this.task('Structured logging, metrics, and tracing'),
+          this.task('Integration/E2E tests and a CI gate'),
+        ];
+
     return this.phase(
       'Hardening & launch',
       'Security, performance, observability, and production readiness.',
@@ -407,16 +556,14 @@ export class RoadmapPlannerAgent extends BaseAgent {
           this.task('Encrypt sensitive data in transit and at rest'),
           this.task('Add audit logging of sensitive actions'),
         ]),
-        this.milestone('Performance & scale', 1, [
-          this.task('Add caching for read-heavy endpoints'),
-          this.task('Add DB indexes and pagination on list endpoints'),
-        ]),
-        this.milestone('Observability & QA', 1, [
-          this.task('Structured logging, metrics, and tracing'),
-          this.task('Integration/E2E tests and a CI gate'),
-        ]),
+        this.milestone('Performance & scale', 1, performance),
+        this.milestone('Observability & QA', 1, observability),
         this.milestone('Deploy & launch', 1, [
-          this.task('Provision production infra and backups'),
+          this.task(
+            small
+              ? 'Configure the production host, environment variables and managed backups'
+              : 'Provision production infra and backups',
+          ),
           this.task('Write a deploy + restore runbook and go live'),
         ]),
       ],
@@ -486,6 +633,18 @@ export class RoadmapPlannerAgent extends BaseAgent {
       ctx.databaseDesign.entities.length
     } entities: start with a thin end-to-end slice, then layer on supporting features, and finish with hardening and launch.`;
   }
+}
+
+/**
+ * A prompt block as lines, or nothing at all when the block is empty.
+ *
+ * `scaleOperationsPromptBlock` returns `''` for a design carrying no tier (one
+ * generated before the tier existed), and spreading that raw would push a blank
+ * line into the prompt where a section used to be — a subtle way to change the
+ * prompt of every legacy project while believing nothing changed.
+ */
+function blockLines(block: string): string[] {
+  return block ? ['', block] : [];
 }
 
 /**

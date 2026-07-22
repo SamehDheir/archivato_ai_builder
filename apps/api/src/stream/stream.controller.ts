@@ -7,8 +7,8 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Observable } from 'rxjs';
-import type { AuthUser, PipelineStageName, StreamEvent } from '@archivato/shared';
-import { PIPELINE_STAGES } from '@archivato/shared';
+import type { AuthUser, StreamEvent } from '@archivato/shared';
+import { isStreamStage } from '@archivato/shared';
 import { THROTTLE_AI } from '../common/throttling';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -36,12 +36,12 @@ export class StreamController {
     @Param('stage') stage: string,
     @CurrentUser() user: AuthUser,
   ): Observable<MessageEvent> {
-    if (!PIPELINE_STAGES.includes(stage as PipelineStageName)) {
+    if (!isStreamStage(stage)) {
       // Surface as a single error event rather than throwing after headers.
       return new Observable((subscriber) => {
         subscriber.next({
           type: 'error',
-          data: { type: 'error', message: `Unknown pipeline stage "${stage}".` },
+          data: { type: 'error', message: `Unknown stage "${stage}".` },
         });
         subscriber.complete();
       });
@@ -49,9 +49,7 @@ export class StreamController {
 
     // The generate analytics event is recorded inside the service, after the Pro
     // gate passes (so a gated free user doesn't inflate the metric).
-    return this.toSse(
-      this.stream.run(sessionId, stage as PipelineStageName, user.id),
-    );
+    return this.toSse(this.stream.run(sessionId, stage, user.id));
   }
 
   /** Bridge the service's async generator to an SSE `Observable<MessageEvent>`. */

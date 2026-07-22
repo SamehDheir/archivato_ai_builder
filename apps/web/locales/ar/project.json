@@ -14,7 +14,12 @@
     "system-design": "تصميم النظام",
     "database-design": "تصميم قاعدة البيانات",
     "api-design": "تصميم واجهة API",
-    "review": "مراجعة الذكاء الاصطناعي"
+    "review": "مراجعة الذكاء الاصطناعي",
+    "business-analysis": "تحليل الأعمال",
+    "product-vision": "رؤية المنتج",
+    "roadmap": "خطة التنفيذ",
+    "threat-model": "نموذج التهديدات",
+    "qa-plan": "خطة الاختبار"
   },
   "tab": {
     "vision": "الرؤية",

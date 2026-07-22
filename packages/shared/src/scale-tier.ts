@@ -387,6 +387,102 @@ const TIER_INFRASTRUCTURE_RULES: Record<ScaleTier, readonly string[]> = {
 };
 
 /**
+ * The OPERATIONS budget for a tier — what the team must run, pay for and keep
+ * alive after launch, as opposed to what the system is built from.
+ *
+ * This is the second half of the same decision, and it exists because the first
+ * half was applied in exactly one place. `TIER_INFRASTRUCTURE_RULES` sized the
+ * *architecture* and lived only in the System Architect's prompt, so a project
+ * correctly designed as one process on one managed host was then handed a
+ * roadmap whose Hardening phase said "Integrate Prometheus metrics" and "Send
+ * logs to an ELK stack" — a full observability platform for a five-figure MVP,
+ * bolted onto a design that had just been stripped of a cache it could not
+ * justify. The roadmap was not disagreeing with the design; nobody had ever told
+ * it there was a tier at all, so it fell back on the same prior the architect
+ * used to fall back on.
+ *
+ * Every downstream stage that recommends tooling or operational practice reads
+ * this table, keyed by the tier stamped on the system design — so the roadmap,
+ * the QA plan, the threat model and the review cannot size the same project
+ * differently from each other or from the architecture.
+ *
+ * Calibration runs in both directions, like the tier itself: `large` states
+ * plainly that a dedicated observability stack is the right answer there. The
+ * rule is proportionality, never a ban on particular products.
+ */
+const TIER_OPERATIONS_RULES: Record<ScaleTier, readonly string[]> = {
+  small: [
+    'OPERATIONS BUDGET (Small/MVP tier): there is no dedicated DevOps capacity',
+    'here. Every operational tool is one more thing this team installs, pays for',
+    'and keeps alive, and at this scale that cost is not repaid.',
+    'Use what the chosen host already gives you: its built-in log stream, its',
+    'uptime/health check and its metrics page. The observability plan at this',
+    'tier is structured (JSON) application logs, a /health endpoint the host can',
+    'poll, and error alerting — nothing more.',
+    'Do NOT introduce a dedicated observability stack (a metrics server, a',
+    'log-aggregation cluster, a tracing backend, an APM subscription), a',
+    'dedicated security product (WAF, SIEM, intrusion detection), container',
+    'orchestration or a service mesh, or a multi-region/failover deployment.',
+    'Standard practice covers the risk at this scale: rate limiting via framework',
+    'middleware, input validation, enforced HTTPS, dependency auditing in CI, and',
+    'the managed backups the database provider already takes.',
+    'The ONLY exception is a stated requirement that plainly demands more — a',
+    'contractual uptime or availability target, a regulatory audit or retention',
+    'obligation, a named certification. If you take that exception, name the',
+    'requirement that forces it.',
+  ],
+  medium: [
+    'OPERATIONS BUDGET (Medium tier): host-provided logging and uptime checks',
+    'remain the baseline.',
+    'Add a dedicated monitoring, logging or tracing service only for the specific',
+    'component whose failure or latency the team genuinely cannot diagnose',
+    'without it, and name that component. A monitoring stack adopted "for',
+    'observability" with no component named is unjustified spend and unowned',
+    'operational work.',
+  ],
+  large: [
+    'OPERATIONS BUDGET (Large/Enterprise tier): the stated scale justifies real',
+    'operational tooling — a full observability stack (metrics, centralized log',
+    'aggregation, distributed tracing), dedicated security tooling, load and',
+    'resilience testing, and multi-region or failover deployment are appropriate',
+    'where availability, compliance or load calls for them. Still tie each one to',
+    'the driver that justifies it rather than listing it as standard equipment.',
+  ],
+};
+
+/**
+ * The scale-tier block for a DOWNSTREAM prompt — the roadmap, QA plan, threat
+ * model and review.
+ *
+ * It takes the tier off the finished system design rather than re-deriving it,
+ * which is the whole point: one assessment of one set of numbers sizes the
+ * architecture, the plan to build it, the plan to test it and the review of it.
+ * A stage that re-assessed scale from the same inputs would be a second opinion
+ * that can drift, and the drift is invisible — each artifact reads plausibly on
+ * its own, and only a reader holding two of them at once sees the contradiction.
+ *
+ * The grounding differs from `scaleTierPromptBlock` on purpose. The architect is
+ * shown the evidence because it is deciding; these stages are shown the design
+ * itself, so the check they are pointed at is one they can actually run — the
+ * infrastructure in front of them either has a cache and a queue or it does not.
+ *
+ * An **absent tier returns the empty string**, which means the previous
+ * behaviour. Designs generated before the tier existed carry none, and guessing
+ * one here would size a plan from an assessment nobody made — the same rule as
+ * an unstamped `sourceStamp` never reading as stale.
+ */
+export function scaleOperationsPromptBlock(tier: ScaleTier | undefined): string {
+  if (!tier) return '';
+  return [
+    `SCALE TIER: ${tier.toUpperCase()}. This was decided from the client's own` +
+      ' stated figures and the system design above was already sized to it. Use this' +
+      ' tier — do not re-estimate the size of the project, and do not recommend',
+    'operational tooling the design itself does not run.',
+    ...TIER_OPERATIONS_RULES[tier],
+  ].join('\n');
+}
+
+/**
  * The full scale-tier block for a design prompt: the verdict, the evidence the
  * code actually read, and the infrastructure budget that follows from it.
  *
@@ -617,6 +713,164 @@ export interface TechChoiceLike {
  * in the prompt and the escape hatch in the backstop are the same test, so the
  * two can never disagree.
  */
+// ── the operations backstop ─────────────────────────────────────────────────
+
+/*
+ * Three narrow patterns, and the narrowness is the design. Each names a
+ * *platform the team would have to run*, never a practice and never a technique
+ * — the calibration is about who operates what, not about which words appear.
+ *
+ * Deliberately absent, and each for a reason:
+ *  - **Sentry, and hosted error tracking generally.** One environment variable
+ *    and a free tier. That is exactly the "lightweight hosted tier" a small-tier
+ *    project should have, so flagging it would strip the one piece of
+ *    observability this tier is supposed to keep.
+ *  - **Bare `elasticsearch`.** Roadmap tasks span every phase, and a Supporting
+ *    Features task that indexes products for search is not an operations
+ *    recommendation. `logstash`/`kibana`/`elk stack` carry the logging meaning on
+ *    their own, so the ambiguous token buys nothing and costs a real task.
+ *  - **`ids` / `ips` as abbreviations.** They match "ids" in ordinary prose.
+ *  - **Dependency scanners (Snyk, `npm audit`) and CI security steps.** The
+ *    small-tier rules name dependency auditing as standard practice, so a
+ *    backstop that removed it would contradict the prompt it backs up.
+ *  - **Load-testing tools.** A performance check against one list endpoint is
+ *    proportionate at any tier; only a load-testing *programme* is not, and no
+ *    regex can tell those apart. The QA planner sizes that one in code instead.
+ */
+
+/** Observability platforms — something to deploy and keep alive, not a log line. */
+const OBSERVABILITY_PLATFORM =
+  /\b(?:prometheus|grafana|loki|thanos|mimir|cortex|elk stack|\belk\b|logstash|kibana|graylog|fluentd|fluent ?bit|datadog|new relic|dynatrace|appdynamics|splunk|sumo ?logic|jaeger|zipkin|signoz|victoriametrics|nagios|zabbix|opentelemetry collector|otel collector)\b/i;
+
+/** Security products bought and operated, as opposed to controls written in code. */
+const SECURITY_PLATFORM =
+  /\b(?:waf|web application firewall|siem|soar|intrusion detection|intrusion prevention|hashicorp vault|crowdstrike|wazuh|falco|qualys|nessus|tenable|imperva|aws shield|guardduty|security hub)\b/i;
+
+/** Deployment topologies a one-process, one-host budget cannot carry. */
+const HEAVY_PLATFORM =
+  /\b(?:kubernetes|k8s|service mesh|istio|linkerd|multi[- ]?region|cross[- ]?region|active[- ]active|active[- ]passive|failover cluster|disaster[- ]recovery site|read replicas?)\b/i;
+
+/**
+ * Requirements that justify dedicated operational tooling even at the small tier.
+ *
+ * This is the SAME escape hatch the small-tier prompt rules state, expressed as
+ * code, exactly as `needsAsyncProcessing` mirrors the infrastructure prompt's
+ * exception — so the instruction and the backstop can never disagree about when
+ * heavier tooling is warranted.
+ *
+ * The Arabic half is not decoration. An English-only pattern over an Arabic
+ * requirement document silently matches nothing, and here a silent miss means
+ * the escape hatch never fires — so an Arabic project would be stripped harder
+ * than an identical English one. That is the `stripMetrics` trap, and the same
+ * rule applies: no `\b`, which is ASCII-only and never fires next to Arabic.
+ */
+const ASSURANCE_JUSTIFICATION =
+  /\b(?:99\.9|99\.99|uptime (?:target|guarantee|commitment)|availability (?:target|guarantee|commitment)|\bsla\b|service[- ]level agreement|penetration test\w*|pci[- ]?dss|\bhipaa\b|\bsoc ?2\b|iso ?27001|regulatory audit|compliance audit|audit (?:log |trail )?retention|certification)\b/i;
+
+const ASSURANCE_JUSTIFICATION_AR =
+  /(?:اتفاقية مستوى الخدمة|مستوى الخدمة|هدف التوافر|نسبة التوافر|اختبار اختراق|تدقيق تنظيمي|شهادة امتثال|الاحتفاظ بالسجلات)/;
+
+/**
+ * Does anything in the requirements genuinely justify dedicated ops tooling?
+ *
+ * Exported for the same reason `needsAsyncProcessing` is: an agent that wants to
+ * explain *why* it kept a heavier recommendation should ask the same question
+ * the backstop asks, not a similar one.
+ */
+export function needsOperationalAssurance(requirementText: string): boolean {
+  return (
+    ASSURANCE_JUSTIFICATION.test(requirementText) ||
+    ASSURANCE_JUSTIFICATION_AR.test(requirementText)
+  );
+}
+
+/**
+ * Is this one recommendation over-scaled for the tier?
+ *
+ * Only ever true at `small`, mirroring `enforceScaleAppropriateStack`'s
+ * asymmetry and for the mirrored reason. Stripping a monitoring stack from a
+ * genuinely large system is an outage nobody can diagnose; leaving one on a
+ * 400-user tool is a monthly bill and unowned operational work that is invisible
+ * until someone has to answer a page at 3am. Only the second direction is safe
+ * to enforce in code, so only that one is.
+ */
+export function isOverScaledForTier(
+  text: string,
+  tier: ScaleTier | undefined,
+  requirementText = '',
+): boolean {
+  if (tier !== 'small') return false;
+  if (needsOperationalAssurance(requirementText)) return false;
+  return (
+    OBSERVABILITY_PLATFORM.test(text) ||
+    SECURITY_PLATFORM.test(text) ||
+    HEAVY_PLATFORM.test(text)
+  );
+}
+
+export interface OperationsScaleResult {
+  lines: string[];
+  /** The recommendations dropped, for the log line. Empty when nothing was. */
+  removed: string[];
+}
+
+/**
+ * What "observability" actually means at the small tier, as a plan item.
+ *
+ * The backstop above deletes, and deletion alone is the wrong answer for a
+ * *plan*: strip "Integrate Prometheus" and "Ship logs to ELK" from a Monitoring
+ * & Logging milestone and the milestone empties, so a roadmap that over-scaled
+ * observability is replaced by one with no observability at all. The milestone
+ * was never the problem — its implementation was. So a caller left with nothing
+ * puts this in its place instead of dropping the work.
+ *
+ * `LocalizedCopy` because this reaches the artifact on the **LLM path**, where
+ * the roadmap is written in the project's language. An English line spliced into
+ * an Arabic delivery plan is the half-translated artifact the language system
+ * exists to prevent — and a table that forgets a language will not compile.
+ */
+export const SMALL_TIER_OPERATIONS_TASK: LocalizedCopy<{
+  title: string;
+  detail: string;
+}> = {
+  en: {
+    title: 'Set up logging, health checks and error alerts on the host',
+    detail:
+      'Emit structured JSON application logs to the host’s built-in log stream, expose a /health endpoint for its uptime check, and route unhandled errors to an alerting address. No self-hosted monitoring stack is warranted at this scale.',
+  },
+  ar: {
+    title: 'إعداد السجلات وفحوص السلامة وتنبيهات الأخطاء على الاستضافة',
+    detail:
+      'إصدار سجلات تطبيق منظَّمة بصيغة JSON إلى مسار السجلات المدمج في الاستضافة، وإتاحة نقطة /health لفحص التوافر، وتوجيه الأخطاء غير المعالَجة إلى عنوان للتنبيهات. لا تستدعي هذه المرحلة إنشاء منظومة مراقبة مستضافة ذاتيًا.',
+  },
+};
+
+/**
+ * Drop tooling recommendations a small-tier project has no justification for.
+ *
+ * For the plain string lists — the QA plan's `tooling`, the review's
+ * `recommendations`. Removal-only, small-tier-only. Callers that would be left
+ * with an empty list fall back to their own deterministic, tier-sized build
+ * rather than shipping the section empty: the section is legitimate at every
+ * tier, only its contents were over-scaled.
+ */
+export function enforceScaleAppropriateOperations(
+  lines: readonly string[] | undefined,
+  tier: ScaleTier | undefined,
+  requirementText = '',
+): OperationsScaleResult {
+  const all = [...(lines ?? [])];
+  if (tier !== 'small') return { lines: all, removed: [] };
+
+  const removed: string[] = [];
+  const kept = all.filter((line) => {
+    if (!isOverScaledForTier(line, tier, requirementText)) return true;
+    removed.push(line);
+    return false;
+  });
+  return { lines: kept, removed };
+}
+
 export function enforceScaleAppropriateStack(
   techStack: readonly TechChoiceLike[] | undefined,
   tier: ScaleTier,
