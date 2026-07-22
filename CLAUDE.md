@@ -295,6 +295,37 @@ tsconfig and never needs shared's `dist`.
   best-value recommendation. Stable across runs (unit-testable, offline). The
   service only reads system/database/API designs; the estimate is a labeled
   planning figure, not a quote.
+  - **Hosting is RECONCILED with the design, not decided beside it
+    (`cost-estimate.hosting.ts`).** Two bugs shared a root — the estimator knew
+    the prices and nothing else about the project. `bestFor` was a static string
+    on the pricing table, so a 1,000-user MVP was told Cloudflare suits
+    *"edge-first apps and heavy traffic"*; and the tab ran `argmin(total
+    monthly)` over all eight providers, crowning a "Best Value" that contradicted
+    the host the System Design had already chosen. The context was already there
+    — `CostEstimateService` loads the system design for effort and service
+    subscriptions — the hosting decision just never read it. Five rules:
+    1. **`rationale` is derived, `bestFor` is legacy.** Each "why" is written
+       from the computed bill (cost position at the comparison scale + whichever
+       category actually carries the dollars), so one provider reads differently
+       on a 100-user MVP than on a 10,000-user product. `bestFor`/`recommended`
+       are retained only so estimates stored earlier still render.
+    2. **The project budget is deliberately never quoted here.** A one-off build
+       budget and a recurring monthly bill are different quantities; putting them
+       in one sentence is the category error this codebase avoids elsewhere.
+       Budget still reaches the reasoning through `scaleTier`.
+    3. **Feasibility is a fact, not a preference.** `providerFit` vetoes only
+       Cloudflare under a `long-running` runtime (Workers cannot host a
+       long-lived server — the thing `scaffold.compose.ts` already refused to
+       inherit) and merely **caveats** other serverless hosts. An `unknown`
+       runtime excludes nothing.
+    4. **A caveated host is never the alternative to switch to.** "Switch to
+       Vercel and save $135/mo" for a long-running backend is not a like-for-like
+       swap — offering it would be a fresh instance of the same bug.
+    5. **The System Design's choice wins ties** (`MEANINGFUL_SAVING_USD`): it was
+       made against budget and timeline this function cannot see, so a few
+       dollars is not grounds to reopen it. `hostingChoiceFromDesign` reads the
+       **technology field only, never the rationale** — architect rationales name
+       the *rejected* alternative.
 - **Project economics — effort + budget + service subscriptions (R9).** The cost
   stage grew from "monthly hosting bill" into full project economics, still
   **100% deterministic (zero LLM calls)** — all new math is pure functions in
