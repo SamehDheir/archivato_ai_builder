@@ -191,6 +191,15 @@ export interface BusinessAnalysis extends LocalizedArtifact {
    * empty when there is an unverified claim anywhere in the analysis.
    */
   researchChecklist: string[];
+  /**
+   * A hash of the inputs this analysis was derived from (idea, industry, the
+   * grounding slots). Lets a re-run recognise "same interview" and reuse the
+   * stored competitors and market read instead of churning them — see
+   * `businessAnalysisInputsFingerprint` / `carryOverFacts`. Additive/optional
+   * (JSON-blob convention, migration-free); absent on pre-existing rows, which
+   * simply never match and so always regenerate — the safe direction.
+   */
+  inputsFingerprint?: string;
 }
 
 /**
@@ -219,6 +228,13 @@ export const MARKET_HONESTY_RULES = [
   'empty competitor list with an honest note beats an invented one.',
   'Every competitor and market claim carries a confidence, and anything you did',
   'not get from the interview is "unverified".',
+  'NEVER name a specific law, regulation, act, directive, standard, government',
+  'ministry, regulator, agency, or national initiative unless the client named it',
+  'in the interview. You have no way to confirm which one applies. Describe the',
+  'category instead ("a data-protection regime likely applies", "sector licensing',
+  'may be required") and put confirming the specific regime into researchChecklist.',
+  'The "unverified" label is NOT permission to invent a specific — a specific you',
+  'cannot ground does not belong in the document at all, only in the checklist.',
   'Put every unverified claim the owner should check into researchChecklist.',
 ].join(' ');
 
@@ -289,6 +305,14 @@ const COPY: LocalizedCopy<{
   raisedFunding: string;
   /** Verbs after which "<an undisclosed amount>" collapses to "funding". */
   raisedPrefixes: string[];
+  /** The generic that replaces a named-but-ungrounded law/regulation/standard. */
+  genericRegulation: string;
+  /** The generic that replaces a named-but-ungrounded ministry/regulator/agency. */
+  genericAuthority: string;
+  /** The generic that replaces a named-but-ungrounded national initiative. */
+  genericInitiative: string;
+  /** Added to the checklist once any specific was generalized away. */
+  confirmSpecifics: string;
 }> = {
   en: {
     confirmCompetitor: (name) =>
@@ -304,6 +328,12 @@ const COPY: LocalizedCopy<{
     established: 'established',
     raisedFunding: 'raised funding',
     raisedPrefixes: ['raised'],
+    genericRegulation: 'an applicable regulation (confirm the specific regime)',
+    genericAuthority: 'the relevant government body (confirm which)',
+    genericInitiative: 'a relevant national initiative (confirm which)',
+    confirmSpecifics:
+      'Confirm the specific laws, regulators and initiatives that apply — the ' +
+      'analysis names none it could verify.',
   },
   ar: {
     confirmCompetitor: (name) =>
@@ -321,6 +351,12 @@ const COPY: LocalizedCopy<{
     raisedFunding: 'حصلت على تمويل',
     // Empty on purpose — see the collapse step in `stripMetrics`.
     raisedPrefixes: [],
+    genericRegulation: 'لائحة تنظيمية سارية (يُرجى تأكيد النظام المُحدَّد)',
+    genericAuthority: 'الجهة الحكومية المختصة (يُرجى تأكيدها)',
+    genericInitiative: 'مبادرة وطنية ذات صلة (يُرجى تأكيدها)',
+    confirmSpecifics:
+      'أكِّد الأنظمة والجهات التنظيمية والمبادرات المُحدَّدة التي تنطبق — لم يذكر ' +
+      'التحليل أيًّا منها ممّا يمكن التحقق منه.',
   },
 };
 
@@ -594,4 +630,297 @@ const ARABIC_PLURALS: Record<string, string> = {
  */
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ── ungrounded named specifics (laws, regulators, initiatives) ───────────────
+
+/**
+ * The regulation acronyms a model reaches for by default.
+ *
+ * A CLOSED allowlist, not a general uppercase-token rule: `SaaS`, `API`, `CRM`,
+ * `EHR`, `MVP` are all uppercase and legitimate, so a blanket "strip acronyms"
+ * would gut the document. Case-sensitive — these are always written uppercase,
+ * and matching case-insensitively would catch the common word "sox" and the like.
+ */
+const REGULATION_ACRONYMS = [
+  'GDPR', 'HIPAA', 'CCPA', 'CPRA', 'PDPL', 'PIPL', 'LGPD', 'POPIA', 'NDPR',
+  'FERPA', 'GLBA', 'COPPA', 'SOX', 'PSD2', 'DORA', 'eIDAS', 'FedRAMP', 'FISMA',
+  'PCI DSS', 'PCI-DSS', 'SOC 2', 'SOC2', 'ISO 27001', 'ISO27001', 'NIST 800-53',
+];
+
+const ACRONYM_RE = new RegExp(`\\b(${REGULATION_ACRONYMS.map(escapeRegExp).join('|')})\\b`, 'g');
+
+/** "the Data Protection Act", "the Consumer Protection Law" — captures the name. */
+const NAMED_LAW_RE =
+  /\bthe\s+([A-Z][A-Za-z&'-]+(?:\s+[A-Z][A-Za-z&'-]+){0,4})\s+(?:Act|Law|Decree|Directive|Ordinance|Statute|Code)\b/g;
+
+/** "Law No. 25", "Royal Decree No. M/19", "Regulation (EU) 2016/679". */
+const NUMBERED_LAW_RE =
+  /\b(?:Royal\s+Decree|Decree|Law|Regulation|Directive|Act)\s+(?:No\.?\s*)?(?:\([A-Z]{2,}\)\s*)?[MмA-Z]?\/?\s*\d[\d/-]*\b/g;
+
+/** "Ministry of Health", "Department for Digital". */
+const MINISTRY_OF_RE =
+  /\b(?:Ministry|Department|Directorate|Authority|Commission|Agency)\s+(?:of|for)\s+([A-Z][A-Za-z&'-]+(?:\s+[A-Z][A-Za-z&'-]+){0,3})/g;
+
+/** "Saudi Data & AI Authority", "Federal Trade Commission" — the name leads. */
+const NAMED_BODY_RE =
+  /\b([A-Z][A-Za-z&'-]+(?:\s+[A-Z][A-Za-z&'-]+){0,4})\s+(?:Ministry|Authority|Commission|Regulator|Directorate)\b/g;
+
+/**
+ * Common-noun heads that precede Authority/Commission/etc. and are NOT proper
+ * names — "local authority", "certificate authority", "public commission". A
+ * single distinctive proper noun is not enough to fire when it is one of these.
+ */
+const BODY_STOPWORDS = new Set([
+  'local', 'certificate', 'public', 'the', 'a', 'an', 'central', 'higher',
+  'relevant', 'appropriate', 'competent', 'national', 'federal', 'state',
+]);
+
+/** "Vision 2030", "Vision 2071" — a national initiative keyed to a year. */
+const INITIATIVE_RE = /\bVision\s+\d{4}\b/g;
+
+/** Arabic: "وزارة الصحة" (Ministry of X), "هيئة الاتصالات" (X Authority). */
+const ARABIC_BODY_RE = /(?:وزارة|هيئة|الهيئة)\s+[^\s،.]+(?:\s+[^\s،.]+){0,2}/g;
+
+/** Arabic: "رؤية ٢٠٣٠" / "رؤية 2030". */
+const ARABIC_INITIATIVE_RE = /رؤية\s*[\d٠-٩]{4}/g;
+
+/** The distinctive words of a phrase, lowercased — proper nouns and acronyms. */
+function distinctiveTokens(phrase: string): string[] {
+  return (phrase.match(/[A-Za-z٠-٩؀-ۿ][\w؀-ۿ&/-]{1,}/g) ?? [])
+    .map((t) => t.toLowerCase())
+    .filter((t) => t.length >= 2);
+}
+
+/**
+ * True when every distinctive word of a matched specific also appears in what the
+ * client actually said. Containment, not overlap — the `namesExcludedCapability`
+ * bar: a specific the client named ("we must meet PDPL") is grounded and survives;
+ * one the model supplied is not. A match with no distinctive words (a bare
+ * numbered decree) is never grounded, which is correct — the client did not state
+ * a decree number we cannot see.
+ */
+function isGrounded(match: string, groundingLower: string): boolean {
+  const tokens = distinctiveTokens(match);
+  const nameTokens = tokens.filter((t) => !/^\d/.test(t));
+  if (!nameTokens.length) return false;
+  return nameTokens.every((t) => groundingLower.includes(t));
+}
+
+/**
+ * Generalize named laws, regulators and national initiatives the model could not
+ * have grounded — the backstop for when the honesty prompt does not hold.
+ *
+ * The prompt is the primary defence (see `MARKET_HONESTY_RULES`); this is the
+ * `stripMetrics` sibling for named specifics rather than numeric ones. It runs at
+ * the AGENT only, never at the repository read boundary, because it needs the
+ * interview text to decide groundedness and only the agent has it — the same
+ * reason `stripMetrics` is a write-side backstop.
+ *
+ * Conservative by construction, because a false positive silently deletes the
+ * client's own words: acronyms are a closed allowlist, government bodies must
+ * carry a proper-noun head that is not a common-noun stopword, and anything the
+ * interview actually mentions is kept verbatim.
+ */
+export function stripUngroundedSpecifics(
+  text: string,
+  grounding: string,
+  language: ArtifactLanguage = DEFAULT_ARTIFACT_LANGUAGE,
+): { text: string; changed: boolean } {
+  if (!text) return { text, changed: false };
+  const copy = copyFor(COPY, language);
+  const groundingLower = grounding.toLowerCase();
+  let changed = false;
+
+  const generalize = (re: RegExp, replacement: string) => {
+    text = text.replace(re, (match, ...rest) => {
+      // The captured proper-noun group, when the pattern has one, is the tighter
+      // groundedness signal; else the whole match.
+      const captured = typeof rest[0] === 'string' ? rest[0] : match;
+      if (isGrounded(captured, groundingLower)) return match;
+      // The body patterns fire on a leading proper noun; hold fire when that noun
+      // is a generic head ("local authority") rather than a real name.
+      if (re === NAMED_BODY_RE && BODY_STOPWORDS.has(captured.toLowerCase())) {
+        return match;
+      }
+      changed = true;
+      return replacement;
+    });
+  };
+
+  generalize(ACRONYM_RE, copy.genericRegulation);
+  generalize(NAMED_LAW_RE, copy.genericRegulation);
+  generalize(NUMBERED_LAW_RE, copy.genericRegulation);
+  generalize(MINISTRY_OF_RE, copy.genericAuthority);
+  generalize(NAMED_BODY_RE, copy.genericAuthority);
+  generalize(INITIATIVE_RE, copy.genericInitiative);
+  generalize(ARABIC_BODY_RE, copy.genericAuthority);
+  generalize(ARABIC_INITIATIVE_RE, copy.genericInitiative);
+
+  return { text: text.replace(/\s{2,}/g, ' ').trim(), changed };
+}
+
+/**
+ * Apply `stripUngroundedSpecifics` across every free-prose field of the analysis
+ * that a client reads, and record — once — that specifics were generalized.
+ *
+ * The market read and the verdict rationale are where a fabricated statute or
+ * ministry actually surfaces; the competitor prose is where an invented
+ * "regulated by X" creeps in. When anything is generalized, the checklist gains a
+ * line telling the owner to confirm the specifics, so the document never quietly
+ * swaps a named law for a vague one and leaves no trace — the honesty the whole
+ * stage is built on.
+ */
+export function screenUngroundedSpecifics(
+  analysis: BusinessAnalysis,
+  grounding: string,
+): BusinessAnalysis {
+  const language = artifactLanguageOf(analysis);
+  const copy = copyFor(COPY, language);
+  let any = false;
+  const scrub = (value: string): string => {
+    const { text, changed } = stripUngroundedSpecifics(value, grounding, language);
+    if (changed) any = true;
+    return text;
+  };
+  const scrubList = (values: string[]): string[] => values.map(scrub);
+
+  const screened: BusinessAnalysis = {
+    ...analysis,
+    competitors: analysis.competitors.map((c) => ({
+      ...c,
+      positioning: scrub(c.positioning),
+      strengths: scrubList(c.strengths),
+      weaknesses: scrubList(c.weaknesses),
+    })),
+    market: {
+      ...analysis.market,
+      demandSignals: scrubList(analysis.market.demandSignals),
+      headwinds: scrubList(analysis.market.headwinds),
+      sizeNote: scrub(analysis.market.sizeNote),
+    },
+    verdictRationale: scrub(analysis.verdictRationale),
+  };
+
+  if (any) {
+    const has = screened.researchChecklist.some(
+      (c) => c.toLowerCase() === copy.confirmSpecifics.toLowerCase(),
+    );
+    if (!has) {
+      screened.researchChecklist = [...screened.researchChecklist, copy.confirmSpecifics];
+    }
+  }
+  return screened;
+}
+
+// ── fact stability across re-runs ────────────────────────────────────────────
+
+/**
+ * The inputs a business analysis is derived from, reduced to a stable string.
+ *
+ * Re-running the analysis on the SAME interview must not churn the competitor
+ * names and regulatory claims — those are the client-facing facts, and a document
+ * whose "facts" reshuffle every time it is regenerated is not one an owner can
+ * stand behind. The fingerprint is how a re-run recognises "same inputs" and
+ * reuses the stored facts (see `carryOverFacts`); only the framing is allowed to
+ * vary. Fields are listed explicitly and in order so the hash is stable across
+ * runs and process restarts.
+ */
+export function businessAnalysisInputsFingerprint(input: {
+  idea?: string;
+  industry?: string;
+  domain?: string;
+  goal?: string;
+  features?: string[];
+  slots?: Record<string, string>;
+}): string {
+  const parts = [
+    input.idea ?? '',
+    input.industry ?? '',
+    input.domain ?? '',
+    input.goal ?? '',
+    (input.features ?? []).join('|'),
+    Object.keys(input.slots ?? {})
+      .sort()
+      .map((k) => `${k}=${input.slots?.[k] ?? ''}`)
+      .join('|'),
+  ];
+  return fnv1a(parts.join(' '));
+}
+
+/** FNV-1a, 32-bit, hex. A tiny stable hash — no crypto dep in runtime-free code. */
+function fnv1a(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * Reuse the researched FACTS from a previous analysis, keeping the fresh framing.
+ *
+ * This is the "reuse facts, re-vary framing" rule made structural: rather than
+ * trust the model to reproduce the same competitors on a re-run (it will not,
+ * even at temperature 0 — batched inference is not bit-deterministic), the
+ * service pins the facts in CODE. Competitors and the market read come from the
+ * previous run; the problem/segments/USP/verdict/MVP framing comes from the new
+ * one. The checklist is re-derived so it matches the pinned facts.
+ *
+ * Only called when the inputs fingerprint matches — different inputs are a
+ * different project and must be researched afresh.
+ */
+export function carryOverFacts(
+  fresh: BusinessAnalysis,
+  previous: BusinessAnalysis,
+): BusinessAnalysis {
+  return normalizeBusinessAnalysis({
+    ...fresh,
+    competitors: previous.competitors,
+    market: previous.market,
+  });
+}
+
+/** One factual difference between two runs, for the re-run log. */
+export interface BusinessAnalysisFactDiff {
+  competitorsAdded: string[];
+  competitorsRemoved: string[];
+  marketSignalsChanged: boolean;
+  /** True when nothing factual moved — the stability the caching exists to give. */
+  stable: boolean;
+}
+
+/**
+ * Diff the FACTUAL sections of two analyses (competitor names, market signals).
+ *
+ * Surfaces what changed on a re-run instead of silently replacing one set of
+ * unverified claims with another. When facts were reused this is `stable: true`,
+ * which is the proof the reuse worked; when the inputs changed (or a facts
+ * refresh was forced) it names exactly which competitors and signals moved.
+ */
+export function diffBusinessAnalysisFacts(
+  previous: BusinessAnalysis | null,
+  next: BusinessAnalysis,
+): BusinessAnalysisFactDiff {
+  const prevNames = new Set((previous?.competitors ?? []).map((c) => c.name.toLowerCase()));
+  const nextNames = new Set(next.competitors.map((c) => c.name.toLowerCase()));
+  const competitorsAdded = next.competitors
+    .filter((c) => !prevNames.has(c.name.toLowerCase()))
+    .map((c) => c.name);
+  const competitorsRemoved = (previous?.competitors ?? [])
+    .filter((c) => !nextNames.has(c.name.toLowerCase()))
+    .map((c) => c.name);
+  const signal = (a: MarketAssessment | undefined) =>
+    [...(a?.demandSignals ?? []), ...(a?.headwinds ?? []), a?.sizeNote ?? '']
+      .join('||')
+      .toLowerCase();
+  const marketSignalsChanged = signal(previous?.market) !== signal(next.market);
+  return {
+    competitorsAdded,
+    competitorsRemoved,
+    marketSignalsChanged,
+    stable:
+      !competitorsAdded.length && !competitorsRemoved.length && !marketSignalsChanged,
+  };
 }

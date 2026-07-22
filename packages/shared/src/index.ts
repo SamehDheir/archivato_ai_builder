@@ -30,6 +30,7 @@ export * from './api-design.coverage';
 export * from './api-design.rest';
 export * from './mock-response';
 export * from './business-analysis';
+export * from './collections';
 export * from './freshness';
 export * from './generation';
 export * from './extended-artifacts';

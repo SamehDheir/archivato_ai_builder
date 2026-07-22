@@ -15,6 +15,8 @@ import {
   type SlotMap,
   type SuccessMetric,
   untrustedField,
+  dedupeBy,
+  dedupeStrings,
   screenProductVision,
 } from '@archivato/shared';
 import { BaseAgent } from '../agent.base';
@@ -87,7 +89,8 @@ export class ProductManagerAgent extends BaseAgent {
       label: 'Product vision',
       prompt: this.buildPrompt(ctx, targets),
       isValid: (raw) => this.isValid(raw),
-      accept: (raw) => ({ ...(raw as ProductVision), sessionId, generatedAt }),
+      accept: (raw) =>
+        this.dedupeLists({ ...(raw as ProductVision), sessionId, generatedAt }),
       fallback: (language) =>
         this.buildDeterministic(sessionId, generatedAt, ctx, targets, language),
     });
@@ -101,6 +104,23 @@ export class ProductManagerAgent extends BaseAgent {
       );
     }
     return vision;
+  }
+
+  /**
+   * Remove duplicate list entries the model may have emitted. There is no
+   * read-boundary normalizer for the vision, so a repeat left here renders twice
+   * on the share page the client reads. The view dedupes defensively too; this
+   * keeps the stored artifact (and its JSON export) clean at the source.
+   */
+  private dedupeLists(vision: ProductVision): ProductVision {
+    return {
+      ...vision,
+      goals: dedupeStrings(vision.goals ?? []),
+      mvp: dedupeStrings(vision.mvp ?? []),
+      futureFeatures: dedupeStrings(vision.futureFeatures ?? []),
+      successMetrics: dedupeBy(vision.successMetrics ?? [], (m) => m.name),
+      personas: dedupeBy(vision.personas ?? [], (p) => p.name),
+    };
   }
 
   private buildPrompt(

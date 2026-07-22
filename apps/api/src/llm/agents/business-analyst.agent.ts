@@ -5,6 +5,7 @@ import {
   MARKET_HONESTY_RULES,
   normalizeBusinessAnalysis,
   normalizeMvpAssessment,
+  screenUngroundedSpecifics,
   stripMetrics,
   withResearchChecklist,
   type ArtifactLanguage,
@@ -90,9 +91,32 @@ export class BusinessAnalystAgent extends BaseAgent {
         this.normalize(sessionId, generatedAt, raw, ctx, language),
       fallback: (language) =>
         this.buildDeterministic(sessionId, generatedAt, ctx, language),
+      // Explicit temperature 0, even though `completeJson` already defaults to it
+      // on every provider — this is the one artifact whose sections are meant to
+      // be researched facts, not creative writing, so the intent is stated here
+      // rather than left to a provider default that a later change could raise.
+      // (The residual run-to-run drift at 0 is handled structurally by pinning the
+      // facts across re-runs in the service, not by chasing determinism here.)
+      options: { temperature: 0 },
     });
   }
 
+  /**
+   * SEARCH-GROUNDING SEAM (deliberately empty).
+   *
+   * The right fix for ungrounded competitor/market/regulatory claims is to
+   * research them against a real source before writing. That needs a capability
+   * this platform does not have yet — the `LlmProvider` seam exposes only
+   * `complete`/`completeJson`, with no tool-use or web-search — so it is a slice
+   * of its own (a `ResearchProvider` abstraction + a search-then-summarise flow),
+   * not a prompt tweak. Until it exists, this agent MUST NOT present a named
+   * specific it cannot ground: the prompt forbids it (`MARKET_HONESTY_RULES`) and
+   * `screenUngroundedSpecifics` enforces it in code. When search lands, its
+   * findings get injected into `buildPrompt` here and become the grounding text
+   * `screenUngroundedSpecifics` already checks against — the enforcement does not
+   * change, only what counts as grounded widens from "the interview" to "the
+   * interview plus verified search results".
+   */
   private buildPrompt(ctx: BusinessAnalysisContext): string {
     const s = ctx.slots;
     return [
@@ -179,7 +203,7 @@ export class BusinessAnalystAgent extends BaseAgent {
       },
     });
 
-    return {
+    const metricsStripped: BusinessAnalysis = {
       ...shaped,
       competitors: shaped.competitors.map((c) => ({
         ...c,
@@ -192,6 +216,38 @@ export class BusinessAnalystAgent extends BaseAgent {
         sizeNote: stripMetrics(shaped.market.sizeNote, language),
       },
     };
+
+    // Second backstop: generalize any named law/regulator/initiative the model
+    // could not have grounded. `stripMetrics` removes invented NUMBERS; this
+    // removes invented NAMED SPECIFICS — the class the "unverified" badge was
+    // quietly licensing. Grounded against the interview: a regime the client
+    // actually stated survives; one the model supplied is generalized and pushed
+    // to the research checklist.
+    return screenUngroundedSpecifics(metricsStripped, this.groundingText(ctx));
+  }
+
+  /**
+   * Everything the client actually said, as one lowercase-searchable string.
+   *
+   * This is the allowlist a named specific must appear in to survive
+   * `screenUngroundedSpecifics` — the model's own inventions are not in it, the
+   * client's stated facts are. When the search seam above lands, verified results
+   * are appended here and the enforcement is unchanged.
+   */
+  private groundingText(ctx: BusinessAnalysisContext): string {
+    const slotValues = ctx.slots
+      ? Object.values(ctx.slots)
+          .map((v) => (typeof v?.value === 'string' ? v.value : ''))
+          .join(' ')
+      : '';
+    return [
+      ctx.idea,
+      ctx.industry ?? '',
+      ctx.intent?.domain ?? '',
+      ctx.summary.goal ?? '',
+      ctx.summary.features.join(' '),
+      slotValues,
+    ].join(' ');
   }
 
   // ── deterministic fallback ────────────────────────────────────────────────

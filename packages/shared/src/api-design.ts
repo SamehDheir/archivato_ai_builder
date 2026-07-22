@@ -6,6 +6,7 @@
 
 import type { LocalizedArtifact } from './artifact-language';
 import type { GenerationProvenance } from './generation';
+import { dedupeBy } from './collections';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -239,9 +240,14 @@ export function normalizeApiModule(module: ApiModule): ApiModule {
   const normalized: ApiModule = {
     name: typeof m.name === 'string' ? m.name : '',
     basePath,
-    endpoints: Array.isArray(m.endpoints)
-      ? m.endpoints.map((e) => normalizeApiEndpoint(e, basePath))
-      : [],
+    // Dedupe by method+path: two identical endpoints would publish the same
+    // route twice in the OpenAPI/Postman export and list it twice in the view.
+    endpoints: dedupeBy(
+      Array.isArray(m.endpoints)
+        ? m.endpoints.map((e) => normalizeApiEndpoint(e, basePath))
+        : [],
+      (e) => `${e.method} ${e.path}`,
+    ),
   };
   if (Array.isArray(m.coveredEntities)) {
     normalized.coveredEntities = m.coveredEntities.filter(
@@ -285,9 +291,12 @@ export function normalizeApiDesign(design: ApiDesign): ApiDesign {
   const excludedEntities = normalizeExcludedEntities(design?.excludedEntities);
   const normalized: ApiDesign = {
     ...design,
-    modules: Array.isArray(design?.modules)
-      ? design.modules.map(normalizeApiModule)
-      : [],
+    // Dedupe by module name: a repeated module would render its whole endpoint
+    // group twice — the same duplication class the System Design services hit.
+    modules: dedupeBy(
+      Array.isArray(design?.modules) ? design.modules.map(normalizeApiModule) : [],
+      (m) => m.name,
+    ),
   };
   if (excludedEntities) normalized.excludedEntities = excludedEntities;
   else delete normalized.excludedEntities;

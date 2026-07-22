@@ -20,7 +20,10 @@ const legacyRow = {
       basePath: '/api/orders',
       endpoints: [
         // No statusCodes, no requestSchema, no responseSchema, no summary.
-        { method: 'GET', path: '/api/orders' },
+        // POST so it stays distinct from the filled endpoint below — an empty
+        // endpoint fills to GET + the base path, and two identical routes are
+        // now (correctly) collapsed by the read-boundary dedup.
+        { method: 'POST', path: '/api/orders' },
         // Not even a method or a path.
         {},
       ],

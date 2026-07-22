@@ -58,6 +58,7 @@ import type {
   ReviewReport,
   SuggestedResolution,
 } from './review';
+import { dedupeBy } from './collections';
 
 // ── Finding identity ────────────────────────────────────────────────────────
 
@@ -366,8 +367,12 @@ export function normalizeReviewReport(report: ReviewReport): ReviewReport {
   const next = { ...report };
   for (const section of FINDING_SECTION_KEYS) {
     const field = FINDING_SECTIONS[section];
-    const findings = (report[field] ?? []) as ReviewFinding[];
-    if (!Array.isArray(findings)) continue;
+    const raw = (report[field] ?? []) as ReviewFinding[];
+    if (!Array.isArray(raw)) continue;
+    // Dedupe by title within the section: a repeated finding would list the same
+    // risk twice, and the index-based ids below are then assigned on the deduped
+    // list so they stay sequential.
+    const findings = dedupeBy(raw, (f) => f.title ?? '');
     (next as Record<string, unknown>)[field] = findings.map((finding, index) => {
       const action = resolveFindingAction(finding, section);
       return {

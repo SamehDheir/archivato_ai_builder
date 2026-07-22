@@ -14,6 +14,7 @@ import type { LocalizedArtifact } from './artifact-language';
 import type { Severity } from './review';
 import type { DerivedArtifact } from './freshness';
 import type { GenerationProvenance } from './generation';
+import { dedupeBy, dedupeStrings } from './collections';
 
 export type StrideCategory =
   | 'spoofing'
@@ -91,12 +92,15 @@ export function normalizeThreatModel(model: ThreatModel): ThreatModel {
   return {
     ...model,
     summary: typeof model?.summary === 'string' ? model.summary : '',
-    trustBoundaries: strings(model?.trustBoundaries),
-    assumptions: strings(model?.assumptions),
-    threats: Array.isArray(model?.threats)
-      ? model.threats.filter(
-          (t): t is Threat => !!t && typeof t.threat === 'string',
-        )
-      : [],
+    trustBoundaries: dedupeStrings(strings(model?.trustBoundaries)),
+    assumptions: dedupeStrings(strings(model?.assumptions)),
+    // Dedupe by category+component+threat: this renders on the PUBLIC share page,
+    // so a repeated threat is a doubled row a client sees with no owner present.
+    threats: dedupeBy(
+      Array.isArray(model?.threats)
+        ? model.threats.filter((t): t is Threat => !!t && typeof t.threat === 'string')
+        : [],
+      (t) => `${t.category}|${t.component}|${t.threat}`,
+    ),
   };
 }
