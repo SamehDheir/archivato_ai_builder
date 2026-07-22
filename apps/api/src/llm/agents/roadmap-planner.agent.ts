@@ -179,19 +179,24 @@ export class RoadmapPlannerAgent extends BaseAgent {
     raw: ProjectRoadmap['phases'] | undefined,
     ctx: RoadmapContext,
   ): RoadmapPhase[] {
-    const phases: RoadmapPhase[] = (raw ?? []).map((p) => ({
+    // `?? []` is NOT enough here, and this crashed in production:
+    // `TypeError: (raw ?? []).map is not a function`. A model that answers with
+    // an object where an array was asked for passes the nullish check and dies
+    // on `.map` — the documented rule is that a required array must read as
+    // empty whether it is MISSING or MISTYPED. `asArray` is that rule.
+    const phases: RoadmapPhase[] = asArray(raw).map((p) => ({
       name: p.name,
       goal: p.goal ?? '',
       effort: '', // never trusted from the LLM; buildPhaseEffort fills the numbers
-      dependsOn: p.dependsOn ?? [],
+      dependsOn: asArray(p.dependsOn),
       moduleNames: Array.isArray(p.moduleNames) ? p.moduleNames : undefined,
       isMvp: !!p.isMvp,
       mvpStatement:
         typeof p.mvpStatement === 'string' ? p.mvpStatement : undefined,
-      milestones: (p.milestones ?? []).map((m) => ({
+      milestones: asArray(p.milestones).map((m) => ({
         title: m.title,
         effort: '',
-        tasks: (m.tasks ?? []).map((t) => ({ title: t.title, detail: t.detail })),
+        tasks: asArray(m.tasks).map(toTask),
       })),
     }));
     return this.ensureMvp(phases, ctx);
@@ -213,8 +218,14 @@ export class RoadmapPlannerAgent extends BaseAgent {
     ctx: RoadmapContext,
   ): AlternativeRoadmaps | undefined {
     if (!ctx.requestDualRoadmap || !raw) return undefined;
-    const within = this.mapPhases(raw.withinDeadline, ctx);
-    const full = this.mapPhases(raw.fullScope, ctx);
+    // `isValid` gates on `phases` and never looks at this branch, so a malformed
+    // alternative reaches here unchecked — which is how the production crash
+    // happened: the prompt asks for `withinDeadline: phases[]` and the model
+    // answered `withinDeadline: { phases: [...] }`, an object that sailed past
+    // `?? []` and died on `.map`. `phasesOf` reads either shape, so the dual
+    // roadmap survives instead of being silently dropped.
+    const within = this.mapPhases(phasesOf(raw.withinDeadline), ctx);
+    const full = this.mapPhases(phasesOf(raw.fullScope), ctx);
     if (within.length === 0 || full.length === 0) return undefined;
     return {
       withinDeadline: ctx.effort ? buildPhaseEffort(within, ctx.effort) : within,
@@ -475,4 +486,52 @@ export class RoadmapPlannerAgent extends BaseAgent {
       ctx.databaseDesign.entities.length
     } entities: start with a thin end-to-end slice, then layer on supporting features, and finish with hardening and launch.`;
   }
+}
+
+/**
+ * Read a value that must be an array, tolerating both absent and MISTYPED.
+ *
+ * `?? []` only covers the first case. A real run crashed with
+ * `TypeError: (raw ?? []).map is not a function` because the model returned an
+ * object where the schema asked for a list — truthy, so the nullish coalesce
+ * passed it straight through to `.map`. Every array read on this untrusted
+ * payload goes through here.
+ */
+function asArray<T>(value: readonly T[] | undefined | null): T[];
+function asArray<T>(value: unknown): T[];
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+/**
+ * A phase list that may have arrived wrapped in an object.
+ *
+ * The schema asks for `withinDeadline: phases[]`, and a real completion returned
+ * `withinDeadline: { phases: [...] }` — a fair reading of a field *named*
+ * phases, and the content behind it was perfectly good. Unwrapping it recovers
+ * a whole alternative roadmap that would otherwise be discarded; anything else
+ * still reads as empty.
+ */
+function phasesOf(value: unknown): ProjectRoadmap['phases'] {
+  if (Array.isArray(value)) return value as ProjectRoadmap['phases'];
+  const wrapped = (value as { phases?: unknown } | null | undefined)?.phases;
+  return asArray<ProjectRoadmap['phases'][number]>(wrapped);
+}
+
+/**
+ * Coerce one task entry, which the model does not always shape consistently.
+ *
+ * Observed in a real (rejected) completion: a `tasks` array holding a mix of
+ * `{title}` objects and bare strings — `[{"title":"Support tag filter"},"Add
+ * pagination","Implement fuzzy matching"]`. Reading `.title` off a string
+ * yields `undefined`, so those tasks rendered blank in the roadmap. A string IS
+ * the title.
+ */
+function toTask(value: unknown): { title: string; detail?: string } {
+  if (typeof value === 'string') return { title: value };
+  const t = (value ?? {}) as { title?: unknown; detail?: unknown };
+  return {
+    title: typeof t.title === 'string' ? t.title : '',
+    ...(typeof t.detail === 'string' ? { detail: t.detail } : {}),
+  };
 }

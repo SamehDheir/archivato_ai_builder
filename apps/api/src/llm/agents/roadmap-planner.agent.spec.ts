@@ -62,6 +62,78 @@ function ctx(overrides: Partial<RoadmapContext> = {}): RoadmapContext {
   };
 }
 
+describe('RoadmapPlannerAgent — malformed model output', () => {
+  it('survives (and recovers) an alternative roadmap wrapped in an object', async () => {
+    // The production crash: `TypeError: (raw ?? []).map is not a function`.
+    // `isValid` gates on `phases` and never inspects `alternativeRoadmaps`, so
+    // this branch reached `.map` unchecked — and the prompt's
+    // `withinDeadline: phases[]` came back as `{ phases: [...] }`, an object
+    // that is truthy and therefore survived `?? []`.
+    const phase = (name: string) => ({
+      name,
+      goal: 'g',
+      dependsOn: [],
+      moduleNames: ['Booking'],
+      milestones: [{ title: 'M', tasks: [{ title: 't' }] }],
+    });
+    const mock = new MockLlmProvider();
+    mock.enqueueJson({
+      summary: 'plan',
+      phases: [phase('Core')],
+      alternativeRoadmaps: {
+        withinDeadline: { phases: [phase('Lean')] },
+        fullScope: { phases: [phase('Full')] },
+        excludedFromDeadline: ['Reporting'],
+      },
+    });
+
+    const roadmap = await new RoadmapPlannerAgent(mock).generate('s', {
+      ...ctx(),
+      requestDualRoadmap: true,
+    });
+
+    // It does not throw, and the alternative is kept rather than dropped.
+    expect(roadmap.alternativeRoadmaps?.withinDeadline[0].name).toBe('Lean');
+    expect(roadmap.alternativeRoadmaps?.fullScope[0].name).toBe('Full');
+  });
+
+  it('falls back when a phase list itself is mistyped', async () => {
+    // Here `isValid` is the one that catches it, and the deterministic build
+    // takes over — a complete roadmap beats a half-parsed one.
+    const mock = new MockLlmProvider();
+    mock.enqueueJson({ summary: 'plan', phases: { name: 'Core' } });
+
+    const roadmap = await new RoadmapPlannerAgent(mock).generate('s', ctx());
+    expect(roadmap.phases.length).toBeGreaterThan(0);
+    expect(roadmap.generation?.mode).toBe('fallback');
+  });
+
+  it('reads a bare string task as its title', async () => {
+    // Observed in a real rejected completion: tasks mixing {title} objects with
+    // bare strings. Reading `.title` off a string rendered the task blank.
+    const mock = new MockLlmProvider();
+    mock.enqueueJson({
+      summary: 'plan',
+      phases: [
+        {
+          name: 'Core',
+          goal: 'g',
+          dependsOn: [],
+          milestones: [
+            { title: 'M', tasks: [{ title: 'Support tag filter' }, 'Add pagination'] },
+          ],
+        },
+      ],
+    });
+
+    const roadmap = await new RoadmapPlannerAgent(mock).generate('s', ctx());
+    expect(roadmap.phases[0].milestones[0].tasks.map((t) => t.title)).toEqual([
+      'Support tag filter',
+      'Add pagination',
+    ]);
+  });
+});
+
 describe('RoadmapPlannerAgent (R10)', () => {
   it('computes phase week numbers in code and ignores any the LLM emits', async () => {
     const mock = new MockLlmProvider();
