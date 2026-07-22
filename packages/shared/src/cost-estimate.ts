@@ -13,6 +13,18 @@ import type { DerivedArtifact } from './freshness';
 import type { BudgetWarning, EffortEstimate } from './effort';
 import type { BuildVsBuyCapability, SystemDesign } from './system-design';
 import { resolveRegionKey, type RegionKey } from './region';
+import {
+  DEFAULT_ARTIFACT_LANGUAGE,
+  type ArtifactLanguage,
+} from './artifact-language';
+import {
+  providerFit,
+  providerRationale,
+  reconcileHosting,
+  type CostProjectProfile,
+  type HostingRecommendation,
+  type ProviderFit,
+} from './cost-estimate.hosting';
 
 /** The user scales we project a monthly bill at. */
 export const COST_USER_SCALES = [100, 1000, 10000] as const;
@@ -60,10 +72,27 @@ export interface ProviderEstimate {
   /** Display name, e.g. "Amazon Web Services". */
   name: string;
   model: CostHostingModel;
-  /** One-line positioning. */
+  /** One-line positioning. Genuinely static — what the platform *is*. */
   summary: string;
-  /** Where this provider shines for this workload. */
+  /**
+   * @deprecated Static marketing copy; superseded by `rationale`.
+   *
+   * It claimed to describe "where this provider shines for this workload" and
+   * never read the workload — a 1,000-user MVP was told Cloudflare suits
+   * "edge-first apps and heavy traffic". Still emitted so estimates stored
+   * before `rationale` existed keep rendering; every consumer should prefer
+   * `rationale` and fall back to this.
+   */
   bestFor: string;
+  /**
+   * Why this provider, for THIS project, from its own computed numbers
+   * (cost position at each scale, the category actually carrying the bill,
+   * external-DB and feasibility caveats). Optional/additive — absent on
+   * estimates stored before this existed.
+   */
+  rationale?: string;
+  /** Whether this provider can actually run the design (additive/optional). */
+  fit?: ProviderFit;
   /** true when the provider has no first-class managed DB (an external one is priced in). */
   externalDbNeeded: boolean;
   /** One entry per scale in `COST_USER_SCALES` order. */
@@ -88,8 +117,20 @@ export interface CostEstimate extends DerivedArtifact {
   providers: ProviderEstimate[];
   /** Cheapest provider id at each scale, keyed by the scale as a string. */
   cheapestByScale: Record<string, CostProviderId>;
-  /** Best overall value (lowest summed cost across all scales). */
+  /**
+   * Best overall value (lowest summed cost across all scales).
+   *
+   * Kept for back-compat and still purely arithmetic — it takes no account of
+   * whether the provider can host the design. **Prefer `hosting.provider`**,
+   * which is reconciled with the System Design and excludes infeasible hosts.
+   */
   recommended: CostProviderId;
+  /**
+   * The headline hosting recommendation, reconciled with the host the System
+   * Design already chose. Optional/additive — absent on estimates stored before
+   * this existed, in which case consumers fall back to `recommended`.
+   */
+  hosting?: HostingRecommendation;
   disclaimer: string;
   /**
    * Person-effort estimate (R9). Additive/optional — absent on pre-R9 stored
@@ -224,6 +265,14 @@ export function buildServiceCostLines(
 /** The design-derived inputs the estimator needs. */
 export interface CostEstimateInput extends CostWorkload {
   sessionId: string;
+  /**
+   * The project facts the reasoning is written from. Optional — with no profile
+   * the estimate still prices everything and simply reasons from the computed
+   * bill alone, which is what every caller did before this existed.
+   */
+  profile?: CostProjectProfile;
+  /** Language for the generated reasoning. Defaults to English. */
+  language?: ArtifactLanguage;
 }
 
 // --- Pricing model -----------------------------------------------------------
@@ -503,14 +552,53 @@ export function estimateCosts(
     architecture: input.architecture || 'modular_monolith',
   };
 
-  const providers: ProviderEstimate[] = PRICING.map((p) => ({
-    provider: p.id,
-    name: p.name,
-    model: p.model,
-    summary: p.summary,
-    bestFor: p.bestFor,
-    externalDbNeeded: !!p.externalDbNeeded,
+  const profile = input.profile ?? {};
+  const language = input.language ?? DEFAULT_ARTIFACT_LANGUAGE;
+  const runtime = profile.runtime ?? 'unknown';
+
+  const priced = PRICING.map((p) => ({
+    pricing: p,
     costs: COST_USER_SCALES.map((users) => providerCostAtScale(p, users, workload)),
+    fit: providerFit(p.id, p.model, runtime, language),
+  }));
+
+  // The comparison scale — the middle of the three. The headline reasoning has
+  // to speak about ONE bill, and the mid scale is the one a project is actually
+  // sized for: the low scale flatters providers with a free tier that runs out,
+  // and the high scale describes a future the client has not reached.
+  const compareIndex = Math.floor(COST_USER_SCALES.length / 2);
+  const cheapestAtCompare = priced
+    .filter((p) => p.fit.viable)
+    .reduce(
+      (best, p) =>
+        !best || p.costs[compareIndex].monthlyUsd < best.costs[compareIndex].monthlyUsd
+          ? p
+          : best,
+      null as (typeof priced)[number] | null,
+    );
+
+  const providers: ProviderEstimate[] = priced.map((p) => ({
+    provider: p.pricing.id,
+    name: p.pricing.name,
+    model: p.pricing.model,
+    summary: p.pricing.summary,
+    // Still emitted so a consumer reading a mix of old and new estimates has one
+    // field that is always present; `rationale` is what should be shown.
+    bestFor: p.pricing.bestFor,
+    rationale: providerRationale({
+      monthlyUsd: p.costs[compareIndex].monthlyUsd,
+      cheapestMonthlyUsd:
+        cheapestAtCompare?.costs[compareIndex].monthlyUsd ??
+        p.costs[compareIndex].monthlyUsd,
+      cost: p.costs[compareIndex],
+      fit: p.fit,
+      externalDbNeeded: !!p.pricing.externalDbNeeded,
+      profile,
+      language,
+    }),
+    fit: p.fit,
+    externalDbNeeded: !!p.pricing.externalDbNeeded,
+    costs: p.costs,
   }));
 
   // Cheapest provider at each scale.
@@ -523,7 +611,8 @@ export function estimateCosts(
     cheapestByScale[String(users)] = best.provider;
   });
 
-  // Best overall value = lowest summed monthly cost across all scales.
+  // Best overall value = lowest summed monthly cost across all scales. Retained
+  // unchanged for back-compat; `hosting` below is the reconciled answer.
   let recommended = providers[0];
   const total = (pe: ProviderEstimate) =>
     pe.costs.reduce((s, c) => s + c.monthlyUsd, 0);
@@ -531,12 +620,24 @@ export function estimateCosts(
     if (total(prov) < total(recommended)) recommended = prov;
   }
 
+  const hosting = reconcileHosting({
+    candidates: providers.map((p) => ({
+      provider: p.provider,
+      name: p.name,
+      monthlyUsd: p.costs[compareIndex].monthlyUsd,
+      fit: p.fit ?? { viable: true },
+    })),
+    chosenProvider: profile.chosenProvider ?? null,
+    language,
+  });
+
   return {
     workload,
     scales: [...COST_USER_SCALES],
     providers,
     cheapestByScale,
     recommended: recommended.provider,
+    ...(hosting ? { hosting } : {}),
     disclaimer:
       'Ballpark estimates from public list prices for planning only — not quotes. ' +
       'Actual costs vary with usage patterns, region, reserved/committed discounts, and free tiers.',

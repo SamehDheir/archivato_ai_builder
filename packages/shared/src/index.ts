@@ -42,6 +42,7 @@ export * from './roadmap';
 export * from './region';
 export * from './scoping-integrity';
 export * from './cost-estimate';
+export * from './cost-estimate.hosting';
 export * from './export';
 export * from './share';
 export * from './proposal';
