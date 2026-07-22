@@ -18,6 +18,7 @@ export * from './artifact-language';
 export * from './prompt-safety';
 export * from './effort';
 export * from './scale-tier';
+export * from './service-targets';
 export * from './requirements';
 export * from './system-design';
 export * from './decision-explanation';

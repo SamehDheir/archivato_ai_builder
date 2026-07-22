@@ -2117,6 +2117,51 @@ tsconfig and never needs shared's `dist`.
     `requirements.{executiveSummary,outOfScope,assumptionsAndOpenQuestions,
     impactIfWrong}` + `share.appendix.requirements` (EN+AR). Owner page shows all
     sections (`audience="full"`) with IDs demoted to muted mono reference text.
+- **Service targets (`service-targets.ts`) — a figure that appears twice is
+  resolved ONCE.** The Vision page promised *"SearchLatency — Average ≤1.5
+  seconds per query"* while the System Design's compliance table said *"95% of
+  dashboard/search <2s"*, for the same requirement, in the same package. The
+  cause was not a broken sync: **there was nothing to sync with.**
+  `ProductVisionContext` was `{idea, industry, scale, intent, summary}` — the
+  Product Manager was asked for "measurable success metrics" while holding no
+  requirement document, no NFRs, and not even the interview slots, so it invented
+  a number. The System Architect *does* receive the NFRs, which is exactly why
+  its figure tracked the requirement doc and the vision's did not.
+  The fix is the pattern already used for every other cross-artifact number
+  (`estimateCosts`, `buildEffortEstimate`, `assessScaleTier`): **a pure function
+  of a shared source.** `resolveServiceTargets(serviceTargetInput(session))`
+  returns `{latency, uptime, totalUsers, concurrentUsers}`, each carrying a
+  `source` of `stated | proposed | derived`. Six things not to undo:
+  1. **Derivation, not propagation.** The vision is a standalone stage that
+     legitimately runs *before* requirements exist, so threading the stored
+     requirement document into it would add an ordering dependency and a
+     staleness problem. Three stages calling one pure function on one input
+     cannot disagree, because none of them is deciding anything.
+  2. **A proposed figure is still a target.** With no stated latency the
+     resolver returns `{value: 2, source: 'proposed'}` — inventing a number is
+     fine (a scoping document has to commit), inventing it *twice* is the bug.
+     `DEFAULT_LATENCY_SECONDS` / `DEFAULT_UPTIME_PERCENT` are the one edit site.
+  3. **`serviceTargetInput` is exported and shared**, because the guarantee only
+     holds if every caller hands the resolver the *same text*. Three hand-rolled
+     assemblies would drift by one field and the figures would separate again.
+     It lives in `shared`, so no agent imports another agent.
+  4. **Total users and concurrent users are different keys with different
+     units.** *"Up to 1,000 users"* is a registered total; a stage rendered it as
+     *"1,000 concurrent active users"*, silently multiplying what the system is
+     sized for. The only path from one to the other runs through
+     `CONCURRENT_USER_RATIO` (10%) and **records itself** as an auditable
+     assumption the client is asked to confirm. Nothing ever relabels a total.
+  5. **The parser requires a response-time context word**, so "deliver within 6
+     weeks" is not read as a latency target (`parseBudget`'s "null, never a
+     guess"). Concurrency is detected in the gap between figure and noun and in a
+     clause-bounded window *after* it — never before it, which on the real
+     sentence *"4,000 concurrent users across 60,000 registered patients"* saw
+     the earlier "concurrent" and marked the registered total as concurrency.
+  6. **The requirement prompt's own example was teaching the bug.** It read
+     *"handles 10,000 concurrent users at peak"*, modelling a concurrency claim
+     as the natural way to state scale. An example is an instruction.
+  Pinned by `metric-consistency.spec.ts`, which asserts the vision's metric and
+  the NFR are **byte-identical**, not merely similar.
 - **Scale tier (`scale-tier.ts`) — the design agents never DECIDED how big the
   system was.** A client described *"a lightweight task and reminder board for
   small teams"*, stated 30–50 users at launch growing to 300–400, and received
