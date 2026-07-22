@@ -47,6 +47,12 @@ export class ProductVisionService {
       scale: session.input.scale,
       intent: session.intent,
       summary: session.summary,
+      // The slots are where the client's stated figures live. Without them the
+      // Product Manager had no number to quote and invented its own, which is
+      // how the vision's latency target came to contradict the requirement
+      // document's. This stage still depends on nothing but the session — the
+      // figures are derived, not read from another stage's artifact.
+      slots: session.slots ?? undefined,
     });
 
     return this.visions.upsert(vision);

@@ -4,8 +4,14 @@ import {
   extractionGapAssumption,
   isAssumptionKind,
   SLOT_KEYS,
+  parseLatencySeconds,
+  parseUptimePercent,
   regulationsForMarket,
+  resolveServiceTargets,
   screenRequirementDocument,
+  serviceTargetInput,
+  serviceTargetSentence,
+  serviceTargetsPromptBlock,
   transcriptSuggestsBusinessRules,
   unsourcedRoleAssumption,
   unsourcedRoleNames,
@@ -24,6 +30,7 @@ import {
   type RequirementAssumption,
   type RequirementDocument,
   type RequirementsSummary,
+  type ServiceTargets,
   type SlotMap,
   type SlotValue,
   type UserRole,
@@ -112,8 +119,18 @@ export class RequirementEngineerAgent extends BaseAgent {
     '"API" there. Phrase functional requirements in the user-outcome voice',
     '("Customers can track their orders in real time"), not "the system shall".',
     'The non-functional requirements, business rules and constraints may be',
-    'technical, and should use impact language ("handles 10,000 concurrent users',
-    'at peak") over standards language where the interview allows.',
+    'technical, and should use impact language ("pages respond in under two',
+    'seconds") over standards language where the interview allows.',
+    // The example here used to read "handles 10,000 concurrent users at peak",
+    // which taught the model the exact substitution described below: it modelled
+    // a concurrency claim as the natural way to state scale, so a stated total
+    // came back relabelled. An example is an instruction.
+    'Registered users and concurrent users are DIFFERENT quantities and must never',
+    'be swapped. "Up to 1,000 users" is a total registered-user count; writing it',
+    'as "1,000 concurrent users" silently multiplies the load the system is sized',
+    'for. State the client\'s figure with the meaning they gave it, and only call a',
+    'number concurrent when the client did, or when the agreed figures below give',
+    'you a concurrency figure explicitly derived for that purpose.',
     'Out-of-scope is a first-class section that protects the dev shop from scope',
     'creep: name 3–6 capabilities explicitly NOT included, drawn from what the',
     'interview raised then deferred AND from what a buyer typically expects in this',
@@ -167,13 +184,18 @@ export class RequirementEngineerAgent extends BaseAgent {
     // notes below are appended *after* it returns and compose their own
     // sentences. Both reads hit the same memoized thunk, so this is one lookup.
     const language = await this.artifactLanguage();
+    // The same pure resolution the Product Manager and the System Architect run.
+    // None of the three reads another's artifact; they agree because they all
+    // derive from the interview rather than each estimating for itself.
+    const targets = resolveServiceTargets(serviceTargetInput(ctx), language);
     const doc = await this.generateArtifact<RequirementDocument>({
       label: 'Requirement doc',
-      prompt: this.buildPrompt(ctx),
+      prompt: this.buildPrompt(ctx, targets),
       isValid: (raw) => this.isValid(raw),
       accept: (raw) =>
         this.normalize(sessionId, generatedAt, raw, ctx, openQuestions),
-      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      fallback: (lang) =>
+        this.buildDeterministic(sessionId, generatedAt, ctx, targets, lang),
       options: { maxTokens: REQUIREMENTS_MAX_TOKENS },
     });
 
@@ -337,7 +359,7 @@ export class RequirementEngineerAgent extends BaseAgent {
     ].join('\n');
   }
 
-  private buildPrompt(ctx: RequirementContext): string {
+  private buildPrompt(ctx: RequirementContext, targets: ServiceTargets): string {
     // The transcript is fenced as one block rather than per answer: every line of
     // it is either our question or the client's words, and a single fence is
     // harder to get wrong than one per turn.
@@ -384,6 +406,8 @@ export class RequirementEngineerAgent extends BaseAgent {
       `\nCapabilities buyers typically expect in this kind of product — list any NOT being built under outOfScope: ${commonScope.join(', ')}.`,
       this.complianceHint(ctx),
       '',
+      serviceTargetsPromptBlock(targets),
+      '',
       'Produce the Requirement Document as JSON with these keys:',
       '- executiveSummary: 3–4 plain sentences for a NON-TECHNICAL client — who the system serves, what it lets them do, and the business outcome. No technical jargon.',
       '- functional[]: {id (FR-n), title (short), description (a user-outcome sentence, e.g. "Customers can track their orders in real time" — never "the system shall…"), priority (must|should|could)}.',
@@ -396,6 +420,9 @@ export class RequirementEngineerAgent extends BaseAgent {
       '  Never resolve an open_question into a settled-sounding assumption. "Either Microsoft Teams or Slack will be used for notifications" is NOT an assumption — the client may use one, the other, or neither, and each answer is different integration work. Write it as the question it is.',
       '  If you must pick one to keep the design moving, say plainly in the text that it is a placeholder pending the client\'s choice, not a recommendation.',
       '- nonFunctional[]: {id (NFR-n), category (e.g. security, performance, scalability, availability, usability), description (a measurable quality attribute in impact language)}.',
+      '  Response-time, availability and user-volume requirements MUST use the',
+      '  agreed figures above verbatim — other documents in this package quote the',
+      '  same numbers, and a different one here is a contradiction the client sees.',
       '  Keep distinct measurements in SEPARATE requirements, each with its own unit',
       '  and time window. Throughput (orders per day), concurrency (simultaneous',
       '  users), latency (response time) and uptime are four different numbers —',
@@ -427,6 +454,8 @@ export class RequirementEngineerAgent extends BaseAgent {
     sessionId: string,
     generatedAt: string,
     ctx: RequirementContext,
+    targets: ServiceTargets,
+    language: ArtifactLanguage,
   ): RequirementDocument {
     const { summary } = ctx;
     const openQuestions = ctx.openQuestions ?? [];
@@ -458,6 +487,40 @@ export class RequirementEngineerAgent extends BaseAgent {
     // longer folded into `constraints`, so it would otherwise be dropped from
     // the offline document entirely.
     for (const s of summary.scale ?? []) addNfr('scalability', s);
+
+    // The shared figures, written from the resolved targets rather than restated
+    // in this method's own words. These are the sentences the Product Manager's
+    // metrics and the architect's compliance table also render, from the same
+    // resolution — so the three cannot disagree about a number.
+    //
+    // Skipped when a constraint above ALREADY states this figure: the constraint
+    // is the client's own wording of the same target, and emitting both would
+    // print one requirement twice in slightly different words — the duplication
+    // this document's own prompt calls its most visible defect.
+    const alreadyStated = (parse: (t: string) => number | null, value: number) =>
+      summary.constraints.some((c) => parse(c) === value);
+
+    if (targets.latency && !alreadyStated(parseLatencySeconds, targets.latency.value)) {
+      addNfr('performance', serviceTargetSentence(targets.latency, language));
+    }
+    if (targets.uptime && !alreadyStated(parseUptimePercent, targets.uptime.value)) {
+      addNfr('availability', serviceTargetSentence(targets.uptime, language));
+    }
+    // Concurrency is stated separately from the registered-user total, and when
+    // it was derived rather than stated the assumption travels with it — the
+    // client said how many users they have, not how many are online at once.
+    if (targets.concurrentUsers) {
+      addNfr(
+        'scalability',
+        [
+          serviceTargetSentence(targets.concurrentUsers, language),
+          targets.concurrentUsers.derivation ?? '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+    }
+
     addNfr(
       'security',
       'Sensitive data must be encrypted in transit and at rest; access is role-based.',

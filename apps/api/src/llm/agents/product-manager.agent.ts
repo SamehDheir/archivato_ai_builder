@@ -1,11 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
+  resolveServiceTargets,
+  serviceTargetInput,
+  serviceTargetsPromptBlock,
+  serviceTargetSentence,
+  type ArtifactLanguage,
   type IntentAnalysis,
   type Persona,
   type ProductVision,
   type ProjectScale,
   type RequirementsSummary,
+  type ServiceTargets,
+  type SlotMap,
   type SuccessMetric,
   untrustedField,
   screenProductVision,
@@ -20,6 +27,18 @@ export interface ProductVisionContext {
   scale?: ProjectScale;
   intent: IntentAnalysis | null;
   summary: RequirementsSummary | null;
+  /**
+   * The interview's slot snapshot — the source of every figure this stage quotes.
+   *
+   * Its absence was the whole bug. The context was `{idea, industry, scale,
+   * intent, summary}`, so the agent was asked for "measurable success metrics"
+   * while holding no number the client had stated and no artifact anyone else
+   * had committed to. It invented "≤1.5 seconds" while the requirement document
+   * said 2 — not a sync failure, but two independent guesses, because there was
+   * nothing to sync with. Optional, because legacy/plan-mode sessions carry no
+   * slots and every reader here tolerates that.
+   */
+  slots?: SlotMap;
 }
 
 /**
@@ -57,12 +76,20 @@ export class ProductManagerAgent extends BaseAgent {
     ctx: ProductVisionContext,
   ): Promise<ProductVision> {
     const generatedAt = new Date().toISOString();
+    // Resolved from the interview, not invented here — the same pure call the
+    // Requirement Engineer and the System Architect make, so all three quote one
+    // figure without any of them having to read another's artifact. The language
+    // is resolved up front and passed in so this agent's targets are identical to
+    // the Requirement Engineer's, derivation prose included.
+    const language = await this.artifactLanguage();
+    const targets = resolveServiceTargets(serviceTargetInput(ctx), language);
     const generated = await this.generateArtifact<ProductVision>({
       label: 'Product vision',
-      prompt: this.buildPrompt(ctx),
+      prompt: this.buildPrompt(ctx, targets),
       isValid: (raw) => this.isValid(raw),
       accept: (raw) => ({ ...(raw as ProductVision), sessionId, generatedAt }),
-      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      fallback: (language) =>
+        this.buildDeterministic(sessionId, generatedAt, ctx, targets, language),
     });
 
     // The vision leads the share page, so it is screened like the requirement
@@ -76,7 +103,10 @@ export class ProductManagerAgent extends BaseAgent {
     return vision;
   }
 
-  private buildPrompt(ctx: ProductVisionContext): string {
+  private buildPrompt(
+    ctx: ProductVisionContext,
+    targets: ServiceTargets,
+  ): string {
     return [
       untrustedField('Idea', ctx.idea),
       ctx.industry ? `Industry: ${ctx.industry}` : '',
@@ -86,6 +116,11 @@ export class ProductManagerAgent extends BaseAgent {
       ctx.summary ? `Goal: ${ctx.summary.goal}` : '',
       ctx.summary ? `Users: ${ctx.summary.users.join(', ')}` : '',
       ctx.summary ? `Features: ${ctx.summary.features.join(', ')}` : '',
+      ctx.summary?.scale?.length
+        ? `Stated scale: ${ctx.summary.scale.join('; ')}`
+        : '',
+      '',
+      serviceTargetsPromptBlock(targets),
       '',
       'Produce the product vision as JSON with these keys:',
       '- vision: one inspiring but concrete sentence — who it serves and the change it creates.',
@@ -93,6 +128,12 @@ export class ProductManagerAgent extends BaseAgent {
       '- mvp: the smallest end-to-end scope worth launching (list of capabilities).',
       '- futureFeatures: what is deliberately deferred to after the MVP.',
       '- successMetrics[]: {name, target (measurable), rationale (why it signals success)}.',
+      '  A metric about response time, availability or user volume MUST use the',
+      '  agreed figure above exactly — this list sits beside the requirement',
+      '  document and the architecture in one proposal, and a different number here',
+      '  reads as a second, contradictory promise. Metrics about adoption',
+      '  (activation, retention, engagement) have no agreed figure: choose targets',
+      '  that suit this product.',
       '- personas[]: {name, description, goals[], painPoints[]} — grounded in the real users above.',
     ]
       .filter(Boolean)
@@ -117,6 +158,8 @@ export class ProductManagerAgent extends BaseAgent {
     sessionId: string,
     generatedAt: string,
     ctx: ProductVisionContext,
+    targets: ServiceTargets,
+    language: ArtifactLanguage,
   ): ProductVision {
     const goal =
       ctx.summary?.goal || ctx.intent?.summary || ctx.idea;
@@ -131,7 +174,7 @@ export class ProductManagerAgent extends BaseAgent {
       goals: this.goals(goal, features),
       mvp,
       futureFeatures,
-      successMetrics: this.successMetrics(ctx),
+      successMetrics: this.successMetrics(ctx, targets, language),
       personas: this.personas(users, goal),
     };
   }
@@ -218,11 +261,25 @@ export class ProductManagerAgent extends BaseAgent {
     return { mvp, futureFeatures: future };
   }
 
-  private successMetrics(ctx: ProductVisionContext): SuccessMetric[] {
+  /**
+   * The offline metric set.
+   *
+   * Adoption metrics (activation, retention, engagement) are this stage's own to
+   * choose — no other artifact states them, so there is nothing to contradict.
+   * The performance and scale metrics are **not**: they restate a figure the
+   * requirement document and the architecture also quote, so they are rendered
+   * from the resolved targets rather than written here. A hardcoded "≤1.5s" in
+   * this method is precisely how the two pages came to disagree.
+   */
+  private successMetrics(
+    ctx: ProductVisionContext,
+    targets: ServiceTargets,
+    language: ArtifactLanguage,
+  ): SuccessMetric[] {
     const noun = ctx.intent?.domain
       ? `${ctx.intent.domain} teams`
       : 'active users';
-    return [
+    const metrics: SuccessMetric[] = [
       {
         name: 'Activation rate',
         target: '≥ 40% of signups complete the core workflow in week one',
@@ -239,13 +296,32 @@ export class ProductManagerAgent extends BaseAgent {
         target: '≥ 60% of users return in month two',
         rationale: 'Retention is the clearest measure of durable value.',
       },
-      {
-        name: 'Time saved',
-        target: 'Measurable reduction in time spent on the manual process',
-        rationale:
-          'Ties the product back to the concrete pain it was built to remove.',
-      },
     ];
+
+    if (targets.latency) {
+      metrics.push({
+        name: 'Responsiveness',
+        target: serviceTargetSentence(targets.latency, language),
+        rationale:
+          'The same response-time target the requirement document and the architecture are built around — a slower product loses the routine use the metrics above measure.',
+      });
+    }
+    if (targets.totalUsers) {
+      metrics.push({
+        name: 'Adoption against the stated scale',
+        target: serviceTargetSentence(targets.totalUsers, language),
+        rationale:
+          'Measures adoption against the scale the client actually stated, in registered users — the figure the rest of the package is sized to.',
+      });
+    }
+
+    metrics.push({
+      name: 'Time saved',
+      target: 'Measurable reduction in time spent on the manual process',
+      rationale:
+        'Ties the product back to the concrete pain it was built to remove.',
+    });
+    return metrics;
   }
 
   private personas(users: string[], goal: string): Persona[] {
@@ -270,6 +346,7 @@ export class ProductManagerAgent extends BaseAgent {
     return t.charAt(0).toLowerCase() + t.slice(1);
   }
 
+
   private titleCase(s: string): string {
     return s
       .trim()
@@ -278,3 +355,4 @@ export class ProductManagerAgent extends BaseAgent {
       .join(' ');
   }
 }
+

@@ -13,9 +13,12 @@ import {
   paymentAvailabilityFor,
   paymentProvidersFor,
   regulationsForMarket,
+  resolveServiceTargets,
   scaleEvidenceSummary,
   scaleTierPromptBlock,
   scaleTierRationale,
+  serviceTargetInput,
+  serviceTargetsPromptBlock,
   significantTokens,
   untrusted,
   type ArtifactLanguage,
@@ -374,6 +377,14 @@ export class SystemArchitectAgent extends BaseAgent {
       residencyLine(slotText(s, 'target_market')),
       paymentGuidanceLine(slotText(s, 'target_market')),
       '',
+      // The architect already received the NFRs, which is why its figures used to
+      // track the requirement document while the vision's did not. It gets the
+      // resolved targets too so all three quote one number rather than two of
+      // them happening to agree.
+      serviceTargetsPromptBlock(
+        resolveServiceTargets(serviceTargetInput({ slots: ctx.slots })),
+      ),
+      '',
       // The tier is decided in code and handed down as a verdict, not left to the
       // model to infer from the numbers above. Told only "here are some figures",
       // a model reliably reached for the enterprise stack it has seen most; told
@@ -423,6 +434,9 @@ export class SystemArchitectAgent extends BaseAgent {
       '  carries it rather than leaving it unmentioned.',
       '- buildVsBuy[]: {capability (one of auth|payments|notifications|file_storage|maps_geo|search), recommendation (build|buy), suggestedService (a concrete well-known service, when buying), rationale, impact (time/cost/risk)} — cover the capabilities this project needs.',
       '- constraintCompliance[]: {constraint, howAddressed} for each stated constraint (empty array if none).',
+      '  Where a row restates a response-time, availability or user-volume figure,',
+      '  use the agreed figure above verbatim. This table is read beside the',
+      '  requirement document and the product vision, which quote the same numbers.',
       '- phasedArchitecture (ONLY on the scale-vs-budget/timeline conflict): {mvp, growthPath, migrationNotes}.',
     ]
       .filter(Boolean)
