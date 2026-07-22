@@ -244,6 +244,55 @@ tsconfig and never needs shared's `dist`.
      `proceed-with-changes` / `needs-validation` / `high-risk`), because this
      product's user is a dev shop scoping a project the client already decided to
      build — see [docs/POSITIONING.md](docs/POSITIONING.md) §2.
+  10. **Named specifics need grounding the badge does not give them
+     (`stripUngroundedSpecifics`).** Re-running the analysis twice on the same
+     interview produced different competitor names, different regulatory claims
+     (a named `PDPL` "enforced by SDAIA", a `Ministry of X`, `Vision 2030`), and
+     different counts — all self-flagged "unverified", which was treated as a
+     *licence to fabricate a specific* rather than a warning not to. There is **no
+     web search in this pipeline** (the `LlmProvider` seam exposes only
+     `complete`/`completeJson`, no tool-use), so grounding a named law or regulator
+     is impossible — and the honest response to "cannot ground" is **omit the
+     specific, keep the category**, never print it dressed as researched. Two
+     layers, the `stripMetrics` split reused for names instead of numbers: the
+     **prompt** (`MARKET_HONESTY_RULES`, extended + pinned) bans naming a specific
+     law/regulator/ministry/initiative the client did not state, and the
+     **code backstop** (`stripUngroundedSpecifics`, pure/shared, runs at the agent
+     only — like `stripMetrics`, because only the agent has the interview text)
+     generalizes any that slip through **unless the interview vouches for them**.
+     Conservative by construction, because a false positive deletes the client's
+     own words: acronyms are a **closed allowlist** (GDPR/HIPAA/PDPL/… — never a
+     blanket uppercase strip, which would gut `SaaS`/`API`/`EHR`), government
+     bodies need a proper-noun head that is not a common-noun stopword ("Certificate
+     Authority" survives), groundedness is **containment** (every distinctive word
+     appears in what the client said — the `namesExcludedCapability` bar), and
+     Arabic ministries/initiatives are matched too (no `\b`, which is ASCII-only).
+     `screenUngroundedSpecifics` applies it across the market read + competitor
+     prose + verdict rationale and, when anything was generalized, adds one
+     research-checklist line so the swap is never silent. **Web-search grounding is
+     a documented seam** (`buildPrompt` names exactly where a `ResearchProvider`
+     plugs in and how it widens "grounded" from *the interview* to *the interview
+     plus verified results*) — flagged as a missing capability, not silently faked.
+  11. **The FACTS are pinned across re-runs; only the framing re-varies.** A
+     client-facing document whose competitor list and regulatory claims reshuffle
+     every regenerate is not one an owner can stand behind, and temperature is not
+     the lever — this call already runs at **temperature 0** on every provider, and
+     the residual drift is batched-inference non-determinism, not sampling. So the
+     stability is **structural**: `businessAnalysisInputsFingerprint` hashes the
+     grounding inputs (idea/industry/domain/goal/features/slot values, FNV-1a — no
+     crypto dep in runtime-free code); on a plain re-run of the same interview
+     `BusinessAnalysisService` calls the model but **carries the stored competitors
+     and market read over the fresh output** (`carryOverFacts`, re-deriving the
+     checklist), so the researched facts hold while problem/USP/verdict framing is
+     rewritten. **`?refreshFacts=true`** (`ParseBoolPipe`) is the one explicit way
+     to re-research and re-pin. Either way `diffBusinessAnalysisFacts` logs the
+     factual delta — `stable` when reuse held, else naming which competitors and
+     signals moved — so a change is surfaced, never silent. A pre-existing row has
+     no fingerprint, so it never matches and re-researches once, then pins — the
+     `sourceStamp`/`generation` "unstamped means unknown" rule. All additive/
+     optional on the JSON-blob artifact (`inputsFingerprint?`), migration-free.
+     Temperature is also passed **explicitly** in the agent (documents intent so a
+     provider-default change can't quietly raise it).
 - **Standalone stages** generate from the session but don't gate, and aren't
   gated by, the design chain; each has its own artifact table + owner-guarded
   controller and is not in version snapshots. `product-vision` needs only the
