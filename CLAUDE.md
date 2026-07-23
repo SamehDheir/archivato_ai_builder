@@ -3722,6 +3722,51 @@ tsconfig and never needs shared's `dist`.
   the full pipeline, so they sit early **disabled** until the API design exists.
   That's the honest read ("this is coming, and it's what matters") where burying
   them behind eight technical tabs said the opposite.
+  - **The rail is GROUPED into the four phases of a scoping job**
+    (`STAGE_GROUPS`): the source (Interview, unlabelled — it precedes the phases
+    rather than being one), **the deal**, **the build**, **assurance**,
+    **handoff**. Those groupings already existed *as comments*; eighteen items in
+    one flat 224px column made the owner hold the whole pipeline in their head to
+    find anything, while the seams that would have made it scannable were visible
+    only in the source. Modelled on `ADMIN_NAV`, which solved this shape for the
+    staff console. Six things not to undo:
+    1. **`TABS` is DERIVED from `STAGE_GROUPS`** (`flatMap`), never maintained
+       beside it — two hand-kept lists drift by one entry and the rail silently
+       drops a stage. The order is byte-identical to the flat list it replaced,
+       so R12's ordering is untouched; only the seams became visible. Pinned by a
+       test asserting the full 18-item order.
+    2. **`EveryStageIsGrouped` is a compile-time exhaustiveness check.** A stage
+       added to `TabKey` and wired up everywhere else would still be **invisible**
+       if nobody put it in a group, and that failure has no runtime symptom — the
+       tab is simply absent, so the feature reads as unbuilt rather than broken.
+       The `extends never` form is deliberate: it fails as `Type '"canvas"' does
+       not satisfy the constraint 'never'`, **naming** the stage, where a boolean
+       assertion would only say `'true' is not assignable to 'never'`. Verified in
+       both directions — removing a stage from a group does fail the build.
+    3. **The headings are `md:` only.** On mobile the same list is a horizontal
+       scrolling strip, where a heading would eat scarce inline space and sit
+       *beside* the items it labels — grouping that reads as another tab. The
+       strip is byte-unchanged; headings appear only once the rail is a column.
+    4. **`role="presentation"` + `aria-hidden` keeps the `role="tablist"` valid.**
+       ARIA requires a tablist's children to be tabs, and a screen reader
+       announcing "THE BUILD" between two tabs is reading furniture. Radix's
+       roving focus only tracks registered triggers, so arrow-key navigation skips
+       them without being told to.
+    5. **It is still a Radix `TabsList`.** The file already warns that rebuilding
+       this as a bespoke nav would quietly break the unmount-of-inactive-
+       `TabsContent` behaviour every panel's fetch-on-mount depends on. The
+       grouping is interleaved children, not a new primitive.
+    6. **An empty group renders no heading** — defensive, and honest about it: no
+       group empties today (Assurance holds both optional stages but keeps Review
+       when they are off). It guards the next optional stage, not a case that
+       exists now.
+  - **`jest.setup.ts` stubs `window.matchMedia`** for the same reason it stubs
+    `scrollIntoView`: jsdom has no layout, so accessing it *throws* rather than
+    reporting a non-match, and components that branch on a breakpoint read it in
+    an effect (`useIsDesktop`) — so the failure lands as an unrelated render error
+    in whatever test mounts them. It reports **no match**, which is the meaningful
+    default; a stub claiming every query matches would silently put every
+    component under test into its desktop branch.
 - **The export surface is organised by AUDIENCE, not by file format (R12).**
   `ExportView` = two primary cards — **Send to client** (`shareApi.create`,
   idempotent, copies the link) and **Hand off to your team** (the existing

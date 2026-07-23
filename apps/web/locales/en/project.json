@@ -110,6 +110,12 @@
   },
   "nav": {
     "requires": "Requires {{stage}} first",
-    "done": "Completed"
+    "done": "Completed",
+    "group": {
+      "deal": "The deal",
+      "build": "The build",
+      "assurance": "Assurance",
+      "handoff": "Handoff"
+    }
   }
 }

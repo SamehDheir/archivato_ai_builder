@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowRight,
@@ -118,6 +118,112 @@ function useIsDesktop(): boolean {
   return desktop;
 }
 
+interface StageGroup {
+  key: string;
+  /**
+   * i18n key under `project.nav.group.*`, or **null for a group that renders no
+   * heading**. The source group is the only one: a single item under a label
+   * would be a heading explaining one thing, and it reads as the start of the
+   * list rather than as a section of it.
+   */
+  labelKey: string | null;
+  items: readonly { value: TabKey; icon: LucideIcon }[];
+}
+
+/**
+ * The stage rail's structure: four phases of a scoping job, in the order an
+ * owner works through them.
+ *
+ * These groupings already existed here — as comments. Eighteen items rendered as
+ * one flat 224px column asked the owner to hold the whole pipeline in their head
+ * to find anything, and the phase boundaries that would have made it scannable
+ * were visible only to whoever was reading the source. Promoting them from
+ * comments to data is the entire change; the ORDER below is byte-identical to
+ * the flat list it replaces, so nothing moved — the seams just became visible.
+ *
+ * Modelled on `ADMIN_NAV`, which already solved this shape for the staff console.
+ */
+const STAGE_GROUPS = [
+  {
+    // The source: the client's own words, which everything below is derived
+    // from. First because it is what an owner reaches for when a client disputes
+    // what was agreed — and because it is the one tab that is never generated,
+    // never gated, and never stale. It does not compete with the deal ordering
+    // below; it precedes it, which is why it sits outside the labelled sections.
+    key: 'source',
+    labelKey: null,
+    items: [{ value: 'interview', icon: Mic }],
+  },
+  {
+    // What the client reads and decides on.
+    key: 'deal',
+    labelKey: 'deal',
+    items: [
+      { value: 'business', icon: Compass },
+      { value: 'vision', icon: Sparkles },
+      { value: 'requirements', icon: FileText },
+      { value: 'cost', icon: Coins },
+      { value: 'roadmap', icon: Flag },
+    ],
+  },
+  {
+    // How the team delivers it.
+    key: 'build',
+    labelKey: 'build',
+    items: [
+      { value: 'system', icon: Network },
+      { value: 'database', icon: DatabaseIcon },
+      { value: 'api', icon: Webhook },
+      { value: 'apidocs', icon: BookOpen },
+      { value: 'diagrams', icon: Workflow },
+      { value: 'canvas', icon: Shapes },
+    ],
+  },
+  {
+    // Evidence the design holds up. Both optional stages live here, so this is
+    // the group that can empty out — see `StageNav`.
+    key: 'assurance',
+    labelKey: 'assurance',
+    items: [
+      { value: 'review', icon: ClipboardCheck },
+      { value: 'threat', icon: ShieldAlert },
+      { value: 'qa', icon: FlaskConical },
+    ],
+  },
+  {
+    // Getting it out of the building, and what happens after.
+    key: 'handoff',
+    labelKey: 'handoff',
+    items: [
+      { value: 'export', icon: Download },
+      { value: 'refine', icon: MessageSquare },
+      { value: 'history', icon: History },
+    ],
+  },
+  // `satisfies` rather than a type annotation: the annotation would widen every
+  // `value` back to `TabKey` and make the exhaustiveness check below vacuous.
+] satisfies readonly StageGroup[];
+
+/**
+ * Compile-time proof that the rail lists every stage.
+ *
+ * The rail is built from groups now, so a stage added to `TabKey` and wired up
+ * everywhere else — panel, gating, i18n — would still be **invisible** if nobody
+ * put it in a group. That failure has no runtime symptom to catch: the tab is
+ * simply absent, so the feature reads as unbuilt rather than broken, and no test
+ * that doesn't already know the stage exists can miss it.
+ *
+ * The `extends never` constraint is what makes the message useful — it fails as
+ * `Type '"canvas"' does not satisfy the constraint 'never'`, naming the stage.
+ * A boolean assertion would only say `'true' is not assignable to 'never'`,
+ * which tells you something is wrong and nothing about what. Verified in both
+ * directions: removing a stage from a group does fail the build.
+ */
+type GroupedStage = (typeof STAGE_GROUPS)[number]['items'][number]['value'];
+export type EveryStageIsGrouped<
+  Ungrouped extends never = Exclude<TabKey, GroupedStage>,
+> = Ungrouped;
+
 /**
  * Tab order + icons (drives the tab bar). Labels come from `project.tab.*`.
  *
@@ -132,35 +238,18 @@ function useIsDesktop(): boolean {
  * they sit here disabled until the API design exists — a locked tab early in the
  * list is the honest read (it says "this is coming, and it's what matters"),
  * where burying them behind eight technical tabs said the opposite.
+ *
+ * **Derived from `STAGE_GROUPS`, never maintained beside it.** Two hand-kept
+ * lists would drift by one entry and the rail would silently drop a stage — the
+ * flattening is what makes the grouping presentational rather than a second
+ * source of truth.
  */
-const TABS: { value: TabKey; icon: LucideIcon }[] = [
-  // The source: the client's own words, which everything below is derived from.
-  // First because it is what an owner reaches for when a client disputes what
-  // was agreed — and because it is the one tab that is never generated, never
-  // gated, and never stale. It does not compete with the deal ordering below;
-  // it precedes it.
-  { value: 'interview', icon: Mic },
-  // The deal: what the client reads and decides on.
-  { value: 'business', icon: Compass },
-  { value: 'vision', icon: Sparkles },
-  { value: 'requirements', icon: FileText },
-  { value: 'cost', icon: Coins },
-  { value: 'roadmap', icon: Flag },
-  // The build: how the team delivers it.
-  { value: 'system', icon: Network },
-  { value: 'database', icon: DatabaseIcon },
-  { value: 'api', icon: Webhook },
-  { value: 'apidocs', icon: BookOpen },
-  { value: 'diagrams', icon: Workflow },
-  { value: 'canvas', icon: Shapes },
-  // Assurance, then handoff.
-  { value: 'review', icon: ClipboardCheck },
-  { value: 'threat', icon: ShieldAlert },
-  { value: 'qa', icon: FlaskConical },
-  { value: 'export', icon: Download },
-  { value: 'refine', icon: MessageSquare },
-  { value: 'history', icon: History },
-];
+const TABS: { value: TabKey; icon: LucideIcon }[] = STAGE_GROUPS.flatMap(
+  // The return annotation is load-bearing: without it `flatMap` infers its
+  // element type from the FIRST group alone (whose only `value` is the literal
+  // `'interview'`) and rejects every other group.
+  (group): { value: TabKey; icon: LucideIcon }[] => [...group.items],
+);
 
 /**
  * The stages a project can switch off (R12). Hidden from the nav — not disabled —
@@ -1070,6 +1159,20 @@ export function ProjectStages({
  *   current — the accent bar
  *   locked  — dimmed + a tooltip naming the missing prerequisite
  *   pro     — a lock badge; a plan problem, not a progress one
+ *
+ * **The section headings are desktop-only and invisible to assistive tech**, and
+ * both halves are deliberate:
+ *
+ * - On mobile this same list is a horizontal scrolling strip, where a heading
+ *   would consume scarce inline space and sit *beside* the items it labels
+ *   rather than above them — grouping that reads as another tab. So the strip is
+ *   left exactly as it was; the headings appear only once the rail is a column.
+ * - `role="presentation"` + `aria-hidden` keeps the `role="tablist"` valid.
+ *   ARIA requires a tablist's children to be tabs, and a screen reader announcing
+ *   "THE BUILD" between two tabs would be reading furniture. The grouping is a
+ *   visual scanning aid; the tab list itself is unchanged, still complete, and
+ *   still in the same order. Radix's roving focus only tracks registered
+ *   triggers, so arrow-key navigation skips these without being told to.
  */
 function StageNav({
   tabs,
@@ -1092,6 +1195,59 @@ function StageNav({
   isPro: boolean;
 }) {
   const { t } = useTranslation('project');
+  // `tabs` is the caller's already-filtered list (extended stages can be off),
+  // so the groups are intersected with it rather than re-deriving the filter —
+  // one place decides what is visible, this one decides how it is laid out.
+  const visible = new Set(tabs.map((tab) => tab.value));
+
+  const renderTrigger = ({
+    value,
+    icon: Icon,
+  }: {
+    value: TabKey;
+    icon: LucideIcon;
+  }) => {
+    const locked = !isPro && PRO_TABS.has(value);
+    // Locked-but-unreachable tabs stay clickable so the click can open the
+    // upgrade modal (Radix disables un-clickable triggers).
+    const opensModal = locked && !available[value];
+    const blocked = !available[value] && !opensModal;
+    const requires = REQUIRES[value];
+
+    return (
+      <TabsTrigger
+        key={value}
+        value={value}
+        disabled={blocked}
+        title={
+          blocked && requires
+            ? t('nav.requires', { stage: t(`tab.${requires}`) })
+            : undefined
+        }
+        className={cn(
+          'shrink-0 justify-start gap-2 md:w-full',
+          locked && 'opacity-80',
+        )}
+      >
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{t(`tab.${value}`)}</span>
+        <span className="ms-auto flex items-center gap-1">
+          {done[value] && (
+            <CheckCircle2
+              className={cn(
+                'h-3 w-3',
+                // On the active (accent-filled) trigger the check has to sit
+                // on the accent, not on the page.
+                value === active ? 'text-primary-foreground' : 'text-success',
+              )}
+              aria-label={t('nav.done')}
+            />
+          )}
+          {locked && <Lock className="h-3 w-3 opacity-70" aria-label={t('pro')} />}
+        </span>
+      </TabsTrigger>
+    );
+  };
 
   return (
     <TabsList
@@ -1103,48 +1259,27 @@ function StageNav({
         'md:top-20 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:shadow-none',
       )}
     >
-      {tabs.map(({ value, icon: Icon }) => {
-        const locked = !isPro && PRO_TABS.has(value);
-        // Locked-but-unreachable tabs stay clickable so the click can open the
-        // upgrade modal (Radix disables un-clickable triggers).
-        const opensModal = locked && !available[value];
-        const blocked = !available[value] && !opensModal;
-        const requires = REQUIRES[value];
+      {STAGE_GROUPS.map((group) => {
+        const items = group.items.filter((item) => visible.has(item.value));
+        // Defensive, and honest about it: no group empties today (Assurance
+        // holds both optional stages but keeps Review when they are off). It
+        // guards the next optional stage rather than a case that exists now — a
+        // heading floating over nothing is the kind of thing that ships.
+        if (items.length === 0) return null;
 
         return (
-          <TabsTrigger
-            key={value}
-            value={value}
-            disabled={blocked}
-            title={
-              blocked && requires
-                ? t('nav.requires', { stage: t(`tab.${requires}`) })
-                : undefined
-            }
-            className={cn(
-              'shrink-0 justify-start gap-2 md:w-full',
-              locked && 'opacity-80',
+          <Fragment key={group.key}>
+            {group.labelKey && (
+              <div
+                role="presentation"
+                aria-hidden="true"
+                className="hidden select-none px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground first:pt-1 md:block"
+              >
+                {t(`nav.group.${group.labelKey}`)}
+              </div>
             )}
-          >
-            <Icon className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{t(`tab.${value}`)}</span>
-            <span className="ms-auto flex items-center gap-1">
-              {done[value] && (
-                <CheckCircle2
-                  className={cn(
-                    'h-3 w-3',
-                    // On the active (accent-filled) trigger the check has to sit
-                    // on the accent, not on the page.
-                    value === active ? 'text-primary-foreground' : 'text-success',
-                  )}
-                  aria-label={t('nav.done')}
-                />
-              )}
-              {locked && (
-                <Lock className="h-3 w-3 opacity-70" aria-label={t('pro')} />
-              )}
-            </span>
-          </TabsTrigger>
+            {items.map(renderTrigger)}
+          </Fragment>
         );
       })}
     </TabsList>
