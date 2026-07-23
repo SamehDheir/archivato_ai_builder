@@ -4,8 +4,10 @@ import {
   MEANINGFUL_SAVING_USD,
   providerFit,
   reconcileHosting,
+  resolveHostingChoice,
   runtimeStyleFromDesign,
   type CostEstimateInput,
+  type CostProviderId,
   type SystemDesign,
 } from '@archivato/shared';
 
@@ -72,6 +74,32 @@ describe('reading the System Design hosting choice', () => {
     expect(hostingChoiceFromDesign(null)).toBeNull();
   });
 
+  it('separates "named no host" from "named a host we do not price"', () => {
+    // The distinction the old nullable provider id could not express, and the
+    // whole reason the Azure project was told no hosting decision existed.
+    expect(resolveHostingChoice(design([['backend', 'NestJS']]))).toEqual({
+      kind: 'none',
+    });
+    expect(resolveHostingChoice(null)).toEqual({ kind: 'none' });
+    expect(
+      resolveHostingChoice(
+        design([['hosting', 'Contoso Regional Cloud (Amman datacentre)']]),
+      ),
+    ).toEqual({
+      kind: 'unpriced',
+      label: 'Contoso Regional Cloud (Amman datacentre)',
+    });
+  });
+
+  it('does not read a runtime in a "platform" row as a chosen host', () => {
+    // `platform` stays a hosting layer for provider-name matching but is not
+    // evidence on its own — otherwise `platform: Node.js 20` would be reported
+    // as an unpriced hosting choice and suppress the recommendation entirely.
+    expect(resolveHostingChoice(design([['platform', 'Node.js 20 LTS']]))).toEqual({
+      kind: 'none',
+    });
+  });
+
   it('reads an unrecognised stack as an unknown runtime, excluding nothing', () => {
     expect(runtimeStyleFromDesign(design([['backend', 'Bespoke runtime']]))).toBe(
       'unknown',
@@ -110,7 +138,7 @@ describe('the per-provider "why" is generated from the project', () => {
         scaleTier: 'small',
         totalUsers: 1000,
         concurrentUsers: 100,
-        chosenProvider: 'render',
+        chosenHosting: { kind: 'priced', provider: 'render' },
         runtime: 'long-running',
       },
     });
@@ -153,14 +181,16 @@ describe('the per-provider "why" is generated from the project', () => {
 });
 
 describe('reconciliation with the System Design', () => {
-  const est = (chosen: ReturnType<typeof hostingChoiceFromDesign>) =>
+  const est = (chosen: CostProviderId | null) =>
     estimateCosts({
       ...smallMvp,
       profile: {
         scaleTier: 'small',
         totalUsers: 1000,
         concurrentUsers: 100,
-        chosenProvider: chosen,
+        chosenHosting: chosen
+          ? { kind: 'priced' as const, provider: chosen }
+          : { kind: 'none' as const },
         runtime: 'long-running',
       },
     });
@@ -193,7 +223,10 @@ describe('reconciliation with the System Design', () => {
       services: 14,
       entities: 40,
       endpoints: 180,
-      profile: { chosenProvider: 'heroku', runtime: 'long-running' },
+      profile: {
+        chosenHosting: { kind: 'priced', provider: 'heroku' },
+        runtime: 'long-running',
+      },
     });
     const alt = e.hosting?.alternative;
 
@@ -212,7 +245,10 @@ describe('reconciliation with the System Design', () => {
       services: 14,
       entities: 40,
       endpoints: 180,
-      profile: { chosenProvider: 'heroku', runtime: 'long-running' },
+      profile: {
+        chosenHosting: { kind: 'priced', provider: 'heroku' },
+        runtime: 'long-running',
+      },
     });
     const alt = e.hosting!.alternative!;
     const provider = e.providers.find((p) => p.provider === alt.provider)!;
@@ -232,7 +268,7 @@ describe('reconciliation with the System Design', () => {
             fit: { viable: false, note: 'no' },
           },
         ],
-        chosenProvider: null,
+        chosen: { kind: 'none' },
       }),
     ).toBeNull();
   });

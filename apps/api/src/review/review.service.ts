@@ -7,6 +7,7 @@ import {
 import {
   buildConsistencyFindings,
   buildEffortEstimate,
+  resolveHostingChoice,
   upstreamStamp,
   type ReviewReport,
 } from '@archivato/shared';
@@ -139,6 +140,12 @@ export class ReviewService {
       constraintCompliance: systemDesign.constraintCompliance,
       buildVsBuy: systemDesign.buildVsBuy,
       serviceSubscriptions: costEstimate?.serviceSubscriptions,
+      // Cross-stage hosting agreement. The design's choice is re-read here
+      // rather than taken from the estimate, so a *stale* estimate built against
+      // a host the architecture has since changed is caught — which is the only
+      // way this can still drift now that the reconciliation is fixed.
+      designHosting: resolveHostingChoice(systemDesign),
+      costHosting: costEstimate?.hosting ?? null,
       outOfScope: requirements.outOfScope,
       promisedCapabilities,
       // These findings wrap values the model wrote (a constraint sentence, an

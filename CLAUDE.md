@@ -372,9 +372,72 @@ tsconfig and never needs shared's `dist`.
        swap — offering it would be a fresh instance of the same bug.
     5. **The System Design's choice wins ties** (`MEANINGFUL_SAVING_USD`): it was
        made against budget and timeline this function cannot see, so a few
-       dollars is not grounds to reopen it. `hostingChoiceFromDesign` reads the
+       dollars is not grounds to reopen it. `resolveHostingChoice` reads the
        **technology field only, never the rationale** — architect rationales name
        the *rejected* alternative.
+  - **A nullable provider id was answering two questions, and that shipped a
+    false claim (`HostingChoice`).** A project whose System Design chose **Azure
+    App Service (Linux) – Jordan region** — justified by data residency, and
+    confirmed again in its Roadmap — got a comparison across eight providers
+    containing no Azure, headlining **Fly.io** as best value and explaining
+    itself with *"The System Design did not name a host we price, so Fly.io is
+    shown as the lowest-cost option."* Nothing errored; the sentence was simply
+    false, and it was sitting in the database. The plumbing was already right —
+    `CostEstimateService` loads the design and passes its hosting choice through
+    — but the choice travelled as `CostProviderId | null`, and `null` meant both
+    *"the design named no host"* (where falling back to the cheapest is correct)
+    and *"the design named a host outside our table"* (where it discards a
+    decision made on constraints this function cannot see, then denies the
+    decision exists). Six things not to undo:
+    1. **The state is a discriminated union, not a nullable id.**
+       `priced | unpriced | none`, so the "no host was named" copy is reachable
+       **only** from `none`. Widening the pricing table fixed Azure; making the
+       state explicit is what stops the *class*, because a design can always name
+       a host nobody has priced — a regional cloud, a local datacentre, on-prem.
+       Pinned by a test asserting that sentence never appears for a design that
+       named something.
+    2. **There are FOUR outcomes, and each gets its own sentence.**
+       `system-design` · `design-unpriced` · `design-not-viable` · `cheapest-viable`.
+       The last three all mean "the design's host is not the headline" and are
+       three different things to tell an owner; collapsing them is what made an
+       admission read as a recommendation. An unpriced host still leads the card
+       **in the design's own wording** (`chosenLabel` — "Microsoft Azure" loses
+       the region, which was the load-bearing part).
+    3. **Azure, Google Cloud and a self-managed VPS are priced.** Listing AWS but
+       not the other two of the global top three was never defensible, and a
+       table that omits a provider does not get to conclude it was not chosen.
+       `vps` carries a permanent `fit.caveat` because its bill excludes the
+       operations labour every managed provider here includes — it can be the
+       primary when the design chose it, but it is never the "switch and save"
+       pitch, which would price a team's ops work at zero. The **cheapest-viable
+       fallback now prefers an uncaveated host** for the same reason.
+    4. **A compliance-driven choice is flagged, not overruled
+       (`hostingConstraintFromDesign`).** Residency/locality language anywhere in
+       the design's reasoning — or a hosting row pinned to a place — emits a
+       `constraintNote` saying any switch has to clear it. The whole stack is the
+       haystack because on the real project the hosting row talked about SLAs
+       while *"Meets data-residency requirement"* sat on the **database** row.
+       It **asserts nothing about other providers' regions** (unverifiable); it
+       tells the owner to check. The cheaper alternative is still shown — the
+       point is an informed decision, not a hidden one. Arabic is matched with no
+       `\b` (ASCII-only, never fires next to Arabic script).
+    5. **`runtimeStyleFromDesign` ignores the hosting rows when testing for
+       serverless.** Otherwise feasibility is circular — `hosting: Cloudflare
+       Workers` would make the design "serverless", which makes Cloudflare
+       viable, the provider under evaluation vouching for itself. Long-running
+       detection still reads the whole stack: a framework name is a statement
+       about the *application* wherever it appears.
+    6. **`constraintNote` quotes the requirement document, never the interview
+       `constraints` slot.** It crosses onto the public share page, and the raw
+       transcript never leaves the session. Nothing is lost — `summaryFromSlots`
+       already feeds that slot into those constraints — the public payload just
+       quotes the vetted artifact.
+    A **fifth automated consistency finding** (`buildConsistencyFindings`)
+    compares the design's host against the stored estimate's headline and fires
+    on a mismatch, an unpriceable host, or an infeasible one. It re-reads the
+    design rather than trusting the estimate, so it catches the one drift the
+    reconciliation cannot: a **stale** estimate built before the architecture
+    changed host. Silent when they agree, and when the design named nothing.
 - **Project economics — effort + budget + service subscriptions (R9).** The cost
   stage grew from "monthly hosting bill" into full project economics, still
   **100% deterministic (zero LLM calls)** — all new math is pure functions in

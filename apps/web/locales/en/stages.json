@@ -335,7 +335,11 @@
       "fromDesign": "Recommended host",
       "alternative": "Cheaper alternative:",
       "selected": "Selected in System Design",
-      "notViable": "Not viable for this design"
+      "notViable": "Not viable for this design",
+      "unpriced": "Chosen host — not priced here",
+      "notViableChoice": "Chosen host cannot run this design",
+      "chosenIs": "System Design chose:",
+      "constraint": "Compliance check before switching:"
     }
   },
   "export": {

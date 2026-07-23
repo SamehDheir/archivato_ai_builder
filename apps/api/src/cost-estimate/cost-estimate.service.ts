@@ -10,8 +10,9 @@ import {
   buildEffortEstimate,
   buildServiceCostLines,
   estimateCosts,
-  hostingChoiceFromDesign,
+  hostingConstraintFromDesign,
   REFERENCE_RATES,
+  resolveHostingChoice,
   resolveServiceTargets,
   runtimeStyleFromDesign,
   serviceTargetInput,
@@ -122,14 +123,40 @@ export class CostEstimateService {
     // and the service subscriptions) — the hosting decision simply never read
     // it, which is how the Cost tab came to crown a provider the architecture
     // had already passed over.
+    //
+    // `resolveHostingChoice` replaces the old nullable provider id. That id
+    // could not tell "the design named no host" apart from "the design named a
+    // host our table has no column for", so an Azure-hosted project was reported
+    // as having made no hosting decision at all. It is read here, at the one
+    // place that builds an estimate, so every project gets it — including the
+    // SSE stream, which calls this same method.
     const targets = resolveServiceTargets(
       serviceTargetInput({ slots: session.slots, summary: session.summary }),
+    );
+    // The requirement document's constraints join the design's, because a
+    // residency rule is usually stated by the client long before it reaches a
+    // tech-stack rationale, and it is the client's own wording the owner has to
+    // answer for.
+    //
+    // **The interview `constraints` slot is deliberately NOT a source.** The
+    // resulting `constraintNote` is quoted into `CostEstimate.hosting`, which
+    // crosses onto the public share page — and the raw transcript never leaves
+    // the session, by design. The requirement document is the reviewed artifact
+    // the owner chose to send (R7 already puts its constraints in the share
+    // page's technical appendix), so quoting from it exposes nothing new; the
+    // slot is a derived cache of what was said in the room. Nothing is lost in
+    // practice, since `summaryFromSlots` feeds that slot into these very
+    // constraints — this just makes the public payload quote the vetted copy.
+    const hostingConstraint = hostingConstraintFromDesign(
+      systemDesign,
+      requirements?.constraints ?? [],
     );
     const profile: CostProjectProfile = {
       scaleTier: systemDesign.scaleTier,
       totalUsers: targets.totalUsers?.value ?? null,
       concurrentUsers: targets.concurrentUsers?.value ?? null,
-      chosenProvider: hostingChoiceFromDesign(systemDesign),
+      chosenHosting: resolveHostingChoice(systemDesign),
+      hostingConstraint,
       runtime: runtimeStyleFromDesign(systemDesign),
     };
 

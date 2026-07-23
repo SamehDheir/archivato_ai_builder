@@ -11,6 +11,7 @@ import {
   HardDrive,
   Lock,
   Server,
+  ShieldAlert,
   Sparkles,
   Wifi,
   type LucideIcon,
@@ -22,6 +23,7 @@ import {
   type CostEstimate,
   type CostHostingModel,
   type EffortEstimate,
+  type HostingRecommendationSource,
   type ProviderEstimate,
   type ServiceCostLine,
 } from '@archivato/shared';
@@ -38,6 +40,21 @@ const CATEGORY_ICON: Record<CostCategory, LucideIcon> = {
   bandwidth: Wifi,
   storage: HardDrive,
   platform: Boxes,
+};
+
+/**
+ * What the highlighted card is claiming, per reconciliation outcome.
+ *
+ * Four headings for four different statements, because collapsing them is what
+ * shipped the bug: a project hosting on Azure was shown "Best value: Fly.io",
+ * which reads as a recommendation when it was really an admission that the
+ * chosen host was missing from the table.
+ */
+const HOSTING_HEADINGS: Record<HostingRecommendationSource, string> = {
+  'system-design': 'cost.hosting.fromDesign',
+  'design-unpriced': 'cost.hosting.unpriced',
+  'design-not-viable': 'cost.hosting.notViableChoice',
+  'cheapest-viable': 'cost.bestValue',
 };
 
 /**
@@ -137,16 +154,32 @@ export function CostView({
         <div className="mb-5 rounded-lg border border-primary/30 bg-primary/5 p-4">
           <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
             <Sparkles className="h-3.5 w-3.5" />
-            {estimate.hosting?.source === 'system-design'
-              ? t('cost.hosting.fromDesign')
-              : t('cost.bestValue')}
+            {t(HOSTING_HEADINGS[estimate.hosting?.source ?? 'cheapest-viable'])}
           </div>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="text-base font-semibold">
-              {recommendedProvider.name}
-            </span>
-            <ModelBadge model={recommendedProvider.model} />
-          </div>
+          {/* When the headline is NOT the design's host, the design's own choice
+              leads — the decision the architecture made is the thing the owner
+              has to see, and burying it under a provider name they never picked
+              is how the reported bug read as a recommendation. */}
+          {estimate.hosting?.chosenLabel &&
+          estimate.hosting.source !== 'system-design' ? (
+            <>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="text-xs text-muted-foreground">
+                  {t('cost.hosting.chosenIs')}
+                </span>
+                <span className="text-base font-semibold" dir="auto">
+                  {estimate.hosting.chosenLabel}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="text-base font-semibold">
+                {recommendedProvider.name}
+              </span>
+              <ModelBadge model={recommendedProvider.model} />
+            </div>
+          )}
           <p className="mt-1 text-sm text-muted-foreground" dir="auto">
             {/* `rationale` is generated from this project's numbers; `bestFor` is
                 the old static platform blurb, kept only for estimates stored
@@ -164,6 +197,24 @@ export function CostView({
                 {t('cost.hosting.alternative')}
               </span>
               {estimate.hosting.alternative.note}
+            </p>
+          )}
+          {/* The compliance trade-off, styled as a warning rather than as more
+              grey body copy: a cheaper provider that cannot deploy in the
+              required region is not a saving, and this is the line that stops it
+              being read as one. */}
+          {estimate.hosting?.constraintNote && (
+            <p
+              className="mt-2 flex gap-2 rounded-md bg-warning-subtle p-2 text-sm text-warning-subtle-foreground"
+              dir="auto"
+            >
+              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                <span className="me-1 font-semibold">
+                  {t('cost.hosting.constraint')}
+                </span>
+                {estimate.hosting.constraintNote}
+              </span>
             </p>
           )}
         </div>
