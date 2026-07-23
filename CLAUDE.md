@@ -1197,6 +1197,66 @@ tsconfig and never needs shared's `dist`.
      endpoint **drops the parent's FK filter**, since the path already pins it.
      This costs ~5 schema fields per entity, which narrowed the chunking margin —
      see `MAX_ENTITIES_PER_CALL`, and lower it before raising `CHUNK_MAX_TOKENS`.
+  11. **Field types come FROM the schema (`api-design.field-types.ts`) — the API
+     stage does not get to re-guess them.** A 12-module, 48-endpoint design typed
+     **every** id `integer` — path params, request bodies, response bodies —
+     against a schema whose primary keys are all `uuid`. A team building against
+     that doc assumes auto-incrementing integers and hits the mismatch on their
+     first insert. **The cause was `describeEntity` printing column NAMES and no
+     types** while the prompt said "field names match the data model": the model
+     was told to match something it was never shown, so it used the REST
+     convention its training data is full of. The tell was that the deterministic
+     builder (`type: c.type`) was right all along — the offline output correct and
+     the paid one wrong, the `enforcePaymentAvailability` inversion. **Third
+     instance of one class** (the QA planner asked for tools "matched to the
+     stack" with no stack in its prompt; the schema designer was told to respect
+     business rules that were never printed): *when a prompt tells the model to
+     respect something, grep the prompt for the something.* Seven rules:
+     - **Both halves, as always.** `describeColumns` prints `name type PK/FK→target
+       NULL` and a FIELD TYPES rule says to copy it; `reconcileApiFieldTypes` then
+       enforces it on the output at `finalize()`, the one exit every generated
+       design passes through. The prompt alone is not enough here because the
+       failure is **invisible and intermittent** — an `integer` id parses, renders,
+       exports to OpenAPI and scaffolds perfectly happily, and the same model gets
+       it right on one run and wrong on the next.
+     - **The database wins unconditionally.** It is what the migration, the Prisma
+       schema, the SQL export and the scaffold are generated from, so an API doc
+       that disagrees is wrong by definition even when its own type looks more
+       idiomatic.
+     - **It is NOT about ids.** Every type is reconciled — enum, timestamp,
+       decimal, boolean, date. A `status` documented `string` against an `enum`
+       column is the same bug with a smaller blast radius, and `listQueryParams`
+       now emits the column's own type for the same reason.
+     - **Never invent a type.** A field that resolves to no column (`page`,
+       `limit`, `search`, `accessToken`) is left exactly alone — guessing there
+       would be this bug in reverse. `_ids` is skipped too (typed `array` by
+       `enforceRoleCardinality`; rewriting it to the referenced scalar key would
+       silently undo that fix).
+     - **Rewrite always, REPORT only on a semantic difference.** The field is set
+       to the schema's exact spelling so the document lands in one vocabulary, but
+       `varchar(255) → string` is not listed — burying `integer → uuid` under
+       cosmetic noise makes the table one nobody reads. `sameFieldType` folds
+       spellings and pointedly does **not** forgive `integer` for `uuid`.
+     - **Resolution order is confidence order**: an exact column on a context
+       entity, then bare `id` → that resource's PK, then `<noun>_id` → the named
+       table's PK (which needs **no** context — an early cut short-circuited
+       context-less endpoints as an optimization and silently switched that rule
+       off for the modules most likely to need it). Context comes from the
+       **path** before `coveredEntities`, last segment first, because a nested
+       route returns the child. The **Auth module** is the one narrow special case:
+       it covers no entity by construction, so `POST /api/auth/register` kept
+       `id: integer` — resolved against the users table, which is a fact about our
+       own generator's convention, not an inference about the client's domain.
+       Found by auditing a real design, not by reading the code.
+     - **`typeCorrections` is aggregated by (entity, field, from, to)** and
+       OWNER-ONLY (stripped in `ShareService.view`). ~100 wrong fields became 31
+       rows on the real design; ninety bullet points is a wall an owner scrolls
+       past. `save()` carries it over and deliberately does **not** re-reconcile —
+       silently rewriting a type the owner just set would make the editor feel
+       broken, the `ensureEntityCoverage` call. OpenAPI path params are typed from
+       the real PK and carry `format: uuid`/`date-time`, without which a uuid key
+       and an integer key both render as `"string"` and the distinction is lost
+       again at the export boundary.
 - **Database design = lifecycle, linkage, isolation, and real-world completeness.**
   Prompt rules on the Database Designer, several previously true only of the
   *deterministic fallback* (which emitted `status` on invoices/notifications while
@@ -1222,6 +1282,65 @@ tsconfig and never needs shared's `dist`.
   - **An audit-log entity** whenever the requirements restrict who may read or
     change records, or name a regulated data category — the same schema had a
     business rule and a repudiation mitigation both demanding one, and no table.
+- **Cross-tenant SHARED records (`database-design.shared-entities.ts`) — the
+  exception "EVERY table carries the tenant FK" had no concept of.** A clinic
+  group's confirmed business rule read *"Patient records are shared across all
+  clinics and are not branch-scoped"*, and the schema shipped `patients.branch_id
+  NOT NULL` plus a *"each branch has many patients"* relation anyway — splitting
+  into N records the one thing the client had explicitly asked to keep whole, and
+  dragging `bills` / `payments` / `insurance_claims` / `notifications` with it.
+  **Regenerating did not help, because two independent causes each produced it**:
+  1. **The business rules were never in the schema prompt at all.** `buildPrompt`
+     sent idea, engine, services, roles and functional requirements;
+     `requirements.businessRules` and `.constraints` appeared in **none** of the
+     three prompt builders. The sentence never reached the model on any run — the
+     QA-planner-recommending-JUnit failure exactly. When a prompt tells the model
+     to respect something, **check the something is in the prompt** (`rulesContext`,
+     now in all three builders, labelled BINDING, and carried into **every chunk**
+     because a chunk is a whole call with its own context).
+  2. **`ensureTenancy` put the mandatory FK back** on the runs where the model got
+     it right. The backstop had no notion of a shared record, so it also shipped
+     the bug on the deterministic/offline path.
+  Six things not to undo:
+  - **Nothing is keyed on an entity NAME.** There is no patient/customer/member
+    list. The trigger is a *statement in the client's own requirements* and the
+    entity is whatever that statement was about, so a retail chain whose rules say
+    members are shared across stores gets the same treatment with no code change.
+    Pinned by `shared-entities.spec.ts`, which runs a gym chain end-to-end plus
+    five more nouns — if it only passes for `patients` the fix is a patch.
+  - **The restriction covers the shared record ONLY, never its transactions.** A
+    visit, order, bill or claim happens at one location and keeps its `branch_id`;
+    the unified history is restored by the *shared* record being single, so every
+    branch's bills reach it through one `patient_id`. Widening to dependents would
+    trade the bug for a cross-tenant leak.
+  - **The asymmetry INVERTS `applyTenancy`'s.** There, any plausible signal keeps
+    tenancy because a missing FK is a leak. Here, *removing* scoping is the
+    dangerous direction, so the bar is an **explicit written statement** — never an
+    inference from a table's name. Silence leaves every table scoped exactly as
+    before, which is why the whole change is a no-op for existing projects.
+  - **Subject extraction is head-anchored, per clause.** *"Patient records"* yields
+    `{record, patient}` (walking back through container nouns) so a rule about them
+    matches a `patients` table; *"the patient portal"* yields `{portal}` alone and
+    matches nothing. Possessives count as subjects (*"a patient's medical history"*)
+    and each clause of a compound sentence contributes its own.
+  - **The executive summary and service responsibilities are NOT sources.** A
+    summary is marketing prose thick with this vocabulary and asserting nothing
+    about record scope: MedCore's own promised billing *"across all clinics"* and
+    *"a unified view"*, and both fired a warning on a schema where nothing was
+    wrong. A check that cries wolf gets the panel muted. A rule about record scope
+    lives where rules live. `LOCATION_NOUN` is likewise enumerated **once** and
+    composed into every pattern — the MENA-regex-missing-Palestine failure shape.
+  - **A correction is never silent, and it demotes rather than deletes.**
+    `branch_id` becomes a nullable, non-unique `registered_at_branch_id` (the
+    originating clinic is a fact worth keeping; nullable + renamed makes it
+    unusable as ownership), the has-many relation is dropped outright, and every
+    change becomes an owner-facing `sharedEntityNotices` entry quoting the rule
+    that caused it. Owner-only (stripped in `ShareService.view`, the
+    `uncoveredRequirements` precedent), `LocalizedCopy`, additive/migration-free.
+    A statement matched to **no** table is reported rather than guessed at — which
+    is also the expected path for an Arabic document, whose subject is deliberately
+    not parsed. Running the whole pass twice is a **fixed point** (pinned), which is
+    what makes Regenerate safe.
 - **Agents backfill via `normalize()`.** Where an artifact has many optional
   parts (e.g. the reviewer's per-dimension scores/findings), the agent trusts a
   valid LLM response but fills any omitted field deterministically, so the shape

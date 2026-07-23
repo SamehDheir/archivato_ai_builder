@@ -131,6 +131,11 @@ export class ApiDesignService {
         // and undefined when the editor omits it, which would spread right over the
         // stored exclusions.
         excludedEntities: edited.excludedEntities ?? existing.excludedEntities,
+        // Carried over for the same reason, and deliberately NOT recomputed: the
+        // owner may be editing a type on purpose, and silently rewriting it back
+        // to the schema's would make the editor feel broken — the same call as
+        // not re-running `ensureEntityCoverage` here. Regeneration replaces it.
+        typeCorrections: existing.typeCorrections,
         sessionId,
         generatedAt: new Date().toISOString(),
       },

@@ -277,9 +277,25 @@ export class ShareService {
         // work — is the opposite of what it is for.
         uncoveredRequirements: undefined,
       }),
-      databaseDesign: withoutGeneration({ ...design.databaseDesign, sessionId: token }),
+      databaseDesign: withoutGeneration({
+        ...design.databaseDesign,
+        sessionId: token,
+        // OWNER-ONLY, same rule as `uncoveredRequirements` above: these notices
+        // say "our generator got a table's tenant scoping wrong and we corrected
+        // it". That is a note to the person editing the schema, not something a
+        // client should read in the document being used to win the work.
+        sharedEntityNotices: undefined,
+      }),
       apiDesign: design.apiDesign
-        ? withoutGeneration({ ...design.apiDesign, sessionId: token })
+        ? withoutGeneration({
+            ...design.apiDesign,
+            sessionId: token,
+            // OWNER-ONLY, the `uncoveredRequirements` / `sharedEntityNotices`
+            // rule: "our API stage contradicted our own schema and we corrected
+            // it" is a note to the person reviewing the design, not to the client
+            // deciding whether to sign.
+            typeCorrections: undefined,
+          })
         : null,
       review: design.review
         ? // Strip the OWNER-ONLY client-readiness / consistency (deal-risk)

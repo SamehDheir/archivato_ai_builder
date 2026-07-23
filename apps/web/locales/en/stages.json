@@ -104,6 +104,10 @@
       "unique": "unique",
       "notNull": "not null",
       "fk": "FK → {{entity}}"
+    },
+    "sharedEntities": {
+      "title": "Cross-tenant corrections — verify before you send this",
+      "body": "Your requirements describe a record as shared across the whole organization, but the generated schema had scoped it to one tenant. It was corrected as follows — this is only shown to you, never to your client."
     }
   },
   "erd": {
@@ -127,6 +131,14 @@
       "summary": "{{covered}} entities covered · {{excluded}} excluded",
       "needsReview": "{{n}} need review",
       "fallback": "Auto-generated — review"
+    },
+    "typeCorrections": {
+      "title": "Field types corrected against the database — verify before you send this",
+      "body": "These fields were documented with a type that contradicts the database schema, so they were corrected to match it. The database is the source of truth: it is what the migration, the SQL export and the scaffold are generated from. This is only shown to you, never to your client.",
+      "field": "Field",
+      "was": "Documented",
+      "now": "Database",
+      "count": "Endpoints"
     }
   },
   "review": {

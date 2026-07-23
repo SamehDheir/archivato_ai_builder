@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
+  DEFAULT_ARTIFACT_LANGUAGE,
+  type ArtifactLanguage,
   type DatabaseDesign,
   type DegradedReason,
   type Entity,
@@ -11,7 +13,9 @@ import {
   type SystemDesign,
   untrustedField,
   applyTenancy,
+  findSharedEntityDeclarations,
   requiresMultiTenancy,
+  sharedEntityDirective,
   stripUnrequestedSupportTables,
   supportTableDirective,
   tenantEntityFor,
@@ -126,6 +130,24 @@ export class DatabaseDesignerAgent extends BaseAgent {
     'table. A tenant column on users alone is not isolation: it leaves every',
     'record queryable across tenants, which is the single most damaging flaw a',
     'multi-tenant schema can ship with.',
+    'That rule has one exception, and you must check for it BEFORE giving any',
+    'table a mandatory tenant/branch/location/organization foreign key: read the',
+    'confirmed business rules, constraints and requirements for a statement that',
+    'the record is SHARED, CROSS-BRANCH, CROSS-TENANT, UNIFIED, or explicitly NOT',
+    'scoped to a single branch, tenant or location. Where such a statement exists,',
+    'that entity does NOT get a mandatory single-tenant ownership foreign key and',
+    'does NOT get a "branch/tenant has many X" relationship — whatever the entity',
+    'is called (patient, customer, member, account, student, resident, guest).',
+    'Either omit the tenant key entirely, or make it nullable and reference-only',
+    'with a name that says so (registered_at_branch_id, originating_branch_id),',
+    'never used for access control, uniqueness constraints, or primary data',
+    'ownership. Forcing one owner onto a shared record splits into many records the',
+    'one history the client asked to keep whole.',
+    'This exception covers the shared record ITSELF, not everything touching it: a',
+    'transaction or event that references it — an appointment, visit, order, bill,',
+    'payment, claim — happens at one specific location and MUST still carry the',
+    'tenant foreign key. The unified history is preserved by the shared record',
+    'being single, so every location\'s transactions are reachable through it.',
     'The converse is equally binding: when the software serves ONE business, do',
     'NOT invent a tenants/organizations table and do NOT put a tenant foreign key',
     'on anything. Tenancy is modelled only when the requirements describe several',
@@ -185,8 +207,10 @@ export class DatabaseDesignerAgent extends BaseAgent {
       isValid: (raw) => this.isValid(raw),
       // `isValid` gates on entities, so a reply that simply omits `relations`
       // gets here — normalize rather than spread it through unchecked.
-      accept: (raw) => this.acceptDesign(raw, sessionId, generatedAt, ctx),
-      fallback: () => this.buildDeterministic(sessionId, generatedAt, ctx),
+      accept: (raw, language) =>
+        this.acceptDesign(raw, sessionId, generatedAt, ctx, language),
+      fallback: (language) =>
+        this.buildDeterministic(sessionId, generatedAt, ctx, language),
       options: { maxTokens: SCHEMA_MAX_TOKENS },
     });
   }
@@ -203,6 +227,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
     sessionId: string,
     generatedAt: string,
     ctx: DatabaseDesignContext,
+    language: ArtifactLanguage = DEFAULT_ARTIFACT_LANGUAGE,
   ): DatabaseDesign {
     return this.withoutUnrequestedTables(
       this.withoutUnrequestedTenancy(
@@ -212,6 +237,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
           generatedAt,
         }),
         ctx,
+        language,
       ),
       ctx,
     );
@@ -376,15 +402,24 @@ export class DatabaseDesignerAgent extends BaseAgent {
   private withoutUnrequestedTenancy(
     design: DatabaseDesign,
     ctx: DatabaseDesignContext,
+    language: ArtifactLanguage = DEFAULT_ARTIFACT_LANGUAGE,
   ): DatabaseDesign {
-    const { design: next, added, removed } = applyTenancy(
+    const { design: next, added, removed, sharedEntityNotices } = applyTenancy(
       design,
       ctx.requirements,
       ctx.systemDesign,
+      language,
     );
     if (removed) this.logger.debug(`Tenancy stripped: ${removed}`);
     if (added) this.logger.warn(`Tenancy added: ${added}`);
-    return next;
+    for (const notice of sharedEntityNotices) {
+      this.logger.warn(`Cross-tenant correction: ${notice}`);
+    }
+    // Surfaced on the artifact, not only in the log: the owner reviews this
+    // schema before it reaches a client, and a correction they cannot see is one
+    // they cannot check. Left absent rather than `[]` when nothing was corrected,
+    // so the field stays additive and the view renders nothing.
+    return sharedEntityNotices.length > 0 ? { ...next, sharedEntityNotices } : next;
   }
 
   /**
@@ -430,6 +465,54 @@ export class DatabaseDesignerAgent extends BaseAgent {
     );
   }
 
+  /**
+   * The confirmed business rules and constraints.
+   *
+   * **These were never in any of this agent's prompts**, and their absence is the
+   * first of the two causes behind a real bug: a clinic group's confirmed rule
+   * said patient records are shared across all clinics and not branch-scoped, and
+   * the schema gave `patients` a mandatory `branch_id` anyway — on the first run
+   * and on every regeneration, because the sentence had never reached the model.
+   * The same class as the QA planner that recommended JUnit for a Node project
+   * because its prompt asked for tools "matched to the stack" and never sent the
+   * stack. When a prompt tells the model to respect something, check that the
+   * something is actually in the prompt.
+   *
+   * Labelled BINDING and placed above the schema instructions, because a business
+   * rule is a statement about what the data must be, and it loses to whatever the
+   * model's priors suggest if it arrives as background colour.
+   */
+  private rulesContext(ctx: DatabaseDesignContext): string {
+    const rules = (ctx.requirements.businessRules ?? []).map(
+      (b) => `- ${b.id ? `${b.id}: ` : ''}${b.description}`,
+    );
+    const constraints = (ctx.requirements.constraints ?? []).map((c) => `- ${c}`);
+    if (rules.length === 0 && constraints.length === 0) return '';
+    return [
+      'Confirmed business rules and constraints (BINDING — the schema must not contradict these):',
+      ...rules,
+      ...constraints,
+    ].join('\n');
+  }
+
+  /**
+   * The cross-tenant carve-out, decided in code from those rules.
+   *
+   * Empty unless the requirements actually declare some record shared, so a
+   * normal project's prompt is byte-unchanged. Placed immediately after the
+   * tenancy directive and marked as overriding it: the two rules genuinely
+   * conflict for one table, and a model handed two emphatic rules with no stated
+   * precedence picks one per run — which is the run-to-run non-determinism this
+   * whole tenancy layer exists to remove.
+   */
+  private sharedEntityContext(ctx: DatabaseDesignContext): string {
+    if (!requiresMultiTenancy(ctx.requirements, ctx.systemDesign)) return '';
+    return sharedEntityDirective(
+      findSharedEntityDeclarations(ctx.requirements),
+      tenantEntityFor(ctx.requirements, ctx.systemDesign),
+    );
+  }
+
   private buildPrompt(ctx: DatabaseDesignContext): string {
     const entities = ctx.requirements.functional
       .map((f) => `- ${f.title}${f.description ? `: ${f.description}` : ''}`)
@@ -444,7 +527,11 @@ export class DatabaseDesignerAgent extends BaseAgent {
       'Functional requirements (the data must support these):',
       entities || '- none listed',
       '',
+      this.rulesContext(ctx),
+      '',
       this.tenancyDirective(ctx),
+      '',
+      this.sharedEntityContext(ctx),
       '',
       supportTableDirective(ctx.requirements),
       '',
@@ -487,7 +574,11 @@ export class DatabaseDesignerAgent extends BaseAgent {
       'Functional requirements (the data must support these):',
       requirements || '- none listed',
       '',
+      this.rulesContext(ctx),
+      '',
       this.tenancyDirective(ctx),
+      '',
+      this.sharedEntityContext(ctx),
       '',
       supportTableDirective(ctx.requirements),
       '',
@@ -514,7 +605,13 @@ export class DatabaseDesignerAgent extends BaseAgent {
       untrustedField('Idea', ctx.idea),
       `Database engine: ${this.databaseType(ctx.systemDesign)}`,
       `Roles: ${ctx.requirements.roles.map((r) => r.name).join(', ') || 'none'}`,
+      // Carried into EVERY chunk, not just the first. A chunk is a whole call
+      // with its own context, so a rule stated once in a different call does not
+      // exist for this one — and the shared record is as likely to land in chunk
+      // 3 as in chunk 1.
+      this.rulesContext(ctx),
       this.tenancyDirective(ctx),
+      this.sharedEntityContext(ctx),
       supportTableDirective(ctx.requirements),
       '',
       `This is part ${part.index} of ${part.total} of ONE schema. Fully design ONLY`,
@@ -560,6 +657,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
     sessionId: string,
     generatedAt: string,
     ctx: DatabaseDesignContext,
+    language: ArtifactLanguage = DEFAULT_ARTIFACT_LANGUAGE,
   ): DatabaseDesign {
     const entities: Entity[] = [usersEntity()];
     const relations: Relation[] = [];
@@ -608,6 +706,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
           relations,
         },
         ctx,
+        language,
       ),
       ctx,
     );

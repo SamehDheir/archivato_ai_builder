@@ -25,6 +25,7 @@ import {
   withResolvedCoverage,
 } from './api-design.coverage';
 import type { ScaleTier } from './scale-tier';
+import { singularNoun } from './text';
 
 /** Columns the server owns — never accepted in a request body. */
 const SERVER_MANAGED = new Set(['id', 'created_at', 'updated_at', 'password_hash']);
@@ -202,7 +203,11 @@ export function listQueryParams(
   if (demand.search && searchable) push({ name: 'search', type: 'string', required: false });
 
   const status = columns.find((c) => STATUS_COLUMN.test(c.name));
-  if (demand.status && status) push({ name: status.name, type: 'string', required: false });
+  // The column's own type, not a flat 'string': a lifecycle column is an enum in
+  // the schema, and a filter documented as a free string invites a client to send
+  // a value the column cannot hold. `jsonType` maps enum→string at the OpenAPI
+  // boundary anyway, so the export is unchanged and only the doc gets sharper.
+  if (demand.status && status) push({ name: status.name, type: status.type, required: false });
 
   // Prefer the audit timestamp every entity carries; fall back to whatever
   // domain date the entity actually has (issued_at, sent_at, scheduled_for…).
@@ -736,19 +741,9 @@ function singular(table: string): string {
   return table.endsWith('s') ? table.slice(0, -1) : table;
 }
 
-/**
- * Singularize a table name for **prose matching**, unlike `singular()`, which
- * exists to build readable endpoint summaries and only strips a trailing "s".
- *
- * Handles the two English plural forms that mis-stem: `-ies` → `-y`
- * (`categories` → `category`) and a sibilant `-es` → base (`addresses` →
- * `address`, `statuses` → `status`, `boxes` → `box`). Everything else falls
- * through to the bare "s" rule. Deliberately not a full inflector — the cost of
- * a miss here is one query parameter, so a conservative rule that never mangles
- * a word beats a clever one that sometimes does.
- */
-function singularNoun(table: string): string {
-  if (/[^aeiou]ies$/i.test(table)) return `${table.slice(0, -3)}y`;
-  if (/(?:ss|sh|ch|x|z|s)es$/i.test(table)) return table.slice(0, -2);
-  return singular(table);
-}
+// `singularNoun` (prose matching) now lives in `text.ts`, because the
+// cross-tenant shared-entity rule needs exactly the same stemming to decide
+// whether "patient records" and a `patients` table are the same noun. `singular`
+// above stays local and separate: it only strips a trailing "s" and exists to
+// build readable endpoint summaries, where mangling `addresses` into `addresse`
+// would be visible in the output rather than a silent failed match.

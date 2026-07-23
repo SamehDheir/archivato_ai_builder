@@ -1,9 +1,13 @@
 import {
+  buildSchemaTypeIndex,
   exampleValue,
+  pathParamType,
   type ApiDesign,
   type ApiEndpoint,
+  type ApiModule,
   type DatabaseDesign,
   type SchemaField,
+  type SchemaTypeIndex,
 } from '@archivato/shared';
 
 /**
@@ -17,12 +21,17 @@ export function buildOpenApi(
   databaseDesign: DatabaseDesign,
 ): Record<string, unknown> {
   const paths: Record<string, Record<string, unknown>> = {};
+  // A path parameter lives in the path string, not in `requestSchema`, so the
+  // agent's type reconciliation cannot reach it — and `GET /api/patients/{id}`
+  // is exactly where a consumer first meets the id type. Resolved against the
+  // real schema here instead of being typed `string` with no format.
+  const types = buildSchemaTypeIndex(databaseDesign);
 
   for (const mod of apiDesign.modules) {
     for (const ep of mod.endpoints) {
       const path = toOpenApiPath(ep.path);
       paths[path] ??= {};
-      paths[path][ep.method.toLowerCase()] = operation(mod.name, ep);
+      paths[path][ep.method.toLowerCase()] = operation(mod.name, ep, types, mod);
     }
   }
 
@@ -45,24 +54,57 @@ function toOpenApiPath(path: string): string {
   return path.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
 }
 
-function pathParams(path: string) {
+function pathParams(
+  path: string,
+  types: SchemaTypeIndex,
+  module: Pick<ApiModule, 'basePath' | 'coveredEntities'>,
+) {
   const params = [...path.matchAll(/:([A-Za-z0-9_]+)/g)].map((m) => m[1]);
-  return params.map((name) => ({
-    name,
-    in: 'path',
-    required: true,
-    schema: { type: 'string', example: exampleValue('string', name) },
-  }));
+  return params.map((name) => {
+    // Falls back to the previous behaviour when the schema has nothing to say —
+    // an unresolvable param is still a string, just without a claimed format.
+    const dbType = pathParamType(types, path, name, module);
+    const schema: Record<string, unknown> = {
+      type: jsonType(dbType ?? 'string'),
+      example: exampleValue(dbType ?? 'string', name),
+    };
+    // `format: uuid` is the half a consumer's codegen actually reads: OpenAPI has
+    // no uuid *type*, so without it a uuid key and an integer key both render as
+    // "string" and the distinction this whole pass exists for is lost again at
+    // the export boundary.
+    const format = openApiFormat(dbType);
+    if (format) schema.format = format;
+    return { name, in: 'path', required: true, schema };
+  });
 }
 
-function operation(tag: string, ep: ApiEndpoint): Record<string, unknown> {
+/** The OpenAPI `format` for a database type, where one exists. */
+function openApiFormat(type: string | null): string | undefined {
+  switch ((type ?? '').trim().toLowerCase()) {
+    case 'uuid':
+      return 'uuid';
+    case 'timestamp':
+      return 'date-time';
+    case 'date':
+      return 'date';
+    default:
+      return undefined;
+  }
+}
+
+function operation(
+  tag: string,
+  ep: ApiEndpoint,
+  types: SchemaTypeIndex,
+  module: Pick<ApiModule, 'basePath' | 'coveredEntities'>,
+): Record<string, unknown> {
   const op: Record<string, unknown> = {
     tags: [tag],
     summary: ep.summary,
     responses: responses(ep),
   };
 
-  const params = pathParams(ep.path);
+  const params = pathParams(ep.path, types, module);
   // Query params come from the request schema on GET/DELETE.
   if (ep.method === 'GET' || ep.method === 'DELETE') {
     for (const f of ep.requestSchema) {
