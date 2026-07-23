@@ -27,17 +27,32 @@
  * only a design with no signal at all is stripped.
  */
 
+import type { ArtifactLanguage } from './artifact-language';
 import type {
   DatabaseDesign,
   Entity,
   EntityColumn,
   Relation,
 } from './database-design';
+import {
+  findSharedEntityDeclarations,
+  isSharedEntity,
+  reconcileSharedEntities,
+  TENANT_SCOPE_COLUMN,
+  TENANT_SCOPE_TABLE,
+  type SharedEntityDeclaration,
+} from './database-design.shared-entities';
 import type { RequirementDocument } from './requirements';
 import type { SystemDesign } from './system-design';
 
-/** Table names that ARE the tenant table. */
-const TENANT_TABLE = /^(?:tenants?|organizations?|orgs?|accounts?|workspaces?|companies|branches|clinics|hospitals|stores|merchants|vendors|schools|campuses|warehouses|outlets|practices|franchises)$/i;
+/**
+ * Table names that ARE the tenant table.
+ *
+ * Lives in `database-design.shared-entities.ts` and is imported here (one-way —
+ * the reverse would be a runtime cycle), so the two halves of the tenancy rule
+ * cannot disagree about what a tenant boundary looks like.
+ */
+const TENANT_TABLE = TENANT_SCOPE_TABLE;
 
 /**
  * Column names that scope a row to a tenant, for the STRIP path.
@@ -55,8 +70,10 @@ const TENANT_COLUMN = /^(?:tenant|organization|org|workspace|company|branch|stor
  *
  * Broader than `TENANT_COLUMN` because being wrong here is safe: it only stops
  * `ensureTenancy` from adding a *second* scoping column, never strips anything.
+ * Shared with the cross-tenant module for the same no-drift reason as
+ * `TENANT_TABLE` above.
  */
-const SCOPING_COLUMN_BROAD = /^(?:tenant|organization|org|workspace|company|branch|store|merchant|vendor|clinic|hospital|school|campus|warehouse|outlet|practice|franchise)_id$/i;
+const SCOPING_COLUMN_BROAD = TENANT_SCOPE_COLUMN;
 
 /**
  * Language that indicates the platform serves MANY businesses, not one.
@@ -298,15 +315,25 @@ export interface TenancyAddition {
  * tables (which are scoped through their parents). Over-scoping a would-be global
  * lookup table is the safe direction — the prompt rule is "EVERY table holding
  * their data", and an extra join costs money where a missing one costs a leak.
+ *
+ * **One exception, and it is not a name list.** A table the requirements
+ * explicitly describe as shared across the whole organization — a patient seen at
+ * several clinics, a member using any gym — is skipped, because forcing a
+ * mandatory owner onto it fragments into N records the one thing the client said
+ * must stay unified. That exception fires only on an explicit written statement
+ * (`findSharedEntityDeclarations`), never on the table's name, so silence leaves
+ * every table scoped exactly as before. See `database-design.shared-entities.ts`.
  */
 export function ensureTenancy(
   design: DatabaseDesign,
   requirements: RequirementDocument,
   systemDesign?: SystemDesign | null,
+  declarations?: readonly SharedEntityDeclaration[],
 ): TenancyAddition {
   if (!requiresMultiTenancy(requirements, systemDesign)) {
     return { design, added: null };
   }
+  const shared = declarations ?? findSharedEntityDeclarations(requirements);
 
   const hasScopeTable = design.entities.some(
     (e) => TENANT_TABLE.test(e.name.trim()) && isScopeTable(e, design),
@@ -337,8 +364,17 @@ export function ensureTenancy(
   });
 
   const scoped: string[] = [];
+  const skippedAsShared: string[] = [];
   const entities = design.entities.map((entity) => {
     if (isPureJunction(entity) || entity.columns.some((c) => c.name === column)) {
+      return entity;
+    }
+    // The requirements say this record belongs to the whole organization. Adding
+    // the ownership key here is precisely the bug this exception exists for — and
+    // it recurred across regenerations because this backstop put the key back
+    // even on the runs where the model correctly left it off.
+    if (isSharedEntity(entity.name, shared)) {
+      skippedAsShared.push(entity.name);
       return entity;
     }
     scoped.push(entity.name);
@@ -364,7 +400,11 @@ export function ensureTenancy(
       `Added a "${table}" tenant table and a ${column} foreign key on ${scoped.length} table(s). ` +
       `The requirements and system design describe a multi-tenant platform, but the ` +
       `generated schema had no tenant scoping — which would leave every record queryable ` +
-      `across tenants, the most damaging flaw a multi-tenant schema can ship with.`,
+      `across tenants, the most damaging flaw a multi-tenant schema can ship with.` +
+      (skippedAsShared.length > 0
+        ? ` Left unscoped by design: ${skippedAsShared.join(', ')} — the requirements ` +
+          `describe these records as shared across the whole organization.`
+        : ''),
   };
 }
 
@@ -380,17 +420,48 @@ export interface TenancyReconciliation {
   design: DatabaseDesign;
   added: string | null;
   removed: string | null;
+  /**
+   * Owner-facing sentences describing every cross-tenant correction made, in the
+   * artifact's language. Empty when the requirements declared nothing shared,
+   * which is the overwhelmingly common case.
+   */
+  sharedEntityNotices: string[];
 }
 
 export function applyTenancy(
   design: DatabaseDesign,
   requirements: RequirementDocument,
   systemDesign?: SystemDesign | null,
+  language?: ArtifactLanguage,
 ): TenancyReconciliation {
-  if (requiresMultiTenancy(requirements, systemDesign)) {
-    const { design: next, added } = ensureTenancy(design, requirements, systemDesign);
-    return { design: next, added, removed: null };
+  if (!requiresMultiTenancy(requirements, systemDesign)) {
+    // Single-business: there is no tenancy, so there is nothing a record could be
+    // shared *across*. `enforceTenancy` strips whatever scoping the model
+    // invented, which subsumes the shared-record case entirely.
+    const { design: next, removed } = enforceTenancy(design, requirements, systemDesign);
+    return { design: next, added: null, removed, sharedEntityNotices: [] };
   }
-  const { design: next, removed } = enforceTenancy(design, requirements, systemDesign);
-  return { design: next, added: null, removed };
+
+  // Computed once and threaded into both halves, so the rule that decides which
+  // tables are exempt from being GIVEN a tenant key is literally the same rule
+  // that decides which are corrected afterwards.
+  const declarations = findSharedEntityDeclarations(requirements);
+  const { design: scoped, added } = ensureTenancy(
+    design,
+    requirements,
+    systemDesign,
+    declarations,
+  );
+
+  // The validation pass. It runs even when `ensureTenancy` was a no-op, because
+  // the far more common case is a model that DID emit tenancy and got one table
+  // wrong — which is invisible to a backstop that only fires on a total miss.
+  const { design: reconciled, notices } = reconcileSharedEntities(
+    scoped,
+    declarations,
+    tenantEntityFor(requirements, systemDesign),
+    language,
+  );
+
+  return { design: reconciled, added, removed: null, sharedEntityNotices: notices };
 }

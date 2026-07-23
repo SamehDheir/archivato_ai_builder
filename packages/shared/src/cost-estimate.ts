@@ -31,16 +31,39 @@ export const COST_USER_SCALES = [100, 1000, 10000] as const;
 
 export type CostUserScale = (typeof COST_USER_SCALES)[number];
 
-/** Providers we estimate. `etc.` is covered by the breadth of these eight. */
+/**
+ * Providers we estimate.
+ *
+ * **Azure and Google Cloud were the two gaps that produced a real bug.** A
+ * project whose System Design chose *Azure App Service (Linux) – Jordan region*
+ * hit a table containing neither, so the chosen host silently vanished from the
+ * comparison and the estimate crowned Fly.io "best value" — while asserting that
+ * the design had named no host. Listing AWS but not the other two members of the
+ * global top three was never defensible; a table that omits a provider does not
+ * get to conclude the provider was not chosen.
+ *
+ * `vps` is the generic self-managed box (Hetzner, a local datacentre VPS, bare
+ * metal) — a genuinely common answer in this product's market and, until now,
+ * one the estimator could not represent at all. It carries a permanent
+ * `fit.caveat` because its bill excludes the operations labour every managed
+ * provider here includes.
+ *
+ * The list is still not the world, and it never will be — which is exactly why
+ * `HostingChoice` distinguishes "named a host we do not price" from "named no
+ * host". Adding a provider here narrows the unpriced case; it does not close it.
+ */
 export type CostProviderId =
   | 'aws'
+  | 'azure'
+  | 'gcp'
   | 'digitalocean'
   | 'railway'
   | 'render'
   | 'vercel'
   | 'cloudflare'
   | 'flyio'
-  | 'heroku';
+  | 'heroku'
+  | 'vps';
 
 /** Hosting model — drives how compute is priced (instances vs. per-request). */
 export type CostHostingModel = 'iaas' | 'paas' | 'serverless';
@@ -322,6 +345,35 @@ const PRICING: ProviderPricing[] = [
     platformFee: 0,
   },
   {
+    id: 'azure',
+    name: 'Microsoft Azure',
+    model: 'iaas',
+    summary:
+      'Full cloud with managed App Service and Postgres; the usual pick when a client is already on Microsoft or needs a specific region.',
+    bestFor: 'Enterprise and regulated work, and deployments pinned to a region.',
+    computePerUnit: 16,
+    dbBase: 26,
+    dbPerGb: 0.12,
+    dbScalePerThousandUsers: 6,
+    bandwidthPerGb: 0.087,
+    bandwidthFreeGb: 100,
+    platformFee: 0,
+  },
+  {
+    id: 'gcp',
+    name: 'Google Cloud',
+    model: 'iaas',
+    summary: 'Full cloud with strong managed data services; priced close to AWS.',
+    bestFor: 'Data-heavy products and teams already using Google services.',
+    computePerUnit: 15,
+    dbBase: 25,
+    dbPerGb: 0.17,
+    dbScalePerThousandUsers: 6,
+    bandwidthPerGb: 0.12,
+    bandwidthFreeGb: 100,
+    platformFee: 0,
+  },
+  {
     id: 'digitalocean',
     name: 'DigitalOcean',
     model: 'iaas',
@@ -420,6 +472,23 @@ const PRICING: ProviderPricing[] = [
     dbScalePerThousandUsers: 20,
     bandwidthPerGb: 0,
     bandwidthFreeGb: 0,
+    platformFee: 0,
+  },
+  {
+    id: 'vps',
+    name: 'Self-managed VPS',
+    model: 'iaas',
+    summary:
+      'Rented servers you administer yourself (Hetzner, a local datacentre, bare metal). Cheapest on paper; the operations work is yours.',
+    bestFor: 'Teams with ops capacity, or a client who requires local hardware.',
+    computePerUnit: 7,
+    // Postgres runs on your own machine, so this is the incremental cost of the
+    // box and disk it needs — not a managed-database subscription.
+    dbBase: 6,
+    dbPerGb: 0.05,
+    dbScalePerThousandUsers: 3,
+    bandwidthPerGb: 0.01,
+    bandwidthFreeGb: 5000,
     platformFee: 0,
   },
 ];
@@ -527,6 +596,8 @@ function providerCostAtScale(
 /** Every provider we price — the source for validating a provider id. */
 export const COST_PROVIDER_IDS: readonly CostProviderId[] = [
   'aws',
+  'azure',
+  'gcp',
   'digitalocean',
   'railway',
   'render',
@@ -534,6 +605,7 @@ export const COST_PROVIDER_IDS: readonly CostProviderId[] = [
   'cloudflare',
   'flyio',
   'heroku',
+  'vps',
 ];
 
 /** Display name for a provider id (falls back to the id itself). */
@@ -627,7 +699,8 @@ export function estimateCosts(
       monthlyUsd: p.costs[compareIndex].monthlyUsd,
       fit: p.fit ?? { viable: true },
     })),
-    chosenProvider: profile.chosenProvider ?? null,
+    chosen: profile.chosenHosting,
+    constraint: profile.hostingConstraint,
     language,
   });
 

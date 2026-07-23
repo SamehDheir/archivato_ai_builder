@@ -18,6 +18,10 @@ import type { GenerationProvenance } from './generation';
 import { hasTimelineConflict, parseTimelineWeeks, type EffortEstimate } from './effort';
 import type { BuildVsBuyItem, ConstraintCompliance } from './system-design';
 import type { ServiceCostLine } from './cost-estimate';
+import type {
+  HostingChoice,
+  HostingRecommendation,
+} from './cost-estimate.hosting';
 import type { OutOfScopeItem } from './requirements';
 import { significantTokens } from './text';
 
@@ -206,6 +210,20 @@ export interface ConsistencyCheckInput {
    * signal that a "buy" has no cost line.
    */
   serviceSubscriptions?: ServiceCostLine[];
+  /**
+   * The System Design's hosting decision, as the three real states.
+   *
+   * Paired with `costHosting` below to catch the contradiction this check was
+   * added for: the Cost stage headlining a provider the architecture never
+   * chose. Undefined ⇒ skip (nothing to compare).
+   */
+  designHosting?: HostingChoice;
+  /**
+   * The stored cost estimate's headline hosting recommendation. Undefined or
+   * null ⇒ skip — there is no cost estimate to contradict the design yet, and
+   * flagging its absence is the freshness system's job, not this one.
+   */
+  costHosting?: HostingRecommendation | null;
   /** What the requirement document declares NOT included. */
   outOfScope?: OutOfScopeItem[];
   /**
@@ -413,6 +431,10 @@ const CONSISTENCY_COPY: LocalizedCopy<{
   boughtDetail: (capability: string, service?: string) => string;
   scopeTitle: string;
   scopeDetail: (item: string, artifact: string, label: string) => string;
+  hostingTitle: string;
+  hostingMismatch: (chosen: string, headline: string) => string;
+  hostingUnpriced: (chosen: string, headline: string) => string;
+  hostingNotViable: (chosen: string) => string;
 }> = {
   en: {
     timelineTitle: 'Effort exceeds the stated timeline',
@@ -429,6 +451,13 @@ const CONSISTENCY_COPY: LocalizedCopy<{
     scopeTitle: 'Excluded capability appears elsewhere in the package',
     scopeDetail: (item, artifact, label) =>
       `“${item}” is listed as out of scope, but ${artifact} promises “${label}”. Either remove the exclusion or drop the capability — a client who spots both will read the exclusion as a way out of work they think they are paying for.`,
+    hostingTitle: 'Cost estimate and architecture name different hosts',
+    hostingMismatch: (chosen, headline) =>
+      `The System Design hosts on ${chosen}, but the cost estimate headlines ${headline}. Regenerate the cost estimate, or change the architecture — sending a client a price built on a host you are not going to use makes the figure wrong and the package look unreviewed.`,
+    hostingUnpriced: (chosen, headline) =>
+      `The System Design hosts on ${chosen}, which the cost comparison does not price; it headlines ${headline} instead. The monthly figures therefore describe a different host than the one being proposed — price ${chosen} directly before quoting a running cost.`,
+    hostingNotViable: (chosen) =>
+      `The System Design hosts on ${chosen}, which cannot run the design as specified, so the cost estimate had to fall back to another provider. Fix this in the architecture — the price is a symptom, not the problem.`,
   },
   ar: {
     timelineTitle: 'الجهد المقدَّر يتجاوز المدة الزمنية المذكورة',
@@ -445,6 +474,13 @@ const CONSISTENCY_COPY: LocalizedCopy<{
     scopeTitle: 'قدرة مستثناة تظهر في موضع آخر من الحزمة',
     scopeDetail: (item, artifact, label) =>
       `«${item}» مُدرج ضمن ما هو خارج النطاق، لكن ${artifact} يَعِد بـ«${label}». إمّا أن تحذف الاستثناء أو تحذف القدرة — فالعميل الذي يلاحظ الأمرين سيقرأ الاستثناء على أنه تهرّب من عمل يعتقد أنه يدفع مقابله.`,
+    hostingTitle: 'تقدير التكلفة والبنية يسمّيان مزوّدَي استضافة مختلفين',
+    hostingMismatch: (chosen, headline) =>
+      `يعتمد تصميم النظام الاستضافة على ${chosen}، بينما يتصدّر تقدير التكلفة ${headline}. أعد توليد تقدير التكلفة أو عدّل البنية — فإرسال سعر مبني على استضافة لن تُستخدم يجعل الرقم خاطئًا ويجعل الحزمة تبدو غير مراجَعة.`,
+    hostingUnpriced: (chosen, headline) =>
+      `يعتمد تصميم النظام الاستضافة على ${chosen}، وهو غير مُسعّر في جدول المقارنة الذي يتصدّره ${headline} بدلًا منه. لذا فالأرقام الشهرية تصف استضافة غير المقترحة — سعّر ${chosen} مباشرةً قبل تحديد تكلفة تشغيل للعميل.`,
+    hostingNotViable: (chosen) =>
+      `يعتمد تصميم النظام الاستضافة على ${chosen}، وهو غير قادر على تشغيل التصميم بصيغته الحالية، فاضطر تقدير التكلفة إلى الرجوع إلى مزوّد آخر. عالج هذا في البنية — فالسعر عَرَض لا سبب.`,
   },
 };
 
@@ -531,6 +567,52 @@ export function buildConsistencyFindings(
         title: copy.scopeTitle,
         detail: copy.scopeDetail(item, conflict.artifact, conflict.label),
         severity: 'medium',
+      });
+    }
+  }
+
+  // 5. Hosting: the Cost stage's headline provider vs the host the System Design
+  //    actually chose.
+  //
+  //    This is the regression guard for the bug that motivated it — an Azure
+  //    project whose cost page recommended Fly.io "because the System Design did
+  //    not name a host". The reconciliation now prevents that at the source, so
+  //    on a healthy project this check is silent; it fires when the two stages
+  //    have drifted apart for a reason the reconciliation cannot fix on its own:
+  //    a stale estimate generated before the architecture changed its host, a
+  //    host nobody prices, or a host that cannot run the design.
+  //
+  //    Severity is `high` for a plain mismatch because the number is what the
+  //    client reads, and a monthly figure computed against the wrong host is
+  //    simply wrong — not merely inconsistent.
+  const designHosting = input.designHosting;
+  const costHosting = input.costHosting;
+  if (designHosting && designHosting.kind !== 'none' && costHosting) {
+    const chosenLabel =
+      (designHosting.kind === 'priced'
+        ? designHosting.label ?? designHosting.provider
+        : designHosting.label) || '';
+    const headline = costHosting.provider;
+    const mismatched =
+      designHosting.kind !== 'priced' || designHosting.provider !== headline;
+
+    if (mismatched && chosenLabel) {
+      const detail =
+        costHosting.source === 'design-not-viable'
+          ? copy.hostingNotViable(chosenLabel)
+          : designHosting.kind === 'unpriced'
+            ? copy.hostingUnpriced(chosenLabel, headline)
+            : copy.hostingMismatch(chosenLabel, headline);
+      findings.push({
+        source: 'automated',
+        artifacts: ['the architecture', 'the cost estimate'],
+        title: copy.hostingTitle,
+        detail,
+        severity:
+          costHosting.source === 'design-not-viable' ||
+          designHosting.kind === 'priced'
+            ? 'high'
+            : 'medium',
       });
     }
   }

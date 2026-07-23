@@ -4,7 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { Package, ShieldQuestion, TriangleAlert } from 'lucide-react';
 import type { ApiDesign, ApiEndpoint, SchemaField } from '@archivato/shared';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { Empty } from '@/components/design/RequirementDocumentView';
 
@@ -50,6 +59,7 @@ export function ApiDesignView({ design }: { design: ApiDesign }) {
       </div>
 
       <CoverageSummary design={design} />
+      <TypeCorrections design={design} />
 
       {design.modules.map((module) => (
         <div className="mt-5" key={module.name}>
@@ -160,6 +170,59 @@ function EndpointRow({ endpoint }: { endpoint: ApiEndpoint }) {
         <SchemaList label={t('api.response')} fields={endpoint.responseSchema ?? []} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Field types that contradicted the database schema and were corrected to match
+ * it. Owner-only — the share payload never carries them.
+ *
+ * A table rather than a list of sentences: the design that prompted this had
+ * ~90 wrong fields across 48 endpoints, and ninety bullet points is a wall an
+ * owner scrolls past. Aggregated rows are something they can actually check
+ * against their own schema.
+ */
+function TypeCorrections({ design }: { design: ApiDesign }) {
+  const { t } = useTranslation('stages');
+  const corrections = design.typeCorrections ?? [];
+  if (corrections.length === 0) return null;
+
+  return (
+    <Alert variant="warning" className="mb-4">
+      <TriangleAlert aria-hidden />
+      <AlertTitle>{t('api.typeCorrections.title')}</AlertTitle>
+      <AlertDescription>
+        <p>{t('api.typeCorrections.body')}</p>
+        <div className="mt-2 overflow-x-auto">
+          <Table stack={false} className="min-w-0">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('api.typeCorrections.field')}</TableHead>
+                <TableHead>{t('api.typeCorrections.was')}</TableHead>
+                <TableHead>{t('api.typeCorrections.now')}</TableHead>
+                <TableHead>{t('api.typeCorrections.count')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {corrections.map((c) => (
+                <TableRow key={`${c.entity}.${c.field}.${c.from}`}>
+                  <TableCell className="font-mono text-xs" dir="ltr">
+                    {c.entity}.{c.field}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs" dir="ltr">
+                    {c.from}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs font-semibold" dir="ltr">
+                    {c.to}
+                  </TableCell>
+                  <TableCell className="text-xs tabular-nums">{c.occurrences}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </AlertDescription>
+    </Alert>
   );
 }
 

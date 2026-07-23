@@ -372,9 +372,72 @@ tsconfig and never needs shared's `dist`.
        swap — offering it would be a fresh instance of the same bug.
     5. **The System Design's choice wins ties** (`MEANINGFUL_SAVING_USD`): it was
        made against budget and timeline this function cannot see, so a few
-       dollars is not grounds to reopen it. `hostingChoiceFromDesign` reads the
+       dollars is not grounds to reopen it. `resolveHostingChoice` reads the
        **technology field only, never the rationale** — architect rationales name
        the *rejected* alternative.
+  - **A nullable provider id was answering two questions, and that shipped a
+    false claim (`HostingChoice`).** A project whose System Design chose **Azure
+    App Service (Linux) – Jordan region** — justified by data residency, and
+    confirmed again in its Roadmap — got a comparison across eight providers
+    containing no Azure, headlining **Fly.io** as best value and explaining
+    itself with *"The System Design did not name a host we price, so Fly.io is
+    shown as the lowest-cost option."* Nothing errored; the sentence was simply
+    false, and it was sitting in the database. The plumbing was already right —
+    `CostEstimateService` loads the design and passes its hosting choice through
+    — but the choice travelled as `CostProviderId | null`, and `null` meant both
+    *"the design named no host"* (where falling back to the cheapest is correct)
+    and *"the design named a host outside our table"* (where it discards a
+    decision made on constraints this function cannot see, then denies the
+    decision exists). Six things not to undo:
+    1. **The state is a discriminated union, not a nullable id.**
+       `priced | unpriced | none`, so the "no host was named" copy is reachable
+       **only** from `none`. Widening the pricing table fixed Azure; making the
+       state explicit is what stops the *class*, because a design can always name
+       a host nobody has priced — a regional cloud, a local datacentre, on-prem.
+       Pinned by a test asserting that sentence never appears for a design that
+       named something.
+    2. **There are FOUR outcomes, and each gets its own sentence.**
+       `system-design` · `design-unpriced` · `design-not-viable` · `cheapest-viable`.
+       The last three all mean "the design's host is not the headline" and are
+       three different things to tell an owner; collapsing them is what made an
+       admission read as a recommendation. An unpriced host still leads the card
+       **in the design's own wording** (`chosenLabel` — "Microsoft Azure" loses
+       the region, which was the load-bearing part).
+    3. **Azure, Google Cloud and a self-managed VPS are priced.** Listing AWS but
+       not the other two of the global top three was never defensible, and a
+       table that omits a provider does not get to conclude it was not chosen.
+       `vps` carries a permanent `fit.caveat` because its bill excludes the
+       operations labour every managed provider here includes — it can be the
+       primary when the design chose it, but it is never the "switch and save"
+       pitch, which would price a team's ops work at zero. The **cheapest-viable
+       fallback now prefers an uncaveated host** for the same reason.
+    4. **A compliance-driven choice is flagged, not overruled
+       (`hostingConstraintFromDesign`).** Residency/locality language anywhere in
+       the design's reasoning — or a hosting row pinned to a place — emits a
+       `constraintNote` saying any switch has to clear it. The whole stack is the
+       haystack because on the real project the hosting row talked about SLAs
+       while *"Meets data-residency requirement"* sat on the **database** row.
+       It **asserts nothing about other providers' regions** (unverifiable); it
+       tells the owner to check. The cheaper alternative is still shown — the
+       point is an informed decision, not a hidden one. Arabic is matched with no
+       `\b` (ASCII-only, never fires next to Arabic script).
+    5. **`runtimeStyleFromDesign` ignores the hosting rows when testing for
+       serverless.** Otherwise feasibility is circular — `hosting: Cloudflare
+       Workers` would make the design "serverless", which makes Cloudflare
+       viable, the provider under evaluation vouching for itself. Long-running
+       detection still reads the whole stack: a framework name is a statement
+       about the *application* wherever it appears.
+    6. **`constraintNote` quotes the requirement document, never the interview
+       `constraints` slot.** It crosses onto the public share page, and the raw
+       transcript never leaves the session. Nothing is lost — `summaryFromSlots`
+       already feeds that slot into those constraints — the public payload just
+       quotes the vetted artifact.
+    A **fifth automated consistency finding** (`buildConsistencyFindings`)
+    compares the design's host against the stored estimate's headline and fires
+    on a mismatch, an unpriceable host, or an infeasible one. It re-reads the
+    design rather than trusting the estimate, so it catches the one drift the
+    reconciliation cannot: a **stale** estimate built before the architecture
+    changed host. Silent when they agree, and when the design named nothing.
 - **Project economics — effort + budget + service subscriptions (R9).** The cost
   stage grew from "monthly hosting bill" into full project economics, still
   **100% deterministic (zero LLM calls)** — all new math is pure functions in
@@ -1197,6 +1260,66 @@ tsconfig and never needs shared's `dist`.
      endpoint **drops the parent's FK filter**, since the path already pins it.
      This costs ~5 schema fields per entity, which narrowed the chunking margin —
      see `MAX_ENTITIES_PER_CALL`, and lower it before raising `CHUNK_MAX_TOKENS`.
+  11. **Field types come FROM the schema (`api-design.field-types.ts`) — the API
+     stage does not get to re-guess them.** A 12-module, 48-endpoint design typed
+     **every** id `integer` — path params, request bodies, response bodies —
+     against a schema whose primary keys are all `uuid`. A team building against
+     that doc assumes auto-incrementing integers and hits the mismatch on their
+     first insert. **The cause was `describeEntity` printing column NAMES and no
+     types** while the prompt said "field names match the data model": the model
+     was told to match something it was never shown, so it used the REST
+     convention its training data is full of. The tell was that the deterministic
+     builder (`type: c.type`) was right all along — the offline output correct and
+     the paid one wrong, the `enforcePaymentAvailability` inversion. **Third
+     instance of one class** (the QA planner asked for tools "matched to the
+     stack" with no stack in its prompt; the schema designer was told to respect
+     business rules that were never printed): *when a prompt tells the model to
+     respect something, grep the prompt for the something.* Seven rules:
+     - **Both halves, as always.** `describeColumns` prints `name type PK/FK→target
+       NULL` and a FIELD TYPES rule says to copy it; `reconcileApiFieldTypes` then
+       enforces it on the output at `finalize()`, the one exit every generated
+       design passes through. The prompt alone is not enough here because the
+       failure is **invisible and intermittent** — an `integer` id parses, renders,
+       exports to OpenAPI and scaffolds perfectly happily, and the same model gets
+       it right on one run and wrong on the next.
+     - **The database wins unconditionally.** It is what the migration, the Prisma
+       schema, the SQL export and the scaffold are generated from, so an API doc
+       that disagrees is wrong by definition even when its own type looks more
+       idiomatic.
+     - **It is NOT about ids.** Every type is reconciled — enum, timestamp,
+       decimal, boolean, date. A `status` documented `string` against an `enum`
+       column is the same bug with a smaller blast radius, and `listQueryParams`
+       now emits the column's own type for the same reason.
+     - **Never invent a type.** A field that resolves to no column (`page`,
+       `limit`, `search`, `accessToken`) is left exactly alone — guessing there
+       would be this bug in reverse. `_ids` is skipped too (typed `array` by
+       `enforceRoleCardinality`; rewriting it to the referenced scalar key would
+       silently undo that fix).
+     - **Rewrite always, REPORT only on a semantic difference.** The field is set
+       to the schema's exact spelling so the document lands in one vocabulary, but
+       `varchar(255) → string` is not listed — burying `integer → uuid` under
+       cosmetic noise makes the table one nobody reads. `sameFieldType` folds
+       spellings and pointedly does **not** forgive `integer` for `uuid`.
+     - **Resolution order is confidence order**: an exact column on a context
+       entity, then bare `id` → that resource's PK, then `<noun>_id` → the named
+       table's PK (which needs **no** context — an early cut short-circuited
+       context-less endpoints as an optimization and silently switched that rule
+       off for the modules most likely to need it). Context comes from the
+       **path** before `coveredEntities`, last segment first, because a nested
+       route returns the child. The **Auth module** is the one narrow special case:
+       it covers no entity by construction, so `POST /api/auth/register` kept
+       `id: integer` — resolved against the users table, which is a fact about our
+       own generator's convention, not an inference about the client's domain.
+       Found by auditing a real design, not by reading the code.
+     - **`typeCorrections` is aggregated by (entity, field, from, to)** and
+       OWNER-ONLY (stripped in `ShareService.view`). ~100 wrong fields became 31
+       rows on the real design; ninety bullet points is a wall an owner scrolls
+       past. `save()` carries it over and deliberately does **not** re-reconcile —
+       silently rewriting a type the owner just set would make the editor feel
+       broken, the `ensureEntityCoverage` call. OpenAPI path params are typed from
+       the real PK and carry `format: uuid`/`date-time`, without which a uuid key
+       and an integer key both render as `"string"` and the distinction is lost
+       again at the export boundary.
 - **Database design = lifecycle, linkage, isolation, and real-world completeness.**
   Prompt rules on the Database Designer, several previously true only of the
   *deterministic fallback* (which emitted `status` on invoices/notifications while
@@ -1222,6 +1345,65 @@ tsconfig and never needs shared's `dist`.
   - **An audit-log entity** whenever the requirements restrict who may read or
     change records, or name a regulated data category — the same schema had a
     business rule and a repudiation mitigation both demanding one, and no table.
+- **Cross-tenant SHARED records (`database-design.shared-entities.ts`) — the
+  exception "EVERY table carries the tenant FK" had no concept of.** A clinic
+  group's confirmed business rule read *"Patient records are shared across all
+  clinics and are not branch-scoped"*, and the schema shipped `patients.branch_id
+  NOT NULL` plus a *"each branch has many patients"* relation anyway — splitting
+  into N records the one thing the client had explicitly asked to keep whole, and
+  dragging `bills` / `payments` / `insurance_claims` / `notifications` with it.
+  **Regenerating did not help, because two independent causes each produced it**:
+  1. **The business rules were never in the schema prompt at all.** `buildPrompt`
+     sent idea, engine, services, roles and functional requirements;
+     `requirements.businessRules` and `.constraints` appeared in **none** of the
+     three prompt builders. The sentence never reached the model on any run — the
+     QA-planner-recommending-JUnit failure exactly. When a prompt tells the model
+     to respect something, **check the something is in the prompt** (`rulesContext`,
+     now in all three builders, labelled BINDING, and carried into **every chunk**
+     because a chunk is a whole call with its own context).
+  2. **`ensureTenancy` put the mandatory FK back** on the runs where the model got
+     it right. The backstop had no notion of a shared record, so it also shipped
+     the bug on the deterministic/offline path.
+  Six things not to undo:
+  - **Nothing is keyed on an entity NAME.** There is no patient/customer/member
+    list. The trigger is a *statement in the client's own requirements* and the
+    entity is whatever that statement was about, so a retail chain whose rules say
+    members are shared across stores gets the same treatment with no code change.
+    Pinned by `shared-entities.spec.ts`, which runs a gym chain end-to-end plus
+    five more nouns — if it only passes for `patients` the fix is a patch.
+  - **The restriction covers the shared record ONLY, never its transactions.** A
+    visit, order, bill or claim happens at one location and keeps its `branch_id`;
+    the unified history is restored by the *shared* record being single, so every
+    branch's bills reach it through one `patient_id`. Widening to dependents would
+    trade the bug for a cross-tenant leak.
+  - **The asymmetry INVERTS `applyTenancy`'s.** There, any plausible signal keeps
+    tenancy because a missing FK is a leak. Here, *removing* scoping is the
+    dangerous direction, so the bar is an **explicit written statement** — never an
+    inference from a table's name. Silence leaves every table scoped exactly as
+    before, which is why the whole change is a no-op for existing projects.
+  - **Subject extraction is head-anchored, per clause.** *"Patient records"* yields
+    `{record, patient}` (walking back through container nouns) so a rule about them
+    matches a `patients` table; *"the patient portal"* yields `{portal}` alone and
+    matches nothing. Possessives count as subjects (*"a patient's medical history"*)
+    and each clause of a compound sentence contributes its own.
+  - **The executive summary and service responsibilities are NOT sources.** A
+    summary is marketing prose thick with this vocabulary and asserting nothing
+    about record scope: MedCore's own promised billing *"across all clinics"* and
+    *"a unified view"*, and both fired a warning on a schema where nothing was
+    wrong. A check that cries wolf gets the panel muted. A rule about record scope
+    lives where rules live. `LOCATION_NOUN` is likewise enumerated **once** and
+    composed into every pattern — the MENA-regex-missing-Palestine failure shape.
+  - **A correction is never silent, and it demotes rather than deletes.**
+    `branch_id` becomes a nullable, non-unique `registered_at_branch_id` (the
+    originating clinic is a fact worth keeping; nullable + renamed makes it
+    unusable as ownership), the has-many relation is dropped outright, and every
+    change becomes an owner-facing `sharedEntityNotices` entry quoting the rule
+    that caused it. Owner-only (stripped in `ShareService.view`, the
+    `uncoveredRequirements` precedent), `LocalizedCopy`, additive/migration-free.
+    A statement matched to **no** table is reported rather than guessed at — which
+    is also the expected path for an Arabic document, whose subject is deliberately
+    not parsed. Running the whole pass twice is a **fixed point** (pinned), which is
+    what makes Regenerate safe.
 - **Agents backfill via `normalize()`.** Where an artifact has many optional
   parts (e.g. the reviewer's per-dimension scores/findings), the agent trusts a
   valid LLM response but fills any omitted field deterministically, so the shape
@@ -3540,6 +3722,51 @@ tsconfig and never needs shared's `dist`.
   the full pipeline, so they sit early **disabled** until the API design exists.
   That's the honest read ("this is coming, and it's what matters") where burying
   them behind eight technical tabs said the opposite.
+  - **The rail is GROUPED into the four phases of a scoping job**
+    (`STAGE_GROUPS`): the source (Interview, unlabelled — it precedes the phases
+    rather than being one), **the deal**, **the build**, **assurance**,
+    **handoff**. Those groupings already existed *as comments*; eighteen items in
+    one flat 224px column made the owner hold the whole pipeline in their head to
+    find anything, while the seams that would have made it scannable were visible
+    only in the source. Modelled on `ADMIN_NAV`, which solved this shape for the
+    staff console. Six things not to undo:
+    1. **`TABS` is DERIVED from `STAGE_GROUPS`** (`flatMap`), never maintained
+       beside it — two hand-kept lists drift by one entry and the rail silently
+       drops a stage. The order is byte-identical to the flat list it replaced,
+       so R12's ordering is untouched; only the seams became visible. Pinned by a
+       test asserting the full 18-item order.
+    2. **`EveryStageIsGrouped` is a compile-time exhaustiveness check.** A stage
+       added to `TabKey` and wired up everywhere else would still be **invisible**
+       if nobody put it in a group, and that failure has no runtime symptom — the
+       tab is simply absent, so the feature reads as unbuilt rather than broken.
+       The `extends never` form is deliberate: it fails as `Type '"canvas"' does
+       not satisfy the constraint 'never'`, **naming** the stage, where a boolean
+       assertion would only say `'true' is not assignable to 'never'`. Verified in
+       both directions — removing a stage from a group does fail the build.
+    3. **The headings are `md:` only.** On mobile the same list is a horizontal
+       scrolling strip, where a heading would eat scarce inline space and sit
+       *beside* the items it labels — grouping that reads as another tab. The
+       strip is byte-unchanged; headings appear only once the rail is a column.
+    4. **`role="presentation"` + `aria-hidden` keeps the `role="tablist"` valid.**
+       ARIA requires a tablist's children to be tabs, and a screen reader
+       announcing "THE BUILD" between two tabs is reading furniture. Radix's
+       roving focus only tracks registered triggers, so arrow-key navigation skips
+       them without being told to.
+    5. **It is still a Radix `TabsList`.** The file already warns that rebuilding
+       this as a bespoke nav would quietly break the unmount-of-inactive-
+       `TabsContent` behaviour every panel's fetch-on-mount depends on. The
+       grouping is interleaved children, not a new primitive.
+    6. **An empty group renders no heading** — defensive, and honest about it: no
+       group empties today (Assurance holds both optional stages but keeps Review
+       when they are off). It guards the next optional stage, not a case that
+       exists now.
+  - **`jest.setup.ts` stubs `window.matchMedia`** for the same reason it stubs
+    `scrollIntoView`: jsdom has no layout, so accessing it *throws* rather than
+    reporting a non-match, and components that branch on a breakpoint read it in
+    an effect (`useIsDesktop`) — so the failure lands as an unrelated render error
+    in whatever test mounts them. It reports **no match**, which is the meaningful
+    default; a stub claiming every query matches would silently put every
+    component under test into its desktop branch.
 - **The export surface is organised by AUDIENCE, not by file format (R12).**
   `ExportView` = two primary cards — **Send to client** (`shareApi.create`,
   idempotent, copies the link) and **Hand off to your team** (the existing

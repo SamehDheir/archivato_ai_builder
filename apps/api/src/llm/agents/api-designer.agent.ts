@@ -2,9 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   AgentRole,
   buildRestApi,
+  describeColumns,
   enforceQuerySurface,
   enforceRoleCardinality,
   mergeMissingCoverage,
+  reconcileApiFieldTypes,
   normalizeApiModule,
   normalizeExcludedEntities,
   userRoleCardinality,
@@ -127,7 +129,7 @@ export class ApiDesignerAgent extends BaseAgent {
         // `llm` even when a later repair runs: the chunked design is model-authored,
         // and per-module attribution already lives on `ApiModule.source`.
         if (!coverage.missing.length) {
-          return this.reconcileRoles(
+          return this.finalize(
             { ...this.trimQuerySurface(design, ctx), generation: this.provenance('llm') },
             ctx,
           );
@@ -144,7 +146,7 @@ export class ApiDesignerAgent extends BaseAgent {
 
         // Whatever is still uncovered is the service's to fill deterministically
         // before it persists anything — never the user's to discover.
-        return this.reconcileRoles(
+        return this.finalize(
           { ...this.trimQuerySurface(design, ctx), generation: this.provenance('llm') },
           ctx,
         );
@@ -158,13 +160,59 @@ export class ApiDesignerAgent extends BaseAgent {
       degraded = degradedReasonFor(err);
       this.logger.warn(`API design failed (${degraded}); using fallback: ${err}`);
     }
-    return this.reconcileRoles(
+    return this.finalize(
       {
         ...this.buildDeterministic(sessionId, generatedAt, ctx),
         generation: this.provenance('fallback', degraded),
       },
       ctx,
     );
+  }
+
+  /**
+   * The one exit every generated design passes through.
+   *
+   * Both passes reconcile the API contract with the schema it is derived from,
+   * and both run on the deterministic path too — where they are near no-ops,
+   * which is the point: the builder agrees with the schema today, and if a future
+   * edit breaks that, this catches it instead of shipping it.
+   */
+  private finalize(design: ApiDesign, ctx: ApiDesignContext): ApiDesign {
+    return this.reconcileFieldTypes(this.reconcileRoles(design, ctx), ctx);
+  }
+
+  /**
+   * Make every documented field type agree with the database column it describes.
+   *
+   * The prompt is the primary defence (the checklist prints real types and the
+   * FIELD TYPES rule says to copy them); this is the backstop that makes the
+   * guarantee hold whatever the model does — the same split as
+   * `enforceScaleAppropriateStack` and `applyTenancy`. It matters here because
+   * the failure is invisible: an `integer` id parses, renders, exports to
+   * OpenAPI and generates a scaffold perfectly happily, and is only discovered by
+   * the team that built against it.
+   *
+   * The database wins unconditionally. It is what the migration, the Prisma
+   * schema, the SQL export and the scaffold are all generated from, so an API doc
+   * that disagrees with it is wrong by definition.
+   */
+  private reconcileFieldTypes(design: ApiDesign, ctx: ApiDesignContext): ApiDesign {
+    const { design: next, corrections } = reconcileApiFieldTypes(
+      design,
+      ctx.databaseDesign,
+    );
+    if (corrections.length === 0) return next;
+
+    const total = corrections.reduce((sum, c) => sum + c.occurrences, 0);
+    this.logger.warn(
+      `Corrected ${total} API field type(s) to match the database schema: ` +
+        corrections
+          .map((c) => `${c.entity}.${c.field} ${c.from}→${c.to} (${c.occurrences})`)
+          .join(', '),
+    );
+    // Surfaced on the artifact, not only in the log: the owner reviews this
+    // contract before a team builds against it.
+    return { ...next, typeCorrections: corrections };
   }
 
   /**
@@ -420,6 +468,14 @@ export class ApiDesignerAgent extends BaseAgent {
       'Use the data model\'s own column names, all optional (required: false). Never expose a password, hash, token, or secret column as a filter.',
       'Updates must be able to change the lifecycle state too, not only descriptive fields.',
       'Omit server-managed fields (id, created_at, updated_at, password_hash) from request BODIES (POST/PUT/PATCH).',
+      // The checklist above now prints every column's real type. Without this
+      // rule saying to copy it, a model still reaches for the REST convention it
+      // has seen most — which is how a fully uuid schema was documented with
+      // integer ids in all 48 endpoints.
+      'FIELD TYPES — COPY THEM, DO NOT INVENT THEM. Every "type" you emit must be the EXACT type printed next to that column in the checklist above (uuid, string, integer, decimal, boolean, timestamp, date, enum, json). This is not a style preference: the schema above is what the migration and the client SDK are generated from, so a type that disagrees with it is wrong even when it looks more conventional.',
+      '- Identifiers are whatever the schema says they are. If a primary key is uuid, then that resource\'s id, every *_id referencing it, and the :id path parameter are ALL uuid — never integer, and never an auto-incrementing number.',
+      '- The same holds for every other type: a timestamp column is timestamp (not string), a decimal is decimal (not number), an enum is enum (not string), a json column is json.',
+      '- A field that is NOT a column — page, limit, search, accessToken — keeps its natural type; this rule is about fields the data model already defines.',
     );
 
     return lines.join('\n');
@@ -522,13 +578,22 @@ function scaleGuidance(ctx: ApiDesignContext): string {
   }
 }
 
-/** Name, purpose, columns and relationships — the checklist line for one entity. */
+/**
+ * Name, purpose, columns and relationships — the checklist line for one entity.
+ *
+ * The columns carry their **types** and their PK/FK markers. They used to be
+ * bare names (and silently capped at 10), which is why a design whose primary
+ * keys are all `uuid` came back documenting every id as `integer`: the prompt
+ * told the model "field names match the data model" and showed it no types to
+ * match, so it filled the gap with the REST convention its training data is full
+ * of. A model cannot copy what it was never shown.
+ */
 function describeEntity(entity: Entity, db: DatabaseDesign): string {
   const parts = [entity.name];
   if (entity.description?.trim()) parts.push(`— ${entity.description.trim()}`);
 
-  const columns = (entity.columns ?? []).slice(0, 10).map((c) => c.name);
-  if (columns.length > 0) parts.push(`| columns: ${columns.join(', ')}`);
+  const columns = describeColumns(entity);
+  if (columns) parts.push(`| columns: ${columns}`);
 
   const relations = (db.relations ?? [])
     .filter((r) => r.from === entity.name || r.to === entity.name)

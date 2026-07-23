@@ -63,6 +63,26 @@ export interface ApiModule {
   source?: ApiModuleSource;
 }
 
+/**
+ * One field whose documented type contradicted the database design, aggregated
+ * across every endpoint that carried it. Written by `reconcileApiFieldTypes`.
+ *
+ * Lives here rather than beside that function so the import stays one-way
+ * (`api-design.field-types` → `api-design`), the `review.fix.ts` → `review.ts`
+ * rule: the artifact file owns the artifact's types.
+ */
+export interface ApiTypeCorrection {
+  /** The entity whose column is the source of truth. */
+  entity: string;
+  field: string;
+  /** What the API design said. */
+  from: string;
+  /** What the database says — and what it now says. */
+  to: string;
+  /** How many endpoint schemas carried the wrong type. */
+  occurrences: number;
+}
+
 /** A database entity deliberately left without its own endpoint group. */
 export interface ExcludedEntity {
   /** Exact entity name from the database design. */
@@ -90,6 +110,17 @@ export interface ApiDesign extends LocalizedArtifact {
    * it or it is declared here.
    */
   excludedEntities?: ExcludedEntity[];
+  /**
+   * Field types that contradicted the database design and were corrected to
+   * match it, aggregated by field. See `api-design.field-types.ts`.
+   *
+   * **OWNER-ONLY**, like `SystemDesign.uncoveredRequirements` and
+   * `DatabaseDesign.sharedEntityNotices`: it reports that our own two stages
+   * disagreed, which is a signal for the person reviewing the design, not for the
+   * client reading it. Stripped from the share payload. Optional and additive
+   * (the JSON-blob convention) — designs generated before this renders nothing.
+   */
+  typeCorrections?: ApiTypeCorrection[];
 }
 
 // ── Normalization ───────────────────────────────────────────────────────────

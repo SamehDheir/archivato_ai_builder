@@ -1,8 +1,9 @@
 'use client';
 
 import { useTranslation } from 'react-i18next';
-import { Share2, Table2, Workflow } from 'lucide-react';
+import { AlertTriangle, Share2, Table2, Workflow } from 'lucide-react';
 import { type DatabaseDesign, type EntityColumn } from '@archivato/shared';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArtifactDownload } from '@/components/shared/ArtifactDownload';
@@ -15,6 +16,8 @@ import { Empty, Section } from '@/components/design/RequirementDocumentView';
 
 export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
   const { t } = useTranslation('stages');
+  // Owner-only: the share payload never carries it (stripped in ShareService).
+  const sharedEntityNotices = design.sharedEntityNotices ?? [];
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -48,6 +51,23 @@ export function DatabaseDesignView({ design }: { design: DatabaseDesign }) {
           ]}
         />
       </div>
+
+      {sharedEntityNotices.length > 0 && (
+        <Alert variant="warning" className="mb-4">
+          <AlertTriangle aria-hidden />
+          <AlertTitle>{t('database.sharedEntities.title')}</AlertTitle>
+          <AlertDescription>
+            <p>{t('database.sharedEntities.body')}</p>
+            <ul className="mt-2 list-disc space-y-1 ps-5">
+              {sharedEntityNotices.map((notice) => (
+                <li key={notice} dir="auto">
+                  {notice}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Section title={t('database.erd')} icon={Workflow}>
         {design.entities.length ? (

@@ -84,6 +84,18 @@ export interface DatabaseDesign extends LocalizedArtifact {
   databaseType: string;
   entities: Entity[];
   relations: Relation[];
+  /**
+   * Cross-tenant corrections made after generation, in the artifact's language —
+   * a table the requirements call shared that was given a mandatory tenant
+   * ownership key anyway, and what was done about it. See
+   * `database-design.shared-entities.ts`.
+   *
+   * **OWNER-ONLY**, like `SystemDesign.uncoveredRequirements`: it is an internal
+   * quality signal for the person still editing the schema, and stripped from the
+   * share payload. Optional and additive (the JSON-blob convention) — a design
+   * generated before this existed simply renders no notice.
+   */
+  sharedEntityNotices?: string[];
 }
 
 /**
